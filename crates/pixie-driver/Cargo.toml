@@ -1,0 +1,20 @@
+[package]
+name = "pixie-driver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+toml.workspace = true
+pixie-syntax.workspace = true
+pixie-hir.workspace = true
+pixie-types.workspace = true
+pixie-binding.workspace = true
+# For `CheckInfo`: the driver is where the checker's answer meets the
+# emitter (§8.55). Not a cycle — codegen depends on syntax only.
+pixie-codegen.workspace = true
+codespan-reporting.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pixie-interp.workspace = true

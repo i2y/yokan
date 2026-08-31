@@ -1,0 +1,31 @@
+store Charts {
+  state values : List<Float> = []
+  state names : List<String> = []
+
+  fn load {
+    values.push(0.3)
+    values.push(0.8)
+    values.push(0.5)
+    names.push("a")
+    names.push("b")
+    names.push("c")
+  }
+
+  fn spike {
+    values.push(1.0)
+    names.push("d")
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "points: #{Charts.values.length}" }
+    BarChart { data: Charts.values; labels: Charts.names; width: 260.0; height: 110.0 }
+    LineChart { data: Charts.values; labels: Charts.names }
+    Spinner { size: 32.0 }
+    Row {
+      Button { text: "load"; onClick: Charts.load() }
+      Button { text: "spike"; onClick: Charts.spike() }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "pixie-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cute language: bidirectional type system and checker."
+
+[dependencies]
+pixie-syntax.workspace = true
+pixie-hir.workspace = true
+codespan-reporting.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+pixie-binding.workspace = true

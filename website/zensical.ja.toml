@@ -1,0 +1,83 @@
+[project]
+site_name = "Yokan"
+site_url = "https://i2y.github.io/yokan/ja/"
+site_description = "デスクトップアプリのための、静的に型付けされた Python サブセットのネイティブコンパイラ。"
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
+
+docs_dir = "docs-ja"
+site_dir = "build/ja"
+use_directory_urls = true
+
+nav = [
+  { "ホーム" = "index.md" },
+  { "インストール" = "installation.md" },
+  { "言語ツアー" = [
+    { "最初のアプリ" = "tour.md" },
+    { "制御フローとデータ" = "tour-logic.md" },
+    { "値と型" = "tour-values.md" },
+    { "コンポーネントとスタイル" = "tour-ui.md" },
+    { "ライブラリと crate" = "tour-lib.md" },
+    { "検証とリリース" = "tour-ship.md" },
+  ] },
+  { "デモ" = "demos.md" },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/yokan/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/yokan/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+language = "ja"
+
+# ---- Palette --------------------------------------------------------------
+
+# Yokan the sweet: dark azuki block, a slice of chestnut. Black
+# header keeps the dark app screenshots seamless; amber is the
+# accent. Same pair on both schemes so the brand holds.
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "amber"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "amber"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+# ---- Markdown extensions ---------------------------------------------------
+
+# Unicode-preserving heading anchors (Japanese headings slug like
+# GitHub's), via pymdownx's slugifier.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

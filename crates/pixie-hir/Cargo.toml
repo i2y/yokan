@@ -1,0 +1,14 @@
+[package]
+name = "pixie-hir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cute language: HIR (name-resolved AST with DefIds)."
+
+[dependencies]
+pixie-syntax.workspace = true
+codespan-reporting.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

@@ -1,0 +1,79 @@
+store Calc {
+  state display : String = "0"
+  state accent : String = "#89b4fa"
+
+  fn press(d: String) {
+    display = d
+  }
+
+  fn theme {
+    accent = "#f38ba8"
+  }
+}
+
+style Key {
+  background: "#313244"
+  hover.background: "#45475a"
+  active.background: "#a6e3a1"
+}
+
+style Hot {
+  background: "#fab387"
+}
+
+style KeyOp = Key + Hot
+
+style Readout {
+  fontSize: 28.0
+  color: "#cdd6f4"
+}
+
+style Pad {
+  spacing: 6.0
+  padding: 14.0
+  background: "panel"
+}
+
+# The box decoration every element that paints one takes —
+# a corner radius, a border thickness, and the border's color. The
+# color is a theme token like any other, so a palette flip carries it.
+style Card {
+  padding: 10.0
+  spacing: 4.0
+  background: "panel"
+  borderRadius: 10.0
+  borderWidth: 1.0
+  borderColor: "accent"
+}
+
+view Main {
+  Column {
+    style: Pad
+    Text { style: Readout; text: Calc.display }
+    Text { text: "accent: #{Calc.accent}"; color: Calc.accent }
+    Row {
+      spacing: 6.0
+      Button { style: Key; text: "7"; onClick: Calc.press("7") }
+      Button { style: Key; text: "8"; onClick: Calc.press("8") }
+      Button { style: KeyOp; text: "÷"; onClick: Calc.press("÷") }
+    }
+    Button { text: "theme"; onClick: Calc.theme() }
+    # A bordered card, and two buttons wearing the same props
+    # directly — a pill and an outline.
+    Column {
+      style: Card
+      Text { text: "boxed" }
+      Row {
+        spacing: 6.0
+        Button { text: "pill"; onClick: Calc.press("pill"); borderRadius: 14.0 }
+        Button {
+          text: "outline"
+          onClick: Calc.press("outline")
+          background: "panel"
+          borderWidth: 2.0
+          borderColor: "accent"
+        }
+      }
+    }
+  }
+}

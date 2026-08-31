@@ -1,0 +1,58 @@
+store Doc {
+  state title : String = "Reports"
+  state saved : Bool = false
+  state query : String = ""
+  # `role:` takes an expression: the summary line is a
+  # heading until there is a result under it, and then it is not.
+  state summaryRole : String = "heading"
+
+  fn save {
+    saved = true
+    summaryRole = "label"
+  }
+
+  fn find(q: String) {
+    query = q
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text {
+      fontSize: 22.0
+      text: Doc.title
+      role: "heading"
+    }
+
+    Row {
+      spacing: 6.0
+      role: "group"
+      label: "toolbar"
+
+      Svg {
+        source: "examples/icons/assets/save.svg"
+        width: 20.0
+        height: 20.0
+        label: "Save"
+      }
+
+      Button { text: "save"; onClick: Doc.save() }
+    }
+
+    TextField {
+      placeholder: "search"
+      text: Doc.query
+      onTextChanged: Doc.find(text)
+    }
+
+    Text {
+      text: "1 of 4 saved"
+      role: Doc.summaryRole
+    }
+
+    ProgressBar { value: 0.4 }
+  }
+}

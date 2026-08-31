@@ -1,0 +1,48 @@
+store App {
+  state mode : String = "dark"
+
+  fn light {
+    mode = "light"
+  }
+
+  fn dark {
+    mode = "dark"
+  }
+}
+
+view Main {
+  Column {
+    theme: App.mode
+    grow: 1.0
+    spacing: 10.0
+    padding: 14.0
+    background: "windowBg"
+    animate: 250.0
+    easing: "linear"
+
+    Text { fontSize: 20.0; text: "the app owns its theme: #{App.mode}"; color: "text" }
+
+    Row {
+      spacing: 6.0
+      Button { text: "light"; onClick: App.light() }
+      Button { text: "dark"; onClick: App.dark() }
+    }
+
+    Column {
+      theme: "light"
+      spacing: 6.0
+      padding: 10.0
+      background: "panel"
+      Text { text: "this panel is always light"; color: "text" }
+      Button { text: "inner"; background: "accent"; color: "windowBg"; onClick: App.light() }
+    }
+
+    Column {
+      theme: "dark"
+      spacing: 6.0
+      padding: 10.0
+      background: "panel"
+      Text { text: "this panel is always dark"; color: "text" }
+    }
+  }
+}

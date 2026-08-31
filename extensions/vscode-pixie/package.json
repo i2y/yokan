@@ -1,0 +1,82 @@
+{
+  "name": "pixie-language",
+  "displayName": "pixie Language",
+  "description": "Language support for pixie (.pix / .rpi): diagnostics, hover, go-to-definition and completion from the pixie language server, plus syntax highlighting.",
+  "version": "0.1.0",
+  "publisher": "i2y",
+  "license": "MIT OR Apache-2.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "pixie",
+    "pix",
+    "gui",
+    "gpui",
+    "rust"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "pixie",
+        "aliases": [
+          "pixie",
+          "Pixie"
+        ],
+        "extensions": [
+          ".pix",
+          ".rpi"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pixie",
+        "scopeName": "source.pixie",
+        "path": "./syntaxes/pixie.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[pixie]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.formatOnSave": false
+      }
+    },
+    "commands": [
+      {
+        "command": "pixie.restartServer",
+        "title": "pixie: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "pixie",
+      "properties": {
+        "pixie.lsp.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `pixie-lsp` binary. Leave empty to look for a cargo build in the open workspace (`target/release` then `target/debug`), then for `pixie-lsp` on `PATH`."
+        }
+      }
+    }
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:pixie"
+  ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "scripts": {
+    "test": "node test/scope-check.js test/highlight-sample.pix test/highlight-sample.rpi"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.1.0"
+  }
+}

@@ -1,0 +1,151 @@
+# ライブラリと crate
+
+[ツアー](tour.md)の続きです。エラー処理、標準ライブラリ、自分の Rust crate、CPython エスケープを見ます。
+
+## エラー処理
+
+迷ったら、この順で選びます。
+
+1. **`*_or` を使う**。失敗したら既定値が返る読み方で、理由が要らない場面はこれで済みます。
+   `fs.read_text_or(p, "")`、`http.get_text_or(url, "")`、`sqlite.query_int_or(p, sql, 0)`。
+2. **try/except を使う**。失敗の理由が要るときの形で、Python の書き方がそのまま使えます。
+   本体に複数の文、例外の種類ごとの except 節、タプル指定（`except (ValueError, KeyError) as e:`）、`else`、`finally`。
+   `@py` のエスケープ関数が投げた例外もここで捕まえられ、`e` のメッセージも Python が出すものそのままです。
+3. **何もしない**。捕まえなかった失敗は、その文を中断してアプリは生き続けます。
+   クラッシュはしません。
+
+```python
+try:
+    body.set(http.get_text(url))
+except Exception as e:
+    status.set(f"offline: {e}")
+```
+
+## 標準ライブラリ
+
+`from yokan import fs, sqlite, http, math, json, time, strings, random` で使います。
+どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
+リリースバイナリに Python は要りません。
+呼ぶのはハンドラからです（ビューは純粋なまま）。
+
+- **fs**：`read_text` / `write_text` / `exists` / `read_text_or`
+- **sqlite**：`exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or`（SQLite 同梱。集計は COALESCE で包み、ORDER BY で順序を固定する）
+- **http**：`get_text` / `get_text_or`（同期）
+- **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
+- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）
+- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）
+- **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
+- **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
+
+検証を安定させるこつは、結果を毎回同じにすることです。
+時刻は固定値を渡し、乱数は種を撒く。
+そうしておけば、検証スクリプトは何度でも同じ結果を再生します。
+
+自分の Rust crate を足すこともできます。
+それが次の節です。
+
+## Rust crate を呼ぶ
+
+Rust の crate を宣言して、アプリから呼べます。
+crates.io の version 指定でも、手元の path 指定でも構いません。
+追加は 1 コマンドです。
+
+```console
+$ yokan add app.py deunicode 1                    # crates.io から
+$ yokan add app.py hexfmt --path native/hexfmt    # 手元の crate
+```
+
+宣言の置き場はアプリの流儀に合わせて二つあります。
+スクリプト型なら PEP 723 ブロックの `[tool.yokan.crates]`、プロジェクト型なら pyproject.toml の同じテーブルです（`yokan add` がどちらの家も見つけて書き込みます）。
+
+```python
+# /// script
+# requires-python = ">=3.14"
+#
+# [tool.yokan.crates]
+# hexfmt = { path = "native/hexfmt" }
+# ///
+from yokan import crates
+
+# ハンドラの中で
+self.encoded = crates.hexfmt.encode("yokan")
+self.total = crates.hexfmt.add(40, 2)
+self.mean = crates.hexfmt.avg(self.samples)
+```
+
+crate 側は普通の Rust で、pyo3 も yokan の型も要りません。
+
+```rust
+pub fn encode(s: &str) -> String { … }
+pub fn add(a: i64, b: i64) -> i64 { … }
+pub fn avg(xs: Vec<f64>) -> f64 { … }
+```
+
+仕組みは標準ライブラリと同じ「実装ひとつ、入口ふたつ」です。
+開発中の CPython 向けには pyo3 の入口が自動生成されてビルドされ、リリース向けにはバインディングが rustdoc の JSON 出力から自動導出されます。
+どちらも `yokan gate` / `yokan build` が面倒を見ます。
+ゲートを通さず `uv run` だけで動かしたいときは、先に一度 `yokan sync app.py` を実行します。
+
+この機能はネイティブビルドと同じ前提です（リポジトリの clone と Rust）。
+関数名は crate のドキュメント通りの snake_case で呼びます。
+境界を越えられるのは、Int、Float、Bool、String、その List と Optional（None ごと）、str キーの辞書（`HashMap<String, …>`）、構造体（入れ子も）と enum、そして Result を返す関数です（`Result<Vec<…>>` のような複合型も可）。
+crate から返る辞書はキー順に並んで届きます。どちらの実行でも同じ順です。
+Result は try/except で受け、`f"{e}"` の文言まで両実行で一致します。
+構造体と enum は、アプリ側に同名の**双子**を宣言すると往復します。
+特別な印は要りません。同じ形で宣言するだけです。
+入れ子の構造体は、内側の双子を先に宣言して、外側のフィールドにその名前を書きます。
+
+```python
+@value
+class Span:          # crate の struct Span の双子
+    lo: int
+    hi: int
+
+class Grade(Enum):   # crate の enum Grade の双子
+    Fine = 1
+    Odd = 2
+
+moved = crates.hexfmt.shift(Span(3, 8), 10)
+self.verdict = crates.hexfmt.describe(crates.hexfmt.judge(7))
+```
+
+Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そのまま越えます（読みは広がり、書きは幅に合わせて戻ります）。入れ子のフィールドも同じ規則です。
+越えられない型を呼ぶと、何がなぜだめかを名指しするエラーになります。
+デモは `demo/rustcrate.py`（path と version の同居、Optional・Result・構造体・enum・辞書まで）と `demo/proj/`（pyproject 綴り）です。
+
+## CPython エスケープ
+
+ここまでの範囲の外の Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
+その関数は**本物の Python のまま**残ります。
+開発中はそのまま、リリース後は同梱または実行環境の CPython で実行されます（自己完結にするなら後述の `--bundle` / `--onefile`）。
+
+```python
+@py
+def slug(t: str) -> str:
+    import re                  # import はエスケープの中に書く
+    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
+```
+
+引数と返り値は全部注釈します（int / float / str / bool / list[...]）。
+numpy のようなコンパイル済み拡張もエスケープの中で使えます。
+
+## 重い処理とタイマー
+
+ハンドラをブロックしてはいけません（ウィンドウが固まります）。
+`ui.task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
+
+```python
+def start():
+    busy.set(True)
+    ui.task(fetch_data,
+            on_done=lambda v: (busy.set(False), data.set(v)),
+            on_error=lambda e: (busy.set(False), err.set(str(e))))
+```
+
+渡す関数は `ui.*` に触らず、値を返すだけにします。
+ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+
+`ui.every(seconds, cb)` は秒間隔のタイマーです。
+`ui.run` より前に呼びます。
+タイマーは開発実行の機能で、コンパイル対象ではありません（[今できないこと](tour-ship.md#今できないこと)参照）。
+

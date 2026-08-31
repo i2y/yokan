@@ -1,0 +1,121 @@
+# Objects referring to objects. A `class` is World-resident,
+# so a class-typed field holds a HANDLE: two owners can name the same
+# leaf, and a write through one is visible through the other. That is
+# the thing values cannot express, and the reason `class` composes.
+
+class Tag {
+  pub prop label : String
+  pub prop weight : Int, default: 0
+  pub weak prop filed : List<Note>, default: []
+
+  init(l: String) {
+    label = l
+  }
+
+  pub fn note(n: Note) {
+    filed.push(n)
+  }
+}
+
+class Note {
+  pub prop tag : Tag
+  pub prop body : String
+  # A plain field. `let` means the value arrives in `init`
+  # and never changes — the compiler holds the note to it — while
+  # `var` is an ordinary mutable field. Both are reactive; what they
+  # are not is part of the class's declared property surface.
+  pub let id : Int
+  pub var reads : Int = 0
+  # A DERIVED property: nothing is stored, the body runs on
+  # every read, and it stays current because a view subscribes to the
+  # class rather than to one property.
+  pub prop heading : String, bind { "##{id} #{body}" }
+
+  init(t: Tag, b: String, n: Int) {
+    tag = t
+    body = b
+    id = n
+  }
+
+  pub fn heavier {
+    tag.weight = tag.weight + 1
+    reads = reads + 1
+  }
+
+  # `this` is the receiver — the object the method is running
+  # on. Handing it to another object is how a graph gets its back
+  # edges, and the reference is `weak` so the pair does not keep
+  # itself alive.
+  pub fn file(t: Tag) {
+    tag = t
+    t.note(this)
+  }
+}
+
+store Board {
+  state summary : String = ""
+  state shared : Int = 0
+  state kept : List<Note> = []
+  # A store can OWN an object. The default constructs it —
+  # not in `new()`, which has no World, but in `main` right after the
+  # store exists — and a view reads through it like any other chain.
+  state inbox : Tag = Tag("inbox")
+
+  fn build {
+    # ONE tag, two notes: the graph is shared, not copied.
+    let t = Tag("urgent")
+    let a = Note(t, "call back", 1)
+    let b = Note(t, "send draft", 2)
+    a.heavier()
+    a.heavier()
+    b.heavier()
+    # Read the shared weight through the OTHER note.
+    shared = b.tag.weight
+    summary = "#{a.body} / #{b.tag.label}"
+    kept.push(a)
+    kept.push(b)
+  }
+
+  fn file {
+    let t = inbox
+    t.weight = t.weight + 1
+    for n in kept {
+      n.file(t)
+    }
+    summary = "filed #{t.filed.length} under #{t.label}"
+  }
+
+  # Writes NOTHING the store owns directly — only a property of an
+  # object the view reaches through the store. The view has
+  # to rebuild anyway, or it shows a stale number.
+  fn touch {
+    inbox.weight = inbox.weight + 1
+  }
+
+  fn rename {
+    # Writing through a chain, and through a list element.
+    let n = kept[0]
+    n.tag.label = "later"
+    summary = "#{n.body} / #{n.tag.label}"
+  }
+}
+
+view Main {
+  Column {
+    spacing: 6.0
+    padding: 12.0
+    Text { text: "shared weight: #{Board.shared}" }
+    Text { text: Board.summary }
+    Text { text: "kept: #{Board.kept.length} in #{Board.inbox.label} (#{Board.inbox.weight})" }
+    # A view reads the object list DIRECTLY now, and reaches through
+    # each element's own graph — the same table lookup the compiled
+    # tier does, so both tiers print the same tree.
+    for n in Board.kept {
+      Text { text: "- #{n.heading} [#{n.tag.label} #{n.tag.weight}] read #{n.reads}" }
+    }
+    Button { text: "build"; onClick: Board.build() }
+    Button { text: "rename"; onClick: Board.rename() }
+    Button { text: "file"; onClick: Board.file() }
+    Button { text: "touch"; onClick: Board.touch() }
+  }
+}

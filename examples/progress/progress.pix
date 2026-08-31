@@ -1,0 +1,15 @@
+store Job {
+  state ratio : Float = 0.25
+
+  fn step {
+    ratio = ratio + 0.25
+  }
+}
+
+view Main {
+  Column {
+    ProgressBar { value: Job.ratio }
+    Text { text: "ratio: #{Job.ratio}" }
+    Button { text: "step"; onClick: Job.step() }
+  }
+}

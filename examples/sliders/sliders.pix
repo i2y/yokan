@@ -1,0 +1,18 @@
+store Mix {
+  state volume : Float = 5.0
+}
+
+view Main {
+  Column {
+    Slider {
+      value: Mix.volume
+      min: 0.0
+      max: 10.0
+      step: 1.0
+      onChange: {
+        Mix.volume = value
+      }
+    }
+    Text { text: "volume: #{Mix.volume}" }
+  }
+}

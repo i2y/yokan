@@ -1,0 +1,412 @@
+enum Color {
+  Red
+  Green
+  Blue
+}
+
+error MathError {
+  divByZero
+  negative(value: Int)
+}
+
+struct Point {
+  var x: Int
+  var y: Int
+
+  fn sum Int {
+    self.x + self.y
+  }
+
+  fn describe String {
+    "point(#{self.x}, #{self.y})"
+  }
+}
+
+trait Labeled {
+  fn tag String
+}
+
+pub class Palette {
+  pub prop current : Color, default: Color.Red
+  pub prop label : String, default: ""
+
+  pub fn cycle {
+    case current {
+      when Red { current = Color.Green }
+      when Green { current = Color.Blue }
+      when Blue { current = Color.Red }
+    }
+    label = "#{current}"
+  }
+}
+
+impl Labeled for Palette {
+  pub fn tag String {
+    "palette"
+  }
+}
+
+fn safeDiv(a: Int, b: Int) !Int {
+  if b == 0 {
+    return MathError.divByZero
+  }
+  if a < 0 {
+    return MathError.negative(a)
+  }
+  a / b
+}
+
+fn divideTwice(a: Int, b: Int) !Int {
+  let once = try safeDiv(a, b)
+  try safeDiv(once, b)
+}
+
+view Main {
+  let palette = Palette()
+
+  Column {
+    Text { text: "color: #{palette.label}" }
+    Button { text: "cycle"; onClick: palette.cycle() }
+  }
+}
+
+test fn structFieldsAndMethods {
+  let p = Point(3, 4)
+  assert_eq(p.sum(), 7)
+  assert_eq(p.describe(), "point(3, 4)")
+}
+
+test fn enumCycleViaCase {
+  let pal = Palette()
+  pal.cycle()
+  assert_eq(pal.label, "Green")
+}
+
+suite "errors" {
+  test "ok path divides" {
+    case safeDiv(10, 2) {
+      when ok(v) { assert_eq(v, 5) }
+      when err(e) { assert_true(false) }
+    }
+  }
+  test "div by zero raises" {
+    case safeDiv(1, 0) {
+      when ok(v) { assert_true(false) }
+      when err(e) { assert_eq("#{e}", "divByZero") }
+    }
+  }
+  test "payload carries the value" {
+    case safeDiv(0 - 5, 1) {
+      when ok(v) { assert_true(false) }
+      when err(e) { assert_eq("#{e}", "negative(-5)") }
+    }
+  }
+  test "try propagates" {
+    case divideTwice(100, 5) {
+      when ok(v) { assert_eq(v, 4) }
+      when err(e) { assert_true(false) }
+    }
+  }
+}
+
+fn pickName(id: Int) String? {
+  if id == 1 {
+    return "ada"
+  }
+  nil
+}
+
+fn describe(n: String?) String {
+  var out : String = "anonymous"
+  case n {
+    when some(v) { out = "name: #{v}" }
+    when nil { }
+  }
+  out
+}
+
+suite "nullable" {
+  test "some flows through" {
+    let n : String? = pickName(1)
+    assert_eq(describe(n), "name: ada")
+  }
+  test "nil flows through" {
+    let n : String? = pickName(2)
+    assert_eq(describe(n), "anonymous")
+  }
+  test "T? locals hold either" {
+    let held : String? = pickName(1)
+    let empty : String? = nil
+    assert_eq(describe(held), "name: ada")
+    assert_eq(describe(empty), "anonymous")
+  }
+  test "plain values coerce into T? slots" {
+    assert_eq(describe("grace"), "name: grace")
+  }
+}
+
+fn compoundLocals String {
+  var n : Int = 10
+  n += 5
+  n -= 3
+  n *= 2
+  n /= 4
+  var s : String = "n="
+  s += "#{n}"
+  s
+}
+
+suite "compound assignment" {
+  test "locals compound, strings concat" {
+    assert_eq(compoundLocals(), "n=6")
+  }
+}
+
+pub class Badge {
+  pub prop kind : String, default: "gold"
+}
+
+impl Labeled for Badge {
+  pub fn tag String {
+    "badge:#{kind}"
+  }
+}
+
+fn describeTag<T: Labeled>(x: T) String {
+  "tagged: " + x.tag()
+}
+
+fn sameTag<T: Labeled>(a: T, b: T) Bool {
+  a.tag() == b.tag()
+}
+
+suite "generics" {
+  test "trait-bounded fn dispatches per type" {
+    let p = Palette()
+    let b = Badge()
+    assert_eq(describeTag(p), "tagged: palette")
+    assert_eq(describeTag(b), "tagged: badge:gold")
+  }
+  test "two params share one instantiation" {
+    let a = Badge()
+    let c = Badge()
+    assert_true(sameTag(a, c))
+  }
+}
+
+fn tally Map<String, Int> {
+  var m : Map<String, Int> = { b: 2 }
+  m.insert("a", 1)
+  m
+}
+
+suite "maps" {
+  test "literal, insert, get, length" {
+    var m : Map<String, Int> = { a: 1 }
+    m.insert("b", 2)
+    assert_eq(m.length, 2)
+    case m.get("a") {
+      when some(v) { assert_eq(v, 1) }
+      when nil { assert_true(false) }
+    }
+    case m.get("zz") {
+      when some(v) { assert_true(false) }
+      when nil { assert_true(true) }
+    }
+  }
+  test "keys come back sorted" {
+    let m = tally()
+    let ks = m.keys()
+    assert_eq(ks.length, 2)
+    case ks.first() {
+      when some(k) { assert_eq(k, "a") }
+      when nil { assert_true(false) }
+    }
+  }
+  test "contains and remove" {
+    var m : Map<String, Int> = { x: 7 }
+    assert_true(m.contains("x"))
+    m.remove("x")
+    assert_false(m.contains("x"))
+    assert_eq(m.length, 0)
+  }
+}
+
+pub class Curator {
+  pub prop note : String, default: ""
+
+  pub fn describe<T: Labeled>(x: T) String {
+    "curated #{x.tag()}"
+  }
+}
+
+struct Wrap {
+  var tagText: String
+
+  fn echoBack<U>(u: U) U {
+    u
+  }
+}
+
+suite "generic methods" {
+  test "class method with a trait bound dispatches" {
+    let c = Curator()
+    let p = Palette()
+    let b = Badge()
+    assert_eq(c.describe(p), "curated palette")
+    assert_eq(c.describe(b), "curated badge:gold")
+  }
+  test "struct method with an unbounded generic" {
+    let w = Wrap("t")
+    assert_eq(w.echoBack("hello"), "hello")
+    assert_eq(w.echoBack(41), 41)
+  }
+}
+
+pub class Tag {
+  pub prop label : String
+  pub prop weight : Int, default: 1
+
+  init(l: String, extra: Int) {
+    label = l
+    weight = weight + extra
+  }
+}
+
+struct Pair<T> {
+  var a: T
+  var b: T
+
+  fn swapped Pair<T> {
+    Pair(self.b, self.a)
+  }
+}
+
+suite "constructors and type generics" {
+  test "init runs with args, defaults seed the rest" {
+    let t = Tag("hi", 4)
+    assert_eq(t.label, "hi")
+    assert_eq(t.weight, 5)
+  }
+  test "generic struct instantiates by inference" {
+    let p = Pair(1, 2)
+    let q = Pair("a", "b")
+    assert_eq(p.a, 1)
+    assert_eq(q.b, "b")
+    let s = p.swapped()
+    assert_eq(s.a, 2)
+    assert_eq(s.b, 1)
+  }
+}
+
+pub class Robot {
+  pub prop type : String, default: "bot"
+  pub prop gen : Int, default: 3
+
+  pub fn move(loop: Int) String {
+    let match : String = "#{type}/#{gen}/#{loop}"
+    match
+  }
+}
+
+enum Key {
+  type
+  other
+}
+
+fn keyName(k: Key) String {
+  var out : String = ""
+  case k {
+    when type { out = "the type key" }
+    when other { out = "other" }
+  }
+  out
+}
+
+suite "reserved identifiers" {
+  test "Rust keywords survive as pixie names" {
+    let r = Robot()
+    assert_eq(r.move(7), "bot/3/7")
+    r.type = "droid"
+    assert_eq(r.move(1), "droid/3/1")
+  }
+  test "keyword enum variants match" {
+    assert_eq(keyName(Key.type), "the type key")
+    assert_eq(keyName(Key.other), "other")
+  }
+}
+
+fn total(xs: List<Int>) Int {
+  var sum = 0
+  for x in xs {
+    sum += x
+  }
+  sum
+}
+
+fn countdown(n: Int) String {
+  var out : String = ""
+  var i = n
+  while i > 0 {
+    out += "#{i}"
+    i -= 1
+  }
+  out
+}
+
+fn firstOver(xs: List<Int>, limit: Int) Int {
+  for x in xs {
+    if x > limit {
+      return x
+    }
+  }
+  0 - 1
+}
+
+fn evensBelow(n: Int) Int {
+  var c = 0
+  for i in 0..n {
+    if i % 2 == 0 {
+      c += 1
+    }
+  }
+  c
+}
+
+fn skipAndStop(xs: List<Int>) Int {
+  var sum = 0
+  for x in xs {
+    if x == 2 {
+      continue
+    }
+    if x > 8 {
+      break
+    }
+    sum += x
+  }
+  sum
+}
+
+suite "loops" {
+  test "for over a list accumulates" {
+    assert_eq(total([1, 2, 3, 4]), 10)
+  }
+  test "while counts down" {
+    assert_eq(countdown(3), "321")
+  }
+  test "return exits mid-loop" {
+    assert_eq(firstOver([1, 9, 30, 2], 10), 30)
+    assert_eq(firstOver([1, 2], 10), 0 - 1)
+  }
+  test "range iteration, exclusive and inclusive" {
+    assert_eq(evensBelow(10), 5)
+    var last = 0
+    for i in 1..=3 {
+      last = i
+    }
+    assert_eq(last, 3)
+  }
+  test "continue and break steer" {
+    assert_eq(skipAndStop([1, 2, 3, 9, 4]), 4)
+  }
+}

@@ -1,0 +1,16 @@
+view Main {
+  state count : Int = 0
+
+  Column {
+    Text { text: "Stack demo — later children paint above earlier ones." }
+    Stack {
+      Column {
+        Text { text: "base layer, line 1" }
+        Text { text: "base layer, line 2" }
+        Text { text: "count: #{count}" }
+      }
+      Text { text: "overlay badge" }
+      Button { text: "bump"; onClick: { count = count + 1 } }
+    }
+  }
+}

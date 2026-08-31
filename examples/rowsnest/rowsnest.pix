@@ -1,0 +1,64 @@
+store Grid {
+  state rows : List<String> = []
+  state cols : List<String> = []
+  state items : List<String> = []
+
+  fn seed {
+    rows.push("a")
+    rows.push("b")
+    cols.push("1")
+    cols.push("2")
+  }
+
+  fn widen {
+    cols.push("3")
+  }
+
+  fn fill {
+    items.push("i#{items.length}")
+    items.push("i#{items.length}")
+    items.push("i#{items.length}")
+    items.push("i#{items.length}")
+  }
+}
+
+view Tick(tag: String) {
+  state n : Int = 0
+
+  Row {
+    spacing: 4.0
+    Text { text: "#{tag}=#{n}" }
+    Button {
+      text: tag
+      onClick: {
+        n = n + 1
+      }
+    }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 6.0
+    padding: 10.0
+    Button { text: "seed"; onClick: Grid.seed() }
+    Button { text: "widen"; onClick: Grid.widen() }
+    Button { text: "fill"; onClick: Grid.fill() }
+    for r in Grid.rows {
+      Row {
+        spacing: 6.0
+        for c in Grid.cols {
+          Tick { tag: "#{r}#{c}" }
+        }
+      }
+    }
+    ListView {
+      virtualized: true
+      itemHeight: 26.0
+      height: 120.0
+      for it in Grid.items {
+        Tick { tag: it }
+      }
+    }
+  }
+}

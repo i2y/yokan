@@ -1,0 +1,11 @@
+pub class Greeter {
+  pub prop message : String, default: "hello"
+
+  pub fn shout {
+    message = "HELLO"
+  }
+}
+
+pub fn decorate(t: String) String {
+  "[#{t}]"
+}

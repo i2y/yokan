@@ -1,0 +1,28 @@
+[package]
+name = "pixie-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "pixie-lsp"
+path = "src/main.rs"
+
+[dependencies]
+pixie-syntax = { workspace = true }
+pixie-hir = { workspace = true }
+pixie-types = { workspace = true }
+pixie-binding = { workspace = true }
+# desugar_suite + desugar_store: LSP's analyze pipeline calls into
+# HIR / type-check directly, so we re-run the same AST→AST pre-passes
+# the driver runs. HIR's `Item::Store(_) => unreachable!()` requires
+# `desugar_store` to fire first; suite tests rely on the same flatten.
+pixie-driver = { workspace = true }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "sync"] }
+tower-lsp = "0.20"
+dashmap = "6"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,4 @@
+.vscodeignore
+CHANGELOG.md
+test/**
+node_modules/.bin/**

@@ -1,0 +1,12 @@
+[package]
+name = "pixie-kernel"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# The HTTP battery (§12.3): a BLOCKING client is exactly right for
+# the worker-pool async model — no second runtime beside gpui.
+# Plain dep, not a feature: the shared target compiles it once per
+# machine, so the slim-kernel motivation is moot in dev (revisit at
+# --release).
+ureq = "2"

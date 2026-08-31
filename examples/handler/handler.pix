@@ -1,0 +1,88 @@
+# A handler body is a method body written at the use site, so
+# the same statements belong in both: control flow, locals, and
+# objects built right there. Each of these used to be a named error
+# whose reason nobody had written down.
+
+class Chip {
+  pub prop label : String
+  pub prop hits : Int, default: 0
+
+  init(l: String) {
+    label = l
+  }
+
+  pub fn bump {
+    hits = hits + 1
+  }
+}
+
+store Board {
+  state log : List<String> = []
+  state total : Int = 0
+  state locked : Bool = true
+
+  fn note(s: String) {
+    log.push(s)
+  }
+
+  fn unlock {
+    locked = false
+  }
+
+  fn keep(c: Chip) {
+    total = total + c.hits
+    log.push("#{c.label}=#{c.hits}")
+  }
+}
+
+view Main {
+  Column {
+    spacing: 6.0
+    padding: 12.0
+
+    Text { text: "total: #{Board.total}" }
+    for line in Board.log {
+      Text { text: line }
+    }
+
+    # A loop, an if, and a local the handler assigns to.
+    Button {
+      text: "count"
+      onClick: {
+        var i = 0
+        while i < 10 {
+          i = i + 1
+          if i > 3 {
+            break
+          }
+        }
+        for k in 0..i {
+          Board.note("k#{k}")
+        }
+      }
+    }
+
+    # An object built in the handler: constructed with an argument,
+    # written through, called on, and handed to a store.
+    #
+    # `return` is the early exit a method body has, and it
+    # leaves the whole handler — including from inside the loop above,
+    # which is why the guard sits before the work rather than around
+    # it.
+    Button {
+      text: "chip"
+      onClick: {
+        if Board.locked {
+          Board.note("locked")
+          return
+        }
+        let c = Chip("a")
+        c.hits = 2
+        c.bump()
+        Board.keep(c)
+      }
+    }
+
+    Button { text: "unlock"; onClick: Board.unlock() }
+  }
+}

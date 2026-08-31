@@ -1,0 +1,200 @@
+store Calc {
+  state display : String = "0"
+  state acc : Float = 0.0
+  state op : String = ""
+  state fresh : Bool = true
+  state hasDot : Bool = false
+
+  fn press(d: String) {
+    if fresh {
+      display = d
+      fresh = false
+      hasDot = false
+    } else {
+      if display == "0" {
+        display = d
+      } else {
+        display = display + d
+      }
+    }
+  }
+
+  fn dot {
+    if fresh {
+      display = "0."
+      fresh = false
+      hasDot = true
+    } else {
+      if !hasDot {
+        display = display + "."
+        hasDot = true
+      }
+    }
+  }
+
+  fn negate {
+    case Num.parseFloat(display) {
+      when ok(v) {
+        if v != 0.0 {
+          display = "#{0.0 - v}"
+          fresh = false
+        }
+      }
+      when err(e) {
+        display = "0"
+      }
+    }
+  }
+
+  fn percent {
+    case Num.parseFloat(display) {
+      when ok(v) {
+        display = "#{v / 100.0}"
+        fresh = true
+        hasDot = false
+      }
+      when err(e) {
+        display = "0"
+      }
+    }
+  }
+
+  fn apply(next: String) {
+    if fresh && op != "" {
+      op = next
+      return
+    }
+    var cur = 0.0
+    case Num.parseFloat(display) {
+      when ok(v) {
+        cur = v
+      }
+      when err(e) {
+        cur = 0.0
+      }
+    }
+    if op == "" {
+      acc = cur
+    }
+    if op == "+" {
+      acc = acc + cur
+    }
+    if op == "-" {
+      acc = acc - cur
+    }
+    if op == "×" {
+      acc = acc * cur
+    }
+    if op == "÷" {
+      if cur == 0.0 {
+        display = "Error"
+        acc = 0.0
+        op = ""
+        fresh = true
+        return
+      }
+      acc = acc / cur
+    }
+    display = "#{acc}"
+    op = next
+    fresh = true
+  }
+
+  fn doOp(o: String) {
+    Calc.apply(o)
+  }
+
+  fn equals {
+    Calc.apply("")
+  }
+
+  fn clear {
+    display = "0"
+    acc = 0.0
+    op = ""
+    fresh = true
+    hasDot = false
+  }
+}
+
+style Pad {
+  spacing: 8.0
+  padding: 16.0
+  grow: 1.0
+}
+
+style Keys {
+  spacing: 8.0
+  grow: 5.0
+}
+
+style Key {
+  fontSize: 20.0
+  background: "panel"
+  hover.background: "#45475a"
+  active.background: "#585b70"
+}
+
+style Fun = Key + FunTint
+
+style FunTint {
+  background: "#313244"
+  color: "#a6adc8"
+  hover.background: "#45475a"
+  active.background: "#585b70"
+}
+
+style Op = Key + OpTint
+
+style OpTint {
+  background: "#fab387"
+  color: "#1e1e2e"
+  hover.background: "#f8c49b"
+  active.background: "#f5e0dc"
+}
+
+style Readout {
+  fontSize: 40.0
+  color: "text"
+  align: "right"
+  grow: 1.4
+}
+
+view DigitKey(d: String) {
+  Button { style: Key; text: d; onClick: Calc.press(d) }
+}
+
+view OpKey(o: String) {
+  Button { style: Op; text: o; onClick: Calc.doOp(o) }
+}
+
+view Main {
+  Column {
+    style: Pad
+    Text { style: Readout; text: Calc.display }
+    Grid {
+      columns: 4
+      rows: 5
+      style: Keys
+      Button { style: Fun; text: "C"; onClick: Calc.clear() }
+      Button { style: Fun; text: "±"; onClick: Calc.negate() }
+      Button { style: Fun; text: "%"; onClick: Calc.percent() }
+      OpKey { o: "÷" }
+      DigitKey { d: "7" }
+      DigitKey { d: "8" }
+      DigitKey { d: "9" }
+      OpKey { o: "×" }
+      DigitKey { d: "4" }
+      DigitKey { d: "5" }
+      DigitKey { d: "6" }
+      OpKey { o: "-" }
+      DigitKey { d: "1" }
+      DigitKey { d: "2" }
+      DigitKey { d: "3" }
+      OpKey { o: "+" }
+      Button { style: Key; colSpan: 2; text: "0"; onClick: Calc.press("0") }
+      Button { style: Key; text: "."; onClick: Calc.dot() }
+      OpKey { o: "=" }
+    }
+  }
+}

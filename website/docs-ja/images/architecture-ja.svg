@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    </marker>
+    <marker id="arB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5da9e8"/>
+    </marker>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="796" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="796" rx="20" fill="url(#dots)"/>
+
+  <!-- ============ the one source file ============ -->
+  <rect x="430" y="30" width="340" height="136" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="600" y="60" text-anchor="middle" font-size="21" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.py</text>
+  <text x="600" y="82" text-anchor="middle" font-size="13" fill="#9aa0b5">静的に型付けされた Python のサブセット</text>
+  <rect x="470" y="96" width="200" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="470" y="110" width="248" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="470" y="124" width="160" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="470" y="138" width="130" height="7" rx="3.5" fill="#3d76ad"/>
+  <rect x="608" y="132" width="38" height="18" rx="5" fill="#16283c" stroke="#2f5a86" stroke-width="1.2"/>
+  <text x="627" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="#5da9e8" font-family="ui-monospace,'SF Mono',Menlo,monospace">@py</text>
+  <text x="656" y="145" font-size="11" fill="#6f7590">← エスケープ</text>
+
+  <path d="M540 166 C 470 190, 390 196, 335 214" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M660 166 C 730 190, 810 196, 865 214" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+
+  <!-- lane captions -->
+  <text x="325" y="202" text-anchor="middle" font-size="13.5" fill="#5da9e8" font-weight="700">開発：uv run app.py</text>
+  <text x="875" y="202" text-anchor="middle" font-size="13.5" fill="#e8b34a" font-weight="700">リリース：yokan build --release</text>
+
+  <!-- ============ develop lane: the VM loop ============ -->
+  <rect x="85" y="214" width="480" height="286" rx="14" fill="#1b2130" stroke="#2f5a86" stroke-width="1.6"/>
+
+  <rect x="205" y="238" width="240" height="58" rx="12" fill="#2f6fae" opacity="0.35" filter="url(#glow)"/>
+  <rect x="205" y="238" width="240" height="58" rx="12" fill="#16283c" stroke="#3f79b3" stroke-width="1.8"/>
+  <circle cx="236" cy="267" r="5" fill="#5da9e8"/>
+  <circle cx="250" cy="267" r="5" fill="#f5c542"/>
+  <text x="336" y="273" text-anchor="middle" font-size="17.5" font-weight="700" fill="#cfe4f7" font-family="ui-monospace,'SF Mono',Menlo,monospace">CPython VM</text>
+
+  <path d="M325 296 L325 328" fill="none" stroke="#3f79b3" stroke-width="1.8" marker-end="url(#arB)"/>
+
+  <!-- the loop -->
+  <path d="M 325 342 A 54 54 0 1 1 278 369" fill="none" stroke="#5da9e8" stroke-width="2.4" marker-end="url(#arB)"/>
+  <text x="325" y="391" text-anchor="middle" font-size="20" font-weight="800" fill="#e8eaf2">約 1 ms</text>
+  <text x="325" y="411" text-anchor="middle" font-size="11.5" fill="#9aa0b5">状態はそのまま</text>
+  <text x="325" y="330" text-anchor="middle" font-size="12.5" font-weight="600" fill="#bcd6ee">保存</text>
+  <text x="404" y="420" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">アプリが丸ごと変わる</text>
+  <text x="246" y="420" text-anchor="end" font-size="12.5" font-weight="600" fill="#bcd6ee">編集</text>
+
+  <text x="325" y="482" text-anchor="middle" font-size="13" fill="#9aa0b5">アプリ全体が VM の上で動く、速い開発ループ</text>
+
+  <!-- ============ release lane: the VM leaves ============ -->
+  <rect x="635" y="214" width="480" height="286" rx="14" fill="#1b2130" stroke="#3a4160" stroke-width="1.6"/>
+
+  <rect x="685" y="232" width="380" height="48" rx="11" fill="#1e2232" stroke="#6b74a0" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <text x="875" y="256" text-anchor="middle" font-size="14.5" font-weight="600" fill="#c9d3f5" font-family="ui-monospace,'SF Mono',Menlo,monospace">.pix</text>
+  <text x="875" y="272" text-anchor="middle" font-size="11.5" fill="#9aa0b5">読める中間ソース</text>
+
+  <path d="M875 280 L875 308" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="889" y="299" text-anchor="start" font-size="12" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">rustc</text>
+
+  <rect x="685" y="308" width="380" height="86" rx="12" fill="#2a8f63" opacity="0.28" filter="url(#glow)"/>
+  <rect x="685" y="308" width="380" height="86" rx="12" fill="#12291f" stroke="#2f7c58" stroke-width="1.8"/>
+  <text x="875" y="342" text-anchor="middle" font-size="17.5" font-weight="700" fill="#7fe0b2">ネイティブバイナリ</text>
+  <text x="875" y="366" text-anchor="middle" font-size="12.5" fill="#a9c7b8">libpython はリンクしない · 10.4 MB · 起動 4.7 ms</text>
+
+  <path d="M875 394 L875 424" fill="none" stroke="#3f79b3" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arB)"/>
+
+  <rect x="705" y="424" width="340" height="46" rx="11" fill="#16283c" stroke="#3f79b3" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <circle cx="730" cy="447" r="4.5" fill="#5da9e8"/>
+  <circle cx="742" cy="447" r="4.5" fill="#f5c542"/>
+  <text x="758" y="452" text-anchor="start" font-size="12.5" font-weight="600" fill="#9fc4e4">CPython VM（@py を使うときだけ）</text>
+  <text x="875" y="488" text-anchor="middle" font-size="11.5" fill="#6f7590">--bundle / --onefile でアプリに同梱</text>
+
+  <!-- ============ shared foundation ============ -->
+  <path d="M325 500 L325 518" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M875 500 L875 518" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+
+  <rect x="85" y="522" width="1030" height="80" rx="13" fill="#1b2130" stroke="#465081" stroke-width="1.8"/>
+  <text x="600" y="556" text-anchor="middle" font-size="16.5" font-weight="700" fill="#b9c6fa">pixie-kernel + gpui（Zed のレンダラ）</text>
+  <text x="600" y="581" text-anchor="middle" font-size="12.5" fill="#9aa0b5">要素、リアクティブな状態、描画。両方の実行を支える、ひとつの Rust 実装</text>
+
+  <!-- ============ the gate ============ -->
+  <path d="M325 602 L325 638" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M875 602 L875 638" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="311" y="624" text-anchor="end" font-size="11.5" fill="#8b90a5">開発実行のダンプ</text>
+  <text x="889" y="624" text-anchor="start" font-size="11.5" fill="#8b90a5">リリースビルドのダンプ</text>
+
+  <rect x="85" y="644" width="1030" height="112" rx="13" fill="#251f12" stroke="#e0a83f" stroke-width="1.8"/>
+  <text x="600" y="692" text-anchor="middle" font-size="18" font-weight="800" fill="#f0be62">ゲート</text>
+  <text x="600" y="722" text-anchor="middle" font-size="13" fill="#cdbfa0">同じ操作スクリプトを両方で再生し、画面をバイト単位で突き合わせます（ビルドのたびに）</text>
+</svg>

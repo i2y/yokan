@@ -1,0 +1,43 @@
+[build-system]
+requires = ["maturin>=1.7"]
+build-backend = "maturin"
+
+[project]
+name = "yokan"
+version = "0.1.0"
+description = "Compiles a statically typed subset of Python to native desktop apps."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Yasushi Itoh" }]
+keywords = ["gui", "desktop", "compiler", "native", "ui"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Software Development :: Compilers",
+]
+
+[project.urls]
+Repository = "https://github.com/i2y/yokan"
+Documentation = "https://i2y.github.io/yokan/"
+
+[project.scripts]
+yokan = "yokan_gate:main"
+
+[tool.maturin]
+# abi3-py312: one wheel serves CPython 3.12+ (probed: the whole API
+# surface, PyModule::from_code included, builds under the limited API).
+features = ["extension-module", "pyo3/abi3-py312"]
+module-name = "yokan"
+# The translator/gate rides the wheel as a plain top-level module so
+# the `yokan` console script can import it. The stub rides along so
+# external type checkers see the runtime's real shapes (most
+# importantly: @store binds an INSTANCE to the class name).
+include = [
+    { path = "yokan_gate.py", format = ["sdist", "wheel"] },
+    { path = "yokan.pyi", format = ["sdist", "wheel"] },
+]

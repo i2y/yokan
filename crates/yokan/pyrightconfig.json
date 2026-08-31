@@ -1,0 +1,8 @@
+{
+  "exclude": [
+    "**/.gate",
+    "**/.yokan",
+    "**/dist",
+    "**/__pycache__"
+  ]
+}

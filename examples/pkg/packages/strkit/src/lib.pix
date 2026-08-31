@@ -1,0 +1,7 @@
+pub fn exclaim(t: String) String {
+  "#{t}!!"
+}
+
+pub style Loud {
+  fontSize: 20.0
+}

@@ -1,0 +1,37 @@
+pub class Basket<T> {
+  pub prop items : List<T>, default: []
+
+  pub fn put(v: T) {
+    items.push(v)
+  }
+}
+
+pub class Label {
+  pub prop text : String
+  pub prop stars : Int, default: 0
+
+  init(t: String, s: Int) {
+    text = t
+    stars = s + 1
+  }
+}
+
+view Main {
+  let names = Basket<String>()
+  let nums = Basket<Int>()
+  let title = Label("baskets", 2)
+
+  Column {
+    Text { text: "#{title.text} (#{title.stars})" }
+    Text { text: "names: #{names.items.length}  nums: #{nums.items.length}" }
+    Row {
+      Button { text: "word"; onClick: names.put("pixie") }
+      Button { text: "num"; onClick: nums.put(7) }
+    }
+    ListView {
+      for x in names.items {
+        Text { text: x }
+      }
+    }
+  }
+}

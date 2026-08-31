@@ -1,0 +1,204 @@
+# Grammar fixture: every construct the pixie tmLanguage grammar claims to
+# highlight. Not part of the tier gate — it exists so a human (or a
+# tokenizer harness) can eyeball the scopes after editing the grammar.
+
+use ui
+use ui.buttons as B
+use model.{Palette, Basket as Bag}
+
+pub struct Point {
+  var x: Int
+  var y: Int
+
+  fn sum Int {
+    self.x + self.y
+  }
+}
+
+enum Color {
+  Red
+  Green
+  Blue
+}
+
+error MathError {
+  divByZero
+  negative(v: Int)
+}
+
+trait Labeled {
+  fn tag String
+}
+
+impl Labeled for Palette {
+  pub fn tag String { "palette" }
+}
+
+pub class Basket<T> {
+  pub prop items : List<T>, default: []
+  pub prop label : String
+
+  init(l: String) {
+    label = l
+  }
+
+  pub fn put(v: T) {
+    items.push(v)
+  }
+}
+
+store Session {
+  state name : String = ""
+  state ratio : Float = 0.5
+  state hits : Int = 0
+  state saved : Bool = false
+  state tags : List<String> = []
+  state headers : Map<String, String> = { "X-Pixie": "sparkle" }
+  state note : String? = nil
+
+  fn update(t: String) {
+    name = t
+    hits += 1
+  }
+
+  fn sweep {
+    for tag in tags {
+      if tag == "skip" { continue }
+      if tag == "stop" { break }
+      name = name + tag
+    }
+    var i = 3
+    while i > 0 { i -= 1 }
+    for k in 0..=2 { hits += k }
+  }
+
+  async fn save {
+    case await Fs.writeString("/tmp/pixie-hello.txt", name) {
+      when ok(_) {
+        saved = true
+      }
+      when err(e) {
+        name = "write failed: #{e}"
+      }
+    }
+  }
+
+  fn describe String {
+    case note {
+      when some(v) { "note: #{v} (#{ratio:.2f})" }
+      when nil { "no note — #{hits} hits" }
+    }
+  }
+}
+
+style Key {
+  background: "#313244"
+  hover.background: "#45475a"
+  active.background: "#a6e3a1"
+}
+
+style Hot { background: "#fab387" }
+
+style KeyOp = Key + Hot
+
+style Pad {
+  spacing: 6.0
+  padding: 14.0
+  background: "panel"
+}
+
+view Tally(who: String, step: Int) {
+  state n : Int = 0
+
+  Row {
+    spacing: 4.0
+    Text { text: "#{who}: #{n}" }
+    Button {
+      style: Key
+      text: "+#{step}"
+      onClick: {
+        n = n + step
+      }
+    }
+  }
+}
+
+view Card(title: String) {
+  Column {
+    Text { fontSize: 18.0; color: "accent"; text: title }
+    Slot { }
+  }
+}
+
+view Main {
+  let bag = Basket<String>("names")
+  state open : Bool = false
+
+  Column {
+    style: Pad
+    grow: 1.0
+
+    Text { text: "#{Session.describe()}" }
+
+    TextField {
+      text: Session.name
+      placeholder: "your name"
+      onTextChanged: Session.update(text)
+      onSubmitted: Session.save()
+    }
+
+    if Session.saved {
+      Text { color: "accent"; text: "saved" }
+    } else {
+      ProgressBar { value: Session.ratio }
+    }
+
+    Card {
+      title: "counters"
+      Tally { who: "ada"; step: 1 }
+      Tally { who: "grace"; step: 10 }
+    }
+
+    ui.Card {
+      title: "foreign component"
+    }
+
+    ListView {
+      virtualized: true
+      itemHeight: 24.0
+      for x in bag.items {
+        Text { text: x }
+      }
+    }
+
+    Grid {
+      columns: 3
+      rows: 2
+      spacing: 6.0
+      Button { text: "1"; onClick: Session.sweep() }
+      Button { text: "2"; onClick: Session.sweep() }
+      Button { text: "3"; onClick: Session.sweep() }
+      Button { colSpan: 2; text: "wide"; onClick: Session.sweep() }
+      Text { text: "cell" }
+    }
+
+    Row {
+      Button { style: KeyOp; text: "÷"; onClick: Session.sweep() }
+      Button { text: "save"; onClick: Session.save() }
+      Spinner { size: 24.0 }
+    }
+
+    Modal {
+      open: open
+      Text { text: "hello" }
+    }
+  }
+}
+
+test fn addition {
+  assert_eq(Point(3, 4).sum(), 7)
+}
+
+suite "edge cases" {
+  test "zero" { assert_true(true) }
+}

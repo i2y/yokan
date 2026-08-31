@@ -1,0 +1,18 @@
+store App {
+  state fruits : List<String> = ["apple", "banana", "cherry"]
+  state tabs : List<String> = ["Home", "Feed", "Settings"]
+  state ix : Int = 0
+  state pick : Int = 0
+  state tab : Int = 0
+}
+
+view Main {
+  Column {
+    Text { text: "select: #{App.ix}" }
+    Select { options: App.fruits; selected: App.ix; onSelect: { App.ix = index } }
+    Text { text: "radio: #{App.pick}" }
+    RadioGroup { options: App.fruits; selected: App.pick; onSelect: { App.pick = index } }
+    Text { text: "tab: #{App.tab}" }
+    TabBar { labels: App.tabs; active: App.tab; onSelect: { App.tab = index } }
+  }
+}

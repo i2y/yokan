@@ -1,0 +1,90 @@
+store Stats {
+  state clicks : Int = 0
+
+  fn record {
+    clicks = clicks + 1
+  }
+}
+
+fn double(x: Int) Int {
+  x * 2
+}
+
+pub class Counter {
+  pub prop count : Int, default: 0
+  pub prop status : String, default: ""
+
+  pub fn increment {
+    count = count + 1
+    Stats.record()
+  }
+
+  pub fn save {
+    case Fs.writeString("/tmp/pixie-counter.txt", "#{count}") {
+      when ok { status = "saved" }
+      when err(e) { status = "error: #{e}" }
+    }
+  }
+
+  pub fn load {
+    case Fs.readToString("/tmp/pixie-counter.txt") {
+      when ok(text) {
+        case Num.parseInt(text) {
+          when ok(v) {
+            count = v
+            status = "loaded"
+          }
+          when err(e) { status = "bad file: #{e}" }
+        }
+      }
+      when err(e) { status = "error: #{e}" }
+    }
+  }
+}
+
+pub class Todo {
+  pub prop items : List<String>, default: []
+
+  pub fn addItem {
+    items.push("item #{items.length}")
+  }
+}
+
+view Main {
+  let counter = Counter()
+  let todo = Todo()
+  state bump : Int = 100
+
+  Column {
+    Text { text: "clicks: #{Stats.clicks}  bump: #{bump}" }
+    Button { text: "bump"; onClick: { bump = bump + 10 } }
+    Text { text: "Count: #{counter.count}" }
+    Button { text: "+1"; onClick: counter.increment() }
+    Button { text: "save"; onClick: counter.save() }
+    Button { text: "load"; onClick: counter.load() }
+    Text { text: "status: #{counter.status}" }
+    Button { text: "add"; onClick: todo.addItem() }
+    ListView {
+      for it in todo.items {
+        Text { text: it }
+      }
+    }
+    Text { text: "items: #{todo.items.length}" }
+  }
+}
+
+test fn doubleWorks {
+  assert_eq(double(21), 42)
+}
+
+test fn freshWorldPerTest {
+  assert_eq(Stats.clicks, 0)
+}
+
+suite "stats" {
+  test "record increments clicks" {
+    Stats.record()
+    Stats.record()
+    assert_eq(Stats.clicks, 2)
+  }
+}

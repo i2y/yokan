@@ -1,0 +1,149 @@
+# Demos
+
+Every demo is one file (opsboard and multi are directories) and runs
+as-is from `crates/yokan/` in the repository:
+
+```console
+$ cd crates/yokan
+$ uv run demo/counter.py            # substitute any demo's name
+$ ./tools/gate_all.sh               # gate-check every demo at once
+```
+
+The three numpy demos (pystats / csv_viewer / app) run with
+`uv run --with numpy`. Four demos — `app` `csv_viewer` `dashboard`
+`tasks` — use dict state and are development-only by design (see the
+[What does not work yet](tour-ship.md#what-does-not-work-yet) section); they are listed here, not gated. All screenshots show
+the initial state, right after launch.
+
+## Start here
+
+#### counter — the smallest app. The same app in two other spellings: counter_state.py (typed State cells) and counter_with.py
+<img src="images/demos/counter.png" width="360">
+
+#### opsboard — the flagship: a three-module dashboard (two stores, a sum-typed health model, charts, a virtualized alert feed, theme flip, fs report export)
+<img src="images/demos/opsboard.png" width="720">
+
+#### forms — the full set of form controls: checkbox / switch / slider / select / radio_group / tab_bar; each handler receives the one new value
+<img src="images/demos/forms.png" width="360">
+
+#### calc — the classic keypad calculator: the layout is all `grow`, so resizing scales the whole pad with no dead space
+<img src="images/demos/calc.png" width="300">
+
+#### calcgrid — the same calculator on `ui.grid(columns=4, rows=5)`; the zero key spans two cells with `col_span=2`
+<img src="images/demos/calcgrid.png" width="300">
+
+## Holding state
+
+#### stores — named stores: the class name IS the singleton, and stores call each other's methods
+<img src="images/demos/stores.png" width="360">
+
+#### models — @model and Protocol: observed objects, and statically dispatched interfaces
+<img src="images/demos/models.png" width="360">
+
+#### links — models referencing models: owning `Node | None`, non-owning `Weak[Node]` back pointers (no cycles, so dropping the root frees the chain)
+<img src="images/demos/links.png" width="360">
+
+#### stateful — @component + ui.local: a component with its own state per call site
+<img src="images/demos/stateful.png" width="360">
+
+#### lookup — dict cells: reads via `.get(key, default)` and `in`, writes in place with `cell[k] = v`
+<img src="images/demos/lookup.png" width="360">
+
+#### mixer — a fields-only @store: annotated fields, direct assignment, the screen follows
+<img src="images/demos/mixer.png" width="360">
+
+## Values and types
+
+#### points — Value classes (frozen dataclasses): updates are functional, via `replace`
+<img src="images/demos/points.png" width="360">
+
+#### vecops — operators on Value classes: define `__add__` / `__sub__` / `__mul__` and `+` `-` `*` mean that
+<img src="images/demos/vecops.png" width="360">
+
+#### geometry — static dispatch through Protocol: the trait story, compiled
+<img src="images/demos/geometry.png" width="360">
+
+#### moods — Enum, Optional and animation
+<img src="images/demos/moods.png" width="360">
+
+#### pyops — CPython's own arithmetic: `/` `//` `%` `**`, negative indexing, sorted() — byte-identical in both runs
+<img src="images/demos/pyops.png" width="360">
+
+#### pytext — bare float / bool / Enum text renders exactly as Python's str()
+<img src="images/demos/pytext.png" width="360">
+
+## Control flow and errors
+
+#### flow — real control flow in handlers: if / elif / while / for / break / continue
+<img src="images/demos/flow.png" width="360">
+
+#### edges — containment, demonstrated: out-of-bounds and overflow stop the same statement the same way in both runs, and the app keeps running
+<img src="images/demos/edges.png" width="360">
+
+#### tryfetch — the full try/except form: catch a failing http call, with `f"{e}"` identical in both runs
+<img src="images/demos/tryfetch.png" width="360">
+
+## UI elements
+
+#### todo — the classic todo list
+<img src="images/demos/todo.png" width="360">
+
+#### dialog — the modal: existing IS being open, so wrap it in `if`
+<img src="images/demos/dialog.png" width="360">
+
+#### trend — line and bar charts
+<img src="images/demos/trend.png" width="360">
+
+#### styled — named styles (`ui.style` + `**` splat + `|` merge) and theme scopes
+<img src="images/demos/styled.png" width="360">
+
+#### cards — components with slots (components that take children)
+<img src="images/demos/cards.png" width="360">
+
+## The standard library
+
+#### files — yokan.fs: write and read back (both runs call the same implementation)
+<img src="images/demos/files.png" width="360">
+
+#### dbnotes — yokan.sqlite: shape rows with SQL, order with ORDER BY
+<img src="images/demos/dbnotes.png" width="360">
+
+#### ledger — a practical app: a household ledger persisted in sqlite
+<img src="images/demos/ledger.png" width="360">
+
+#### webfetch — yokan.http: the gate needs no network (an @py fixture server runs in both runs)
+<img src="images/demos/webfetch.png" width="360">
+
+#### reader — an http + json feed reader
+<img src="images/demos/reader.png" width="360">
+
+#### stdlib — math / json / time
+<img src="images/demos/stdlib.png" width="360">
+
+#### dice — yokan.random: seed it and both runs draw the same sequence
+<img src="images/demos/dice.png" width="360">
+
+## A Rust crate of your own
+
+#### rustcrate — Rust crates, added with `yokan add`: a local path crate and a crates.io version crate side by side, called by their own snake_case names. The pyproject spelling of the same declaration is `demo/proj/`
+<img src="images/demos/rustcrate.png" width="360">
+
+## Escapes and development-only
+
+#### pystats — @py + numpy: escaped functions ship with CPython embedded in the release binary
+<img src="images/demos/pystats.png" width="360">
+
+#### multi — a multi-module app (state.py and widgets.py; helpers become components)
+<img src="images/demos/multi.png" width="360">
+
+#### dashboard — a load-average display driven by ui.every() (development-only: dict state)
+<img src="images/demos/dashboard.png" width="360">
+
+#### app — a dashboard with numpy (development-only: dict state)
+<img src="images/demos/app.png" width="360">
+
+#### csv_viewer — a 100k-row virtualized table + numpy (development-only: dict state)
+<img src="images/demos/csv_viewer.png" width="360">
+
+#### tasks — worker threads via ui.task() (development-only: dict state)
+<img src="images/demos/tasks.png" width="360">

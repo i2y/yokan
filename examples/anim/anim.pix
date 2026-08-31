@@ -1,0 +1,86 @@
+store Panel {
+  state pct : Float = 0.0
+  state boxWidth : Float = 60.0
+  state boxColor : String = "#3355ff"
+  state openOn : Bool = false
+  # The riders take expressions, so the curve and the fades
+  # are ordinary state an app can offer a control for.
+  state curve : String = "linear"
+  state fades : Bool = true
+
+  fn step {
+    pct = 0.75
+  }
+
+  fn wide {
+    boxWidth = 200.0
+    boxColor = "#ff5533"
+  }
+
+  fn narrow {
+    boxWidth = 60.0
+    boxColor = "#3355ff"
+  }
+
+  fn show {
+    openOn = true
+  }
+
+  fn hide {
+    openOn = false
+  }
+
+  # A toggle, and the row below reads it back — a switch whose only
+  # effect is on the NEXT tween looks broken when you press it.
+  fn ease {
+    if curve == "linear" {
+      curve = "inOut"
+      fades = false
+    } else {
+      curve = "linear"
+      fades = true
+    }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Row {
+      spacing: 6.0
+      Button { text: "step"; onClick: Panel.step() }
+      Button { text: "wide"; onClick: Panel.wide() }
+      Button { text: "narrow"; onClick: Panel.narrow() }
+      Button { text: "show"; onClick: Panel.show() }
+      Button { text: "hide"; onClick: Panel.hide() }
+      Button { text: "ease"; onClick: Panel.ease() }
+    }
+
+    Text { text: "easing: #{Panel.curve}   fades: #{Panel.fades}" }
+
+    ProgressBar {
+      value: Panel.pct
+      animate: 200.0
+    }
+
+    Button {
+      text: "box"
+      width: Panel.boxWidth
+      background: Panel.boxColor
+      animate: 300.0
+      easing: Panel.curve
+      onClick: Panel.narrow()
+    }
+
+    if Panel.openOn {
+      Text {
+        text: "hello"
+        animate: 200.0
+        enter: Panel.fades
+        exit: Panel.fades
+      }
+    }
+  }
+}

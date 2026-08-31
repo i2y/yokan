@@ -1,0 +1,145 @@
+# Memory, made visible. Three buttons, three shapes.
+#
+# `churn`  — objects a method creates and never lets out. Escape
+#            analysis frees them at the end of each iteration, so the
+#            live count does not move at all, and each one runs its
+#            `deinit` on the way out.
+# `reload` — a document dropped and rebuilt. The old nodes lose their
+#            last counted edge and go, children first.
+# `cycle`  — the one thing refcounting cannot do on its own. `Node`
+#            has TWO back-pointers to its parent: `owner` is weak and
+#            drops with the parent, `trap` is strong and does not.
+#
+# `PIXIE_SCRIPT`'s `mem` step prints the World's live-object count, so
+# each of these is a number the tier gate checks rather than a claim.
+
+class Node {
+  pub prop v : Int, default: 0
+  pub prop kids : List<Node>, default: []
+  pub weak prop owner : List<Node>, default: []
+  pub prop trap : List<Node>, default: []
+
+  # `deinit` runs when the last reference goes, while the
+  # object can still read itself. It fires for BOTH ways a node is
+  # freed — the last edge dropping and a scope-end reclaim — which is
+  # what makes `churn` countable from the other side: 5000
+  # temporaries created, 5000 destructors run, live count unmoved.
+  deinit {
+    Doc.dropped = Doc.dropped + 1
+  }
+}
+
+# `shared` — an object a VIEW owns, handed to a store's list and then
+# dropped from it. The view still holds it, so it must survive: a
+# view's fields are counted edges like any other. Take that table
+# away and this exact script panics with "stale handle", which is why
+# it is a reading in the gate rather than a sentence here.
+class Tally {
+  pub prop hits : Int, default: 0
+  pub fn bump { hits = hits + 1 }
+}
+
+store Bin {
+  state kept : List<Tally> = []
+  fn take(t: Tally) { kept.push(t) }
+  fn purge { kept = [] }
+}
+
+store Doc {
+  state roots : List<Node> = []
+  state note : String = "press a button"
+  state dropped : Int = 0
+
+  fn churn {
+    for i in 0..5000 {
+      let t = Node()
+      t.v = i
+    }
+    note = "5000 temporaries created and freed"
+  }
+
+  fn reload {
+    roots = []
+    for i in 0..300 {
+      let top = Node()
+      let kid = Node()
+      top.kids = [kid]
+      kid.owner = [top]
+      roots.push(top)
+    }
+    note = "600 nodes, back-pointer is weak"
+  }
+
+  # A real tree: children appended THROUGH the parent object, which
+  # is the shape `t.kids.push(k)` had to be a named error for until
+  # a list property got a `push` of its own. Filling is
+  # linear now — the old read-modify-write copied the whole list per
+  # append.
+  fn tree {
+    roots = []
+    let top = Node()
+    for i in 0..400 {
+      let k = Node()
+      k.v = i
+      top.kids.push(k)
+      k.owner = [top]
+    }
+    roots.push(top)
+    note = "401 nodes, appended through the parent"
+  }
+
+  # `xs[i] = v` writes through the trapping index, the write
+  # twin of the `xs[i]` that reads. The list comes OUT of the object
+  # first, so the copy-on-write finds one owner and the assignment
+  # lands in place instead of copying the whole list.
+  fn relabel {
+    let top = Node()
+    for i in 0..3 {
+      let k = Node()
+      top.kids.push(k)
+    }
+    top.kids[0].v = 10
+    top.kids[2].v = 30
+    roots = [top]
+    note = "kids: #{top.kids[0].v} #{top.kids[1].v} #{top.kids[2].v}"
+  }
+
+  fn cycle {
+    roots = []
+    for i in 0..300 {
+      let top = Node()
+      let kid = Node()
+      top.kids = [kid]
+      kid.trap = [top]
+      roots.push(top)
+    }
+    note = "600 nodes, back-pointer is STRONG — the cycle leaks"
+  }
+}
+
+view Main {
+  let mine = Tally()
+
+  Column {
+    spacing: 8.0
+    padding: 12.0
+    Text { fontSize: 18.0; text: "roots: #{Doc.roots.length}" }
+    Text { text: Doc.note }
+    Text { text: "dropped: #{Doc.dropped}" }
+    Row {
+      spacing: 6.0
+      Button { text: "churn"; onClick: Doc.churn() }
+      Button { text: "reload"; onClick: Doc.reload() }
+      Button { text: "tree"; onClick: Doc.tree() }
+      Button { text: "cycle"; onClick: Doc.cycle() }
+      Button { text: "relabel"; onClick: Doc.relabel() }
+    }
+    Row {
+      spacing: 6.0
+      Text { text: "shared: #{mine.hits}" }
+      Button { text: "stash"; onClick: Bin.take(mine) }
+      Button { text: "purge"; onClick: Bin.purge() }
+      Button { text: "bump"; onClick: mine.bump() }
+    }
+  }
+}

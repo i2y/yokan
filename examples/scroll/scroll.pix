@@ -1,0 +1,76 @@
+store Feed {
+  state items : List<String> = []
+
+  fn fill {
+    items.push("pushed #{items.length}")
+    items.push("pushed #{items.length}")
+    items.push("pushed #{items.length}")
+    items.push("pushed #{items.length}")
+  }
+
+  fn addOne {
+    items.push("pushed #{items.length}")
+  }
+
+  fn reseed {
+    items = ["seeded a", "seeded b"]
+  }
+
+  fn clear {
+    items = []
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "pushed rows: #{Feed.items.length}" }
+    Row {
+      Button { text: "fill"; onClick: Feed.fill() }
+      Button { text: "one"; onClick: Feed.addOne() }
+      Button { text: "reseed"; onClick: Feed.reseed() }
+      Button { text: "clear"; onClick: Feed.clear() }
+    }
+    ScrollView {
+      height: 240.0
+      Text { text: "seed row 01" }
+      Text { text: "seed row 02" }
+      Text { text: "seed row 03" }
+      Text { text: "seed row 04" }
+      Text { text: "seed row 05" }
+      Text { text: "seed row 06" }
+      Text { text: "seed row 07" }
+      Text { text: "seed row 08" }
+      Text { text: "seed row 09" }
+      Text { text: "seed row 10" }
+      Text { text: "seed row 11" }
+      Text { text: "seed row 12" }
+      Text { text: "seed row 13" }
+      Text { text: "seed row 14" }
+      Text { text: "seed row 15" }
+      Text { text: "seed row 16" }
+      Text { text: "seed row 17" }
+      Text { text: "seed row 18" }
+      Text { text: "seed row 19" }
+      Text { text: "seed row 20" }
+      Text { text: "seed row 21" }
+      Text { text: "seed row 22" }
+      Text { text: "seed row 23" }
+      Text { text: "seed row 24" }
+      for it in Feed.items {
+        Text { text: it }
+      }
+    }
+    HScrollView {
+      Text { text: "column alpha" }
+      Text { text: "column bravo" }
+      Text { text: "column charlie" }
+      Text { text: "column delta" }
+      Text { text: "column echo" }
+      Text { text: "column foxtrot" }
+      Text { text: "column golf" }
+      Text { text: "column hotel" }
+      Text { text: "column india" }
+      Text { text: "column juliett" }
+    }
+  }
+}

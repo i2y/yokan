@@ -1,0 +1,232 @@
+//! The headless `PIXIE_SCRIPT` harness, hoisted out of the generated
+//! `main` template so every front end runs the SAME steps: the
+//! compiled tier, the interpreted tier (build delegation makes the
+//! tier gate meaningful), and embedders like pixie-py. The bodies are
+//! transcribed verbatim from the template this replaced — dump bytes
+//! are part of the gate's contract. `run` returns the final dump
+//! instead of printing it, so callers keep stdout byte-identical by
+//! printing the return value themselves.
+
+use crate::{Component, Element, Handle, Runtime, Str, World, a11y, anim, build_prepared, theme};
+
+/// Flush queued signals; rebuild if any view dirtied.
+pub fn flush<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
+    let next = rt.with(|w| {
+        w.flush();
+        if w.take_dirty_views().is_empty() {
+            None
+        } else {
+            Some(build_prepared(w, view))
+        }
+    });
+    if let Some(t) = next {
+        *tree = t;
+    }
+}
+
+/// Run every live tween to its end (§8.35). Animation must not
+/// change what a script MEANS: a step that does not ask to stand
+/// at a particular instant ends with time run forward, so a demo
+/// that never mentions time dumps exactly as it did before
+/// animation existed. `advance:<ms>` is the opt-in that leaves
+/// the tree mid-flight.
+pub fn anim_settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
+    for _ in 0..64 {
+        let done = rt.with(|w| match anim::last_end(w) {
+            None => true,
+            Some(end) => {
+                if end > anim::now(w) {
+                    anim::set_now(w, end);
+                }
+                false
+            }
+        });
+        if done {
+            return;
+        }
+        *tree = rt.with(|w| build_prepared(w, view));
+    }
+}
+
+/// Spin the async tier to completion (bounded — a task that never
+/// completes is a harness misuse, not a hang).
+pub fn settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
+    let mut spins = 0usize;
+    while rt.has_tasks() {
+        rt.turn();
+        flush(rt, view, tree);
+        spins += 1;
+        if spins > 5000 {
+            panic!("async tasks did not settle within ~5s");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+/// The step loop. Steps: `click:<label>` · `input[@n]:<text>` ·
+/// `submit[@n]` · `slide[@n]:<value>` (the n-th Slider in tree
+/// order, default 0: clamp the value to `[min, max]`, snap it to
+/// the nearest step multiple counted from min, run `onChange`) ·
+/// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
+/// TabBar — picks the option with exactly this text) ·
+/// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
+/// `mem`. Every step settles the async tier before the next one
+/// runs, so scripted runs stay deterministic. Time does not move
+/// between steps: the clock only jumps at an explicit `advance:` or
+/// once at the end, so a script that never mentions time dumps
+/// exactly as it did before animation existed, and one that ENDS at
+/// an `advance:` dumps the frame that instant would have painted.
+pub fn run<C: Component>(
+    rt: &Runtime,
+    view: Handle<C>,
+    tree: &mut Element,
+    script: &str,
+) -> String {
+    let mut timed = false;
+    for step in script.split(',').filter(|s| !s.is_empty()) {
+        timed = false;
+        if let Some(name) = step.strip_prefix("theme:") {
+            // §8.37: flipping the root palette is an ordinary
+            // rebuild now, because the colors live in the tree.
+            let light = match name {
+                "light" => true,
+                "dark" => false,
+                _ => panic!("unknown theme `{name}`"),
+            };
+            rt.with(|w: &mut World| theme::set_light(w, light));
+            *tree = rt.with(|w| build_prepared(w, view));
+        } else if step == "mem" {
+            // §8.44: how many objects the World is holding. A
+            // checked output, the way the accessibility tree is.
+            let n = rt.with(|w: &mut World| w.live_objects());
+            println!("live: {n}");
+        } else if step == "a11y" {
+            // §8.36: the accessibility tree is a KERNEL output, so
+            // a script can print exactly what a platform adapter
+            // would be handed.
+            let t = a11y::tree(tree);
+            <a11y::DumpEngine as a11y::Engine>::push_accessibility(&mut a11y::DumpEngine, t);
+        } else if let Some(ms) = step.strip_prefix("advance:") {
+            let ms: f64 = ms
+                .parse()
+                .unwrap_or_else(|_| panic!("bad advance step `{step}`"));
+            rt.with(|w: &mut World| anim::advance(w, ms));
+            *tree = rt.with(|w| build_prepared(w, view));
+            timed = true;
+        } else if let Some(label) = step.strip_prefix("click:") {
+            // Buttons keep priority; when none carries the label, a
+            // Checkbox/Switch answers (tree order among toggles) and
+            // clicking it runs `onToggle` with the NEW value.
+            if let Some(f) = rt.with(|w| tree.find_button(w, label)) {
+                crate::contain("click handler", || rt.with(|w: &mut World| f(w)));
+            } else {
+                let (checked, on_toggle) = rt
+                    .with(|w| tree.find_toggle(w, label))
+                    .unwrap_or_else(|| panic!("no button or toggle `{label}`"));
+                let f = on_toggle
+                    .unwrap_or_else(|| panic!("toggle `{label}` has no onToggle"));
+                crate::contain("click handler", || {
+                    rt.with(|w: &mut World| f(w, !checked))
+                });
+            }
+        } else if let Some(rest) = step.strip_prefix("input") {
+            let (n, text) = if let Some(r) = rest.strip_prefix('@') {
+                let (a, b) = r
+                    .split_once(':')
+                    .unwrap_or_else(|| panic!("bad input step `{step}`"));
+                let ix: usize = a
+                    .parse()
+                    .unwrap_or_else(|_| panic!("bad input index `{step}`"));
+                (ix, b)
+            } else if let Some(t) = rest.strip_prefix(':') {
+                (0usize, t)
+            } else {
+                panic!("unknown script step `{step}`");
+            };
+            let (_, change, _) = rt
+                .with(|w| tree.find_text_field(w, n))
+                .unwrap_or_else(|| panic!("no TextField #{n}"));
+            let f = change.unwrap_or_else(|| panic!("TextField #{n} has no onTextChanged"));
+            crate::contain("input handler", || {
+                rt.with(|w: &mut World| f(w, Str::from(text)))
+            });
+        } else if let Some(rest) = step.strip_prefix("submit") {
+            let n: usize = if let Some(r) = rest.strip_prefix('@') {
+                r.parse()
+                    .unwrap_or_else(|_| panic!("bad submit index `{step}`"))
+            } else if rest.is_empty() {
+                0
+            } else {
+                panic!("unknown script step `{step}`");
+            };
+            let (val, _, submit) = rt
+                .with(|w| tree.find_text_field(w, n))
+                .unwrap_or_else(|| panic!("no TextField #{n}"));
+            let f = submit.unwrap_or_else(|| panic!("TextField #{n} has no onSubmitted"));
+            crate::contain("submit handler", || rt.with(|w: &mut World| f(w, val)));
+        } else if let Some(rest) = step.strip_prefix("slide") {
+            let (n, raw) = if let Some(r) = rest.strip_prefix('@') {
+                let (a, b) = r
+                    .split_once(':')
+                    .unwrap_or_else(|| panic!("bad slide step `{step}`"));
+                let ix: usize = a
+                    .parse()
+                    .unwrap_or_else(|_| panic!("bad slide index `{step}`"));
+                (ix, b)
+            } else if let Some(v) = rest.strip_prefix(':') {
+                (0usize, v)
+            } else {
+                panic!("unknown script step `{step}`");
+            };
+            let val: f64 = raw
+                .parse()
+                .unwrap_or_else(|_| panic!("bad slide value `{step}`"));
+            let (min, max, snap_step, change) = rt
+                .with(|w| tree.find_slider(w, n))
+                .unwrap_or_else(|| panic!("no Slider #{n}"));
+            let f = change.unwrap_or_else(|| panic!("Slider #{n} has no onChange"));
+            // The same clamp-and-snap the engine's pointer math runs,
+            // so a scripted slide and a real drag land on identical
+            // values.
+            let v = crate::slider_snap(min, max, snap_step, val);
+            crate::contain("slide handler", || rt.with(|w: &mut World| f(w, v)));
+        } else if let Some(rest) = step.strip_prefix("select") {
+            // `select:<label>` / `select@n:<label>` — the nth CHOOSER
+            // (Select, RadioGroup or TabBar, counted together in tree
+            // order; default 0) picks the option/label with exactly
+            // this text, running `onSelect` with its 0-based index.
+            let (n, label) = if let Some(r) = rest.strip_prefix('@') {
+                let (a, b) = r
+                    .split_once(':')
+                    .unwrap_or_else(|| panic!("bad select step `{step}`"));
+                let ix: usize = a
+                    .parse()
+                    .unwrap_or_else(|_| panic!("bad select index `{step}`"));
+                (ix, b)
+            } else if let Some(t) = rest.strip_prefix(':') {
+                (0usize, t)
+            } else {
+                panic!("unknown script step `{step}`");
+            };
+            let (options, on_select) = rt
+                .with(|w| tree.find_chooser(w, n))
+                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar)"));
+            let ix = options
+                .iter()
+                .position(|o| o.as_str() == label)
+                .unwrap_or_else(|| panic!("chooser #{n} has no option `{label}`"));
+            let f = on_select.unwrap_or_else(|| panic!("chooser #{n} has no onSelect"));
+            crate::contain("select handler", || {
+                rt.with(|w: &mut World| f(w, ix as i64))
+            });
+        } else {
+            panic!("unknown script step `{step}`");
+        }
+        flush(rt, view, tree);
+        settle(rt, view, tree);
+    }
+    if !timed {
+        anim_settle(rt, view, tree);
+    }
+    rt.with(|w| tree.dump(w))
+}

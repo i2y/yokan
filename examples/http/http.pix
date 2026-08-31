@@ -1,0 +1,65 @@
+store Net {
+  state status : String = "idle"
+  state body : String = ""
+  state blobLen : Int = 0
+  state echoed : String = ""
+  state tagged : String = ""
+
+  async fn hit {
+    var base : String = ""
+    case Kernel.envVar("PIXIE_HTTP_BASE") {
+      when some(b) {
+        base = b
+      }
+      when nil {
+        base = "http://127.0.0.1:9"
+      }
+    }
+    status = "fetching"
+    case await Http.get("#{base}/hello") {
+      when ok(b) {
+        body = b
+      }
+      when err(e) {
+        status = "GET failed: #{e}"
+      }
+    }
+    case await Http.getBytes("#{base}/blob") {
+      when ok(bs) {
+        blobLen = bs.length
+      }
+      when err(e) {
+        status = "blob failed: #{e}"
+      }
+    }
+    case await Http.post("#{base}/echo", "ping-pong") {
+      when ok(b) {
+        echoed = b
+      }
+      when err(e) {
+        status = "POST failed: #{e}"
+      }
+    }
+    let h : Map<String, String> = { "X-Pixie": "sparkle" }
+    case await Http.getWith("#{base}/tag", h) {
+      when ok(b) {
+        tagged = b
+        status = "done"
+      }
+      when err(e) {
+        status = "header GET failed: #{e}"
+      }
+    }
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "status: #{Net.status}" }
+    Text { text: "body: #{Net.body}" }
+    Text { text: "blob: #{Net.blobLen} bytes" }
+    Text { text: "echo: #{Net.echoed}" }
+    Text { text: "tag: #{Net.tagged}" }
+    Button { text: "hit"; onClick: Net.hit() }
+  }
+}

@@ -1,0 +1,19 @@
+use strkit
+
+store Calc {
+  state result : Int = 0
+  state label : String = ""
+
+  fn go {
+    result = Mathkit.triple(14)
+    let shouted : String = Mathkit.shout("crates work")
+    label = strkit.exclaim(shouted)
+  }
+}
+
+view Main {
+  Column {
+    Text { style: Loud; text: "#{Calc.result} #{Calc.label}" }
+    Button { text: "go"; onClick: Calc.go() }
+  }
+}

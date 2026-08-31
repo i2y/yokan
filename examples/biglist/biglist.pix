@@ -1,0 +1,36 @@
+store Rows {
+  state rows : List<String> = []
+
+  fn fill {
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+    rows.push("row #{rows.length}")
+  }
+
+  fn clear {
+    rows = []
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "rows: #{Rows.rows.length}" }
+    Row {
+      Button { text: "fill"; onClick: Rows.fill() }
+      Button { text: "clear"; onClick: Rows.clear() }
+    }
+    ListView {
+      virtualized: true
+      itemHeight: 24.0
+      height: 280.0
+      for r in Rows.rows {
+        Text { text: r }
+      }
+    }
+  }
+}

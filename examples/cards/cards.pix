@@ -1,0 +1,44 @@
+store Log {
+  state last : String = ""
+
+  fn note(s: String) {
+    last = s
+  }
+}
+
+view Counter(label: String, step: Int) {
+  state n : Int = 0
+
+  Row {
+    spacing: 6.0
+    Text { text: "#{label}: #{n}" }
+    Button {
+      text: "+#{step}"
+      onClick: {
+        n = n + step
+        Log.note(label)
+      }
+    }
+  }
+}
+
+view Card(title: String) {
+  Column {
+    spacing: 4.0
+    Text { fontSize: 18.0; text: title }
+    Slot { }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 10.0
+    padding: 16.0
+    Card {
+      title: "counters"
+      Counter { label: "a"; step: 1 }
+      Counter { label: "b"; step: 10 }
+    }
+    Text { text: "last: #{Log.last}" }
+  }
+}

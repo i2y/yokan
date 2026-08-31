@@ -1,0 +1,23 @@
+store Roster {
+  state rows : List<String> = []
+
+  fn addRow {
+    rows.push("row #{rows.length}")
+  }
+}
+
+view Main {
+  Column {
+    DataTable {
+      Row {
+        Text { text: "Name" }
+        Text { text: "Score" }
+      }
+      for it in Roster.rows {
+        Row { Text { text: it } }
+      }
+    }
+    Button { text: "add"; onClick: Roster.addRow() }
+    Text { text: "rows: #{Roster.rows.length}" }
+  }
+}

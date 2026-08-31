@@ -1,0 +1,18 @@
+[package]
+name = "pixie-syntax"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cute language: lexer, parser, AST, and source-span types."
+
+[dependencies]
+codespan-reporting.workspace = true
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[features]
+default = []
+serde = ["dep:serde"]

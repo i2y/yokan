@@ -1,0 +1,36 @@
+store Session {
+  state name : String = ""
+  state greeting : String = ""
+
+  fn updateName(t: String) {
+    name = t
+  }
+
+  fn greet(t: String) {
+    greeting = "Hello, #{t}!"
+  }
+}
+
+view Main {
+  state note : String = ""
+
+  Column {
+    Text { text: "Your name:" }
+    Row {
+      TextField {
+        text: Session.name
+        placeholder: "type here"
+        onTextChanged: Session.updateName(text)
+        onSubmitted: Session.greet(text)
+      }
+      Button { text: "greet"; onClick: Session.greet(Session.name) }
+    }
+    Text { text: "name: #{Session.name}" }
+    Text { text: Session.greeting }
+    TextField {
+      placeholder: "scratch note (tab here)"
+      onTextChanged: { note = text }
+    }
+    Text { text: "note: #{note}" }
+  }
+}

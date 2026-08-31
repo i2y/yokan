@@ -1,0 +1,9 @@
+view Main {
+  state bump : Int = 0
+
+  Column {
+    Image { source: "examples/gallery/pixie.png"; width: 64.0; height: 64.0 }
+    Text { text: "bump: #{bump}" }
+    Button { text: "+1"; onClick: { bump = bump + 1 } }
+  }
+}

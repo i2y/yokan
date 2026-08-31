@@ -1,0 +1,16 @@
+[package]
+name = "pixie-binding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cute language: .qpi binding-file loader and (future) Qt-header autogenerator."
+
+[dependencies]
+pixie-syntax.workspace = true
+codespan-reporting.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

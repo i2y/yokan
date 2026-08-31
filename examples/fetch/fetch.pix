@@ -1,0 +1,31 @@
+store Loader {
+  state status : String = "idle"
+  state content : String = ""
+
+  async fn fetch(path: String) {
+    status = "loading"
+    await Clock.sleepMs(200)
+    case await Fs.readToString(path) {
+      when ok(text) {
+        content = text
+        status = "done"
+      }
+      when err(e) {
+        status = "error: #{e}"
+      }
+    }
+  }
+}
+
+view Main {
+  state path : String = "/tmp/pixie-fetch.txt"
+
+  Column {
+    Row {
+      TextField { text: path; onTextChanged: { path = text } }
+      Button { text: "fetch"; onClick: Loader.fetch(path) }
+    }
+    Text { text: "status: #{Loader.status}" }
+    Text { text: Loader.content }
+  }
+}

@@ -1,0 +1,13 @@
+# The rung-2 view-slice interpreter (S6's spike, productized): a
+# running app re-parses its own view body and rebuilds the Element
+# tree against the live World through emitter-registered reflection
+# tables — no rustc, no restart, state preserved.
+[package]
+name = "pixie-interp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pixie-kernel.workspace = true
+pixie-syntax.workspace = true

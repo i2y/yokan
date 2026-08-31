@@ -1,0 +1,10 @@
+view Main {
+  state bump : Int = 0
+
+  Column {
+    Svg { source: "examples/icons/star.svg"; width: 24.0; height: 24.0 }
+    Svg { source: "examples/icons/star.svg"; width: 48.0; height: 48.0 }
+    Text { text: "bump: #{bump}" }
+    Button { text: "bump"; onClick: { bump = bump + 1 } }
+  }
+}

@@ -1,0 +1,48 @@
+# Four things that used to be errors: arithmetic inside an
+# interpolation, format specs, `static fn` and mixing Int
+# with Float in one expression. None of them was a rule about
+# the language — each was a gap in the lowerer.
+
+class Temp {
+  pub prop celsius : Float, default: -40.0
+
+  # An associated function: no receiver, no World. A free fn that
+  # lives under the class's name.
+  pub static fn fromF(f: Float) Float {
+    (f - 32.0) * 5.0 / 9.0
+  }
+}
+
+store Weather {
+  state readings : List<Float> = []
+  state count : Int = 0
+  state offset : Float = 0.0
+  state label : String = "none"
+
+  fn sample {
+    readings.push(Temp.fromF(32.0 + offset))
+    # `count` is an Int and the literals are not. The wider type wins,
+    # so a whole number can be written as one.
+    offset = 30.0 * count + 30
+    count = count + 1
+    label = "sample"
+  }
+}
+
+view Main {
+  Column {
+    spacing: 6.0
+    padding: 12.0
+
+    # Arithmetic in an interpolation.
+    Text { text: "#{Weather.count} taken, #{Weather.count * 2} expected"; fontSize: 14 }
+
+    # Format specs: precision, width, fill, and alignment.
+    for c in Weather.readings {
+      Text { text: "[#{c:8.2f}] [#{c:.0f}]" }
+    }
+    Text { text: "[#{Weather.count:04}] [#{Weather.label:>8}] [#{Weather.label:*^9}]" }
+
+    Button { text: "sample"; onClick: Weather.sample() }
+  }
+}

@@ -1,0 +1,12 @@
+# Fixture for rpi-gen tests: representative fn shapes, documented to
+# rustdoc JSON once (the .json is committed) so tests run without
+# cargo or a nightly.
+[package]
+name = "rpi-fixture"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[workspace]

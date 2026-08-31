@@ -1,0 +1,158 @@
+store Disk {
+  state status : String = ""
+  state content : String = ""
+  state resolved : String = ""
+  state entries : List<String> = []
+  state probe : String = ""
+  state ghost : String = ""
+  state bytesLen : Int = 0
+  # A `Bytes` PROPERTY. Byte strings crossed the binding
+  # boundary and lived in locals; now the store can keep one, and the
+  # view reads its length like any other property.
+  state blob : Bytes = []
+  state lines : List<String> = []
+  state total : Int = 0
+
+  fn roundTrip {
+    case Fs.write("/tmp/pixie-genfs.txt", "generated bindings work") {
+      when ok {
+        case Fs.readToString("/tmp/pixie-genfs.txt") {
+          when ok(text) {
+            content = text
+            status = "ok"
+          }
+          when err(e) { status = "read error: #{e}" }
+        }
+      }
+      when err(e) { status = "write error: #{e}" }
+    }
+  }
+
+  fn survey {
+    case Fs.createDirAll("/tmp/pixie-genfs-dir") {
+      when ok {
+        case Fs.write("/tmp/pixie-genfs-dir/a.txt", "a") {
+          when ok { }
+          when err(e) { status = "write error: #{e}" }
+        }
+        case Fs.write("/tmp/pixie-genfs-dir/b.txt", "b") {
+          when ok { }
+          when err(e) { status = "write error: #{e}" }
+        }
+        case Fs.canonicalize("/tmp/pixie-genfs-dir") {
+          when ok(p) { resolved = p }
+          when err(e) { status = "canon error: #{e}" }
+        }
+        case Kernel.listDir("/tmp/pixie-genfs-dir") {
+          when ok(names) { entries = names }
+          when err(e) { status = "list error: #{e}" }
+        }
+      }
+      when err(e) { status = "mkdir error: #{e}" }
+    }
+  }
+
+  fn weigh {
+    case Fs.read("/tmp/pixie-genfs.txt") {
+      when ok(b) {
+        blob = b
+        bytesLen = blob.length
+      }
+      when err(e) { status = "read error: #{e}" }
+    }
+  }
+
+  # A binding takes a LIST and an OPTIONAL now. Returns have
+  # crossed both since the start; arguments were scalars only.
+  fn paths {
+    resolved = Kernel.joinPath(["tmp", "pixie-genfs-dir", "a.txt"])
+    status = Kernel.orElse(Kernel.envVar("PIXIE_NOPE"), "unset")
+  }
+
+  # A Rust enum crosses the binding in both directions, and
+  # pattern-matches on this side like any other.
+  fn kind {
+    let k = Kernel.pathKind("/tmp")
+    case k {
+      when Dir { probe = "dir: #{Kernel.kindName(k)}" }
+      when _ { probe = "not a dir" }
+    }
+  }
+
+  # A STRUCT crosses the same way an enum does — field for
+  # field, in both directions, and nested inside another struct or a
+  # list. `Entry` holds one of each: a name, a `PathKind`, and a
+  # `FileStat`.
+  fn weighAll {
+    let es = Kernel.dirStats("/tmp/pixie-genfs-dir")
+    lines = []
+    for e in es {
+      lines.push("#{e.name} #{Kernel.kindName(e.kind)} #{Kernel.statLine(e.stat)}")
+    }
+    total = Kernel.statTotal(es, PathKind.File)
+    # A struct built on THIS side goes back over unchanged.
+    probe = Kernel.statLine(FileStat(1024, true))
+  }
+
+  # `FileStat.len` is a `u64` on the Rust side and `Perms` is
+  # a newtype. A field says its Rust type when reading it back is not
+  # enough — a number widens on the way here and has to hit an exact
+  # width on the way out — and a tuple field says its position.
+  fn perms {
+    let p = Kernel.permsOf("/tmp")
+    ghost = "#{Kernel.permsText(p)} (#{p.value})"
+    # Both halves built here: an exact width, and a positional field.
+    probe = "#{Kernel.statLine(FileStat(64, false))} #{Kernel.permsText(Perms(493))}"
+  }
+
+  fn who {
+    case Kernel.envVar("PIXIE_SCRIPT") {
+      when some(v) { probe = v }
+      when nil { probe = "windowed" }
+    }
+    case Kernel.envVar("PIXIE_NO_SUCH_VAR") {
+      when some(v) { ghost = v }
+      when nil { ghost = "unset" }
+    }
+  }
+
+  fn cleanUp {
+    case Fs.removeDirAll("/tmp/pixie-genfs-dir") {
+      when ok { }
+      when err(e) { status = "remove error: #{e}" }
+    }
+    case Fs.removeFile("/tmp/pixie-genfs.txt") {
+      when ok { status = "cleaned" }
+      when err(e) { status = "remove error: #{e}" }
+    }
+  }
+}
+
+view Main {
+  Column {
+    Button { text: "round-trip"; onClick: Disk.roundTrip() }
+    Button { text: "survey"; onClick: Disk.survey() }
+    Button { text: "clean"; onClick: Disk.cleanUp() }
+    Button { text: "who"; onClick: Disk.who() }
+    Button { text: "paths"; onClick: Disk.paths() }
+    Button { text: "kind"; onClick: Disk.kind() }
+    Button { text: "weigh"; onClick: Disk.weigh() }
+    Button { text: "stats"; onClick: Disk.weighAll() }
+    Button { text: "perms"; onClick: Disk.perms() }
+    Text { text: "status: #{Disk.status}" }
+    Text { text: Disk.content }
+    Text { text: "resolved: #{Disk.resolved}" }
+    Text { text: "probe: #{Disk.probe}" }
+    Text { text: "ghost: #{Disk.ghost}" }
+    Text { text: "bytes: #{Disk.bytesLen} held: #{Disk.blob.length}" }
+    Text { text: "total: #{Disk.total}" }
+    for l in Disk.lines {
+      Text { text: l }
+    }
+    ListView {
+      for e in Disk.entries {
+        Text { text: e }
+      }
+    }
+  }
+}

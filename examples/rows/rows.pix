@@ -1,0 +1,51 @@
+store Board {
+  state names : List<String> = []
+  state picked : String = ""
+
+  fn seed {
+    names.push("ada")
+    names.push("grace")
+  }
+
+  fn more {
+    names.push("alan")
+  }
+
+  fn pick(who: String) {
+    picked = who
+  }
+}
+
+view Tally(who: String) {
+  state n : Int = 0
+
+  Row {
+    spacing: 4.0
+    Text { text: "#{who}: #{n}" }
+    Button {
+      text: who
+      onClick: {
+        n = n + 1
+      }
+    }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+    Button { text: "seed"; onClick: Board.seed() }
+    Button { text: "more"; onClick: Board.more() }
+    Button { text: "pick"; onClick: Board.pick("grace") }
+    # A `for` body is a run of items, not one element: the
+    # stateful component and a conditional that reads the loop
+    # variable, side by side in one row.
+    for who in Board.names {
+      Tally { who: who }
+      if Board.picked == who {
+        Text { text: "  ^ picked" }
+      }
+    }
+  }
+}

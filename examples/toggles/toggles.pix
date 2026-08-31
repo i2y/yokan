@@ -1,0 +1,12 @@
+store App {
+  state dark : Bool = false
+  state wifi : Bool = true
+}
+
+view Main {
+  Column {
+    Checkbox { label: "Dark mode"; checked: App.dark; onToggle: { App.dark = checked } }
+    Switch { label: "Wi-Fi"; checked: App.wifi; onToggle: { App.wifi = checked } }
+    Text { text: "dark: #{App.dark}  wifi: #{App.wifi}" }
+  }
+}

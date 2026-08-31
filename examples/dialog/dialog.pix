@@ -1,0 +1,35 @@
+store Dialog {
+  state show : Bool = false
+  state note : String = ""
+
+  fn open {
+    show = true
+  }
+
+  fn close {
+    show = false
+  }
+
+  fn updateNote(t: String) {
+    note = t
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "Modal demo — the dialog dims the whole window." }
+    Button { text: "open"; onClick: Dialog.open() }
+    Text { text: "note: #{Dialog.note}" }
+    if Dialog.show {
+      Modal {
+        Text { text: "Leave a note" }
+        TextField {
+          text: Dialog.note
+          placeholder: "type here"
+          onTextChanged: Dialog.updateNote(text)
+        }
+        Button { text: "close"; onClick: Dialog.close() }
+      }
+    }
+  }
+}

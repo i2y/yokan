@@ -1,0 +1,23 @@
+[package]
+name = "pixie-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pixie"
+path = "src/main.rs"
+
+[dependencies]
+pixie-driver.workspace = true
+pixie-codegen.workspace = true
+pixie-rpi-gen.workspace = true
+toml.workspace = true
+pixie-syntax.workspace = true
+pixie-interp.workspace = true
+
+[dev-dependencies]
+# Only the accept tests reach the kernel: they are the one place that
+# can see the role vocabulary on BOTH sides of the codegen/kernel
+# split and assert the two agree (§8.36).
+pixie-kernel.workspace = true

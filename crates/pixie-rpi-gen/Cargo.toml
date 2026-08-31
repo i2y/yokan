@@ -1,0 +1,24 @@
+# rpi-gen: rustdoc JSON → .rpi binding generator (DESIGN section 7).
+# Third iteration of the family's ingestion tools (gir → cute-qpi-gen →
+# rpi-gen), the first with a structured first-party input format.
+# rustdoc-types is pinned to the JSON format_version the pinned
+# toolchain emits — format 61 from nightly-2026-08-22 (rustc
+# 1.100.0-nightly, the installed rust-docs-json component); re-pin
+# both together.
+[package]
+name = "pixie-rpi-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rpi-gen"
+path = "src/main.rs"
+
+[dependencies]
+rustdoc-types = "0.61"
+serde_json.workspace = true
+
+[dev-dependencies]
+pixie-binding.workspace = true
+pixie-syntax.workspace = true

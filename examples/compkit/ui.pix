@@ -1,0 +1,35 @@
+pub view Chip(label: String) {
+  state hits : Int = 0
+
+  Row {
+    spacing: 4.0
+    Text { text: "#{label}/#{hits}" }
+    Button {
+      text: label
+      onClick: {
+        hits = hits + 1
+      }
+    }
+  }
+}
+
+pub view Panel(title: String) {
+  Column {
+    spacing: 4.0
+    Text { fontSize: 16.0; text: title }
+    Slot { }
+  }
+}
+
+view Frame {
+  Column {
+    padding: 2.0
+    Slot { }
+  }
+}
+
+pub view Badge(tag: String) {
+  Frame {
+    Text { text: "[#{tag}]" }
+  }
+}

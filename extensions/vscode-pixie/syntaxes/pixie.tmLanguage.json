@@ -1,0 +1,425 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "pixie",
+  "scopeName": "source.pixie",
+  "fileTypes": ["pix", "rpi"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#attribute" },
+    { "include": "#enum-body" },
+    { "include": "#declaration" },
+    { "include": "#use-statement" },
+    { "include": "#property" },
+    { "include": "#keyword" },
+    { "include": "#constant" },
+    { "include": "#element" },
+    { "include": "#type" },
+    { "include": "#operator" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "comment": "`#` to end of line. `#{` is interpolation, never a comment.",
+          "name": "comment.line.number-sign.pixie",
+          "begin": "#(?!\\{)",
+          "end": "$",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.pixie" }
+          }
+        }
+      ]
+    },
+    "string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.pixie",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.pixie" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.pixie" }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.pixie",
+              "match": "\\\\(x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]+\\}|.)"
+            },
+            { "include": "#interpolation" }
+          ]
+        }
+      ]
+    },
+    "interpolation": {
+      "comment": "`#{expr}` and `#{expr:format-spec}` inside a string literal.",
+      "name": "meta.embedded.line.pixie",
+      "begin": "#\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.pixie" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.pixie" }
+      },
+      "patterns": [
+        {
+          "comment": "Python-style format spec: #{v:.2f}, #{n:08d}, #{s:>20}",
+          "match": "(:)([<>^=+\\-#0-9,._a-zA-Z%]*)(?=\\})",
+          "captures": {
+            "1": { "name": "punctuation.separator.format.pixie" },
+            "2": { "name": "constant.other.format-spec.pixie" }
+          }
+        },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#keyword" },
+        { "include": "#constant" },
+        { "include": "#element" },
+        { "include": "#type" },
+        { "include": "#operator" },
+        { "include": "#punctuation" },
+        { "include": "#identifier" }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.pixie",
+          "match": "\\b\\d[\\d_]*\\.\\d[\\d_]*([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.hex.pixie",
+          "match": "\\b0[xX][0-9A-Fa-f][0-9A-Fa-f_]*\\b"
+        },
+        {
+          "name": "constant.numeric.binary.pixie",
+          "match": "\\b0[bB][01][01_]*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.pixie",
+          "match": "\\b\\d[\\d_]*\\b"
+        }
+      ]
+    },
+    "attribute": {
+      "comment": "`@rust(\"std::fs::read_to_string\")` in .rpi binding files.",
+      "match": "(@)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.decorator.pixie" },
+        "2": { "name": "entity.name.function.decorator.pixie" }
+      }
+    },
+    "enum-body": {
+      "comment": "`enum E { ... }` / `error E { ... }` — bare names inside are variants.",
+      "begin": "\\b(enum|error)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "storage.type.pixie" },
+        "2": { "name": "entity.name.type.pixie" },
+        "3": { "name": "punctuation.section.block.pixie" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.pixie" }
+      },
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*(\\(|;|$|\\}))",
+          "captures": {
+            "1": { "name": "variable.other.enummember.pixie" }
+          }
+        },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#property" },
+        { "include": "#type" },
+        { "include": "#operator" },
+        { "include": "#punctuation" },
+        { "include": "#identifier" }
+      ]
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "comment": "test fn name",
+          "match": "\\b(test)\\s+(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.pixie" },
+            "2": { "name": "storage.type.function.pixie" },
+            "3": { "name": "entity.name.function.pixie" }
+          }
+        },
+        {
+          "comment": "impl Trait for Type",
+          "match": "\\b(impl)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(for)\\s+([A-Za-z_][A-Za-z0-9_]*))?",
+          "captures": {
+            "1": { "name": "storage.type.pixie" },
+            "2": { "name": "entity.name.type.pixie" },
+            "3": { "name": "keyword.control.pixie" },
+            "4": { "name": "entity.name.type.pixie" }
+          }
+        },
+        {
+          "comment": "Type-level declarations: store / view / style / class / struct / trait / flags",
+          "match": "\\b(store|view|style|class|struct|trait|flags)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.pixie" },
+            "2": { "name": "entity.name.type.pixie" }
+          }
+        },
+        {
+          "comment": "fn name, its parameter list, and pixie's POSTFIX return type (`fn sum Int {`)",
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)(\\([^)]*\\))?(?:\\s+(!?[A-Za-z_][A-Za-z0-9_]*(?:<[^>]*>)?\\??))?",
+          "captures": {
+            "1": { "name": "storage.type.function.pixie" },
+            "2": { "name": "entity.name.function.pixie" },
+            "3": {
+              "patterns": [
+                { "include": "#string" },
+                { "include": "#number" },
+                { "include": "#property" },
+                { "include": "#constant" },
+                { "include": "#type" },
+                { "include": "#operator" },
+                { "include": "#punctuation" },
+                { "include": "#identifier" }
+              ]
+            },
+            "4": {
+              "patterns": [
+                { "include": "#type" },
+                { "include": "#operator" },
+                { "include": "#punctuation" }
+              ]
+            }
+          }
+        },
+        {
+          "comment": "state / prop / signal member name",
+          "match": "\\b(state|prop|signal)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.pixie" },
+            "2": { "name": "variable.other.member.declaration.pixie" }
+          }
+        },
+        {
+          "comment": "let / var binding name",
+          "match": "\\b(let|var)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.pixie" },
+            "2": { "name": "variable.other.pixie" }
+          }
+        },
+        {
+          "comment": "for x in xs — `in` is contextual, not a reserved word",
+          "match": "\\b(for)\\s+([a-z_][A-Za-z0-9_]*)\\s+(in)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.pixie" },
+            "2": { "name": "variable.other.pixie" },
+            "3": { "name": "keyword.control.pixie" }
+          }
+        },
+        {
+          "comment": "when Variant / when ok(v) / when some(v) / when _ (`when nil` keeps nil's constant scope)",
+          "match": "\\b(when)\\s+(?!nil\\b)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.pixie" },
+            "2": { "name": "variable.other.enummember.pixie" }
+          }
+        }
+      ]
+    },
+    "use-statement": {
+      "patterns": [
+        {
+          "match": "\\b(use)\\s+([a-z_][A-Za-z0-9_]*(?:\\.[a-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.control.import.pixie" },
+            "2": { "name": "entity.name.namespace.pixie" }
+          }
+        }
+      ]
+    },
+    "property": {
+      "patterns": [
+        {
+          "comment": "Pseudo-state property key: hover.background:, active.background:",
+          "match": "\\b(hover|active)(\\.)([a-z_][A-Za-z0-9_]*)(?=\\s*:)",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.pseudo-state.pixie" },
+            "2": { "name": "punctuation.accessor.pixie" },
+            "3": { "name": "entity.other.attribute-name.pixie" }
+          }
+        },
+        {
+          "comment": "First parameter label: fn f(a: Int), view Card(title: String)",
+          "match": "(\\()\\s*([a-z_][A-Za-z0-9_]*)(?=\\s*:)",
+          "captures": {
+            "1": { "name": "punctuation.section.parens.pixie" },
+            "2": { "name": "variable.parameter.pixie" }
+          }
+        },
+        {
+          "comment": "Following parameter labels / prop modifiers: , b: Int  ·  , default: []",
+          "match": "(,)\\s*([a-z_][A-Za-z0-9_]*)(?=\\s*:)",
+          "captures": {
+            "1": { "name": "punctuation.separator.pixie" },
+            "2": { "name": "variable.parameter.pixie" }
+          }
+        },
+        {
+          "comment": "Element property / style key / map key: text: \"hi\", onClick: Calc.press(d)",
+          "match": "\\b([a-z_][A-Za-z0-9_]*)(?=\\s*:(?!:))",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.pixie" }
+          }
+        }
+      ]
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.pixie",
+          "match": "\\b(if|else|case|when|for|while|in|break|continue|return|try|emit|await)\\b"
+        },
+        {
+          "name": "storage.type.pixie",
+          "match": "\\b(class|struct|trait|impl|view|style|store|fn|prop|signal|state|init|deinit|let|var|test|suite|error|enum|flags)\\b"
+        },
+        {
+          "name": "storage.modifier.pixie",
+          "match": "\\b(pub|static|async|escaping|consuming|weak)\\b"
+        },
+        {
+          "name": "keyword.control.import.pixie",
+          "match": "\\b(use|as)\\b"
+        }
+      ]
+    },
+    "constant": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.pixie",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.nil.pixie",
+          "match": "\\b(nil)\\b"
+        },
+        {
+          "name": "variable.language.self.pixie",
+          "match": "\\b(self)\\b"
+        }
+      ]
+    },
+    "element": {
+      "patterns": [
+        {
+          "comment": "The engine widget catalog plus the component Slot.",
+          "match": "\\b(Column|Row|Grid|Stack|Text|Button|TextField|ListView|ScrollView|HScrollView|Image|Svg|DataTable|Modal|BarChart|LineChart|ProgressBar|Spinner|Slot)\\b(?=\\s*\\{)",
+          "captures": {
+            "1": { "name": "support.class.widget.pixie" }
+          }
+        },
+        {
+          "comment": "User component used as an element: Card { ... }, ui.Card { ... }",
+          "match": "\\b([A-Z][A-Za-z0-9_]*)\\b(?=\\s*\\{)",
+          "captures": {
+            "1": { "name": "entity.name.type.element.pixie" }
+          }
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "comment": "`!T` error-union prefix",
+          "match": "(!)(?=[A-Z][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.operator.error-union.pixie" }
+          }
+        },
+        {
+          "name": "support.type.builtin.pixie",
+          "match": "\\b(Int|Float|Bool|String|Bytes|Void|List|Map)\\b"
+        },
+        {
+          "comment": "PascalCase identifiers — heuristic for user-defined types.",
+          "name": "entity.name.type.pixie",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.range.pixie",
+          "match": "\\.\\.=?"
+        },
+        {
+          "name": "keyword.operator.pixie",
+          "match": "(->|=>|::)"
+        },
+        {
+          "name": "keyword.operator.comparison.pixie",
+          "match": "(==|!=|<=|>=)"
+        },
+        {
+          "name": "keyword.operator.assignment.pixie",
+          "match": "(\\+=|-=|\\*=|/=|%=|=)"
+        },
+        {
+          "name": "keyword.operator.logical.pixie",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.comparison.pixie",
+          "match": "(<|>)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.pixie",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.nullable.pixie",
+          "match": "\\?"
+        },
+        {
+          "name": "keyword.operator.pixie",
+          "match": "\\|"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.section.block.pixie", "match": "[{}]" },
+        { "name": "punctuation.section.brackets.pixie", "match": "[\\[\\]]" },
+        { "name": "punctuation.section.parens.pixie", "match": "[()]" },
+        { "name": "punctuation.separator.pixie", "match": "[,;]" },
+        { "name": "punctuation.accessor.pixie", "match": "\\." },
+        { "name": "punctuation.separator.key-value.pixie", "match": ":" }
+      ]
+    },
+    "identifier": {
+      "patterns": [
+        {
+          "comment": "Function / method calls: ident followed by `(`.",
+          "match": "([a-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.call.pixie" }
+          }
+        },
+        {
+          "name": "variable.other.pixie",
+          "match": "\\b[a-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

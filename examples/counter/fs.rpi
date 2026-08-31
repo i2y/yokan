@@ -1,0 +1,13 @@
+# Hand-written binding over std::fs — the shape rpi-gen will emit.
+# Bindings are type surface only: no code is generated for this class;
+# each call lowers to an inline adapter around the @rust path, with
+# `!T` mapping Rust's Result (errors become message strings for now).
+
+class Fs {
+  static fn readToString(path: String) !String @rust("std::fs::read_to_string")
+  static fn writeString(path: String, contents: String) !Void @rust("std::fs::write")
+}
+
+class Num {
+  static fn parseInt(text: String) !Int @rust("i64::from_str")
+}

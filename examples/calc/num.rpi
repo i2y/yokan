@@ -1,0 +1,6 @@
+# Hand-written binding: the display parses through std's f64::from_str
+# (same shape as counter's fs.rpi — type surface only, inline adapters).
+
+class Num {
+  static fn parseFloat(text: String) !Float @rust("f64::from_str")
+}

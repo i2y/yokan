@@ -1,0 +1,10 @@
+# Grammar fixture for .rpi binding files.
+
+class Fs {
+  static fn readToString(path: String) !String @rust("std::fs::read_to_string")
+  static fn writeString(path: String, contents: String) !Void @rust("std::fs::write")
+}
+
+class Num {
+  static fn parseFloat(text: String) !Float @rust("f64::from_str")
+}

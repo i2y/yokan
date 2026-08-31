@@ -1,0 +1,15 @@
+use ui
+use ui.{Chip as Pin}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+    ui.Panel {
+      title: "panel"
+      Pin { label: "a" }
+      ui.Chip { label: "b" }
+    }
+    ui.Badge { tag: "ok" }
+  }
+}

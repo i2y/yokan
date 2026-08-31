@@ -1,0 +1,26 @@
+use model as m
+use theme
+use ui.card
+
+store App {
+  state banner : String = ""
+
+  fn deco {
+    let inner : String = m.decorate("x")
+    banner = card.cardTitle(inner)
+  }
+}
+
+view Main {
+  let g = Greeter()
+
+  Column {
+    style: Frame
+    Text { style: Headline; text: "#{g.message}" }
+    Text { text: "banner: #{App.banner}" }
+    Row {
+      Button { text: "shout"; onClick: g.shout() }
+      Button { text: "deco"; onClick: App.deco() }
+    }
+  }
+}

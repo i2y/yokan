@@ -1,0 +1,22 @@
+[package]
+name = "yokan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "yokan"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+yokan-stdlib = { path = "../yokan-stdlib" }
+pixie-kernel.workspace = true
+pixie-engine-gpui = { path = "../pixie-engine-gpui" }
+pyo3 = "0.26"
+
+[features]
+default = []
+# Build the importable .so with this feature ON (leaves CPython
+# symbols undefined for the host process). Plain builds/tests link
+# libpython instead, so `cargo test --workspace` stays green.
+extension-module = ["pyo3/extension-module"]

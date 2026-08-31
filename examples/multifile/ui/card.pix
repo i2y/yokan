@@ -1,0 +1,5 @@
+use model.{decorate}
+
+pub fn cardTitle(t: String) String {
+  "<#{decorate(t)}>"
+}

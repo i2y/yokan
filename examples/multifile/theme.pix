@@ -1,0 +1,9 @@
+pub style Headline {
+  fontSize: 22.0
+  color: "accent"
+}
+
+pub style Frame {
+  padding: 12.0
+  background: "panel"
+}

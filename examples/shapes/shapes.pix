@@ -1,0 +1,123 @@
+# The property types that used to stop at the reflection table
+#: a map, an optional, a byte string, and a struct — plus a
+# `List<Struct>`, which is the shape the memory model recommends for
+# app data and which a view could not read one field of.
+
+# An enum payload can be a `T?` too — the field decides the wrapping,
+# the same way a property and a struct field do.
+enum Slot {
+  empty
+  full(v: String?)
+}
+
+struct Row {
+  var name : String
+  var score : Int = 0
+  # A `T?` field. Construction sites wrap a bare value and take `nil`.
+  var note : String? = nil
+}
+
+store Sheet {
+  state rows : List<Row> = []
+  state tally : Map<String, Int> = {}
+  # `[]` is the empty byte string: bytes arrive from a file or a
+  # response, so the only value a default can name is the empty one.
+  state raw : Bytes = []
+  state picked : String? = nil
+  state summary : String = "-"
+  state cell : Slot = Slot.empty
+
+  fn seed {
+    # Trailing defaults may be left out — the fields are positional,
+    # so "omitted" can only mean "from the end".
+    rows = [Row("ada"), Row("grace", 2), Row("alan", 3, "note")]
+    tally = { ada: 1, alan: 3 }
+  }
+
+  fn pick {
+    picked = "grace"
+  }
+
+  # `if let` and `case` run in a handler too — a handler is a method
+  # body written at the use site.
+  fn note {
+    if let some(p) = picked {
+      summary = "note for #{p}"
+    }
+  }
+
+  fn clear {
+    picked = nil
+    cell = Slot.full(nil)
+  }
+
+  fn fill {
+    cell = Slot.full("v")
+  }
+
+  fn describe {
+    case cell {
+      when full(v) { summary = "cell [#{v}]" }
+      when empty { summary = "cell empty" }
+    }
+  }
+
+  fn read {
+    # `if let` is the two-armed `case` spelled shorter.
+    if let some(v) = tally["ada"] {
+      summary = "ada=#{v}"
+    } else {
+      summary = "no ada"
+    }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 6.0
+    padding: 12.0
+
+    Row {
+      spacing: 6.0
+      Button { text: "seed"; onClick: Sheet.seed() }
+      Button { text: "pick"; onClick: Sheet.pick() }
+      Button { text: "clear"; onClick: Sheet.clear() }
+      Button { text: "read"; onClick: Sheet.read() }
+      Button { text: "fill"; onClick: Sheet.fill() }
+      Button { text: "d"; onClick: Sheet.describe() }
+      Button {
+        text: "n"
+        onClick: {
+          if let some(p) = Sheet.picked {
+            Sheet.summary = "handler saw #{p}"
+          } else {
+            Sheet.summary = "handler saw nothing"
+          }
+        }
+      }
+    }
+
+    # An optional interpolates as its value, or as nothing.
+    Text { text: "picked: [#{Sheet.picked}]" }
+
+    # And a view can MATCH one, naming what it holds. Both
+    # arms take as many elements as they like.
+    if let some(p) = Sheet.picked {
+      Text { text: "picked #{p}" }
+      ProgressBar { value: 1.0 }
+    } else {
+      Text { text: "nothing picked" }
+    }
+    Text { text: "bytes: #{Sheet.raw.length}   #{Sheet.summary}" }
+
+    # A repeater over a map's keys, and a subscript that answers `T?`.
+    for k in Sheet.tally.keys {
+      Text { text: "  #{k} = #{Sheet.tally[k]}" }
+    }
+
+    # A repeater over a list of STRUCTS, reading three fields of each.
+    for r in Sheet.rows {
+      Text { text: "  #{r.name} #{r.score} [#{r.note}]" }
+    }
+  }
+}
