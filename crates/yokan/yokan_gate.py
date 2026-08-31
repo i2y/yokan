@@ -1155,10 +1155,10 @@ class Translator:
         for mod in self.modules.values():
             self._scan_body(mod.body, entry=False)
         self._scan_body(self.tree.body, entry=True)
-        if self.ui is None:
-            raise Untranslatable(self.tree, "no `import yokan as ui` found")
+        if self.ui is None and not self.yokan_names and not self.stdlib_mods and self.crates_name is None:
+            raise Untranslatable(self.tree, "the app never imports yokan — `import yokan as ui` or `from yokan import …`")
         if self.view is None:
-            raise Untranslatable(self.tree, "no `ui.run(view, ...)` under the __main__ guard")
+            raise Untranslatable(self.tree, "no `run(view, ...)` call (`ui.run` or bare `run`) under the __main__ guard")
         if self.state_node is not None and self.cells:
             raise Untranslatable(self.tree, "use State cells OR a state dict, not both")
 

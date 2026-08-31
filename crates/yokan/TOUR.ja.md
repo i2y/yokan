@@ -200,6 +200,8 @@ def view():
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
+ここで `ui.` 経由で呼んでいるものは、`from yokan import button, column, run, …` の裸 import でも書けます。どちらの綴りも同じにコンパイルされます。
+このドキュメントが `ui.` を使うのは、要素を出す行が一目で分かるようにするためです。
 
 テキストへの値の埋め込みは f-string です。
 int、str、float、bool、Enum の値がそのまま描画でき、表示は Python の `str()` と同じです（`2.0` は `2.0`、`True` は `True`、`Mood.HAPPY` は `Mood.HAPPY`）。

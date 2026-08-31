@@ -11,12 +11,14 @@ browser, no server. Apps are one file, runnable with
 `uv run app.py` — declare `dependencies = ["yokan"]` in the PEP 723
 header and uv fetches it from PyPI.
 
-Spelling convention: `import yokan as ui` covers the UI surface
-(`ui.text`, `ui.column`, `ui.run`); everything that is not UI —
-State and the decorators — is imported bare:
+Spelling convention: the docs use `import yokan as ui` for the UI
+surface (`ui.text`, `ui.column`, `ui.run`) so element-emitting
+lines stand out, and import everything that is not UI bare:
 `from yokan import State, store, model, value, component,
-py, local`. `@yokan.store` (module-prefixed) works too; `@ui.store`
-is accepted for compatibility but is not the documented style.
+py, local`. Bare element imports compile identically
+(`from yokan import button, column, run, …`) — the alias is a
+house style, not a requirement. `@yokan.store` (module-prefixed)
+works too.
 
 ## The shape of every app
 
