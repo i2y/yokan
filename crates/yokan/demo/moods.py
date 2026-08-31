@@ -13,8 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from enum import Enum, auto  # noqa: E402
 
-import yokan as ui  # noqa: E402
-from yokan import State, store  # noqa: E402
+from yokan import button, column, row, run, State, store, text  # noqa: E402
 
 
 class Mood(Enum):
@@ -60,29 +59,29 @@ def describe():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
+    with column(spacing=8, padding=12):
         match mood():
             case Mood.HAPPY:
-                ui.text("mood: up", size=18, color="accent", animate=120, easing="out")
+                text("mood: up", size=18, color="accent", animate=120, easing="out")
             case Mood.SAD:
-                ui.text("mood: down", size=18, color="#f38ba8", animate=120, easing="out")
+                text("mood: down", size=18, color="#f38ba8", animate=120, easing="out")
         if (v := sel()) is not None:
-            ui.text(f"selection: {v}")
+            text(f"selection: {v}")
         else:
-            ui.text("(no selection)")
-        ui.text(f"note: {note()}")
+            text("(no selection)")
+        text(f"note: {note()}")
         if (t := Tracker.last) is not None:
-            ui.text(f"tracked: {t}", size=12)
+            text(f"tracked: {t}", size=12)
         else:
-            ui.text("(nothing tracked)", size=12)
-        with ui.row(spacing=6):
-            ui.button("flip", on_click=flip)
-            ui.button("pick", on_click=lambda: sel.set(7))
-            ui.button("clear", on_click=lambda: sel.set(None))
-            ui.button("describe", on_click=describe)
-            ui.button("track", on_click=lambda: Tracker.note(9), animate=100, easing="inOut")
-            ui.button("wipe", on_click=Tracker.wipe)
+            text("(nothing tracked)", size=12)
+        with row(spacing=6):
+            button("flip", on_click=flip)
+            button("pick", on_click=lambda: sel.set(7))
+            button("clear", on_click=lambda: sel.set(None))
+            button("describe", on_click=describe)
+            button("track", on_click=lambda: Tracker.note(9), animate=100, easing="inOut")
+            button("wipe", on_click=Tracker.wipe)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="moods")
+    run(view, title="moods")

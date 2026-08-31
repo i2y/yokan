@@ -14,8 +14,7 @@ from enum import Enum
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State, store, value  # noqa: E402
+from yokan import button, column, row, run, State, store, text, value  # noqa: E402
 
 
 @value
@@ -89,20 +88,20 @@ def walk():
 
 
 def view():
-    with ui.column(spacing=6, padding=12):
-        ui.text(f"q = {q()}")
-        ui.text(f"big = {big()}")
-        ui.text(f"floor {fd()}  mod {md()}")
-        ui.text(f"ffloor = {ffd()}  fmod = {fmd()}")
-        ui.text(f"pow {p2()}  fpow = {pf()}")
-        ui.text(f"flag = {flag()}  mood = {mood()}")
-        ui.text(f"grade = {grade()}  doubled = {p2() * 2 + 1}")
-        ui.text(f"last key = {last_key()}  tail = {tail()}")
-        ui.text(f"bag = {Bag.joined}")
-        with ui.row(spacing=6):
-            ui.button("crunch", on_click=crunch)
-            ui.button("walk", on_click=walk)
+    with column(spacing=6, padding=12):
+        text(f"q = {q()}")
+        text(f"big = {big()}")
+        text(f"floor {fd()}  mod {md()}")
+        text(f"ffloor = {ffd()}  fmod = {fmd()}")
+        text(f"pow {p2()}  fpow = {pf()}")
+        text(f"flag = {flag()}  mood = {mood()}")
+        text(f"grade = {grade()}  doubled = {p2() * 2 + 1}")
+        text(f"last key = {last_key()}  tail = {tail()}")
+        text(f"bag = {Bag.joined}")
+        with row(spacing=6):
+            button("crunch", on_click=crunch)
+            button("walk", on_click=walk)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="pyops")
+    run(view, title="pyops")

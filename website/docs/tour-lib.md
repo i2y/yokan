@@ -148,20 +148,20 @@ Compiled extensions like numpy work inside escapes.
 ## Heavy work and timers
 
 Never block a handler (the window freezes).
-`ui.task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
+`task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
 
 ```python
 def start():
     busy.set(True)
-    ui.task(fetch_data,
+    task(fetch_data,
             on_done=lambda v: (busy.set(False), data.set(v)),
             on_error=lambda e: (busy.set(False), err.set(str(e))))
 ```
 
-`work` must not touch `ui.*`; it just returns a value.
+`work` must not build UI elements; it just returns a value.
 Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
 
-`ui.every(seconds, cb)` is a timer with a seconds interval.
-Call it before `ui.run`.
+`every(seconds, cb)` is a timer with a seconds interval.
+Call it before `run`.
 Timers are a development-run feature and are not compiled (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
 

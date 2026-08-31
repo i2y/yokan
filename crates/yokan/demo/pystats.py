@@ -11,8 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import py, State  # noqa: E402
+from yokan import bar_chart, button, column, py, run, State, text  # noqa: E402
 
 
 @py
@@ -35,11 +34,11 @@ def compute():
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.bar_chart(values(), height=100.0)
-        ui.button("stats (numpy)", on_click=compute)
-        ui.text(f"mean {mean():.2f} · std {std():.2f}", size=16)
+    with column(spacing=10, padding=14):
+        bar_chart(values(), height=100.0)
+        button("stats (numpy)", on_click=compute)
+        text(f"mean {mean():.2f} · std {std():.2f}", size=16)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="pystats")
+    run(view, title="pystats")

@@ -11,8 +11,17 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import py, State, store  # noqa: E402
+from yokan import (
+    button,
+    column,
+    list_view,
+    py,
+    row,
+    run,
+    State,
+    store,
+    text,
+)
 from yokan import http, json  # noqa: E402
 
 
@@ -68,18 +77,18 @@ def fetch():
     Feed.refresh(http.get_text(f"http://127.0.0.1:{port()}/feed"))
 
 
-def row(i):
-    return ui.text(Feed.rows[i])
+def item_row(i):
+    return text(Feed.rows[i])
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"stories={len(Feed.rows)} points={Feed.total_points}", size=16)
-        ui.list_view(len(Feed.rows), row, item_height=22.0, height=90.0)
-        with ui.row(spacing=6):
-            ui.button("start", on_click=start)
-            ui.button("fetch", on_click=fetch)
+    with column(spacing=8, padding=12):
+        text(f"stories={len(Feed.rows)} points={Feed.total_points}", size=16)
+        list_view(len(Feed.rows), item_row, item_height=22.0, height=90.0)
+        with row(spacing=6):
+            button("start", on_click=start)
+            button("fetch", on_click=fetch)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="reader")
+    run(view, title="reader")

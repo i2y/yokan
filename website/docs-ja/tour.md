@@ -17,18 +17,17 @@ Yokan のアプリは普通の Python ファイルです。
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
-from yokan import State
+from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
 def view():
-    with ui.column(spacing=12, padding=16):
-        ui.text(f"count: {count()}", size=34)
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
 
 if __name__ == "__main__":
-    ui.run(view, title="counter")
+    run(view, title="counter")
 ```
 
 三つの動かし方があります。
@@ -88,9 +87,9 @@ class Cart:
         for x in xs:
             self.items = self.items + [x]
 
-ui.button("add", on_click=lambda: Cart.add("apple", 120))
-ui.button("clear", on_click=Cart.clear)
-ui.text(f"n={len(Cart.items)} total={Cart.total}")
+button("add", on_click=lambda: Cart.add("apple", 120))
+button("clear", on_click=Cart.clear)
+text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
 フィールドは State と同じ型が使えます。
@@ -111,7 +110,7 @@ class Circle:
 
 left = Circle()
 right = Circle()
-ui.button("grow", on_click=lambda: left.grow(0.5))
+button("grow", on_click=lambda: left.grow(0.5))
 ```
 
 モデルはモデルを参照できます。
@@ -148,7 +147,7 @@ class Tree:
 
 ```python
 if (r := Tree.root) is not None:
-    ui.text(f"root: {r.label}")
+    text(f"root: {r.label}")
 ```
 
 データそのものは後述の**Value クラス**で持ち、ストアのフィールドに置くのが基本形です。
@@ -162,17 +161,17 @@ if (r := Tree.root) is not None:
 
 ```python
 def view():
-    with ui.column(spacing=10, padding=16):
-        ui.text(f"hello {name()}", size=20, color="accent")
-        with ui.row(spacing=6):
-            ui.text_field(name(), placeholder="name", on_change=name.set)
-            ui.button("clear", on_click=lambda: name.set(""))
+    with column(spacing=10, padding=16):
+        text(f"hello {name()}", size=20, color="accent")
+        with row(spacing=6):
+            text_field(name(), placeholder="name", on_change=name.set)
+            button("clear", on_click=lambda: name.set(""))
 ```
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
-ここで `ui.` 経由で呼んでいるものは、`from yokan import button, column, run, …` の裸 import でも書けます。どちらの綴りも同じにコンパイルされます。
-このドキュメントが `ui.` を使うのは、要素を出す行が一目で分かるようにするためです。
+サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
+名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
 テキストへの値の埋め込みは f-string です。
 int、str、float、bool、Enum の値がそのまま描画でき、表示は Python の `str()` と同じです（`2.0` は `2.0`、`True` は `True`、`Mood.HAPPY` は `Mood.HAPPY`）。
@@ -185,9 +184,9 @@ float の小数点以下を揃えたいときは `f"{x:.1f}"` の形式指定も
 
 ```python
 if show():
-    with ui.modal():
-        ui.text("confirm?")
-        ui.button("yes", on_click=lambda: (done.set(True), show.set(False)))
+    with modal():
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
 ## フォーム部品
@@ -224,12 +223,12 @@ class Settings:
         self.tab = i
 
 
-ui.checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
-ui.switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
-ui.slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
-ui.select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
+switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
+slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
+select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 ```
 
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。

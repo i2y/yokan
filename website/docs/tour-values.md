@@ -19,7 +19,7 @@ class Point:
 
 sel: State[Point] = State(Point(3, 4))
 sel.set(replace(sel(), x=10))
-ui.text(f"x={sel().x}")
+text(f"x={sel().x}")
 ```
 
 Value classes can have methods.
@@ -108,11 +108,11 @@ health: State[Health] = State(Healthy())
 # in the view:
 match health():
     case Healthy():
-        ui.text("ALL SYSTEMS NOMINAL")
+        text("ALL SYSTEMS NOMINAL")
     case Degraded(services):
-        ui.text(f"DEGRADED — {services} service(s)")
+        text(f"DEGRADED — {services} service(s)")
     case Outage(service):
-        ui.text(f"OUTAGE — {service} is down")
+        text(f"OUTAGE — {service} is down")
 ```
 
 Missing arms are reported at compile time.

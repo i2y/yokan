@@ -6,7 +6,6 @@ health, two stores, seeded mock generation. No CPython at runtime.
 """
 from dataclasses import dataclass
 
-import yokan as ui
 from yokan import State, store  # noqa: E402
 from yokan import random, time
 

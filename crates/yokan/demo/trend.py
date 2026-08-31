@@ -12,8 +12,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import (
+    bar_chart,
+    button,
+    column,
+    line_chart,
+    row,
+    run,
+    State,
+    text,
+)
 
 values: State[list[float]] = State([3.0, 5.0, 2.0])
 limit: State[float] = State(4.5)
@@ -28,15 +36,15 @@ def raise_limit():
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.text(f"points: {len(values())}", size=14)
-        ui.line_chart(values(), height=120.0)
-        ui.bar_chart(values(), height=90.0)
-        ui.text(f"limit: {limit():.1f}", size=12, color="#8a8f98")
-        with ui.row(spacing=8):
-            ui.button("add point", on_click=bump)
-            ui.button("raise limit", on_click=raise_limit)
+    with column(spacing=10, padding=14):
+        text(f"points: {len(values())}", size=14)
+        line_chart(values(), height=120.0)
+        bar_chart(values(), height=90.0)
+        text(f"limit: {limit():.1f}", size=12, color="#8a8f98")
+        with row(spacing=8):
+            button("add point", on_click=bump)
+            button("raise limit", on_click=raise_limit)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="trend")
+    run(view, title="trend")

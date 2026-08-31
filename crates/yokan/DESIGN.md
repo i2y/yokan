@@ -52,8 +52,8 @@ collected in the tour's closing section, What does not work yet.
   fields; models reference models, with `Weak[...]` for back
   pointers because ownership cycles are not collected.
 - Views are plain functions using `with` blocks; components are
-  functions under `@component`, with `ui.slot()` for children and
-  `ui.local()` for per-call-site state.
+  functions under `@component`, with `slot()` for children and
+  `local()` for per-call-site state.
 - Errors follow three lanes: `*_or` total functions for the common
   case, full `try`/`except` where failure is data, and containment
   (a trapped statement stops that statement, not the app) for
@@ -90,3 +90,16 @@ reason, and the current set is listed in the tour.
 New entries are appended below, newest last: state the decision,
 the reason, and what was rejected, in plain prose — no session
 narration.
+
+## Bare imports are the documented spelling
+
+Elements import bare — `from yokan import button, column, run, …` —
+and the docs and demos write them that way. `import yokan as ui`
+remains fully supported (`ui.button`, `ui.run`); the two spellings
+compile identically, and renamed imports work
+(`from yokan import button as btn`). The namespace-by-default
+alternative was rejected: the samples read better without the
+prefix, and the shadowing risk it guarded against is already
+caught — a local name that hides an element is reported by the
+type checker at the use site, and the translator refuses what it
+cannot resolve.

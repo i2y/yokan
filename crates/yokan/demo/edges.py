@@ -16,8 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, run, State, text  # noqa: E402
 
 xs: State[list[int]] = State([7])
 picked: State[int] = State(0)
@@ -41,12 +40,12 @@ def partial():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"picked={picked()} steps={steps()}")
-        ui.button("oob", on_click=oob)
-        ui.button("grow", on_click=grow)
-        ui.button("partial", on_click=partial)
+    with column(spacing=8, padding=12):
+        text(f"picked={picked()} steps={steps()}")
+        button("oob", on_click=oob)
+        button("grow", on_click=grow)
+        button("partial", on_click=partial)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="edges")
+    run(view, title="edges")

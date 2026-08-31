@@ -11,8 +11,19 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State, store  # noqa: E402
+from yokan import (
+    checkbox,
+    column,
+    radio_group,
+    run,
+    select,
+    slider,
+    State,
+    store,
+    switch,
+    tab_bar,
+    text,
+)
 
 
 @store
@@ -47,22 +58,22 @@ class Settings:
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
-        ui.switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
-        ui.slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
-        ui.select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-        ui.radio_group(options=Settings.sizes, selected=Settings.size, on_change=Settings.pick_size)
-        ui.tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+    with column(spacing=10, padding=14):
+        checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
+        switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
+        slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
+        select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+        radio_group(options=Settings.sizes, selected=Settings.size, on_change=Settings.pick_size)
+        tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
         if Settings.tab == 0:
-            ui.text("general panel", size=12)
+            text("general panel", size=12)
         elif Settings.tab == 1:
-            ui.text("details panel", size=12)
+            text("details panel", size=12)
         else:
-            ui.text("about panel", size=12)
-        ui.text(f"dark={Settings.dark}  wifi={Settings.wifi}  vol={Settings.volume:.1f}")
-        ui.text(f"fruit#{Settings.fruit}  size#{Settings.size}  tab#{Settings.tab}")
+            text("about panel", size=12)
+        text(f"dark={Settings.dark}  wifi={Settings.wifi}  vol={Settings.volume:.1f}")
+        text(f"fruit#{Settings.fruit}  size#{Settings.size}  tab#{Settings.tab}")
 
 
 if __name__ == "__main__":
-    ui.run(view, title="forms", width=460, height=420)
+    run(view, title="forms", width=460, height=420)

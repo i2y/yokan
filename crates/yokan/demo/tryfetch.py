@@ -12,8 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import py, State  # noqa: E402
+from yokan import button, column, py, row, run, State, text  # noqa: E402
 from yokan import fs, http  # noqa: E402
 
 
@@ -169,25 +168,25 @@ def multi_ok():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"body: {body()}")
-        ui.text(f"status: {status()}", size=12)
-        ui.text(f"note: {note()}", size=12)
-        ui.text(f"num: {num()}", size=12)
-        with ui.row(spacing=6):
-            ui.button("start", on_click=start)
-            ui.button("dead", on_click=fetch_dead)
-            ui.button("ok", on_click=fetch_ok)
-            ui.button("peek", on_click=peek)
-            ui.button("parse", on_click=parse)
-            ui.button("parse_ok", on_click=parse_ok)
-            ui.button("mv", on_click=multi_v)
-            ui.button("mk", on_click=multi_k)
-            ui.button("mo", on_click=multi_ok)
-            ui.button("full", on_click=full)
-            ui.button("full_ok", on_click=full_ok)
-            ui.button("mixed", on_click=mixed)
+    with column(spacing=8, padding=12):
+        text(f"body: {body()}")
+        text(f"status: {status()}", size=12)
+        text(f"note: {note()}", size=12)
+        text(f"num: {num()}", size=12)
+        with row(spacing=6):
+            button("start", on_click=start)
+            button("dead", on_click=fetch_dead)
+            button("ok", on_click=fetch_ok)
+            button("peek", on_click=peek)
+            button("parse", on_click=parse)
+            button("parse_ok", on_click=parse_ok)
+            button("mv", on_click=multi_v)
+            button("mk", on_click=multi_k)
+            button("mo", on_click=multi_ok)
+            button("full", on_click=full)
+            button("full_ok", on_click=full_ok)
+            button("mixed", on_click=mixed)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="tryfetch")
+    run(view, title="tryfetch")

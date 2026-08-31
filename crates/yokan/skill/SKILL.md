@@ -11,14 +11,12 @@ browser, no server. Apps are one file, runnable with
 `uv run app.py` — declare `dependencies = ["yokan"]` in the PEP 723
 header and uv fetches it from PyPI.
 
-Spelling convention: the docs use `import yokan as ui` for the UI
-surface (`ui.text`, `ui.column`, `ui.run`) so element-emitting
-lines stand out, and import everything that is not UI bare:
-`from yokan import State, store, model, value, component,
-py, local`. Bare element imports compile identically
-(`from yokan import button, column, run, …`) — the alias is a
-house style, not a requirement. `@yokan.store` (module-prefixed)
-works too.
+Spelling convention: import everything bare —
+`from yokan import State, store, model, value, component, py,
+local, button, column, row, text, run, …`. If you prefer a
+namespace, `import yokan as ui` works identically (`ui.button`,
+`ui.run`); the two spellings compile the same. `@yokan.store`
+(module-prefixed) works too.
 
 ## The shape of every app
 
@@ -26,13 +24,13 @@ Two view spellings, freely mixable — both build the same tree:
 
 ```python
 def view(s):                      # functional
-    return ui.column(ui.text(f"n={s['n']}"), spacing=12)
+    return column(text(f"n={s['n']}"), spacing=12)
 
 def view(s):                      # declarative (return nothing)
-    with ui.column(spacing=12):
-        ui.text(f"n={s['n']}")
-        with ui.row():
-            ui.button("+1", on_click=lambda: s.update(n=s["n"] + 1))
+    with column(spacing=12):
+        text(f"n={s['n']}")
+        with row():
+            button("+1", on_click=lambda: s.update(n=s["n"] + 1))
 ```
 
 Dict state still RUNS on CPython but no longer compiles — typed
@@ -46,10 +44,10 @@ count: State[int] = State(0)
 name: State[str] = State("")
 
 def view():                       # zero-arg: cells close over module scope
-    with ui.column(spacing=12):
-        ui.text(f"count: {count()}")
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
-        ui.text_field(name(), on_change=name.set)   # bound .set is a handler
+    with column(spacing=12):
+        text(f"count: {count()}")
+        button("+1", on_click=lambda: count.set(count() + 1))
+        text_field(name(), on_change=name.set)   # bound .set is a handler
 ```
 
 Annotate cells (`State[int]`) — the annotation is the type source
@@ -66,8 +64,8 @@ values: State[list[float]] = State([1.0]) # fine as CHART DATA
 items.set(items() + [x])   # append (translates to an in-place push)
 items.set([])              # clear
 len(items())               # count
-ui.list_view(len(items()), row)   # row = def row(i): return ui.text(items()[i])
-ui.line_chart(values(), height=120.0)
+list_view(len(items()), row)   # row = def row(i): return text(items()[i])
+line_chart(values(), height=120.0)
 ```
 
 Bare float/bool/enum TEXT renders exactly as CPython's str() in
@@ -132,22 +130,22 @@ Styling — named bags are plain dicts, used by splat; `|`
 composes; `theme=` scopes a subtree's palette:
 
 ```python
-chip = ui.style(size=18, color="accent")     # tokens resolve per theme
-key  = ui.style(background="#313244", hover_background="#45475a")
-hot  = key | ui.style(background="#fab387")  # native style merge
+chip = style(size=18, color="accent")     # tokens resolve per theme
+key  = style(background="#313244", hover_background="#45475a")
+hot  = key | style(background="#fab387")  # native style merge
 
-ui.text(f"n={n()}", **chip)                  # one ** per element
-with ui.column(theme=mode()):                # "light"/"dark" cell or literal
+text(f"n={n()}", **chip)                  # one ** per element
+with column(theme=mode()):                # "light"/"dark" cell or literal
     ...
 ```
 
 Form controls — one shape: value in from state, handler receives
-THE NEW VALUE (one argument) and writes it back. `ui.checkbox(label,
-checked=..., on_change=cb)` / `ui.switch(...)` (cb gets a bool;
-script step: `click:<label>` toggles) · `ui.slider(value=, min=,
+THE NEW VALUE (one argument) and writes it back. `checkbox(label,
+checked=..., on_change=cb)` / `switch(...)` (cb gets a bool;
+script step: `click:<label>` toggles) · `slider(value=, min=,
 max=, step=, on_change=cb)` (cb gets a float; script `slide:<v>`,
-clamped + step-snapped) · `ui.select(options=, selected=,
-on_change=cb)` / `ui.radio_group(...)` / `ui.tab_bar(labels=,
+clamped + step-snapped) · `select(options=, selected=,
+on_change=cb)` / `radio_group(...)` / `tab_bar(labels=,
 active=, on_change=cb)` (cb gets the chosen INDEX; script
 `select:<label>`). Bindings are state/store-field reads; tab
 content switches with a plain `if` on the active index.
@@ -171,9 +169,9 @@ walrus (Python's own `if let`):
 
 ```python
 if (v := sel()) is not None:
-    ui.text(f"picked {v}")      # v is bound, branch-scoped
+    text(f"picked {v}")      # v is bound, branch-scoped
 else:
-    ui.text("(none)")
+    text("(none)")
 ```
 
 Animation — `animate=` (ms) / `easing=` ("linear|in|out|inOut") /
@@ -242,7 +240,7 @@ type Shape = Circle | Rect
 
 sel: State[Shape] = State(Circle(2.0))
 match sel():                       # handlers AND view bodies
-    case Circle(r): ui.text(f"r={r:.1f}")   # float binds need .Nf
+    case Circle(r): text(f"r={r:.1f}")   # float binds need .Nf
     case Rect(w, h): ...
 ```
 
@@ -266,7 +264,7 @@ class Point:
 
 sel: State[Point] = State(Point(3, 4))
 sel.set(replace(sel(), x=10))      # functional update, both tiers
-ui.text(f"x={sel().x}")            # field reads in views/handlers
+text(f"x={sel().x}")            # field reads in views/handlers
 ```
 
 Observed objects — `@model` (instantiable; fields need
@@ -287,8 +285,8 @@ class Circle:
         self.r += by
 
 left = Circle()                    # module-level instances
-ui.button("grow", on_click=lambda: left.grow(0.5))   # def handlers may call left.grow(...)
-ui.text(f"r is set")               # views read left.<field> reactively
+button("grow", on_click=lambda: left.grow(0.5))   # def handlers may call left.grow(...)
+text(f"r is set")               # views read left.<field> reactively
 ```
 
 Interfaces — `typing.Protocol` with method stubs compiles to a
@@ -309,12 +307,12 @@ def area_of(s: Shape) -> float:    # bounded generic natively
     return s.area()
 ```
 
-Startup — `ui.run(view, on_start=Store.load)` runs once after
+Startup — `run(view, on_start=Store.load)` runs once after
 mount, contained (a failing start prints; the app opens). Gate
 persistent apps with `--fresh path/to/file.db` so the interpreted
 run's writes never leak into the compiled run's startup read.
 
-Window — `ui.run(view, title="OpsBoard", width=1100, height=820)`:
+Window — `run(view, title="OpsBoard", width=1100, height=820)`:
 title and size cross into the compiled binary too (baked through
 the project's pixie.toml `[window]`). width/height are logical
 pixels and come as a pair; omitted = the engine default (420x560).
@@ -341,9 +339,9 @@ class Cart:
         self.items = self.items + [name]   # -> native push
         self.total += price
 
-ui.button("add", on_click=lambda: Cart.add("apple", 120))
-ui.button("clear", on_click=Cart.clear)    # bound method, no lambda
-ui.text(f"n={len(Cart.items)} total={Cart.total}")
+button("add", on_click=lambda: Cart.add("apple", 120))
+button("clear", on_click=Cart.clear)    # bound method, no lambda
+text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
 Grouped state is a fields-only `@store` — direct reads in views
@@ -351,29 +349,29 @@ Grouped state is a fields-only `@store` — direct reads in views
 (There is no separate bundle decorator.)
 
 Components with children — declare `@component(slots=True)`,
-place them with `ui.slot()`, pass them with `with`:
+place them with `slot()`, pass them with `with`:
 
 ```python
 @component(slots=True)
 def card(title: str):
-    with ui.column(border_width=1.0, border_color="accent", padding=8):
-        ui.text(title, size=18)
-        ui.slot()
+    with column(border_width=1.0, border_color="accent", padding=8):
+        text(title, size=18)
+        slot()
 
 with card("counters"):        # children keep use-site identity
     counter("a", 1)
     counter("b", 10)
 ```
 
-Per-instance components — `@component` + `ui.local`:
+Per-instance components — `@component` + `local`:
 
 ```python
 @component
 def counter(label: str, step: int):
     n: State[int] = local(0)     # per-call-site state, survives rebuilds
-    with ui.row():
-        ui.text(f"{label}: {n()}")
-        ui.button(f"+{step}", on_click=lambda: n.set(n() + step))
+    with row():
+        text(f"{label}: {n()}")
+        button(f"+{step}", on_click=lambda: n.set(n() + step))
 ```
 
 Identity is positional (reordering call sites reassigns state).
@@ -393,11 +391,11 @@ style; conditions are bool cells or explicit comparisons:
 show: State[bool] = State(False)   # bool: conditions yes, TEXT no
 
 if show():
-    with ui.modal():                     # no open= — presence IS openness
-        ui.text("confirm?")
-        ui.button("yes", on_click=lambda: (done.set(True), show.set(False)))
+    with modal():                     # no open= — presence IS openness
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
 else:
-    ui.text("(closed)")
+    text("(closed)")
 ```
 
 Tuple-bodied lambdas (`lambda: (a.set(x), b.set(y))`) are the
@@ -468,14 +466,14 @@ scroll_view/h_scroll_view/data_table/modal.
 import yokan as ui
 
 def view(s):                      # called on every rebuild; PURE over s
-    return ui.column(
-        ui.text(f"count: {s['count']}", size=34),
-        ui.button("+1", on_click=lambda: s.update(count=s["count"] + 1)),
+    return column(
+        text(f"count: {s['count']}", size=34),
+        button("+1", on_click=lambda: s.update(count=s["count"] + 1)),
         spacing=12, padding=16,
     )
 
 if __name__ == "__main__":        # REQUIRED guard (reload re-execs the module)
-    ui.run(view, state={"count": 0}, title="counter")
+    run(view, state={"count": 0}, title="counter")
 ```
 
 - **State is any Python object** you own (a dict is idiomatic).
@@ -496,14 +494,14 @@ if __name__ == "__main__":        # REQUIRED guard (reload re-execs the module)
    each call.
 2. **TextField is controlled**: pass the current value from state
    and write it back in `on_change` —
-   `ui.text_field(s["q"], on_change=lambda t: s.update(q=t))`.
-3. **`ui.every(seconds, cb)` must be called before `ui.run`** (put
+   `text_field(s["q"], on_change=lambda t: s.update(q=t))`.
+3. **`every(seconds, cb)` must be called before `run`** (put
    it under the `__main__` guard). Timer changes need an app
    restart; reloads keep the original timers.
-4. **`list_view` is virtualized**: `ui.list_view(count, row)` calls
+4. **`list_view` is virtualized**: `list_view(count, row)` calls
    `row(i)` only for visible rows (~14–17 of 100k). Never
    pre-build big lists as columns; use `list_view`.
-5. Charts take sequences of floats: `ui.bar_chart(data, height=140.0)`;
+5. Charts take sequences of floats: `bar_chart(data, height=140.0)`;
    numpy arrays work (`.tolist()` not required, but cheap and safe).
 6. Expensive recomputation belongs in handlers, not in `view()` —
    e.g. recompute a filtered index in `on_change` and store it in
@@ -524,7 +522,7 @@ theme=None)` (`theme="light"|"dark"`; Cmd+T flips live). Buttons
 take `color`/`hover_background`/`active_background`/`border_*`;
 containers take `border_radius`/`border_width`/`border_color`.
 
-## Slow work: ui.task
+## Slow work: task
 
 Never block a handler — `time.sleep`, requests, file crunching all
 freeze the window. Instead:
@@ -532,12 +530,12 @@ freeze the window. Instead:
 ```python
 def start():
     s.update(busy=True)
-    ui.task(fetch_data, on_done=lambda v: s.update(busy=False, data=v),
+    task(fetch_data, on_done=lambda v: s.update(busy=False, data=v),
             on_error=lambda e: s.update(busy=False, error=str(e)))
 ```
 
-`work` runs on a worker thread — it must NOT call `ui.*` or touch
-elements; return a value instead. `on_done`/`on_error` run on the UI
+`work` runs on a worker thread — it must NOT build UI elements;
+return a value instead. `on_done`/`on_error` run on the UI
 thread and may mutate state freely; a rebuild follows automatically.
 Callable from handlers, timer ticks, other callbacks, or before
 `run()`. Headless scripts wait for task completion deterministically,
@@ -562,7 +560,7 @@ uv run app.py` runs the app headless and dumps the element tree
 before and after the steps (steps: `click:<label>`,
 `input[@n]:<text>`, `submit[@n]`, `advance:<ms>`, `theme:light|dark`,
 `a11y`, `mem`). Assert on the dump in tests via
-`ui._headless(view, state, script) -> str`. Timers do not run
+`_headless(view, state, script) -> str`. Timers do not run
 headless. Then run windowed once to confirm the look. For
 virtualized lists, `PIXIE_TRACE_LAZY=1` prints the built row
 ranges — `building rows 0..17 of 100000` is what correct looks

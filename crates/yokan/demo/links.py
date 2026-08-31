@@ -12,8 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State, Weak, model, store  # noqa: E402
+from yokan import button, column, model, row, run, State, store, text, Weak  # noqa: E402
 
 
 @model
@@ -61,17 +60,17 @@ class Tree:
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"note: {Tree.note}")
+    with column(spacing=8, padding=12):
+        text(f"note: {Tree.note}")
         if (r := Tree.root) is not None:
-            ui.text(f"root: {r.label}")
+            text(f"root: {r.label}")
         else:
-            ui.text("root: (none)")
-        with ui.row(spacing=6):
-            ui.button("build", on_click=Tree.build)
-            ui.button("peek", on_click=Tree.peek)
-            ui.button("drop", on_click=Tree.drop_root)
+            text("root: (none)")
+        with row(spacing=6):
+            button("build", on_click=Tree.build)
+            button("peek", on_click=Tree.peek)
+            button("drop", on_click=Tree.drop_root)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="links")
+    run(view, title="links")

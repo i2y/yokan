@@ -10,8 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, run, State, text  # noqa: E402
 from yokan import fs  # noqa: E402
 
 content: State[str] = State("(not loaded)")
@@ -27,12 +26,12 @@ def load():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"content: {content()}")
-        ui.text(f"wrote: {wrote()} bytes")
-        ui.button("save", on_click=save)
-        ui.button("load", on_click=load)
+    with column(spacing=8, padding=12):
+        text(f"content: {content()}")
+        text(f"wrote: {wrote()} bytes")
+        button("save", on_click=save)
+        button("load", on_click=load)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="files")
+    run(view, title="files")

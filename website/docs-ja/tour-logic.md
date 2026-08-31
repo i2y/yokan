@@ -42,9 +42,9 @@ Optional の絞り込みは walrus で書きます。
 
 ```python
 if (v := sel()) is not None:
-    ui.text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
+    text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
 else:
-    ui.text("(none)")
+    text("(none)")
 ```
 
 ## 算術
@@ -89,8 +89,8 @@ tail.set(r[-1])              # 最後の要素（短すぎればその文が中�
 
 ```python
 values: State[list[float]] = State([])
-ui.line_chart(values(), height=120.0)
-ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+line_chart(values(), height=120.0)
+bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 ```
 
 行数の多いリストは `list_view` に渡します。
@@ -98,10 +98,10 @@ ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 
 ```python
 def row(i):
-    return ui.text(items()[i])
+    return text(items()[i])
 
-ui.list_view(len(items()), row, item_height=22.0, height=200.0)
-ui.list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
+list_view(len(items()), row, item_height=22.0, height=200.0)
+list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
 ## 辞書

@@ -33,18 +33,17 @@ The smallest complete app:
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
-from yokan import State
+from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
 def view():
-    with ui.column(spacing=12, padding=16):
-        ui.text(f"count: {count()}", size=34)
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
 
 if __name__ == "__main__":
-    ui.run(view, title="counter")
+    run(view, title="counter")
 ```
 
 Run it with `uv run app.py` and this window opens (the renderer is

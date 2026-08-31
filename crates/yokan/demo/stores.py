@@ -11,8 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import store  # noqa: E402
+from yokan import button, column, row, run, store, text  # noqa: E402
 
 
 @store
@@ -39,12 +38,12 @@ class Cart:
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"n={len(Cart.items)} total={Cart.total} f={Settings.factor}")
-        with ui.row(spacing=6):
-            ui.button("add", on_click=lambda: Cart.add("apple", 10))
-            ui.button("clear", on_click=Cart.clear)
+    with column(spacing=8, padding=12):
+        text(f"n={len(Cart.items)} total={Cart.total} f={Settings.factor}")
+        with row(spacing=6):
+            button("add", on_click=lambda: Cart.add("apple", 10))
+            button("clear", on_click=Cart.clear)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="stores")
+    run(view, title="stores")

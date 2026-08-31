@@ -13,8 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from dataclasses import dataclass, replace  # noqa: E402
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, row, run, State, text  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -41,13 +40,13 @@ def measure():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"p=({sel().x}, {sel().y}) d2={dist()}")
-        with ui.row(spacing=6):
-            ui.button("right", on_click=move_right)
-            ui.button("swap", on_click=swap)
-            ui.button("measure", on_click=measure)
+    with column(spacing=8, padding=12):
+        text(f"p=({sel().x}, {sel().y}) d2={dist()}")
+        with row(spacing=6):
+            button("right", on_click=move_right)
+            button("swap", on_click=swap)
+            button("measure", on_click=measure)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="points")
+    run(view, title="points")

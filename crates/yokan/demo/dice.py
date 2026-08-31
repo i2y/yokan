@@ -13,8 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, row, run, State, text  # noqa: E402
 from yokan import random  # noqa: E402
 
 rolls: State[list[int]] = State([])
@@ -41,12 +40,12 @@ def roll():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"rolls={len(rolls())} total={total()} rank={rank(total())}")
-        with ui.row(spacing=6):
-            ui.button("reset", on_click=reset)
-            ui.button("roll", on_click=roll)
+    with column(spacing=8, padding=12):
+        text(f"rolls={len(rolls())} total={total()} rank={rank(total())}")
+        with row(spacing=6):
+            button("reset", on_click=reset)
+            button("roll", on_click=roll)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="dice")
+    run(view, title="dice")

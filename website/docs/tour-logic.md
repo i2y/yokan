@@ -42,9 +42,9 @@ Optional narrowing is written with the walrus.
 
 ```python
 if (v := sel()) is not None:
-    ui.text(f"picked {v}")      # v is bound only inside this branch
+    text(f"picked {v}")      # v is bound only inside this branch
 else:
-    ui.text("(none)")
+    text("(none)")
 ```
 
 ## Arithmetic
@@ -89,8 +89,8 @@ Charts draw lists of float or int.
 
 ```python
 values: State[list[float]] = State([])
-ui.line_chart(values(), height=120.0)
-ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+line_chart(values(), height=120.0)
+bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 ```
 
 Long lists go to `list_view`.
@@ -98,10 +98,10 @@ It is **virtualized**: the row builder `row(i)` is called only for the visible r
 
 ```python
 def row(i):
-    return ui.text(items()[i])
+    return text(items()[i])
 
-ui.list_view(len(items()), row, item_height=22.0, height=200.0)
-ui.list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
+list_view(len(items()), row, item_height=22.0, height=200.0)
+list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
 ## Dicts

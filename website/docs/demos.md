@@ -29,7 +29,7 @@ the initial state, right after launch.
 #### calc — the classic keypad calculator: the layout is all `grow`, so resizing scales the whole pad with no dead space
 <img src="images/demos/calc.png" width="300">
 
-#### calcgrid — the same calculator on `ui.grid(columns=4, rows=5)`; the zero key spans two cells with `col_span=2`
+#### calcgrid — the same calculator on `grid(columns=4, rows=5)`; the zero key spans two cells with `col_span=2`
 <img src="images/demos/calcgrid.png" width="300">
 
 ## Holding state
@@ -43,7 +43,7 @@ the initial state, right after launch.
 #### links — models referencing models: owning `Node | None`, non-owning `Weak[Node]` back pointers (no cycles, so dropping the root frees the chain)
 <img src="images/demos/links.png" width="360">
 
-#### stateful — @component + ui.local: a component with its own state per call site
+#### stateful — @component + local: a component with its own state per call site
 <img src="images/demos/stateful.png" width="360">
 
 #### lookup — dict cells: reads via `.get(key, default)` and `in`, writes in place with `cell[k] = v`
@@ -94,7 +94,7 @@ the initial state, right after launch.
 #### trend — line and bar charts
 <img src="images/demos/trend.png" width="360">
 
-#### styled — named styles (`ui.style` + `**` splat + `|` merge) and theme scopes
+#### styled — named styles (`style` + `**` splat + `|` merge) and theme scopes
 <img src="images/demos/styled.png" width="360">
 
 #### cards — components with slots (components that take children)
@@ -136,7 +136,7 @@ the initial state, right after launch.
 #### multi — a multi-module app (state.py and widgets.py; helpers become components)
 <img src="images/demos/multi.png" width="360">
 
-#### dashboard — a load-average display driven by ui.every() (development-only: dict state)
+#### dashboard — a load-average display driven by every() (development-only: dict state)
 <img src="images/demos/dashboard.png" width="360">
 
 #### app — a dashboard with numpy (development-only: dict state)
@@ -145,5 +145,5 @@ the initial state, right after launch.
 #### csv_viewer — a 100k-row virtualized table + numpy (development-only: dict state)
 <img src="images/demos/csv_viewer.png" width="360">
 
-#### tasks — worker threads via ui.task() (development-only: dict state)
+#### tasks — worker threads via task() (development-only: dict state)
 <img src="images/demos/tasks.png" width="360">

@@ -46,18 +46,17 @@ Yokan のアプリは普通の Python ファイルです。
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
-from yokan import State
+from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
 def view():
-    with ui.column(spacing=12, padding=16):
-        ui.text(f"count: {count()}", size=34)
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
 
 if __name__ == "__main__":
-    ui.run(view, title="counter")
+    run(view, title="counter")
 ```
 
 三つの動かし方があります。
@@ -117,9 +116,9 @@ class Cart:
         for x in xs:
             self.items = self.items + [x]
 
-ui.button("add", on_click=lambda: Cart.add("apple", 120))
-ui.button("clear", on_click=Cart.clear)
-ui.text(f"n={len(Cart.items)} total={Cart.total}")
+button("add", on_click=lambda: Cart.add("apple", 120))
+button("clear", on_click=Cart.clear)
+text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
 フィールドは State と同じ型が使えます。
@@ -140,7 +139,7 @@ class Circle:
 
 left = Circle()
 right = Circle()
-ui.button("grow", on_click=lambda: left.grow(0.5))
+button("grow", on_click=lambda: left.grow(0.5))
 ```
 
 モデルはモデルを参照できます。
@@ -177,7 +176,7 @@ class Tree:
 
 ```python
 if (r := Tree.root) is not None:
-    ui.text(f"root: {r.label}")
+    text(f"root: {r.label}")
 ```
 
 データそのものは後述の**Value クラス**で持ち、ストアのフィールドに置くのが基本形です。
@@ -191,17 +190,17 @@ if (r := Tree.root) is not None:
 
 ```python
 def view():
-    with ui.column(spacing=10, padding=16):
-        ui.text(f"hello {name()}", size=20, color="accent")
-        with ui.row(spacing=6):
-            ui.text_field(name(), placeholder="name", on_change=name.set)
-            ui.button("clear", on_click=lambda: name.set(""))
+    with column(spacing=10, padding=16):
+        text(f"hello {name()}", size=20, color="accent")
+        with row(spacing=6):
+            text_field(name(), placeholder="name", on_change=name.set)
+            button("clear", on_click=lambda: name.set(""))
 ```
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
-ここで `ui.` 経由で呼んでいるものは、`from yokan import button, column, run, …` の裸 import でも書けます。どちらの綴りも同じにコンパイルされます。
-このドキュメントが `ui.` を使うのは、要素を出す行が一目で分かるようにするためです。
+サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
+名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
 テキストへの値の埋め込みは f-string です。
 int、str、float、bool、Enum の値がそのまま描画でき、表示は Python の `str()` と同じです（`2.0` は `2.0`、`True` は `True`、`Mood.HAPPY` は `Mood.HAPPY`）。
@@ -214,9 +213,9 @@ float の小数点以下を揃えたいときは `f"{x:.1f}"` の形式指定も
 
 ```python
 if show():
-    with ui.modal():
-        ui.text("confirm?")
-        ui.button("yes", on_click=lambda: (done.set(True), show.set(False)))
+    with modal():
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
 ## フォーム部品
@@ -253,12 +252,12 @@ class Settings:
         self.tab = i
 
 
-ui.checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
-ui.switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
-ui.slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
-ui.select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
+switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
+slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
+select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 ```
 
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
@@ -307,9 +306,9 @@ Optional の絞り込みは walrus で書きます。
 
 ```python
 if (v := sel()) is not None:
-    ui.text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
+    text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
 else:
-    ui.text("(none)")
+    text("(none)")
 ```
 
 ## 算術
@@ -354,8 +353,8 @@ tail.set(r[-1])              # 最後の要素（短すぎればその文が中�
 
 ```python
 values: State[list[float]] = State([])
-ui.line_chart(values(), height=120.0)
-ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+line_chart(values(), height=120.0)
+bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 ```
 
 行数の多いリストは `list_view` に渡します。
@@ -363,10 +362,10 @@ ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 
 ```python
 def row(i):
-    return ui.text(items()[i])
+    return text(items()[i])
 
-ui.list_view(len(items()), row, item_height=22.0, height=200.0)
-ui.list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
+list_view(len(items()), row, item_height=22.0, height=200.0)
+list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
 ## 辞書
@@ -405,7 +404,7 @@ class Point:
 
 sel: State[Point] = State(Point(3, 4))
 sel.set(replace(sel(), x=10))
-ui.text(f"x={sel().x}")
+text(f"x={sel().x}")
 ```
 
 Value クラスにはメソッドも書けます。
@@ -494,11 +493,11 @@ health: State[Health] = State(Healthy())
 # ビューの中で:
 match health():
     case Healthy():
-        ui.text("ALL SYSTEMS NOMINAL")
+        text("ALL SYSTEMS NOMINAL")
     case Degraded(services):
-        ui.text(f"DEGRADED — {services} service(s)")
+        text(f"DEGRADED — {services} service(s)")
     case Outage(service):
-        ui.text(f"OUTAGE — {service} is down")
+        text(f"OUTAGE — {service} is down")
 ```
 
 case の抜けはコンパイル時に指摘されます。
@@ -516,33 +515,33 @@ Enum は普通の `class Mood(Enum)` がそのままコンパイルされます�
 ## コンポーネント
 
 再利用したいビューの断片は **コンポーネント**（`@component`）にします。
-インスタンスごとの状態は `ui.local` で持ちます（呼び出し位置ごとに独立で、再描画を生き延びます）。
+インスタンスごとの状態は `local` で持ちます（呼び出し位置ごとに独立で、再描画を生き延びます）。
 
 ```python
 @component
 def counter(label: str, step: int):
     n: State[int] = local(0)
-    with ui.row(spacing=6):
-        ui.text(f"{label}: {n()}")
-        ui.button(f"+{step}", on_click=lambda: n.set(n() + step))
+    with row(spacing=6):
+        text(f"{label}: {n()}")
+        button(f"+{step}", on_click=lambda: n.set(n() + step))
 ```
 
-子要素を受け取るコンポーネントは `slots=True` で宣言し、`ui.slot()` の位置に差し込まれます。
+子要素を受け取るコンポーネントは `slots=True` で宣言し、`slot()` の位置に差し込まれます。
 使う側は `with` で渡します。
 
 ```python
 @component(slots=True)
 def card(title: str):
-    with ui.column(border_width=1.0, border_color="accent", padding=8):
-        ui.text(title, size=18)
-        ui.slot()
+    with column(border_width=1.0, border_color="accent", padding=8):
+        text(title, size=18)
+        slot()
 
 with card("counters"):
     counter("a", 1)
     counter("b", 10)
 ```
 
-`ui.local` は呼び出し位置で見分けられています。
+`local` は呼び出し位置で見分けられています。
 呼び出しの並びを入れ替えると、状態の対応も入れ替わります。
 
 ## スタイルとテーマ
@@ -551,11 +550,11 @@ with card("counters"):
 `|` で合成できます。
 
 ```python
-chip = ui.style(size=18, color="accent")
-key = ui.style(background="surface", hover_background="surfaceHover")
-hot = key | ui.style(background="#fab387")
+chip = style(size=18, color="accent")
+key = style(background="surface", hover_background="surfaceHover")
+hot = key | style(background="#fab387")
 
-ui.text(f"n={n()}", **chip)
+text(f"n={n()}", **chip)
 ```
 
 色は 16 進のリテラルのほかに**テーマトークン**が書けます。
@@ -573,9 +572,9 @@ def flip():
     else:
         mode.set("dark")
 
-with ui.column(background="windowBg", grow=1.0, theme=mode()):
+with column(background="windowBg", grow=1.0, theme=mode()):
     ...
-    ui.button("theme", on_click=flip)
+    button("theme", on_click=flip)
 ```
 
 いちばん外側のコンテナに当てれば、ウィンドウの背景色ごとテーマに従います。
@@ -586,15 +585,15 @@ with ui.column(background="windowBg", grow=1.0, theme=mode()):
 `easing=` は `"linear"`、`"in"`、`"out"`、`"inOut"` から選び、`enter=True` / `exit=True` で出入りにも掛かります。
 
 ```python
-ui.text("OUTAGE — api is down", animate=140, easing="out", **pill_crit)
+text("OUTAGE — api is down", animate=140, easing="out", **pill_crit)
 ```
 
 ## ウィンドウ
 
-タイトルとサイズはアプリが `ui.run` で宣言します。
+タイトルとサイズはアプリが `run` で宣言します。
 
 ```python
-ui.run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
+run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 ```
 
 `width` / `height` は論理ピクセルで、対で指定します（省略時はエンジンの既定値）。
@@ -731,21 +730,21 @@ numpy のようなコンパイル済み拡張もエスケープの中で使え�
 ## 重い処理とタイマー
 
 ハンドラをブロックしてはいけません（ウィンドウが固まります）。
-`ui.task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
+`task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
 
 ```python
 def start():
     busy.set(True)
-    ui.task(fetch_data,
+    task(fetch_data,
             on_done=lambda v: (busy.set(False), data.set(v)),
             on_error=lambda e: (busy.set(False), err.set(str(e))))
 ```
 
-渡す関数は `ui.*` に触らず、値を返すだけにします。
+渡す関数は UI 要素を作らず、値を返すだけにします。
 ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
 
-`ui.every(seconds, cb)` は秒間隔のタイマーです。
-`ui.run` より前に呼びます。
+`every(seconds, cb)` は秒間隔のタイマーです。
+`run` より前に呼びます。
 タイマーは開発実行の機能で、コンパイル対象ではありません（[今できないこと](#今できないこと)参照）。
 
 ## 型チェッカーとの併用
@@ -769,7 +768,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
 ステップの語彙は `click:<ラベル>`、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`。
-ステップの前後で画面の内容がテキストになって標準出力へ出力され、テストからは `ui._headless(view, state, script)` が同じ文字列を返します。
+ステップの前後で画面の内容がテキストになって標準出力へ出力され、テストからは `yokan._headless(view, state, script)` が同じ文字列を返します。
 
 **ゲート**は同じスクリプトを開発版とリリース版の両方で再生し、ダンプを突き合わせます。
 
@@ -829,14 +828,14 @@ $ yokan build demo/opsboard/app.py --release
 - **変数での後ろから添字**（`xs[i]` の i が実行時に負になる形）。リテラルの `xs[-1]` は使えます。
 - **片方の分岐でしか代入していないローカルを後で読むこと**。実行されなかったとき Python なら NameError になる形です。if / else 両方で代入すれば読めます。
 - **`int ** int` の負の指数**。結果の型が実行時に変わるためで、どちらかを float にすれば書けます。
-- **辞書 state（`ui.run(state={...})`）のコンパイル**。開発中は動きますが、コンパイルできる形は型付きの `State` です。
+- **辞書 state（`run(state={...})`）のコンパイル**。開発中は動きますが、コンパイルできる形は型付きの `State` です。
 - **Protocol 束縛のヘルパをビューから呼ぶこと**（ハンドラからは呼べます）。
 - **Value クラスのメソッドをビューから呼ぶこと**（ハンドラからは呼べます。ビューはフィールドを読みます）。
 - **モデルのリストをビューで直接繰り返すこと**。今日は、表示したい文字列にストア側で組み立ててから `list_view` に渡します。
 - **ストアのフィールドを `Weak` にすること**。ストアは所有する側なので、所有しない参照はモデル側（逆向きのポインタ）に置きます。
 - **`Vec` などネイティブ側が既に使っている型名**。名指しで断られるので、別名（`V2` など）を選びます。
-- **`ui.every` のコンパイル**。タイマーは開発実行の機能で、ヘッドレス実行でも走りません。
-- コンポーネントの `ui.local` は**呼び出し位置で識別**されます。並べ替えは状態の付け替えです。
+- **`every` のコンパイル**。タイマーは開発実行の機能で、ヘッドレス実行でも走りません。
+- コンポーネントの `local` は**呼び出し位置で識別**されます。並べ替えは状態の付け替えです。
 - 同じ要素オブジェクトを**二回置くこと**。一度置いた要素は使い切りで、二か所には置けません。
 - **Rust crate の境界で、ペイロード付き enum と、双子へのメソッドは、まだ越えられない。** スカラ、String、List、Optional、str キーの辞書、構造体（入れ子・幅付きフィールド込み）、enum、Result（複合型の返りも）までは越えます。残る二つの前提: ペイロード enum は rpi-gen 自体の残件、メソッドは rpi 宣言済み struct への実装接合。構造体のフィールドに enum やリストを置く形もまだで、どれも呼ぶと理由を名指しして断られます。
 - 実測値はすべて macOS/arm64 のものです。ほかのプラットフォームはまだ測っていません。

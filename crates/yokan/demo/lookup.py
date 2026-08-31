@@ -13,8 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, row, run, State, text  # noqa: E402
 
 prices: State[dict[str, int]] = State({"apple": 120, "banana": 80})
 picked: State[int] = State(0)
@@ -41,14 +40,14 @@ def miss():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"picked={picked()} n={len(prices())} {label()}")
-        ui.text(f"apple costs {prices().get('apple', -1)} right now", size=12)
-        with ui.row(spacing=6):
-            ui.button("apple", on_click=pick_apple)
-            ui.button("cherry", on_click=add_cherry)
-            ui.button("miss", on_click=miss)
+    with column(spacing=8, padding=12):
+        text(f"picked={picked()} n={len(prices())} {label()}")
+        text(f"apple costs {prices().get('apple', -1)} right now", size=12)
+        with row(spacing=6):
+            button("apple", on_click=pick_apple)
+            button("cherry", on_click=add_cherry)
+            button("miss", on_click=miss)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="lookup")
+    run(view, title="lookup")

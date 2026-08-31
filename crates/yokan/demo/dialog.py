@@ -12,8 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, modal, row, run, State, text  # noqa: E402
 
 show: State[bool] = State(False)
 status: State[str] = State("undecided")
@@ -30,18 +29,18 @@ def decline():
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.text(f"status: {status()}", size=16)
-        ui.button("open dialog", on_click=lambda: show.set(True))
+    with column(spacing=10, padding=14):
+        text(f"status: {status()}", size=16)
+        button("open dialog", on_click=lambda: show.set(True))
         if show():
-            with ui.modal():
-                ui.text("accept the terms?", size=18)
-                with ui.row(spacing=8):
-                    ui.button("accept", on_click=accept)
-                    ui.button("decline", on_click=decline)
+            with modal():
+                text("accept the terms?", size=18)
+                with row(spacing=8):
+                    button("accept", on_click=accept)
+                    button("decline", on_click=decline)
         else:
-            ui.text("(dialog closed)", size=12, color="#8a8f98")
+            text("(dialog closed)", size=12, color="#8a8f98")
 
 
 if __name__ == "__main__":
-    ui.run(view, title="dialog")
+    run(view, title="dialog")

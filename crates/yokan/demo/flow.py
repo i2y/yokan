@@ -12,8 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, row, run, State, text  # noqa: E402
 
 count: State[int] = State(0)
 total: State[int] = State(0)
@@ -55,14 +54,14 @@ def find():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"count={count()} total={total()} status={status()}")
-        with ui.row(spacing=6):
-            ui.button("step", on_click=step)
-            ui.button("tally", on_click=tally)
-            ui.button("bump3", on_click=bump3)
-            ui.button("find", on_click=find)
+    with column(spacing=8, padding=12):
+        text(f"count={count()} total={total()} status={status()}")
+        with row(spacing=6):
+            button("step", on_click=step)
+            button("tally", on_click=tally)
+            button("bump3", on_click=bump3)
+            button("find", on_click=find)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="flow")
+    run(view, title="flow")

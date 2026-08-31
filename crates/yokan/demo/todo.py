@@ -12,8 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, list_view, run, State, text, text_field  # noqa: E402
 
 items: State[list[str]] = State(["milk"])
 draft: State[str] = State("")
@@ -25,21 +24,21 @@ def add(t: str):
 
 
 def row(i: int):
-    return ui.text(items()[i])
+    return text(items()[i])
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.text(f"todo — {len(items())} items", size=16)
-        ui.text_field(
+    with column(spacing=10, padding=14):
+        text(f"todo — {len(items())} items", size=16)
+        text_field(
             draft(),
             placeholder="add and press enter",
             on_change=draft.set,
             on_submit=add,
         )
-        ui.list_view(len(items()), row, item_height=24.0, height=280.0)
-        ui.button("clear", on_click=lambda: items.set([]))
+        list_view(len(items()), row, item_height=24.0, height=280.0)
+        button("clear", on_click=lambda: items.set([]))
 
 
 if __name__ == "__main__":
-    ui.run(view, title="todo")
+    run(view, title="todo")

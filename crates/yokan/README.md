@@ -37,7 +37,7 @@ app without a window: the steps are replayed, the element tree is
 dumped to stdout, and `run()` returns. The step vocabulary is
 `click:` `input[@n]:` `submit[@n]` `slide[@n]:` `select[@n]:`
 `advance:` `theme:` `a11y` `mem`. In tests,
-`ui._headless(view, state, script)` returns the dumps as a string.
+`yokan._headless(view, state, script)` returns the dumps as a string.
 Timers are skipped headless.
 
 ## Gate and ship

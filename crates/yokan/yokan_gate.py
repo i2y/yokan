@@ -3638,7 +3638,7 @@ class Translator:
         strlit = lambda name: self._strlit(kw, name)  # noqa: E731
 
         if self._is_ui(node.func, "column") or self._is_ui(node.func, "row"):
-            tag = "Column" if node.func.attr == "column" else "Row"
+            tag = "Column" if self._is_ui(node.func, "column") else "Row"
             lines = [f"{pad}{tag} {{"]
             if style_rider:
                 lines.append(f"{pad}  style: {style_rider}")

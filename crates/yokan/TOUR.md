@@ -48,18 +48,17 @@ The sections below will not repeat this.
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
-from yokan import State
+from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
 def view():
-    with ui.column(spacing=12, padding=16):
-        ui.text(f"count: {count()}", size=34)
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
 
 if __name__ == "__main__":
-    ui.run(view, title="counter")
+    run(view, title="counter")
 ```
 
 There are three ways to run it.
@@ -118,9 +117,9 @@ class Cart:
         for x in xs:
             self.items = self.items + [x]
 
-ui.button("add", on_click=lambda: Cart.add("apple", 120))
-ui.button("clear", on_click=Cart.clear)
-ui.text(f"n={len(Cart.items)} total={Cart.total}")
+button("add", on_click=lambda: Cart.add("apple", 120))
+button("clear", on_click=Cart.clear)
+text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
 Fields take the same types as State.
@@ -142,7 +141,7 @@ class Circle:
 
 left = Circle()
 right = Circle()
-ui.button("grow", on_click=lambda: left.grow(0.5))
+button("grow", on_click=lambda: left.grow(0.5))
 ```
 
 Models can reference models.
@@ -179,7 +178,7 @@ Reads use walrus narrowing (the same shape as in the Optional section; it works 
 
 ```python
 if (r := Tree.root) is not None:
-    ui.text(f"root: {r.label}")
+    text(f"root: {r.label}")
 ```
 
 Data itself belongs in the **value classes** introduced later, placed on store fields — that is the base pattern.
@@ -193,17 +192,17 @@ A view function is a pure function building the screen from state; mutation is t
 
 ```python
 def view():
-    with ui.column(spacing=10, padding=16):
-        ui.text(f"hello {name()}", size=20, color="accent")
-        with ui.row(spacing=6):
-            ui.text_field(name(), placeholder="name", on_change=name.set)
-            ui.button("clear", on_click=lambda: name.set(""))
+    with column(spacing=10, padding=16):
+        text(f"hello {name()}", size=20, color="accent")
+        with row(spacing=6):
+            text_field(name(), placeholder="name", on_change=name.set)
+            button("clear", on_click=lambda: name.set(""))
 ```
 
 The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
-Everything called through `ui.` here can also be imported bare — `from yokan import button, column, run, …` — and the two spellings compile identically.
-The docs use the `ui.` alias so the lines that emit elements stand out.
+The samples import elements bare — `from yokan import button, column, run, …`.
+If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
 Text holes are opened with f-strings.
 int, str, float, bool and Enum values render directly, and the text matches Python's `str()` (`2.0` renders as `2.0`, `True` as `True`, `Mood.HAPPY` as `Mood.HAPPY`).
@@ -215,9 +214,9 @@ A modal is open by existing, so wrap it in an `if`.
 
 ```python
 if show():
-    with ui.modal():
-        ui.text("confirm?")
-        ui.button("yes", on_click=lambda: (done.set(True), show.set(False)))
+    with modal():
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
 ## Form controls
@@ -254,12 +253,12 @@ class Settings:
         self.tab = i
 
 
-ui.checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
-ui.switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
-ui.slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
-ui.select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
+switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
+slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
+select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 ```
 
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
@@ -308,9 +307,9 @@ Optional narrowing is written with the walrus.
 
 ```python
 if (v := sel()) is not None:
-    ui.text(f"picked {v}")      # v is bound only inside this branch
+    text(f"picked {v}")      # v is bound only inside this branch
 else:
-    ui.text("(none)")
+    text("(none)")
 ```
 
 ## Arithmetic
@@ -355,8 +354,8 @@ Charts draw lists of float or int.
 
 ```python
 values: State[list[float]] = State([])
-ui.line_chart(values(), height=120.0)
-ui.bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+line_chart(values(), height=120.0)
+bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
 ```
 
 Long lists go to `list_view`.
@@ -364,10 +363,10 @@ It is **virtualized**: the row builder `row(i)` is called only for the visible r
 
 ```python
 def row(i):
-    return ui.text(items()[i])
+    return text(items()[i])
 
-ui.list_view(len(items()), row, item_height=22.0, height=200.0)
-ui.list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
+list_view(len(items()), row, item_height=22.0, height=200.0)
+list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
 ## Dicts
@@ -405,7 +404,7 @@ class Point:
 
 sel: State[Point] = State(Point(3, 4))
 sel.set(replace(sel(), x=10))
-ui.text(f"x={sel().x}")
+text(f"x={sel().x}")
 ```
 
 Value classes can have methods.
@@ -494,11 +493,11 @@ health: State[Health] = State(Healthy())
 # in the view:
 match health():
     case Healthy():
-        ui.text("ALL SYSTEMS NOMINAL")
+        text("ALL SYSTEMS NOMINAL")
     case Degraded(services):
-        ui.text(f"DEGRADED — {services} service(s)")
+        text(f"DEGRADED — {services} service(s)")
     case Outage(service):
-        ui.text(f"OUTAGE — {service} is down")
+        text(f"OUTAGE — {service} is down")
 ```
 
 Missing arms are reported at compile time.
@@ -516,33 +515,33 @@ In text they render exactly as Python does: `Mood.HAPPY`.
 ## Components
 
 A view fragment you want to reuse becomes a **component** (`@component`).
-Per-instance state lives in `ui.local` (independent per call site, and it survives re-renders).
+Per-instance state lives in `local` (independent per call site, and it survives re-renders).
 
 ```python
 @component
 def counter(label: str, step: int):
     n: State[int] = local(0)
-    with ui.row(spacing=6):
-        ui.text(f"{label}: {n()}")
-        ui.button(f"+{step}", on_click=lambda: n.set(n() + step))
+    with row(spacing=6):
+        text(f"{label}: {n()}")
+        button(f"+{step}", on_click=lambda: n.set(n() + step))
 ```
 
-A component that takes children declares `slots=True`, and the children land at `ui.slot()`.
+A component that takes children declares `slots=True`, and the children land at `slot()`.
 The caller passes them with `with`.
 
 ```python
 @component(slots=True)
 def card(title: str):
-    with ui.column(border_width=1.0, border_color="accent", padding=8):
-        ui.text(title, size=18)
-        ui.slot()
+    with column(border_width=1.0, border_color="accent", padding=8):
+        text(title, size=18)
+        slot()
 
 with card("counters"):
     counter("a", 1)
     counter("b", 10)
 ```
 
-`ui.local` identity is call-site based.
+`local` identity is call-site based.
 Reorder the calls and the states swap along with them.
 
 ## Styles and themes
@@ -551,11 +550,11 @@ A style is a named dict, splatted onto an element with `**` (one per element).
 Compose them with `|`.
 
 ```python
-chip = ui.style(size=18, color="accent")
-key = ui.style(background="surface", hover_background="surfaceHover")
-hot = key | ui.style(background="#fab387")
+chip = style(size=18, color="accent")
+key = style(background="surface", hover_background="surfaceHover")
+hot = key | style(background="#fab387")
 
-ui.text(f"n={n()}", **chip)
+text(f"n={n()}", **chip)
 ```
 
 Colors take hex literals or **theme tokens**.
@@ -573,9 +572,9 @@ def flip():
     else:
         mode.set("dark")
 
-with ui.column(background="windowBg", grow=1.0, theme=mode()):
+with column(background="windowBg", grow=1.0, theme=mode()):
     ...
-    ui.button("theme", on_click=flip)
+    button("theme", on_click=flip)
 ```
 
 An app that themes the root of its tree follows that palette down to the window's ground color.
@@ -586,15 +585,15 @@ Give an element `animate=` (milliseconds) and changes to that element interpolat
 `easing=` picks from `"linear"`, `"in"`, `"out"`, `"inOut"`, and `enter=True` / `exit=True` extend the animation to appearing and disappearing.
 
 ```python
-ui.text("OUTAGE — api is down", animate=140, easing="out", **pill_crit)
+text("OUTAGE — api is down", animate=140, easing="out", **pill_crit)
 ```
 
 ## The window
 
-The app declares its title and size in `ui.run`.
+The app declares its title and size in `run`.
 
 ```python
-ui.run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
+run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 ```
 
 `width` / `height` are logical pixels, given as a pair (omitted, the engine default applies).
@@ -747,21 +746,21 @@ Compiled extensions like numpy work inside escapes.
 ## Heavy work and timers
 
 Never block a handler (the window freezes).
-`ui.task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
+`task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
 
 ```python
 def start():
     busy.set(True)
-    ui.task(fetch_data,
+    task(fetch_data,
             on_done=lambda v: (busy.set(False), data.set(v)),
             on_error=lambda e: (busy.set(False), err.set(str(e))))
 ```
 
-`work` must not touch `ui.*`; it just returns a value.
+`work` must not build UI elements; it just returns a value.
 Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
 
-`ui.every(seconds, cb)` is a timer with a seconds interval.
-Call it before `ui.run`.
+`every(seconds, cb)` is a timer with a seconds interval.
+Call it before `run`.
 Timers are a development-run feature and are not compiled (see [What does not work yet](#what-does-not-work-yet)).
 
 ## Working with type checkers
@@ -784,7 +783,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
 The step vocabulary is `click:<label>`, `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`.
-The screen tree is dumped to stdout before and after the steps, and from tests `ui._headless(view, state, script)` returns the same string.
+The screen tree is dumped to stdout before and after the steps, and from tests `yokan._headless(view, state, script)` returns the same string.
 
 The **gate** replays the same script against the development build and the shipped build, and diffs the dumps.
 
@@ -845,14 +844,14 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Indexing from the back through a variable** (an `xs[i]` whose i turns negative at runtime). The literal `xs[-1]` works.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
-- **Compiling dict state (`ui.run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
+- **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
-- **Compiling `ui.every`.** Timers are a development-run feature and do not run headless either.
-- A component's `ui.local` is **identified by call site**. Reordering the calls reassigns the states.
+- **Compiling `every`.** Timers are a development-run feature and do not run headless either.
+- A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.

@@ -18,8 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from enum import Enum
 
-import yokan as ui  # noqa: E402
-from yokan import crates, store, value  # noqa: E402
+from yokan import button, column, crates, row, run, store, text, value  # noqa: E402
 
 
 @value
@@ -108,26 +107,26 @@ class Out:
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"encoded: {Out.encoded}")
-        ui.text(f"romaji: {Out.romaji}")
-        ui.text(f"total: {Out.total}")
-        ui.text(f"mean: {Out.mean:.2f}")
+    with column(spacing=8, padding=12):
+        text(f"encoded: {Out.encoded}")
+        text(f"romaji: {Out.romaji}")
+        text(f"total: {Out.total}")
+        text(f"mean: {Out.mean:.2f}")
         if (h := Out.half) is not None:
-            ui.text(f"half: {h}  {Out.hello}")
+            text(f"half: {h}  {Out.hello}")
         else:
-            ui.text(f"half: (none)  {Out.hello}")
-        ui.text(f"even: {Out.even_msg}")
-        ui.text(f"span: {Out.span_lo}..{Out.span_hi} w={Out.span_w}")
-        ui.text(f"judge(7): {Out.verdict}")
-        ui.text(f"packed: id={Out.pack_id} heavy={Out.heavy}")
-        ui.text(f"nums: {len(Out.nums)} parse: {Out.parse_msg}")
-        ui.text(f"counts: sum={Out.csum} o={Out.o_count}")
-        ui.text(f"framed: sum={Out.fr_sum} id={Out.fr_id}")
-        with ui.row(spacing=6):
-            ui.button("run", on_click=Out.run)
-            ui.button("check", on_click=Out.check)
+            text(f"half: (none)  {Out.hello}")
+        text(f"even: {Out.even_msg}")
+        text(f"span: {Out.span_lo}..{Out.span_hi} w={Out.span_w}")
+        text(f"judge(7): {Out.verdict}")
+        text(f"packed: id={Out.pack_id} heavy={Out.heavy}")
+        text(f"nums: {len(Out.nums)} parse: {Out.parse_msg}")
+        text(f"counts: sum={Out.csum} o={Out.o_count}")
+        text(f"framed: sum={Out.fr_sum} id={Out.fr_id}")
+        with row(spacing=6):
+            button("run", on_click=Out.run)
+            button("check", on_click=Out.check)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="rustcrate", on_start=Out.run)
+    run(view, title="rustcrate", on_start=Out.run)

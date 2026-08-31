@@ -11,8 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, row, run, State, text  # noqa: E402
 from yokan import json, math, time  # noqa: E402
 
 hyp: State[float] = State(0.0)
@@ -35,13 +34,13 @@ def stamp():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"hyp={hyp():.1f} who={who()} score={score()} day={day()}")
-        with ui.row(spacing=6):
-            ui.button("measure", on_click=measure)
-            ui.button("parse", on_click=parse)
-            ui.button("stamp", on_click=stamp)
+    with column(spacing=8, padding=12):
+        text(f"hyp={hyp():.1f} who={who()} score={score()} day={day()}")
+        with row(spacing=6):
+            button("measure", on_click=measure)
+            button("parse", on_click=parse)
+            button("stamp", on_click=stamp)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="stdlib")
+    run(view, title="stdlib")

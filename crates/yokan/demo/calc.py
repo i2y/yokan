@@ -13,8 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import store, strings  # noqa: E402
+from yokan import button, column, row, run, store, strings, style, text  # noqa: E402
 
 
 @store
@@ -95,51 +94,51 @@ class Calc:
         self.has_dot = False
 
 
-key = ui.style(
+key = style(
     grow=1, size=20, background="panel",
     hover_background="#45475a", active_background="#585b70",
 )
-fun_tint = ui.style(background="#313244", color="#a6adc8")
+fun_tint = style(background="#313244", color="#a6adc8")
 fun = key | fun_tint
-op_tint = ui.style(
+op_tint = style(
     background="#fab387", color="#1e1e2e",
     hover_background="#f8c49b", active_background="#f5e0dc",
 )
 op = key | op_tint
-wide_tint = ui.style(grow=2, basis=8)
+wide_tint = style(grow=2, basis=8)
 wide = key | wide_tint
-readout = ui.style(size=40, color="text", align="right", grow=1.4)
-keys = ui.style(spacing=8, grow=1)
+readout = style(size=40, color="text", align="right", grow=1.4)
+keys = style(spacing=8, grow=1)
 
 
 def view():
-    with ui.column(spacing=8, padding=16, grow=1):
-        ui.text(f"{Calc.display}", **readout)
-        with ui.row(**keys):
-            ui.button("C", on_click=Calc.clear, **fun)
-            ui.button("±", on_click=Calc.negate, **fun)
-            ui.button("%", on_click=Calc.percent, **fun)
-            ui.button("÷", on_click=lambda: Calc.do_op("÷"), **op)
-        with ui.row(**keys):
-            ui.button("7", on_click=lambda: Calc.press("7"), **key)
-            ui.button("8", on_click=lambda: Calc.press("8"), **key)
-            ui.button("9", on_click=lambda: Calc.press("9"), **key)
-            ui.button("×", on_click=lambda: Calc.do_op("×"), **op)
-        with ui.row(**keys):
-            ui.button("4", on_click=lambda: Calc.press("4"), **key)
-            ui.button("5", on_click=lambda: Calc.press("5"), **key)
-            ui.button("6", on_click=lambda: Calc.press("6"), **key)
-            ui.button("-", on_click=lambda: Calc.do_op("-"), **op)
-        with ui.row(**keys):
-            ui.button("1", on_click=lambda: Calc.press("1"), **key)
-            ui.button("2", on_click=lambda: Calc.press("2"), **key)
-            ui.button("3", on_click=lambda: Calc.press("3"), **key)
-            ui.button("+", on_click=lambda: Calc.do_op("+"), **op)
-        with ui.row(**keys):
-            ui.button("0", on_click=lambda: Calc.press("0"), **wide)
-            ui.button(".", on_click=Calc.dot, **key)
-            ui.button("=", on_click=Calc.equals, **op)
+    with column(spacing=8, padding=16, grow=1):
+        text(f"{Calc.display}", **readout)
+        with row(**keys):
+            button("C", on_click=Calc.clear, **fun)
+            button("±", on_click=Calc.negate, **fun)
+            button("%", on_click=Calc.percent, **fun)
+            button("÷", on_click=lambda: Calc.do_op("÷"), **op)
+        with row(**keys):
+            button("7", on_click=lambda: Calc.press("7"), **key)
+            button("8", on_click=lambda: Calc.press("8"), **key)
+            button("9", on_click=lambda: Calc.press("9"), **key)
+            button("×", on_click=lambda: Calc.do_op("×"), **op)
+        with row(**keys):
+            button("4", on_click=lambda: Calc.press("4"), **key)
+            button("5", on_click=lambda: Calc.press("5"), **key)
+            button("6", on_click=lambda: Calc.press("6"), **key)
+            button("-", on_click=lambda: Calc.do_op("-"), **op)
+        with row(**keys):
+            button("1", on_click=lambda: Calc.press("1"), **key)
+            button("2", on_click=lambda: Calc.press("2"), **key)
+            button("3", on_click=lambda: Calc.press("3"), **key)
+            button("+", on_click=lambda: Calc.do_op("+"), **op)
+        with row(**keys):
+            button("0", on_click=lambda: Calc.press("0"), **wide)
+            button(".", on_click=Calc.dot, **key)
+            button("=", on_click=Calc.equals, **op)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="calc")
+    run(view, title="calc")

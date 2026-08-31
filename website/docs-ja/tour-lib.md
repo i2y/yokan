@@ -132,20 +132,20 @@ numpy のようなコンパイル済み拡張もエスケープの中で使え�
 ## 重い処理とタイマー
 
 ハンドラをブロックしてはいけません（ウィンドウが固まります）。
-`ui.task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
+`task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
 
 ```python
 def start():
     busy.set(True)
-    ui.task(fetch_data,
+    task(fetch_data,
             on_done=lambda v: (busy.set(False), data.set(v)),
             on_error=lambda e: (busy.set(False), err.set(str(e))))
 ```
 
-渡す関数は `ui.*` に触らず、値を返すだけにします。
+渡す関数は UI 要素を作らず、値を返すだけにします。
 ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
 
-`ui.every(seconds, cb)` は秒間隔のタイマーです。
-`ui.run` より前に呼びます。
+`every(seconds, cb)` は秒間隔のタイマーです。
+`run` より前に呼びます。
 タイマーは開発実行の機能で、コンパイル対象ではありません（[今できないこと](tour-ship.md#今できないこと)参照）。
 

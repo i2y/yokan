@@ -14,8 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from typing import Protocol  # noqa: E402
 
-import yokan as ui  # noqa: E402
-from yokan import model, State  # noqa: E402
+from yokan import button, column, model, run, State, text  # noqa: E402
 
 
 class Shape(Protocol):
@@ -51,10 +50,10 @@ def bump():
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"L={left.hits} R={right.hits} total={total():.2f}")
-        ui.button("bump", on_click=bump)
+    with column(spacing=8, padding=12):
+        text(f"L={left.hits} R={right.hits} total={total():.2f}")
+        button("bump", on_click=bump)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="models")
+    run(view, title="models")

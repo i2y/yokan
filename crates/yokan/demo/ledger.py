@@ -12,14 +12,25 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State, store  # noqa: E402
+from yokan import (
+    bar_chart,
+    button,
+    column,
+    list_view,
+    row,
+    run,
+    State,
+    store,
+    style,
+    text,
+    text_field,
+)
 from yokan import sqlite, strings  # noqa: E402
 
 DB = "demo/.gate/ledger.db"
 
-heading = ui.style(size=20, color="accent")
-faint = ui.style(size=12, color="#8a8f98")
+heading = style(size=20, color="accent")
+faint = style(size=12, color="#8a8f98")
 
 name: State[str] = State("")
 amount: State[str] = State("")
@@ -69,8 +80,8 @@ class Ledger:
         self.rows = sqlite.query_text_or("demo/.gate/ledger.db", "SELECT name || '  ¥' || amount || '  (' || cat || ')' FROM expenses ORDER BY rowid")
 
 
-def row(i):
-    return ui.text(Ledger.rows[i])
+def entry_row(i):
+    return text(Ledger.rows[i])
 
 
 def add_food():
@@ -86,23 +97,23 @@ def add_fun():
 
 
 def view():
-    with ui.column(spacing=10, padding=14, background="panel"):
-        ui.text("ledger", **heading)
-        with ui.row(spacing=6):
-            ui.text_field(name(), placeholder="item", on_change=name.set)
-            ui.text_field(amount(), placeholder="yen", on_change=amount.set)
-        with ui.row(spacing=6):
-            ui.button("food", on_click=add_food)
-            ui.button("transit", on_click=add_transit)
-            ui.button("fun", on_click=add_fun)
-        ui.bar_chart(Ledger.chart, height=100.0)
-        ui.list_view(len(Ledger.rows), row, item_height=22.0, height=110.0)
-        ui.text(f"entries={Ledger.count} total=¥{Ledger.grand}")
-        ui.text(f"food ¥{Ledger.food} · transit ¥{Ledger.transit} · fun ¥{Ledger.fun}", **faint)
-        with ui.row(spacing=6):
-            ui.button("load", on_click=Ledger.load)
-            ui.button("reset", on_click=Ledger.reset)
+    with column(spacing=10, padding=14, background="panel"):
+        text("ledger", **heading)
+        with row(spacing=6):
+            text_field(name(), placeholder="item", on_change=name.set)
+            text_field(amount(), placeholder="yen", on_change=amount.set)
+        with row(spacing=6):
+            button("food", on_click=add_food)
+            button("transit", on_click=add_transit)
+            button("fun", on_click=add_fun)
+        bar_chart(Ledger.chart, height=100.0)
+        list_view(len(Ledger.rows), entry_row, item_height=22.0, height=110.0)
+        text(f"entries={Ledger.count} total=¥{Ledger.grand}")
+        text(f"food ¥{Ledger.food} · transit ¥{Ledger.transit} · fun ¥{Ledger.fun}", **faint)
+        with row(spacing=6):
+            button("load", on_click=Ledger.load)
+            button("reset", on_click=Ledger.reset)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="ledger", on_start=Ledger.load)
+    run(view, title="ledger", on_start=Ledger.load)

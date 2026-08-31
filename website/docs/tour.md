@@ -19,18 +19,17 @@ The sections below will not repeat this.
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
-from yokan import State
+from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
 def view():
-    with ui.column(spacing=12, padding=16):
-        ui.text(f"count: {count()}", size=34)
-        ui.button("+1", on_click=lambda: count.set(count() + 1))
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
 
 if __name__ == "__main__":
-    ui.run(view, title="counter")
+    run(view, title="counter")
 ```
 
 There are three ways to run it.
@@ -89,9 +88,9 @@ class Cart:
         for x in xs:
             self.items = self.items + [x]
 
-ui.button("add", on_click=lambda: Cart.add("apple", 120))
-ui.button("clear", on_click=Cart.clear)
-ui.text(f"n={len(Cart.items)} total={Cart.total}")
+button("add", on_click=lambda: Cart.add("apple", 120))
+button("clear", on_click=Cart.clear)
+text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
 Fields take the same types as State.
@@ -113,7 +112,7 @@ class Circle:
 
 left = Circle()
 right = Circle()
-ui.button("grow", on_click=lambda: left.grow(0.5))
+button("grow", on_click=lambda: left.grow(0.5))
 ```
 
 Models can reference models.
@@ -150,7 +149,7 @@ Reads use walrus narrowing (the same shape as in the Optional section; it works 
 
 ```python
 if (r := Tree.root) is not None:
-    ui.text(f"root: {r.label}")
+    text(f"root: {r.label}")
 ```
 
 Data itself belongs in the **value classes** introduced later, placed on store fields — that is the base pattern.
@@ -164,17 +163,17 @@ A view function is a pure function building the screen from state; mutation is t
 
 ```python
 def view():
-    with ui.column(spacing=10, padding=16):
-        ui.text(f"hello {name()}", size=20, color="accent")
-        with ui.row(spacing=6):
-            ui.text_field(name(), placeholder="name", on_change=name.set)
-            ui.button("clear", on_click=lambda: name.set(""))
+    with column(spacing=10, padding=16):
+        text(f"hello {name()}", size=20, color="accent")
+        with row(spacing=6):
+            text_field(name(), placeholder="name", on_change=name.set)
+            button("clear", on_click=lambda: name.set(""))
 ```
 
 The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
-Everything called through `ui.` here can also be imported bare — `from yokan import button, column, run, …` — and the two spellings compile identically.
-The docs use the `ui.` alias so the lines that emit elements stand out.
+The samples import elements bare — `from yokan import button, column, run, …`.
+If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
 Text holes are opened with f-strings.
 int, str, float, bool and Enum values render directly, and the text matches Python's `str()` (`2.0` renders as `2.0`, `True` as `True`, `Mood.HAPPY` as `Mood.HAPPY`).
@@ -186,9 +185,9 @@ A modal is open by existing, so wrap it in an `if`.
 
 ```python
 if show():
-    with ui.modal():
-        ui.text("confirm?")
-        ui.button("yes", on_click=lambda: (done.set(True), show.set(False)))
+    with modal():
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
 ## Form controls
@@ -225,12 +224,12 @@ class Settings:
         self.tab = i
 
 
-ui.checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
-ui.switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
-ui.slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
-ui.select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
-ui.tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
+switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
+slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.set_volume)
+select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 ```
 
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.

@@ -13,8 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import py, State  # noqa: E402
+from yokan import column, py, run, State, text, text_field  # noqa: E402
 
 
 @py
@@ -34,11 +33,11 @@ def retitle(t: str):
 
 
 def view():
-    with ui.column(spacing=10, padding=14):
-        ui.text("type a title — the slug is computed by real Python", size=13, color="#8a8f98")
-        ui.text_field(title(), placeholder="title", on_change=retitle)
-        ui.text(f"slug: {slugged()}", size=16)
+    with column(spacing=10, padding=14):
+        text("type a title — the slug is computed by real Python", size=13, color="#8a8f98")
+        text_field(title(), placeholder="title", on_change=retitle)
+        text(f"slug: {slugged()}", size=16)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="pytext")
+    run(view, title="pytext")

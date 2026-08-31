@@ -11,8 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State, value  # noqa: E402
+from yokan import button, column, run, State, text, value  # noqa: E402
 
 
 @value
@@ -49,11 +48,11 @@ def combine():
 
 
 def view():
-    with ui.column(spacing=6, padding=12):
-        ui.text(f"c = ({c().x}, {c().y})")
-        ui.text(f"dot = {d()}  both = {both()}")
-        ui.button("combine", on_click=combine)
+    with column(spacing=6, padding=12):
+        text(f"c = ({c().x}, {c().y})")
+        text(f"dot = {d()}  both = {both()}")
+        button("combine", on_click=combine)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="vecops")
+    run(view, title="vecops")

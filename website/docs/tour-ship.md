@@ -22,7 +22,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
 The step vocabulary is `click:<label>`, `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`.
-The screen tree is dumped to stdout before and after the steps, and from tests `ui._headless(view, state, script)` returns the same string.
+The screen tree is dumped to stdout before and after the steps, and from tests `yokan._headless(view, state, script)` returns the same string.
 
 The **gate** replays the same script against the development build and the shipped build, and diffs the dumps.
 
@@ -83,14 +83,14 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Indexing from the back through a variable** (an `xs[i]` whose i turns negative at runtime). The literal `xs[-1]` works.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
-- **Compiling dict state (`ui.run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
+- **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
-- **Compiling `ui.every`.** Timers are a development-run feature and do not run headless either.
-- A component's `ui.local` is **identified by call site**. Reordering the calls reassigns the states.
+- **Compiling `every`.** Timers are a development-run feature and do not run headless either.
+- A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.

@@ -27,7 +27,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### calc — 定番の電卓。レイアウトは `grow` だけで組んであり（行が高さを分け合い、キーが行の幅を分け合い、0 キーは 2 コマ分）、ウィンドウを伸ばすとパッド全体が隙間なく追従する
 <img src="screenshots/calc.png" width="300">
 
-#### calcgrid — 同じ電卓を `ui.grid(columns=4, rows=5)` で。等分トラックの一つのコンテナに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
+#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で。等分トラックの一つのコンテナに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
 <img src="screenshots/calcgrid.png" width="300">
 
 ## 状態の持ち方
@@ -41,7 +41,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### links — モデルがモデルを参照する。所有は `Node | None`、逆向きは `Weak[Node]`（循環しないので、根を手放すと連鎖ごと解放される）
 <img src="screenshots/links.png" width="360">
 
-#### stateful — @component + ui.local。呼び出し位置ごとに独立した状態を持つ部品
+#### stateful — @component + local。呼び出し位置ごとに独立した状態を持つ部品
 <img src="screenshots/stateful.png" width="360">
 
 #### lookup — 辞書セル。読みは `.get(key, default)`、`in`、そして `cell[k] = v` のその場書き込み
@@ -92,7 +92,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### trend — ライン / バーチャート
 <img src="screenshots/trend.png" width="360">
 
-#### styled — 名前付きスタイル（`ui.style` + `**` 展開 + `|` 合成）とテーマスコープ
+#### styled — 名前付きスタイル（`style` + `**` 展開 + `|` 合成）とテーマスコープ
 <img src="screenshots/styled.png" width="360">
 
 #### cards — スロット付きコンポーネント（子要素を受け取る部品）
@@ -134,7 +134,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### multi — マルチモジュール構成（state.py と widgets.py に分割、ヘルパはコンポーネントになる）
 <img src="screenshots/multi.png" width="360">
 
-#### dashboard — ui.every() が毎秒動かすロードアベレージ表示（開発専用: 辞書 state）
+#### dashboard — every() が毎秒動かすロードアベレージ表示（開発専用: 辞書 state）
 <img src="screenshots/dashboard.png" width="360">
 
 #### app — numpy 入りのダッシュボード（開発専用: 辞書 state）
@@ -143,5 +143,5 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### csv_viewer — 10 万行の仮想化テーブル + numpy（開発専用: 辞書 state）
 <img src="screenshots/csv_viewer.png" width="360">
 
-#### tasks — ui.task() のワーカースレッド（開発専用: 辞書 state）
+#### tasks — task() のワーカースレッド（開発専用: 辞書 state）
 <img src="screenshots/tasks.png" width="360">

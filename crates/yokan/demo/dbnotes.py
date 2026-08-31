@@ -11,8 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import State  # noqa: E402
+from yokan import button, column, list_view, row, run, State, text  # noqa: E402
 from yokan import sqlite  # noqa: E402
 
 changed: State[int] = State(0)
@@ -29,18 +28,18 @@ def load():
     rows.set(sqlite.query_text("demo/.gate/notes.db", "SELECT t FROM notes ORDER BY t"))
 
 
-def row(i):
-    return ui.text(rows()[i])
+def note_row(i):
+    return text(rows()[i])
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"inserted={changed()} rows={len(rows())}")
-        with ui.row(spacing=6):
-            ui.button("setup", on_click=setup)
-            ui.button("load", on_click=load)
-        ui.list_view(len(rows()), row, item_height=22.0, height=120.0)
+    with column(spacing=8, padding=12):
+        text(f"inserted={changed()} rows={len(rows())}")
+        with row(spacing=6):
+            button("setup", on_click=setup)
+            button("load", on_click=load)
+        list_view(len(rows()), note_row, item_height=22.0, height=120.0)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="dbnotes")
+    run(view, title="dbnotes")

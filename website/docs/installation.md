@@ -9,7 +9,7 @@ the PEP 723 header and uv does the rest:
 # /// script
 # dependencies = ["yokan"]
 # ///
-import yokan as ui
+from yokan import State, button, column, run, text
 ```
 
 ```console

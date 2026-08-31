@@ -7,8 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-import yokan as ui  # noqa: E402
-from yokan import crates, store  # noqa: E402
+from yokan import button, column, crates, run, store, text  # noqa: E402
 
 
 @store
@@ -22,11 +21,11 @@ class Out:
 
 
 def view():
-    with ui.column(spacing=8, padding=12):
-        ui.text(f"encoded: {Out.encoded}")
-        ui.text(f"total: {Out.total}")
-        ui.button("run", on_click=Out.run)
+    with column(spacing=8, padding=12):
+        text(f"encoded: {Out.encoded}")
+        text(f"total: {Out.total}")
+        button("run", on_click=Out.run)
 
 
 if __name__ == "__main__":
-    ui.run(view, title="proj", on_start=Out.run)
+    run(view, title="proj", on_start=Out.run)
