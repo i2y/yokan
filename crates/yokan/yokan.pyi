@@ -275,6 +275,10 @@ class strings:
     @staticmethod
     def to_float(s: str, default: float) -> float: ...
 
+class notify:
+    @staticmethod
+    def send(title: str, body: str) -> None: ...
+
 class http:
     """HTTP GET. The call blocks until the response arrives — the
     interpreted and the compiled app block on the same statement. A

@@ -161,7 +161,7 @@ at the end of the tour.
 
 -   :material-view-gallery: __[Demos](demos.md)__
 
-    All 40 bundled demos, screenshotted — from the smallest
+    All 41 bundled demos, screenshotted — from the smallest
     counter to the OpsBoard dashboard.
 
 -   :material-github: __[Source](https://github.com/i2y/yokan)__

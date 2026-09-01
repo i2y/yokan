@@ -136,7 +136,7 @@ GATE OK — 2 dump lines identical across tiers
 
 -   :material-view-gallery: __[デモ](demos.md)__
 
-    付属デモ 40 本を全部スクリーンショット付きで。最小の counter から OpsBoard まで。
+    付属デモ 41 本を全部スクリーンショット付きで。最小の counter から OpsBoard まで。
 
 -   :material-github: __[ソースコード](https://github.com/i2y/yokan)__
 

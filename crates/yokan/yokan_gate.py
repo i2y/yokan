@@ -144,7 +144,7 @@ class Translator:
             for a in node.names:
                 if a.name == "crates":
                     self.crates_name = a.asname or "crates"
-                elif a.name in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random"):
+                elif a.name in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify"):
                     self.stdlib_mods[a.asname or a.name] = a.name
                     if a.name == "fs":
                         self.fs_name = a.asname or "fs"
@@ -1496,6 +1496,7 @@ class Translator:
         ("sqlite", "query_text"): ("Sqlite", "queryText", 2),
         ("sqlite", "query_int"): ("Sqlite", "queryInt", 2),
         ("strings", "to_int"): ("Strings", "toInt", 2),
+        ("notify", "send"): ("Notify", "send", 2),
         ("strings", "to_float"): ("Strings", "toFloat", 2),
         ("fs", "read_text_or"): ("Fs", "readTextOr", 2),
         ("http", "get_text_or"): ("Http", "getTextOr", 2),
@@ -1609,7 +1610,7 @@ class Translator:
             and isinstance(func.value.value, ast.Name)
             and self.ui is not None
             and func.value.value.id == self.ui
-            and func.value.attr in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random")
+            and func.value.attr in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify")
         ):
             return (func.value.attr, func.attr)
         return None
@@ -5246,6 +5247,10 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn tryQueryInt(path: String, sql: String) !Int @rust("yokan_stdlib::sqlite_query_int_result")\n'
             '  static fn queryIntOr(path: String, sql: String, default: Int) Int @rust("yokan_stdlib::sqlite_query_int_or")\n'
             '  static fn queryTextOr(path: String, sql: String) List<String> @rust("yokan_stdlib::sqlite_query_text_or")\n'
+            "}\n"
+            "\n"
+            "class Notify {\n"
+            '  static fn send(title: String, body: String) @rust("yokan_stdlib::notify_send")\n'
             "}\n"
             "\n"
             "class Http {\n"

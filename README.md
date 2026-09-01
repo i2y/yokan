@@ -80,7 +80,7 @@ controls, tables, charts, virtualized lists, modals), plus styles,
 light/dark themes, and animation; virtualized lists stay smooth at
 a hundred thousand rows. State comes in exactly three shapes, and
 the [language tour](crates/yokan/TOUR.md) walks the whole surface
-in one pass. There are 40 bundled demos, all screenshotted in the
+in one pass. There are 41 bundled demos, all screenshotted in the
 [gallery](crates/yokan/demo/README.md).
 
 ## The whole picture
@@ -162,4 +162,6 @@ becomes.
 
 Yokan is 0.x: the API can change between minor versions.
 
-License: MIT OR Apache-2.0.
+License: MIT OR Apache-2.0. The vendored `vendor/gpui_macos` is
+derived from Zed's gpui and remains Apache-2.0 (attribution and the
+list of local changes are in that directory).

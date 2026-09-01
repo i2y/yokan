@@ -840,6 +840,26 @@ impl<T: Clone> Default for List<T> {
     }
 }
 
+/// OS-notification requests. Handler-side code queues them (any
+/// tier, any thread-safety context); the ENGINE drains the queue,
+/// because only the engine holds a platform handle. Headless runs
+/// never drain, so the queue is capped and sending is best-effort
+/// by design — a notification is advice, not state.
+pub mod notify {
+    use std::sync::Mutex;
+    static PENDING: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+    const CAP: usize = 16;
+    pub fn send(title: &str, body: &str) {
+        let mut q = PENDING.lock().unwrap();
+        if q.len() < CAP {
+            q.push((title.to_string(), body.to_string()));
+        }
+    }
+    pub fn drain() -> Vec<(String, String)> {
+        std::mem::take(&mut *PENDING.lock().unwrap())
+    }
+}
+
 // Binding adapters collect converted std-map returns into Maps
 // (sorted on the way in — BTreeMap — so the crossing stays
 // deterministic no matter what order the HashMap held).

@@ -120,6 +120,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### dice — yokan.random。種を撒けば両実行で同じ列
 <img src="images/demos/dice.png" width="360">
 
+#### postcard — 画像とベクタアイコン、そして `notify.send`（`.app` バンドルとして動かすと通知センターに届く）
+<img src="images/demos/postcard.png" width="360">
+
 ## Rust crate
 
 #### rustcrate — `yokan add` で足した Rust crate。手元の path crate と crates.io の version crate が同居し、crate 本来の snake_case 名で呼ぶ。同じ宣言の pyproject 綴りが `demo/proj/`

@@ -1714,6 +1714,11 @@ fn py_strings_to_float(s: &str, default: f64) -> f64 {
     yokan_stdlib::strings_to_float(s, default)
 }
 
+#[pyfunction] #[pyo3(name = "send")]
+fn py_notify_send(title: &str, body: &str) {
+    yokan_stdlib::notify_send(title, body)
+}
+
 #[pyfunction] #[pyo3(name = "query_int")]
 fn py_sqlite_query_int(py: Python<'_>, path: &str, sql: &str) -> PyResult<i64> {
     py.detach(|| yokan_stdlib::sqlite_query_int_result(path, sql))
@@ -1888,6 +1893,9 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jsonm.add_function(wrap_pyfunction!(py_json_length, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_has, &jsonm)?)?;
     m.add_submodule(&jsonm)?;
+    let notifym = PyModule::new(m.py(), "notify")?;
+    notifym.add_function(wrap_pyfunction!(py_notify_send, &notifym)?)?;
+    m.add_submodule(&notifym)?;
     let stringsm = PyModule::new(m.py(), "strings")?;
     stringsm.add_function(wrap_pyfunction!(py_strings_to_int, &stringsm)?)?;
     stringsm.add_function(wrap_pyfunction!(py_strings_to_float, &stringsm)?)?;

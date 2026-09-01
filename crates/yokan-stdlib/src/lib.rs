@@ -228,6 +228,14 @@ pub fn strings_to_int(s: &str, default: i64) -> i64 {
     s.trim().parse::<i64>().unwrap_or(default)
 }
 
+/// Queue an OS notification. The engine delivers it through the
+/// platform when the app runs from an `.app` bundle; a bare binary
+/// logs-and-drops at the platform layer and a headless run never
+/// drains the queue — sending is always best-effort.
+pub fn notify_send(title: &str, body: &str) {
+    pixie_kernel::notify::send(title, body);
+}
+
 /// Total float parse: the value or the default, never an error.
 pub fn strings_to_float(s: &str, default: f64) -> f64 {
     s.trim().parse::<f64>().unwrap_or(default)

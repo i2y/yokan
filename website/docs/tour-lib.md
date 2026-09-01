@@ -23,7 +23,7 @@ except Exception as e:
 
 ## The standard library
 
-Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random`.
+Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
@@ -36,6 +36,7 @@ Call them from handlers (views stay pure).
 - **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
+- **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
 
 The discipline underneath all of these is determinism.
 Pass fixed times, seed the RNG — and verification scripts replay the same result every time.

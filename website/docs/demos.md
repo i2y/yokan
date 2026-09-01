@@ -123,6 +123,9 @@ the initial state, right after launch.
 #### dice — yokan.random: seed it and both runs draw the same sequence
 <img src="images/demos/dice.png" width="360">
 
+#### postcard — an image, a vector icon, and `notify.send` (delivered through Notification Center when the app runs as an `.app` bundle)
+<img src="images/demos/postcard.png" width="360">
+
 ## A Rust crate of your own
 
 #### rustcrate — Rust crates, added with `yokan add`: a local path crate and a crates.io version crate side by side, called by their own snake_case names. The pyproject spelling of the same declaration is `demo/proj/`

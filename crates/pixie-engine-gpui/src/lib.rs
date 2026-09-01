@@ -677,6 +677,17 @@ struct RenderPass {
 
 impl<C: Component> Render for Root<C> {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Handler-queued OS notifications drain here — the one place
+        // every windowed run passes with a platform handle in reach.
+        // (An unbundled binary logs-and-drops inside the platform.)
+        for (title, body) in pixie_kernel::notify::drain() {
+            cx.show_system_notification(gpui::SystemNotification {
+                tag: title.clone().into(),
+                title: title.into(),
+                body: body.into(),
+                actions: Vec::new(),
+            });
+        }
         // Tasks spawned BEFORE the window existed (an embedder can
         // `Runtime::spawn` ahead of `run_app` — pixie-py's timers do)
         // have no `apply` to start the pump for them; arm it here.

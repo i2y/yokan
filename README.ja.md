@@ -67,7 +67,7 @@ Yokan はそれを Python でやり、さらに開発版とリリース版が同
 画面部品は 25 種類（テキスト、ボタン、フォーム部品一式、表、チャート、仮想化リスト、モーダルなど）。
 スタイル、ライト/ダークのテーマ切替、アニメーションが揃い、仮想化リストは 10 万行でもスクロールが軽いままです。
 状態の持ち方は 3 つだけで、書き方は[言語ツアー](crates/yokan/TOUR.ja.md)が一周で案内します。
-付属デモは 40 本あり、全部スクリーンショット付きの[ギャラリー](crates/yokan/demo/README.ja.md)から入れます。
+付属デモは 41 本あり、全部スクリーンショット付きの[ギャラリー](crates/yokan/demo/README.ja.md)から入れます。
 
 ## 全体像
 
@@ -131,4 +131,4 @@ $ yokan build path/to/app.py --release --onefile
 Yokan は 0.x です。
 マイナーバージョン間で API が変わることがあります。
 
-License: MIT OR Apache-2.0.
+License: MIT OR Apache-2.0。`vendor/gpui_macos` は Zed の gpui 由来で、単独の Apache-2.0 です（出典と改変点はそのディレクトリに記載）。

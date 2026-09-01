@@ -103,3 +103,21 @@ prefix, and the shadowing risk it guarded against is already
 caught — a local name that hides an element is reported by the
 type checker at the use site, and the translator refuses what it
 cannot resolve.
+
+## OS notifications ride the engine
+
+`notify.send(title, body)` is a standard-library call with the
+stdlib's usual shape — one implementation, both runs — but its
+delivery is the engine's job, because only the engine holds a
+platform handle. Handlers push onto a small capped queue in the
+kernel; the window's render pass drains it into the platform's
+notification API (Notification Center on macOS). The consequences
+fall out of the design rather than being special-cased: a headless
+run never drains, so verification scripts stay deterministic; a
+bare development binary logs-and-drops at the platform layer
+(the notification framework requires an app bundle); an `.app`
+build (`--app`) delivers for real. Sending is best-effort by
+declaration — a notification is advice, not state — so the call
+returns nothing and cannot fail. Rejected: shelling out to
+osascript (a second delivery mechanism with its own identity and
+quoting rules, when the platform layer already does it properly).

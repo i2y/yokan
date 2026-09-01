@@ -23,7 +23,7 @@ except Exception as e:
 
 ## 標準ライブラリ
 
-`from yokan import fs, sqlite, http, math, json, time, strings, random` で使います。
+`from yokan import fs, sqlite, http, math, json, time, strings, random, notify` で使います。
 どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
@@ -36,6 +36,7 @@ except Exception as e:
 - **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
+- **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
 
 検証を安定させるこつは、結果を毎回同じにすることです。
 時刻は固定値を渡し、乱数は種を撒く。

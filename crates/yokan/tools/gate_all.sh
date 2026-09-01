@@ -17,6 +17,7 @@ gate() {
 # Scripted gates (interaction coverage beyond the startup dump).
 gate counter python3 yokan_gate.py gate demo/counter.py --script "click:+1,input:Momo"
 gate forms   python3 yokan_gate.py gate demo/forms.py --script "click:Dark mode,slide:7,select:banana"
+gate postcard python3 yokan_gate.py gate demo/postcard.py --script "click:send"
 gate calc    python3 yokan_gate.py gate demo/calc.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate calcgrid python3 yokan_gate.py gate demo/calcgrid.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate links   python3 yokan_gate.py gate demo/links.py --script "click:build,click:peek,click:drop,click:peek"
@@ -33,7 +34,7 @@ gate opsboard python3 yokan_gate.py gate demo/opsboard/app.py
 for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
-    counter|forms|links|calc|calcgrid|dbnotes|pystats|rustcrate) continue;;
+    counter|forms|links|calc|calcgrid|postcard|dbnotes|pystats|rustcrate) continue;;
     app|csv_viewer|dashboard|tasks)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac

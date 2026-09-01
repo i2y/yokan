@@ -228,6 +228,10 @@ locals (mutable). Protocol-bounded helpers remain handler-only.
 `random.int(lo, hi)` (inclusive), `random.float()`. Seed in your
 reset handler and gate scripts replay identical sequences.
 
+`notify.send(title, body)` queues an OS notification — delivered
+through Notification Center when the app runs as an `.app` bundle
+(`--app`); bare dev runs and headless runs drop it quietly.
+
 Sum types — frozen dataclasses + a `type` alias compile to a
 native payload enum; `match` destructures everywhere:
 
