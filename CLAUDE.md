@@ -51,6 +51,14 @@ the same change.
 
 ## Commands — the product
 
+`just` is the task runner: `just` alone lists the recipes, and the
+common ones are `just gate <app> "<script>"`, `just sweep`,
+`just dev-so`, `just test` / `just tier-gate`, `just site`,
+`just publish <version>`. It exports the shared `CARGO_TARGET_DIR`
+and encodes the invariants below, so prefer it over typing the raw
+commands; the raw forms stay documented here because they are what
+the recipes run.
+
 Run these from `crates/yokan/` (they also work via
 `uv run yokan_gate.py …`):
 

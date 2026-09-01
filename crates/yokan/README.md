@@ -12,6 +12,12 @@ For what Yokan is and how apps are written, start at the
 
 ## Build and run (in-tree)
 
+The repository root carries a `justfile`; `just` lists the recipes.
+`just dev-so` rebuilds the importable module, `just gate <app>
+"<script>"` checks one app, `just sweep` checks every demo, and
+`just publish <version>` runs the release with its smoke test. The
+raw commands are below, since that is what the recipes run.
+
 ```console
 $ cargo build -p yokan --release --features extension-module
 $ rm -f crates/yokan/yokan.so     # macOS: same-inode overwrite trips the

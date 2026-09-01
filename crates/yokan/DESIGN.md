@@ -150,3 +150,18 @@ close that and the gaps around it:
 Deliberately not done here: scrolling, key events and window
 resizing. Each needs engine-side state that headless runs do not
 have, so each is a design, not an addition.
+
+## The release is a recipe, not a memory
+
+Three releases in one day surfaced a set of invariants that lived
+only in a person's head: the importable module must be built with
+`--features extension-module` (a plain build links a system
+libpython and aborts at import), every build wants the shared
+`CARGO_TARGET_DIR`, the version lives in one place, and — the one
+that actually caught bugs — a wheel must be installed into a
+throwaway venv and driven headless BEFORE it is uploaded, because
+what breaks is the artifact, not the checkout. A `justfile` now
+encodes them. `just publish <version>` bumps, builds, smokes, asks
+once, then uploads, commits, tags and writes the release; the smoke
+step is a hard gate, and the upload is the only irreversible move,
+so it is the only one that asks.
