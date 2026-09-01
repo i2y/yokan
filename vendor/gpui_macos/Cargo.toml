@@ -1,3 +1,5 @@
+# Vendored from zed-industries/zed crates/gpui_macos @ d9ad6af
+# with dependencies concretized — see README.md in this directory.
 [package]
 name = "gpui_macos"
 version = "0.1.0"

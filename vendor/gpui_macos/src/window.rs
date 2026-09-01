@@ -1,3 +1,6 @@
+// Modified from the upstream Zed revision (see ../README.md):
+// panic containment around the input-method callback in
+// `with_input_handler`.
 use crate::{
     BoolExt, MacDisplay, NSRange, NSStringExt, TISCopyCurrentKeyboardInputSource,
     TISGetInputSourceProperty, WindowFrameSource, events::platform_input_from_native,
