@@ -7,7 +7,8 @@ A subset — but not a lookalike language. What you can write is a
 slice of Python, and inside that slice your code behaves exactly as
 Python. While you develop, the whole app runs on real CPython; when
 you ship, the same source becomes a machine-code executable; and
-every build automatically verifies that the two behave the same.
+the two runs can be checked against each other, screen for screen,
+at build time.
 
 First, what it looks like: OpsBoard, a bundled dashboard demo —
 charts, a virtualized list, theme switching — written entirely in
@@ -64,7 +65,7 @@ needs no Python and no pip.
 
 The shape — hot reload while you develop, AOT-compiled native when
 you release — is close to what Flutter and Dart give you. Yokan
-does it with Python, and verifies on every build that the two runs
+does it with Python, and hands you a way to check that the two runs
 behave the same.
 
 ## What can you build?
@@ -91,8 +92,7 @@ That foundation is **pixie**, the substrate language Yokan compiles through, and
 
 ## How the check works
 
-The last box of the diagram — the "automatically verifies" above. Yokan calls it the
-**gate**:
+The last box of the diagram. Yokan calls it the **gate**:
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"

@@ -11,7 +11,8 @@ Python to native code. Not a Python-lookalike language: what you can write is a
 slice of Python, and inside that slice your code behaves exactly
 as Python. While you develop, the whole app runs on real CPython;
 when you ship, the same source becomes a machine-code executable —
-and **every build verifies that the two behave the same**.
+and **the two runs can be checked against each other, screen for
+screen**.
 
 [Installation](installation.md){ .md-button .md-button--primary }
 [Language tour](tour.md){ .md-button }
@@ -81,9 +82,9 @@ see what your app compiled to.
 
 ## "But it worked on my machine" — removed by construction
 
-Every build replays the same interactions against the CPython run
-and the machine-code build, then byte-compares the resulting
-screens. Yokan calls it the **gate**:
+Hand it a sequence of interactions and it replays them against the
+CPython run and the machine-code build, then byte-compares the
+resulting screens. Yokan calls it the **gate**:
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"
@@ -102,7 +103,7 @@ at the end of the tour.
 
 <div class="grid cards" markdown>
 
--   :material-check-decagram: __Verified, per build__
+-   :material-check-decagram: __Verified, per app__
 
     The claim is never "Python compiles". It is: *this app*
     translates, and the gate proved the binary behaves exactly

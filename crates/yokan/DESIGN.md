@@ -11,7 +11,7 @@ Yokan is a compiler for a statically typed subset of Python — not a
 lookalike language. The claim "inside the subset your code behaves
 exactly as Python" is enforced, not promised: the interpreted run
 IS CPython, and the gate byte-compares it against the compiled run
-on every build. Anything the dialect cannot honor is refused with a
+whenever it is asked to (`yokan gate`). Anything the dialect cannot honor is refused with a
 named reason instead of silently diverging; the refusals are
 collected in the tour's closing section, What does not work yet.
 

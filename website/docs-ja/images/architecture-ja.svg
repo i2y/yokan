@@ -96,5 +96,5 @@
 
   <rect x="85" y="644" width="1030" height="112" rx="13" fill="#251f12" stroke="#e0a83f" stroke-width="1.8"/>
   <text x="600" y="692" text-anchor="middle" font-size="18" font-weight="800" fill="#f0be62">ゲート</text>
-  <text x="600" y="722" text-anchor="middle" font-size="13" fill="#cdbfa0">同じ操作スクリプトを両方で再生し、画面をバイト単位で突き合わせます（ビルドのたびに）</text>
+  <text x="600" y="722" text-anchor="middle" font-size="13" fill="#cdbfa0">同じ操作スクリプトを両方で再生し、画面をバイト単位で突き合わせます</text>
 </svg>
