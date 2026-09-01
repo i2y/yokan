@@ -521,7 +521,7 @@ if __name__ == "__main__":        # REQUIRED guard (reload re-execs the module)
 `stack` `list_view` `scroll_view` `h_scroll_view` `data_table`
 `modal` `image` `svg` `bar_chart` `line_chart` `progress`
 `spinner` — plus `every(seconds, cb)`, `task(work, on_done,
-on_error)` and `run(view, state=None, title="pixie", watch=True,
+on_error)` and `run(view, state=None, title="yokan", watch=True,
 theme=None)` (`theme="light"|"dark"`; Cmd+T flips live). Buttons
 take `color`/`hover_background`/`active_background`/`border_*`;
 containers take `border_radius`/`border_width`/`border_color`.

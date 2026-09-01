@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "yokan"
-version = "0.1.0"
+version = "0.1.1"
 description = "Compiles a statically typed subset of Python to native desktop apps."
 readme = "README.md"
 requires-python = ">=3.14"

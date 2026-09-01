@@ -1302,7 +1302,7 @@ fn make_watch(path: PathBuf, shared: Rc<Shared>, hv: ErasedHandle) -> ReloadWatc
     }
 }
 
-#[pyfunction(signature = (view, state=None, title="pixie".to_string(), watch=true, theme=None, on_start=None, width=0.0, height=0.0))]
+#[pyfunction(signature = (view, state=None, title="yokan".to_string(), watch=true, theme=None, on_start=None, width=0.0, height=0.0))]
 fn run(
     py: Python<'_>,
     view: Py<PyAny>,
