@@ -63,14 +63,55 @@ pub fn settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
     }
 }
 
-/// The step loop. Steps: `click:<label>` · `input[@n]:<text>` ·
+/// Split a script into steps on commas, honouring `\\,` for a comma
+/// that belongs to the step's text (`input:hello\\, world`) and
+/// `\\\\` for a literal backslash. Without this a script could not
+/// carry prose at all: the separator would eat it and the tail would
+/// fail as an unknown step.
+fn split_steps(script: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut it = script.chars().peekable();
+    while let Some(c) = it.next() {
+        match c {
+            '\\' => match it.peek() {
+                Some(',') => {
+                    cur.push(',');
+                    it.next();
+                }
+                Some('\\') => {
+                    cur.push('\\');
+                    it.next();
+                }
+                _ => cur.push('\\'),
+            },
+            ',' => out.push(std::mem::take(&mut cur)),
+            _ => cur.push(c),
+        }
+    }
+    out.push(cur);
+    out
+}
+
+/// The step loop. Steps: `click[@n]:<label>` · `input[@n]:<text>` ·
 /// `submit[@n]` · `slide[@n]:<value>` (the n-th Slider in tree
 /// order, default 0: clamp the value to `[min, max]`, snap it to
 /// the nearest step multiple counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar — picks the option with exactly this text) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
-/// `mem`. Every step settles the async tier before the next one
+/// `mem` · `dump` (the element tree HERE — the run's own start and
+/// end are printed by the caller, so a script that only drives is
+/// checked at its endpoints; a `dump` between steps makes an
+/// intermediate state a checked output too).
+///
+/// Steps that produce output (`a11y`, `mem`, `dump`) do not print:
+/// they are collected into the returned transcript, ahead of the
+/// final dump and in the order they ran. The bytes a caller prints
+/// are unchanged from when those steps printed themselves — and an
+/// embedder that CAPTURES the return value (yokan's CPython tier)
+/// now sees them too, which is what makes such a step comparable
+/// across tiers instead of silently one-sided. Every step settles the async tier before the next one
 /// runs, so scripted runs stay deterministic. Time does not move
 /// between steps: the clock only jumps at an explicit `advance:` or
 /// once at the end, so a script that never mentions time dumps
@@ -83,7 +124,12 @@ pub fn run<C: Component>(
     script: &str,
 ) -> String {
     let mut timed = false;
-    for step in script.split(',').filter(|s| !s.is_empty()) {
+    let mut log = String::new();
+    for step in split_steps(script) {
+        if step.is_empty() {
+            continue;
+        }
+        let step = step.as_str();
         timed = false;
         if let Some(name) = step.strip_prefix("theme:") {
             // §8.37: flipping the root palette is an ordinary
@@ -99,13 +145,20 @@ pub fn run<C: Component>(
             // §8.44: how many objects the World is holding. A
             // checked output, the way the accessibility tree is.
             let n = rt.with(|w: &mut World| w.live_objects());
-            println!("live: {n}");
+            log.push_str(&format!("live: {n}\n"));
+        } else if step == "dump" {
+            // The element tree at THIS point in the script. Same
+            // bytes the run prints at its start and end, so a gate
+            // comparing stdout compares the middle of a run too.
+            log.push_str(&rt.with(|w| tree.dump(w)));
+            log.push('\n');
         } else if step == "a11y" {
             // §8.36: the accessibility tree is a KERNEL output, so
             // a script can print exactly what a platform adapter
             // would be handed.
             let t = a11y::tree(tree);
-            <a11y::DumpEngine as a11y::Engine>::push_accessibility(&mut a11y::DumpEngine, t);
+            log.push_str(&t.dump());
+            log.push('\n');
         } else if let Some(ms) = step.strip_prefix("advance:") {
             let ms: f64 = ms
                 .parse()
@@ -113,16 +166,37 @@ pub fn run<C: Component>(
             rt.with(|w: &mut World| anim::advance(w, ms));
             *tree = rt.with(|w| build_prepared(w, view));
             timed = true;
-        } else if let Some(label) = step.strip_prefix("click:") {
+        } else if let Some(rest) = step.strip_prefix("click") {
             // Buttons keep priority; when none carries the label, a
             // Checkbox/Switch answers (tree order among toggles) and
-            // clicking it runs `onToggle` with the NEW value.
-            if let Some(f) = rt.with(|w| tree.find_button(w, label)) {
+            // clicking it runs `onToggle` with the NEW value. `@n`
+            // counts matches of the SAME label in tree order, which
+            // is how a row of identical buttons is reached.
+            let (n, label) = if let Some(r) = rest.strip_prefix('@') {
+                let (a, b) = r
+                    .split_once(':')
+                    .unwrap_or_else(|| panic!("bad click step `{step}`"));
+                let ix: usize = a
+                    .parse()
+                    .unwrap_or_else(|_| panic!("bad click index `{step}`"));
+                (ix, b)
+            } else if let Some(t) = rest.strip_prefix(':') {
+                (0usize, t)
+            } else {
+                panic!("unknown script step `{step}`");
+            };
+            if let Some(f) = rt.with(|w| tree.find_button_nth(w, label, n)) {
                 crate::contain("click handler", || rt.with(|w: &mut World| f(w)));
             } else {
                 let (checked, on_toggle) = rt
-                    .with(|w| tree.find_toggle(w, label))
-                    .unwrap_or_else(|| panic!("no button or toggle `{label}`"));
+                    .with(|w| tree.find_toggle_nth(w, label, n))
+                    .unwrap_or_else(|| {
+                        if n == 0 {
+                            panic!("no button or toggle `{label}`")
+                        } else {
+                            panic!("no button or toggle `{label}` #{n}")
+                        }
+                    });
                 let f = on_toggle
                     .unwrap_or_else(|| panic!("toggle `{label}` has no onToggle"));
                 crate::contain("click handler", || {
@@ -228,5 +302,6 @@ pub fn run<C: Component>(
     if !timed {
         anim_settle(rt, view, tree);
     }
-    rt.with(|w| tree.dump(w))
+    log.push_str(&rt.with(|w| tree.dump(w)));
+    log
 }

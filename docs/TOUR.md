@@ -1414,6 +1414,7 @@ pixie update [kit]               # re-resolve pixie deps, refresh the lock
 pixie remove kit                 # drop a dependency + its caches
 
 PIXIE_SCRIPT="click:go,input:hi" ./app     # headless step replay
+PIXIE_SCRIPT="click:go,dump,click:go" ./app # ... printing the middle too
 PIXIE_SCRIPT="click:go,advance:100" ./app  # ... standing 100 ms in
 PIXIE_SCRIPT="a11y" ./app                  # print the accessibility tree
 PIXIE_SCRIPT="theme:light" ./app           # flip the root palette

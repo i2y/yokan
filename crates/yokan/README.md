@@ -35,8 +35,10 @@ CPython and drives a scripted app with no window.
 `PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py` runs any yokan
 app without a window: the steps are replayed, the element tree is
 dumped to stdout, and `run()` returns. The step vocabulary is
-`click:` `input[@n]:` `submit[@n]` `slide[@n]:` `select[@n]:`
-`advance:` `theme:` `a11y` `mem`. In tests,
+`click[@n]:` `input[@n]:` `submit[@n]` `slide[@n]:` `select[@n]:`
+`advance:` `theme:` `a11y` `mem` `dump` (`@n` = the n-th match in
+tree order; `dump` prints the screen mid-script; `\,` is a comma
+inside text). In tests,
 `yokan._headless(view, state, script)` returns the dumps as a string.
 Timers are skipped headless.
 

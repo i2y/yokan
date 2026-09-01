@@ -89,8 +89,11 @@ Run these from `crates/yokan/` (they also work via
   crates.
 - `cargo run -q -p pixie-cli -- build examples/counter/counter.pix
   --run` opens a window; the `PIXIE_SCRIPT` env var replays it
-  headless (`click:`, `input:`, `submit`, `advance:<ms>`, `a11y`,
-  `theme:dark|light`, `mem`).
+  headless (`click[@n]:`, `input[@n]:`, `submit`, `slide`, `select`,
+  `advance:<ms>`, `a11y`, `theme:dark|light`, `mem`, `dump`). Steps
+  that produce output are collected into the run's returned
+  transcript, so an embedder that captures the return value sees
+  them; a comma inside a step's text is written `\,`.
 - `pixie watch <file>` hot-reloads view-body edits in ~1 ms.
 - First build on a machine: `pixie install-runtime` (prebuilds
   gpui, ~3 min, into the shared target).

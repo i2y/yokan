@@ -121,3 +121,32 @@ declaration — a notification is advice, not state — so the call
 returns nothing and cannot fail. Rejected: shelling out to
 osascript (a second delivery mechanism with its own identity and
 quoting rules, when the platform layer already does it properly).
+
+## The script harness checks the middle of a run
+
+A headless script drove the app and the run printed the screen at
+its start and its end, so a divergence that appeared mid-script and
+resolved before the end was invisible to the gate. Three changes
+close that and the gaps around it:
+
+- **`dump`** prints the screen at that point in the script, making
+  an intermediate state a checked output — the mechanism `a11y` and
+  `mem` already used.
+- **Steps that produce output no longer print**: they are collected
+  into the transcript `run` returns, ahead of the final dump and in
+  the order they ran. The bytes a caller prints are unchanged, and
+  an embedder that CAPTURES the return value rather than the process
+  stdout — the CPython tier — now sees them. Without this, any
+  output-producing step compared a transcript against a stdout with
+  more lines in it, so `a11y` and `mem` were quietly one-sided in
+  that gate too.
+- **`click@n:`** counts matches of the same label in tree order, so
+  a row of identical buttons is reachable; the other steps had taken
+  an index since they were written, and click had not.
+- **`\,`** escapes a comma inside a step's text. The separator used
+  to eat it, and the tail failed as an unknown step, so no script
+  could carry prose.
+
+Deliberately not done here: scrolling, key events and window
+resizing. Each needs engine-side state that headless runs do not
+have, so each is a design, not an addition.

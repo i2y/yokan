@@ -1779,9 +1779,27 @@ impl Element {
     }
 
     pub fn find_button(&self, w: &World, label: &str) -> Option<Listener> {
+        self.find_button_nth(w, label, 0)
+    }
+
+    /// The n-th button carrying `label`, in tree order (`click@n:`).
+    /// Rows of identical buttons — a "delete" per row — are only
+    /// reachable by position, so the finders that take an index and
+    /// the ones that take a label meet here.
+    pub fn find_button_nth(&self, w: &World, label: &str, n: usize) -> Option<Listener> {
+        let mut skip = n;
+        self.find_button_skip(w, label, &mut skip)
+    }
+
+    fn find_button_skip(&self, w: &World, label: &str, skip: &mut usize) -> Option<Listener> {
         match self {
             Element::Button { label: l, on_click, .. } if l.as_str() == label => {
-                Some(on_click.clone())
+                if *skip == 0 {
+                    Some(on_click.clone())
+                } else {
+                    *skip -= 1;
+                    None
+                }
             }
             Element::Column { children: cs, .. }
             | Element::Row { children: cs, .. }
@@ -1793,23 +1811,23 @@ impl Element {
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
-            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_button(w, label)),
+            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_button_skip(w, label, skip)),
             // The walk ignores `virtualized`: which rows the engine
             // paints is a rendering decision, not a tree edit.
             Element::ListView { children, lazy, .. } => children
                 .iter()
-                .find_map(|c| c.find_button(w, label))
+                .find_map(|c| c.find_button_skip(w, label, skip))
                 .or_else(|| {
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| c.find_button(w, label))
+                            .find_map(|c| c.find_button_skip(w, label, skip))
                     })
                 }),
             // Headless scripts must be able to reach a closed dialog's
             // buttons, so the walk ignores `open` (a rendered-visibility
             // flag, not a tree edit).
-            Element::Modal { children, .. } => children.iter().find_map(|c| c.find_button(w, label)),
+            Element::Modal { children, .. } => children.iter().find_map(|c| c.find_button_skip(w, label, skip)),
             _ => None,
         }
     }
@@ -1886,6 +1904,27 @@ impl Element {
         w: &World,
         label: &str,
     ) -> Option<(bool, Option<BoolListener>)> {
+        self.find_toggle_nth(w, label, 0)
+    }
+
+    /// The n-th checkbox or switch carrying `label` — `find_button_nth`'s
+    /// twin, so `click@n:` reaches a row of identical toggles too.
+    pub fn find_toggle_nth(
+        &self,
+        w: &World,
+        label: &str,
+        n: usize,
+    ) -> Option<(bool, Option<BoolListener>)> {
+        let mut skip = n;
+        self.find_toggle_skip(w, label, &mut skip)
+    }
+
+    fn find_toggle_skip(
+        &self,
+        w: &World,
+        label: &str,
+        skip: &mut usize,
+    ) -> Option<(bool, Option<BoolListener>)> {
         match self {
             Element::Checkbox {
                 label: l,
@@ -1896,7 +1935,14 @@ impl Element {
                 label: l,
                 checked,
                 on_toggle,
-            } if l.as_str() == label => Some((*checked, on_toggle.clone())),
+            } if l.as_str() == label => {
+                if *skip == 0 {
+                    Some((*checked, on_toggle.clone()))
+                } else {
+                    *skip -= 1;
+                    None
+                }
+            }
             Element::Column { children: cs, .. }
             | Element::Row { children: cs, .. }
             | Element::Grid { children: cs, .. }
@@ -1907,21 +1953,21 @@ impl Element {
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
-            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_toggle(w, label)),
+            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_toggle_skip(w, label, skip)),
             // Same relaxations as `find_button`: virtualization and a
             // closed Modal never hide a toggle from a script.
             Element::ListView { children, lazy, .. } => children
                 .iter()
-                .find_map(|c| c.find_toggle(w, label))
+                .find_map(|c| c.find_toggle_skip(w, label, skip))
                 .or_else(|| {
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| c.find_toggle(w, label))
+                            .find_map(|c| c.find_toggle_skip(w, label, skip))
                     })
                 }),
             Element::Modal { children, .. } => {
-                children.iter().find_map(|c| c.find_toggle(w, label))
+                children.iter().find_map(|c| c.find_toggle_skip(w, label, skip))
             }
             _ => None,
         }

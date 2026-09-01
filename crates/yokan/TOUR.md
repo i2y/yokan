@@ -783,7 +783,10 @@ Running without a window is where verification starts.
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
-The step vocabulary is `click:<label>`, `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`.
+The step vocabulary is `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
+`@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
+`dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
+A comma inside text is written `\,` (`input:hello\, world`).
 The screen tree is dumped to stdout before and after the steps, and from tests `yokan._headless(view, state, script)` returns the same string.
 
 The **gate** replays the same script against the development build and the shipped build, and diffs the dumps.

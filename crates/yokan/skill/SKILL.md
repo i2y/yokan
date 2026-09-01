@@ -561,9 +561,12 @@ line instead of the tree.
 
 Verify WITHOUT a window first: `PIXIE_SCRIPT="click:+1,input:hello"
 uv run app.py` runs the app headless and dumps the element tree
-before and after the steps (steps: `click:<label>`,
-`input[@n]:<text>`, `submit[@n]`, `advance:<ms>`, `theme:light|dark`,
-`a11y`, `mem`). Assert on the dump in tests via
+before and after the steps (steps: `click[@n]:<label>`,
+`input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`,
+`select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`,
+`mem`, `dump`). `@n` picks the n-th match in tree order; `dump`
+prints the screen mid-script (an intermediate state becomes a
+checked output); a comma inside text is `\,`. Assert on the dump in tests via
 `_headless(view, state, script) -> str`. Timers do not run
 headless. Then run windowed once to confirm the look. For
 virtualized lists, `PIXIE_TRACE_LAZY=1` prints the built row

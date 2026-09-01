@@ -165,17 +165,6 @@ pub trait Engine {
     fn push_accessibility(&mut self, tree: Node);
 }
 
-/// The sink the headless harness installs for `PIXIE_SCRIPT`'s `a11y`
-/// step. Small, but not a stub: it is what makes the accessibility
-/// tree a checked output instead of a promise.
-pub struct DumpEngine;
-
-impl Engine for DumpEngine {
-    fn push_accessibility(&mut self, tree: Node) {
-        println!("{}", tree.dump());
-    }
-}
-
 /// The role an element reports on its own, before any `role:` rider.
 /// `None` means "not reported" — layout containers and the internal
 /// wrappers, whose children rise to the nearest reported ancestor.

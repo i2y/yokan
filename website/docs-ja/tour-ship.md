@@ -22,7 +22,10 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
-ステップの語彙は `click:<ラベル>`、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`。
+ステップの語彙は `click[@n]:<ラベル>`、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump`。
+`@n` はツリー順で n 番目の一致を選ぶので、同じラベルのボタンが並ぶ行にも届きます（`click@2:削除`）。
+`dump` はその時点の画面を出力します。これで途中の状態も検査対象になり、最初と最後だけを見る形ではなくなります。
+テキストに含めるカンマは `\,` と書きます（`input:hello\, world`）。
 ステップの前後で画面の内容がテキストになって標準出力へ出力され、テストからは `yokan._headless(view, state, script)` が同じ文字列を返します。
 
 **ゲート**は同じスクリプトを開発版とリリース版の両方で再生し、ダンプを突き合わせます。

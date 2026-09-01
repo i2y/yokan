@@ -1415,6 +1415,7 @@ pixie update [kit]               # pixie 依存を再解決、lock を更新
 pixie remove kit                 # 依存 + キャッシュを削除
 
 PIXIE_SCRIPT="click:go,input:hi" ./app     # ヘッドレス操作再生
+PIXIE_SCRIPT="click:go,dump,click:go" ./app # 途中の画面も出力
 PIXIE_SCRIPT="click:go,advance:100" ./app  # 100ms 進めた地点で出力
 PIXIE_SCRIPT="a11y" ./app                  # アクセシビリティツリーを出力
 PIXIE_SCRIPT="theme:light" ./app           # ルートのパレットを切替
