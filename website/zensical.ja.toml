@@ -37,6 +37,8 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
+logo = "images/logo.svg"
+favicon = "images/favicon.png"
 language = "ja"
 
 # ---- Palette --------------------------------------------------------------

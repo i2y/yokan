@@ -1,3 +1,5 @@
+<img src="docs/assets/logo.png" width="72" alt="">
+
 # Yokan
 
 **Write Python. Ship native.** — [日本語版 README](README.ja.md)

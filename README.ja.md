@@ -1,3 +1,5 @@
+<img src="docs/assets/logo.png" width="72" alt="">
+
 # Yokan
 
 **Python で書く。ネイティブで配る。** — [English README](README.md)
