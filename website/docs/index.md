@@ -4,9 +4,7 @@ hide:
   - toc
 ---
 
-# Yokan
-
-## Write Python. Ship native.
+# ![Yokan — Write Python. Ship native.](images/banner.png)
 
 Yokan is a **compiler** that takes a statically typed subset of
 Python to native code. Not a Python-lookalike language: what you can write is a

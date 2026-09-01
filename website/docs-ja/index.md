@@ -4,9 +4,7 @@ hide:
   - toc
 ---
 
-# Yokan
-
-## Python で書く。ネイティブで配る。
+# ![Yokan — Write Python. Ship native.](images/banner.png)
 
 Yokan（羊羹）は、静的に型付けされた Python のサブセットをネイティブコードにコンパイルする**処理系**です。
 サブセットといっても、Python に似せた別の言語ではありません。

@@ -1,10 +1,6 @@
-<img src="docs/assets/logo.png" width="72" alt="">
+<img src="docs/assets/banner.png" alt="Yokan — Write Python. Ship native.">
 
-# Yokan
-
-**Python で書く。ネイティブで配る。** — [English README](README.md)
-
-**📘 ドキュメントサイト: <https://i2y.github.io/yokan/ja/>**
+[English README](README.md) · **📘 ドキュメントサイト: <https://i2y.github.io/yokan/ja/>**
 
 Yokan（羊羹）は、静的に型付けされた Python のサブセットをネイティブコードにコンパイルする処理系です。
 サブセットといっても、Python に似せた別の言語ではありません。

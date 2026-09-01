@@ -1,10 +1,6 @@
-<img src="docs/assets/logo.png" width="72" alt="">
+<img src="docs/assets/banner.png" alt="Yokan — Write Python. Ship native.">
 
-# Yokan
-
-**Write Python. Ship native.** — [日本語版 README](README.ja.md)
-
-**📘 Documentation: <https://i2y.github.io/yokan/>**
+[日本語版 README](README.ja.md) · **📘 Documentation: <https://i2y.github.io/yokan/>**
 
 Yokan is a compiler: it takes a statically typed subset of Python to native code.
 A subset — but not a lookalike language. What you can write is a
