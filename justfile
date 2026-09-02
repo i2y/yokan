@@ -31,6 +31,11 @@ dev-so:
     cp "$CARGO_TARGET_DIR/release/libyokan.dylib" {{pkg}}/yokan.so
     codesign -f -s - {{pkg}}/yokan.so
 
+# The dialect boundary, without starting a compiler: the first
+# refusal in file:line:col form, silence when the app is inside it.
+check app:
+    cd {{pkg}} && uv run yokan_gate.py check {{app}}
+
 # Run one app headless through both runs and byte-compare the screens.
 gate app script='':
     cd {{pkg}} && uv run yokan_gate.py gate {{app}} {{ if script == '' { '' } else { '--script "' + script + '"' } }}

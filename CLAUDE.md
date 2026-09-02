@@ -66,7 +66,8 @@ Run these from `crates/yokan/` (they also work via
   — **the gate**: runs the app interpreted and compiled with the
   same interaction script and byte-compares the dumps. The gate is
   the product's core promise; a change is not done while it is red.
-- `translate` (emit the `.pix` only), `build` (native binary;
+- `check` (the refusals alone — no compiler started), `translate`
+  (emit the `.pix` only), `build` (native binary;
   `--release`, `--bundle`, `--onefile`, `--app`), `sync` (build the
   crate doors without gating), `add <app> <crate>` (declare a Rust
   crate dependency).

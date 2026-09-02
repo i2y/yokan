@@ -11,8 +11,11 @@ as Python: while you develop, the whole app runs on real CPython
 with a state-preserving live reload; `yokan build` turns the same
 source into a machine-code executable; and `yokan gate` replays one
 interaction script against both runs and byte-compares the screens.
-What the subset cannot take is refused by name when you translate
-or build — behavior never changes silently. The closing section
+What the subset cannot take is refused by name when you check,
+translate or build — behavior never changes silently. `yokan check
+app.py` is the fast one: it prints the first refusal as
+`file:line:col: …` and says nothing when the app is inside the
+dialect. The closing section
 lists what is refused and why; write inside that boundary from the
 start instead of discovering it at build time.
 
@@ -467,6 +470,7 @@ place for startup work — loading data, seeding the RNG.
 ## Headless runs, the gate, shipping
 
 ```console
+$ yokan check app.py                                  # refusals only, no compiler
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no window
 $ yokan gate app.py --script "click:+1,input:Momo" --release
 GATE OK — 2 dump lines identical across tiers

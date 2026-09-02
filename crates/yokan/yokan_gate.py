@@ -98,7 +98,10 @@ class Untranslatable(Exception):
         return f"{path}:{self.line}:{self.col + 1}"
 
     def render(self, prefix: str = "not in the dialect") -> str:
-        head = f"{self.where()}: {prefix} — {self.msg}"
+        # Most messages name the boundary themselves ("`print(...)` is
+        # not in the dialect yet — …"); prefixing those said it twice.
+        head = (f"{self.where()}: {self.msg}" if "in the dialect" in self.msg
+                else f"{self.where()}: {prefix} — {self.msg}")
         lines = SOURCES.get(self.file or "")
         if not lines or self.line is None or not (1 <= self.line <= len(lines)):
             return head
@@ -6415,7 +6418,7 @@ def do_add(args) -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["translate", "gate", "build", "sync", "add"])
+    ap.add_argument("mode", choices=["check", "translate", "gate", "build", "sync", "add"])
     ap.add_argument("app")
     ap.add_argument("extra", nargs="*",
                     help="for `add`: <crate> [VERSION]")
@@ -6449,6 +6452,12 @@ def main():
         sys.exit(e.render() if e.file else f"{args.app}: {e.render()}")
     except ValueError as e:
         sys.exit(f"{args.app}: not in the dialect — {e}")
+
+    if args.mode == "check":
+        # The checker IS the translator: everything the compiled run
+        # would refuse is refused here, before a compiler is started.
+        # Silent means the app is in the dialect.
+        return
 
     if args.mode == "translate":
         print(pix, end="")

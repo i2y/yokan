@@ -322,3 +322,26 @@ them passes the gate" was written when the sweep gated every demo,
 and it stayed after four dict-state demos became development-only
 by design. The sentence now names the exception and points at the
 gallery, where each of the four already says so.
+
+## The checker is the translator
+
+Everything the compiled run refuses is decided by the translator, on
+the ast alone, before any compiler is started — but the only way to
+ask it was `translate` (which prints a `.pix` nobody wanted to read)
+or a build. `yokan check app.py` asks that question directly: it
+translates every module the app imports, prints the first refusal in
+the `file:line:col` shape with the line and a caret, and says
+nothing at all when the app is inside the dialect. Silence is the
+answer a checker should give, and a checker that needs no compiler
+is one an editor can run on save.
+
+It reports the first refusal, not all of them. Enumerating one per
+def would mean treating a refused def as opaque at its call sites
+and continuing the pass, which is a translator change, not a CLI
+one; the cheap version is honest about stopping where it stops.
+
+A refusal also stopped saying "not in the dialect" twice. The
+rendered head names the location and the category, and most messages
+name the category themselves ("`print(...)` is not in the dialect
+yet — …"), so the head now adds its prefix only to the messages that
+do not.
