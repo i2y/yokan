@@ -1254,7 +1254,7 @@ fn eval_action_stmt(
         // Control flow in a handler (§8.53) — the compiled tier's
         // mirror, statement for statement, because a divergence here
         // is exactly what the tier gate exists to catch.
-        Stmt::For { binding, iter, body, .. } => {
+        Stmt::For { binding, index, iter, body, .. } => {
             let depth = scope.vars.len();
             match &iter.kind {
                 ExprKind::Range { start, end, inclusive } => {
@@ -1262,9 +1262,14 @@ fn eval_action_stmt(
                     let b = eval_expr(end, env, scope, w)?.as_int()?;
                     let last = if *inclusive { b } else { b - 1 };
                     let mut i = a;
+                    let mut turn = 0i64;
                     while i <= last {
                         scope.vars.truncate(depth);
                         scope.vars.push((binding.name.clone(), Value::Int(i)));
+                        if let Some(ix) = index {
+                            scope.vars.push((ix.name.clone(), Value::Int(turn)));
+                        }
+                        turn += 1;
                         match run_action_block(body, env, scope, w)? {
                             Flow::Break => break,
                             Flow::Return => {
@@ -1280,9 +1285,12 @@ fn eval_action_stmt(
                     let Value::List(xs) = eval_expr(iter, env, scope, w)? else {
                         return Err("`for` needs a List or a range".into());
                     };
-                    for item in xs {
+                    for (n, item) in xs.iter().enumerate() {
                         scope.vars.truncate(depth);
-                        scope.vars.push((binding.name.clone(), item));
+                        scope.vars.push((binding.name.clone(), item.clone()));
+                        if let Some(ix) = index {
+                            scope.vars.push((ix.name.clone(), Value::Int(n as i64)));
+                        }
                         match run_action_block(body, env, scope, w)? {
                             Flow::Break => break,
                             Flow::Return => {
@@ -1523,7 +1531,7 @@ pub fn build_view(
 /// is what virtualization means rather than a lowering limit.
 fn single_repeater_of(
     el: &ast::Element,
-) -> Result<Option<(&str, &Expr, &ast::Element)>, String> {
+) -> Result<Option<(&str, Option<&str>, &Expr, &ast::Element)>, String> {
     let mut non_props = el
         .members
         .iter()
@@ -1532,6 +1540,7 @@ fn single_repeater_of(
         (
             Some(ElementMember::Stmt(Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 ..
@@ -1549,7 +1558,12 @@ fn single_repeater_of(
             let ExprKind::Element(child) = &body.trailing.as_deref().unwrap().kind else {
                 unreachable!("checked above");
             };
-            Ok(Some((binding.name.as_str(), iter, child)))
+            Ok(Some((
+                binding.name.as_str(),
+                index.as_ref().map(|i| i.name.as_str()),
+                iter,
+                child,
+            )))
         }
         _ => Ok(None),
     }
@@ -2169,7 +2183,7 @@ fn build_element_inner(
             // non-virtualized lists stay eager (§8.24 — the window's
             // clipped-viewport path renders `children`).
             if virtualized {
-                if let Some((binding, iter, child)) = single_repeater_of(el)? {
+                if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                 let len = match eval_expr(iter, env, scope, w)? {
                     Value::List(xs) => xs.len(),
                     other => {
@@ -2179,6 +2193,7 @@ fn build_element_inner(
                 let iter_ast = iter.clone();
                 let child_ast = child.clone();
                 let binding_name = binding.to_string();
+                let index_name = index.map(|i| i.to_string());
                 let cenv = env.clone();
                 let outer_vars = scope.vars.clone();
                 let outer_path = scope.row_path.clone();
@@ -2195,6 +2210,9 @@ fn build_element_inner(
                     };
                     if let Value::List(xs) = eval_expr(iter, env, scope, w)? {
                         trial.vars.push((binding_name.clone(), xs[0].clone()));
+                        if let Some(ix) = &index_name {
+                            trial.vars.push((ix.clone(), Value::Int(0)));
+                        }
                         build_element(&child_ast, env, &trial, w)?;
                     }
                 }
@@ -2229,6 +2247,9 @@ fn build_element_inner(
                             vars: outer_vars.clone(),
                         };
                         row_scope.vars.push((binding_name.clone(), xs[i].clone()));
+                        if let Some(ix) = &index_name {
+                            row_scope.vars.push((ix.clone(), Value::Int(i as i64)));
+                        }
                         match build_element(&child_ast, &cenv, &row_scope, w) {
                             Ok(e) => rows.push(e),
                             Err(err) => {
@@ -2570,6 +2591,7 @@ fn build_items(
             ViewItem::Child(c) => out.push(build_element(c, env, scope, w)?),
             ViewItem::Repeat {
                 binding,
+                index,
                 iter,
                 body,
                 ..
@@ -2591,6 +2613,9 @@ fn build_items(
                         },
                     };
                     inner.vars.push((binding.name.clone(), it));
+                    if let Some(ix) = index {
+                        inner.vars.push((ix.name.clone(), Value::Int(__ri as i64)));
+                    }
                     build_items(&inner_items, env, &inner, w, out)?;
                 }
             }

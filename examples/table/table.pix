@@ -13,8 +13,11 @@ view Main {
         Text { text: "Name" }
         Text { text: "Score" }
       }
-      for it in Roster.rows {
-        Row { Text { text: it } }
+      for it, i in Roster.rows {
+        Row {
+          Text { text: "#{i + 1}" }
+          Text { text: it }
+        }
       }
     }
     Button { text: "add"; onClick: Roster.addRow() }

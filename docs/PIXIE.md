@@ -112,7 +112,8 @@ Early but real. Working today:
   `Slot { }` children, and per-row state at any repeater depth
   (nested `for`s and virtualized lists included). A `for` body or an
   `if` branch holds as many elements as you write, repeaters nest
-  over any list you can name, and numbers are numbers: `fontSize: 14`
+  over any list you can name and bind the row's index when asked
+  (`for row, i in xs`), and numbers are numbers: `fontSize: 14`
   and `unit * qty` need no decimal points or conversions.
 - **Animation** — declared on the element whose values move rather
   than wrapped around the update that moves them: `animate: 200.0`

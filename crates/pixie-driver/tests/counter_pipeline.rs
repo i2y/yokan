@@ -1275,16 +1275,33 @@ fn choosers_require_their_props() {
         "error should name the expected type: {err}"
     );
 
-    // A list literal has no lowering in views; the error points at
+    // A literal list of strings is an option list people write by
+    // hand, so it lowers; a literal of anything else still points at
     // the property binding that does work (the charts' rule).
+    let f = dir.join("chooser_literal_options.pix");
+    std::fs::write(
+        &f,
+        format!(
+            "{store}view Main {{\n  Column {{\n    RadioGroup {{ options: [\"a\", \"b\"]; selected: S.i }}\n  }}\n}}\n"
+        ),
+    )
+    .unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .expect("a literal option list emits");
+    assert!(
+        code.contains("__lit.push(Str::from(\"a\"))"),
+        "the literal list should be built in place:\n{code}"
+    );
     let err = emit_err(
-        "chooser_literal_options.pix",
+        "chooser_float_literal_options.pix",
         &format!(
-            "{store}view Main {{\n  Column {{\n    RadioGroup {{ options: []; selected: S.i }}\n  }}\n}}\n"
+            "{store}view Main {{\n  Column {{\n    RadioGroup {{ options: [1.0]; selected: S.i }}\n  }}\n}}\n"
         ),
     );
     assert!(
-        err.contains("List<String> property"),
+        err.contains("String"),
         "error should point at the property binding: {err}"
     );
 }

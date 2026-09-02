@@ -2932,11 +2932,15 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
         // clone out (values or Copy handles — the §3.2 economy).
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             ..
         } => {
             let rb = camel_to_snake(&binding.name);
+            if index.is_some() {
+                writeln!(out, "{ind}let mut __turn{} = 0i64;", cx.loop_depth).unwrap();
+            }
             let range_form = matches!(&iter.kind, ExprKind::Range { .. });
             if let ExprKind::Range {
                 start,
@@ -2968,6 +2972,13 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
                 _ => None,
             };
             cx.locals.push((binding.name.clone(), elem_class, false, None));
+            if let Some(i) = index {
+                // `for x, i in xs` — the row's position, counted as
+                // the loop runs so a list and a range say the same.
+                let iv = camel_to_snake(&i.name);
+                writeln!(out, "{ind}    let {iv} = __turn{}; __turn{} += 1;", cx.loop_depth, cx.loop_depth).unwrap();
+                cx.locals.push((i.name.clone(), None, false, None));
+            }
             cx.loop_depth += 1;
             let inner = format!("{ind}    ");
             lower_scope(&body.stmts, body.trailing.as_deref(), true, cx, out, &inner)?;
@@ -4080,7 +4091,16 @@ fn lower_view_float(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitErr
                 _ => err(e.span, format!("this {key} binding must be a numeric property")),
             }
         }
-        _ => err(e.span, format!("`{key}:` must be a number or a numeric property")),
+        // `fontSize: unit * qty` — arithmetic over numbers and numeric
+        // reads. The interpreting tier evaluates the property with the
+        // ordinary expression evaluator, so the compiled one lowers it
+        // too; anything else stays a named error.
+        ExprKind::Binary { op, lhs, rhs } => {
+            let l = lower_view_float(lhs, cx, key)?;
+            let r = lower_view_float(rhs, cx, key)?;
+            Ok(format!("({l} {} {r})", bin_op(op, e.span)?))
+        }
+        _ => err(e.span, format!("`{key}:` must be a number, a numeric property, or arithmetic over them")),
     }
 }
 
@@ -4123,7 +4143,12 @@ fn lower_view_int(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError
             }
             Ok(format!("{handle}.{}(w)", p.rust))
         }
-        _ => err(e.span, format!("`{key}:` must be an int literal or an Int property")),
+        ExprKind::Binary { op, lhs, rhs } => {
+            let l = lower_view_int(lhs, cx, key)?;
+            let r = lower_view_int(rhs, cx, key)?;
+            Ok(format!("({l} {} {r})", bin_op(op, e.span)?))
+        }
+        _ => err(e.span, format!("`{key}:` must be an int literal, an Int property, or arithmetic over them")),
     }
 }
 
@@ -4237,11 +4262,23 @@ fn lower_view_str_list(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, Emit
             }
             Ok(format!("{handle}.{}(w)", p.rust))
         }
+        // A literal list of strings: `options: ["a", "b"]`. A view
+        // rebuild evaluates it again, which is exactly what a literal
+        // in the source says.
+        ExprKind::Array(items) => {
+            let mut out = String::from("{ let mut __lit = List::<Str>::new(); ");
+            for item in items {
+                let v = lower_view_text(item, cx)?;
+                write!(out, "__lit.push({v}); ").unwrap();
+            }
+            out.push_str("__lit }");
+            Ok(out)
+        }
         _ => err(
             e.span,
             format!(
-                "`{key}:` must be a List<String> property (list literals are not \
-                 lowerable in views yet — bind a store prop or state cell)"
+                "`{key}:` must be a List<String> property or a list of string \
+                 literals — bind a store prop or state cell for anything else"
             ),
         ),
     }
@@ -4766,11 +4803,15 @@ fn lower_action_stmt(
         // with no reason anyone had written down.
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
         } => {
             let rb = camel_to_snake(&binding.name);
+            if index.is_some() {
+                writeln!(out, "{ind}let mut __turn = 0i64;").unwrap();
+            }
             match &iter.kind {
                 ExprKind::Range {
                     start,
@@ -4788,8 +4829,14 @@ fn lower_action_stmt(
                     writeln!(out, "{ind}    let {rb} = __it.clone();").unwrap();
                 }
             }
+            if let Some(i) = index {
+                writeln!(out, "{ind}    let {} = __turn; __turn += 1;", camel_to_snake(&i.name)).unwrap();
+            }
             let depth = cx.locals.len();
             cx.locals.push(binding.name.clone());
+            if let Some(i) = index {
+                cx.locals.push(i.name.clone());
+            }
             let inner = format!("{ind}    ");
             lower_action_block(body, cx, out, &inner)?;
             cx.locals.truncate(depth);
@@ -4888,7 +4935,11 @@ fn lower_view_action_with(
         write!(sig, ", {}: {t}", camel_to_snake(n)).unwrap();
     }
     sig.push('|');
-    let implicit: Vec<String> = params.iter().map(|(n, _)| n.to_string()).collect();
+    // The handler's own parameters, plus the repeater bindings in
+    // scope: a row's action is built inside the loop, so the row and
+    // its index are ordinary captures of the closure.
+    let mut implicit: Vec<String> = params.iter().map(|(n, _)| n.to_string()).collect();
+    implicit.extend(cx.loop_vars.iter().map(|(n, _, _)| n.clone()));
     match &e.kind {
         ExprKind::MethodCall {
             receiver,
@@ -4956,7 +5007,7 @@ fn element_prop<'e>(el: &'e Element, key: &str) -> Option<&'e Expr> {
 /// is what virtualization means rather than a lowering limit.
 fn single_repeater_of(
     el: &Element,
-) -> Result<Option<(&ast::Ident, &Expr, &Element)>, EmitError> {
+) -> Result<Option<(&ast::Ident, Option<&ast::Ident>, &Expr, &Element)>, EmitError> {
     let mut non_props = el
         .members
         .iter()
@@ -4965,6 +5016,7 @@ fn single_repeater_of(
         (
             Some(ElementMember::Stmt(Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 span,
@@ -4980,7 +5032,7 @@ fn single_repeater_of(
             let ExprKind::Element(child) = &trailing.kind else {
                 return err(*span, VIRTUAL_ROW_RULE);
             };
-            Ok(Some((binding, iter, child)))
+            Ok(Some((binding, index.as_ref(), iter, child)))
         }
         _ => Ok(None),
     }
@@ -5504,7 +5556,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // tier gate never saw it — §8.24). The detection predicate
             // MUST match the interpreter's, or the tiers diverge.
             if virtualized == "true" {
-                if let Some((binding, iter, child)) = single_repeater_of(el)? {
+                if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                 // Same reach as the eager repeater (§8.65): any list
                 // this view can name, through however many objects.
                 let ExprKind::Member { receiver, name } = &iter.kind else {
@@ -5540,6 +5592,10 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 };
                 let bind_rust = camel_to_snake(&binding.name);
                 let ri = format!("__row_idx{}", cx.repeat_depth);
+                let index_bind = match index {
+                    Some(i) => format!("let {} = {ri} as i64;", camel_to_snake(&i.name)),
+                    None => String::new(),
+                };
                 // A repeater over a list of OBJECTS binds a handle,
                 // so the loop variable carries its class (§8.41).
                 let elem_class = match &elem_ty {
@@ -5554,9 +5610,15 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                     _ => RustTy::Unit,
                 };
                 cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
+                if let Some(i) = index {
+                    cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
+                }
                 cx.repeat_depth += 1;
                 let row = lower_element(child, cx, &format!("{ind}        "));
                 cx.repeat_depth -= 1;
+                if index.is_some() {
+                    cx.loop_vars.pop();
+                }
                 cx.loop_vars.pop();
                 let row = row?;
                 // The closure captures only the Copy handles inside
@@ -5578,6 +5640,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                      {ind}            for {ri} in __range {{\n\
                      {ind}                if {ri} >= __xs.len() {{ break; }}\n\
                      {ind}                let {bind_rust} = __xs.at({ri} as i64);\n\
+                     {ind}                {index_bind}\n\
                      {ind}                __rows.push({row});\n\
                      {ind}            }}\n\
                      {ind}            __rows\n\
@@ -6034,6 +6097,7 @@ fn lower_items(
             }
             ViewItem::Repeat {
                 binding,
+                index,
                 iter,
                 body,
                 span,
@@ -6091,6 +6155,9 @@ fn lower_items(
                     "{ind}for ({ri}, {bind_rust}) in {xs}.iter().enumerate() {{"
                 )
                 .unwrap();
+                if let Some(i) = index {
+                    writeln!(out, "{ind}    let {} = {ri} as i64;", camel_to_snake(&i.name)).unwrap();
+                }
                 // A repeater over a list of OBJECTS binds a handle,
                 // so the loop variable carries its class (§8.41).
                 let elem_class = match &elem_ty {
@@ -6105,6 +6172,9 @@ fn lower_items(
                     _ => RustTy::Unit,
                 };
                 cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
+                if let Some(i) = index {
+                    cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
+                }
                 cx.repeat_depth += 1;
                 let r = lower_items(
                     &items_of_block(body),
@@ -6114,6 +6184,9 @@ fn lower_items(
                     out,
                 );
                 cx.repeat_depth -= 1;
+                if index.is_some() {
+                    cx.loop_vars.pop();
+                }
                 cx.loop_vars.pop();
                 r?;
                 writeln!(out, "{ind}}}").unwrap();
