@@ -96,12 +96,12 @@ What Yokan cannot do as of today, with the reason for each refusal:
 
 - **Iterating a dict in insertion order.** A Python dict iterates in insertion order; the compiled dict is ordered by key. The provided form is `sorted()` iteration (key order, the same in both).
 - **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
-- **Indexing from the back through a variable** (an `xs[i]` whose i turns negative at runtime). The literal `xs[-1]` works.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
+- **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
@@ -110,18 +110,14 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Compiling `every`.** Timers are a development-run feature and do not run headless either; the call is refused by name rather than compiled away.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
-- **Reading a module constant in a handler or a view.** `LIMIT = 10` at module level is a declaration, but reading it inside a handler is not in the dialect yet; write the literal, or hold the value in a State.
-- **Store and model methods that return a value**, `@property` and `@staticmethod`. Keep derived values in a field the view reads.
-- **Most list operations beyond append.** Indexing a list read directly (`items()[0]`, `self.xs[i]`), a variable index, slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, and local lists and dicts. Append with `items.set(items() + [x])`; index through a local with a literal index.
+- **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
+- **Most list operations beyond append and indexing.** Slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, joining two lists, and local lists and dicts. Append with `items.set(items() + [x])`; the row index of a `list_view` covers what `enumerate` would.
 - **str methods, `len(s)` and conversions.** `.upper()`, `.split()`, `.strip()` and the rest, `str()` / `int()` / `float()`, indexing a str. Parse numbers with `strings.to_int` / `strings.to_float`; render values in f-strings.
 - **Format specs other than `.Nf`** in views (width, `,`, `%`, `e`, `d`), and any format spec in a handler f-string.
-- **Dynamic dict keys** (`d[name()] = v`, `"two words"`), `.values()` / `.items()`, and dict literals in handlers.
-- **Some control flow**: `while True`, chained comparisons, conditional expressions (`a if c else b`), a bool local as a bare condition, an early `return` in a helper, helper default and keyword arguments, tuple assignment, nested defs, `print`, `raise`, `assert`.
-- **Keyword arguments to store and model methods**, model constructor arguments (`Node(v=3)`), and the `Optional[T]` spelling (write `T | None`).
-- **`match` on int or str literals, guards and `|` patterns**; `.name` / `.value` on an Enum member; iterating an Enum.
-- **Style values from state** (`size=count()`, `color=name()`), text from a str expression (`text(Store.label)`), and literal option lists in `select` / `tab_bar`. Branch with `if`; put the text in an f-string hole; hold the options in a State.
-- **Component parameters other than str and int**, callback and State parameters, an `if` at the top of a component body, and a `local` holding a list.
-- **The row index in `list_view` beyond indexing** (`lambda: Store.pick(i)`, `if i == sel`, `f"{i + 1}"`).
+- **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
+- **Some control flow**: tuple assignment, nested defs, `print`, `raise`, `assert`, and a conditional expression in a view (branch the elements with `if` there).
+- **Guards and `|` patterns on a sum type's arms** (over int, float, str and bool values both work).
+- **A component parameter that is a value class or an enum**, callback and State parameters, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`).
 - **Types beyond one level**: `list[bool]`, `list[Point]`, `list[list[int]]`, `dict[str, list[str]]`, int-keyed dicts, tuple, set, `Point | None`, value-class fields that are lists or Optionals, model fields holding dicts or value classes.
 - **`@py` signatures beyond scalars and lists** (dict, value class, Optional).
 - **Writing a store field from outside the store** (`Cart.total = 5`). Write it through a method.

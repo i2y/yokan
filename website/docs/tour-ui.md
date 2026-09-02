@@ -50,6 +50,9 @@ text(f"n={n()}", **chip)
 Colors take hex literals or **theme tokens**.
 `windowBg`, `panel`, `surface`, `surfaceHover`, `border`, `text`, `textDim`, `accent` and the rest resolve to the color the theme in effect dictates.
 
+A style value can come from state as well as from a literal: `size=zoom()`, `color=Look.tone`, `padding=Look.pad * 2`.
+The view re-reads it after every event, like everything else it shows.
+
 A theme is applied to a subtree with `theme=`.
 The value can be a literal or a state read, so an app can own its palette as state.
 

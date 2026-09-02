@@ -124,6 +124,7 @@ Optional は状態にもフィールドにも書けます（`last: int | None = 
 絞り込みは walrus の節で見たとおりです。
 
 Enum は普通の `class Mood(Enum)` がそのままコンパイルされます。
+`.name` と `.value` は Python と同じ値を返し（`auto()` は 1 から数えます）、`for m in Mood:` は宣言順にメンバーを回ります。
 `match` の case は `Mood.MEMBER` か `_` で、抜けは指摘されます。
 テキストに入れると Python と同じ `Mood.HAPPY` の形で描画されます。
 

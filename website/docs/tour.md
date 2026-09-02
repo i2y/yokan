@@ -52,6 +52,8 @@ There are three tools for holding state, chosen like this:
 - A **coherent area** (a cart, settings, one screen's state): a **store** (`@store`). Fields alone are fine; operations become methods.
 - **Objects you create many of and want the screen to react to**: a **model** (`@model`).
 
+A value that never changes is not state at all: a module-level literal (`LIMIT = 10`, `NAMES = ["a", "b"]`) is a declaration, and handlers and views read it by name.
+
 ### State
 
 App state is declared at module level with `State` (`from yokan import State`).
@@ -95,7 +97,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 Fields take the same types as State.
 Method bodies are written the same way as handlers, and stores can call each other's methods.
-Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums.
+Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums, and they take keyword arguments and defaults as Python does.
+A method annotated with a return type ends with `return <expression>`, and a handler reads what comes back (`Cart.count()`).
+A view reads state rather than calling methods, so the read-only form is a `@property`: a name for a formula over the fields, usable wherever a field is.
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+A `@staticmethod` is a plain function that happens to live in the class; views may call it, like any pure helper.
 
 ### Models
 

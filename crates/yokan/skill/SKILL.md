@@ -70,6 +70,9 @@ $ yokan build app.py --release                    # ship: the native binary
   statement there (`count.set(5)`, `fs.write_text(...)`,
   `every(...)`) is refused by name; startup work goes in a def
   passed as `run(view, on_start=setup)`.
+- A literal constant (`LIMIT = 10`, `NAMES = ["a", "b"]`) is read
+  by name from handlers and views — it is a declaration, not
+  state.
 
 ## Holding state
 
@@ -119,10 +122,16 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 The decorator returns the singleton, so the class name is the
 store. Fields take the same types as `State` and are read directly
-in views (`Cart.total`); writes go through methods. Methods return
-`None`, take positional int/float/str/bool, `list[...]` of those,
-value classes and Enums, and are written like handlers. Stores can
-call each other's methods.
+in views (`Cart.total`); writes go through methods. Methods take
+int/float/str/bool, `list[...]` of those, value classes and Enums,
+by position or by keyword, with defaults, and are written like
+handlers. Stores can call each other's methods.
+
+A method with a return annotation ends in `return <expression>` and
+answers a handler (`Cart.count()`); a view reads state instead, so
+the read-only form is a `@property` — an expression with a name,
+read like a field. A `@staticmethod` is a plain function living in
+the class and is callable from views too.
 
 ### Models
 
@@ -356,9 +365,16 @@ def tally():
   the branch; assigned in one arm only, it is refused (Python would
   raise NameError on the other path). Loop variables do not outlive
   the loop.
-- Conditions are bool states/fields or explicit comparisons —
-  `if name() == "":`, not `if name():`. `and` / `or` / `not` work in
-  conditions and as bool values over bools.
+- Conditions are bools (a state, a field, a local, a parameter,
+  `while True:`) or explicit comparisons — `if name() == "":`, not
+  `if name():`, because a str has no truth value here. `and` / `or`
+  / `not` work in conditions and as bool values over bools; `0 < n
+  < 10` chains (the middle is read once) and `:=` binds.
+- `a if c else b` is written in a handler over int/float/str/bool;
+  in a view, branch the elements with `if` / `else`.
+- Helpers may return early from a branch, call themselves, take
+  `list[...]` parameters and defaults, and return a value class or
+  a list.
 - Arithmetic is exactly Python's: `/` is always float, `//` floors,
   `%` takes the divisor's sign, `**` is power. Division by zero and
   overflow abort the statement in both runs; the app lives on.
@@ -367,6 +383,10 @@ def tally():
   default)` reads, `"k" in d()` tests, `len(d())` counts, `for k in
   sorted(d())` iterates in key order. Bare `d[k]` and bare
   iteration are refused.
+- Lists: `xs[i]` reads an element with Python's meaning (a
+  negative index counts from the back, past the end aborts the
+  statement); `xs[i] = v` writes one. `len(xs)`, `Cart.xs` and
+  `self.xs` all say the same thing inside a store.
 - Strings: `+`, `==`, `<`, `"-" * 3`, f-strings without format
   specs, `strings.to_int(s, default)` to parse. Methods such as
   `.upper()` and `len(s)` are not in the subset yet.
@@ -505,14 +525,13 @@ Same list as the tour's closing section; each is refused by name.
 - Iterating a dict in insertion order (compiled dicts are
   key-ordered): use `sorted(d())`.
 - Bare `d[k]` reads: use `.get(key, default)`.
-- Indexing from the back through a variable: the literal `xs[-1]`
-  works.
 - Reading a local assigned in one branch only.
 - Negative exponents on `int ** int`: make a side float.
 - Compiling dict state (`run(state={...})`): development only;
   the compiled form is typed `State`.
-- Calling Protocol-bound helpers or value-class methods from views
-  (handlers can; views read fields).
+- Calling Protocol-bound helpers, value-class methods, or a store
+  or model method from views (handlers can; views read fields and
+  `@property`).
 - Iterating a list of models in a view: assemble strings on the
   store side and hand them to `list_view`.
 - A `Weak` field on a store (stores own; the back pointer lives on
@@ -523,37 +542,26 @@ Same list as the tour's closing section; each is refused by name.
 - Compiling `task` and `every`: development-run features today.
 - A component's `local` is identified by call site.
 - Placing one element object twice.
-- Reading a module constant in a handler or view: write the
-  literal, or hold the value in a State.
-- Store and model methods that return a value, `@property`,
-  `@staticmethod`: keep derived values in a field.
-- Most list operations beyond append: direct indexing of a list
-  read (`items()[0]`, `self.xs[i]`), variable indices, slices,
-  `in`, `sorted` / `reversed` / `min` / `max` / `sum`,
-  comprehensions, `enumerate` / `zip`, stepped `range`, local
+- A method that returns `T | None` (scalars, lists, value classes
+  and enums do come back).
+- Most list operations beyond append and indexing: slices, `in`,
+  `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions,
+  `enumerate` / `zip`, stepped `range`, joining two lists, local
   lists and dicts.
 - str methods, `len(s)`, `str()` / `int()` / `float()`, indexing a
   str: parse with `strings.to_int` / `to_float`, render in
   f-strings.
 - Format specs other than `.Nf` in views; any spec in a handler
   f-string.
-- Dynamic dict keys, `.values()` / `.items()`, dict literals in
-  handlers.
-- `while True`, chained comparisons, `a if c else b`, a bool local
-  as a bare condition, early `return` in a helper, helper default
-  and keyword arguments, tuple assignment, nested defs, `print`,
-  `raise`, `assert`.
-- Keyword arguments to store/model methods, model constructor
-  arguments, the `Optional[T]` spelling.
-- `match` on int/str literals, guards, `|` patterns; Enum
-  `.name` / `.value`; iterating an Enum.
-- Style values from state, `text(Store.label)`, literal option
-  lists: branch with `if`, use an f-string hole, hold options in a
-  State.
-- Component parameters other than str and int (callbacks and State
-  included), an `if` at the top of a component body, a list
-  `local`.
-- The `list_view` row index beyond indexing.
+- Iterating a dict's `.values()` / `.items()` (insertion order in
+  Python, key order compiled): iterate `sorted(d())`.
+- Tuple assignment, nested defs, `print`, `raise`, `assert`, and a
+  conditional expression inside a view.
+- Guards and `|` patterns on a sum type's arms (both work over
+  int, float, str and bool values).
+- Component parameters that are value classes or enums (callbacks
+  and State too), and a body that is not one container (a
+  top-level `if`, or several elements — wrap them in a `column`).
 - Types beyond one level (`list[bool]`, `list[Point]`, nested
   containers, int-keyed dicts, tuple, set, `Point | None`, list or
   Optional fields on value classes, dict or value-class fields on

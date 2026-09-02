@@ -80,6 +80,9 @@ $ yokan build app.py --release                    # リリース: ネイティ�
 - **アプリ全体で共有するひとまとまりの状態**（カート、設定、画面ごとの状態）なら**ストア**（`@store`）。フィールドだけでもよく、操作はメソッドになります。
 - **何個も作れて、変更に画面が追随してほしいオブジェクト**なら**モデル**（`@model`）。
 
+変わらない値は状態ではありません。
+モジュールレベルに書いたリテラル（`LIMIT = 10`、`NAMES = ["a", "b"]`）は宣言で、ハンドラからもビューからも名前で読めます。
+
 ### State
 
 アプリの状態は、モジュールレベルに `State` で宣言します（`from yokan import State`）。
@@ -123,7 +126,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 フィールドは State と同じ型が使えます。
 メソッドの中身はハンドラと同じ書き方で、ストア同士の呼び合いもできます。
-メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れます。
+メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れ、キーワード引数と既定値も Python と同じように書けます。
+返り値の型を書いたメソッドは `return <式>` で終わり、ハンドラはその値を受け取れます（`Cart.count()`）。
+ビューは状態を読む場所なのでメソッドは呼べません。読み取り専用の形が `@property` で、式に名前を付けたものとして、フィールドと同じ場所で使えます。
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+ストアの `@staticmethod` はクラスの中に置いた普通の関数で、純粋ヘルパと同じくビューからも呼べます。
 
 ### モデル
 
@@ -287,8 +304,11 @@ def tally():
         total.set(total() + double(i))
 ```
 
-`if` / `elif` / `else`、`while`、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+条件には bool をそのまま書け（`if on:`）、比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）も、`:=` での束縛も使えます。
+条件式（`a if c else b`）はハンドラの中で、int、float、str、bool について書けます。
 純粋ヘルパ（引数と返り値を注釈し、`return 式` で終わる関数）はハンドラからもビューのテキストからも呼べます。
+分岐の途中で `return` してよく、自分自身を呼べ、`list[...]` の引数と既定引数を取り、Value クラスやリストを返せます。
 
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
 
@@ -344,11 +364,14 @@ items.set([])                # クリア
 len(items())                 # 件数
 ```
 
-後ろからの添字はリテラルで書けます。
+添字は Python と同じ意味で読めます。
+負の添字は後ろから数え、範囲外はその文をどちらの実行でも中断します。
 
 ```python
-r = names()
-tail.set(r[-1])              # 最後の要素（短すぎればその文が中断）
+first.set(names()[0])        # 状態を読んで添字を引く
+tail.set(names()[-1])        # 最後の要素（短すぎればその文が中断）
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # ストアの中なら `self.xs[i]` も同じ
 ```
 
 チャートは float か int のリストを描きます。
@@ -370,9 +393,24 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
+行番号は int としてそのまま使えます。
+テキストの中でも、条件でも、その行のハンドラの中でも読めます。
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## 辞書
 
 読みは `.get`、書きはキー単位、数えるのは `len`、回すのは `sorted()` です。
+キーには str なら何でも書けます（リテラル、状態の読み、ループ変数）。
 
 ```python
 prices["cherry"] = 200                 # キー単位の書き込み
@@ -511,6 +549,7 @@ Optional は状態にもフィールドにも書けます（`last: int | None = 
 絞り込みは walrus の節で見たとおりです。
 
 Enum は普通の `class Mood(Enum)` がそのままコンパイルされます。
+`.name` と `.value` は Python と同じ値を返し（`auto()` は 1 から数えます）、`for m in Mood:` は宣言順にメンバーを回ります。
 `match` の case は `Mood.MEMBER` か `_` で、抜けは指摘されます。
 テキストに入れると Python と同じ `Mood.HAPPY` の形で描画されます。
 
@@ -561,6 +600,9 @@ text(f"n={n()}", **chip)
 
 色は 16 進のリテラルのほかに**テーマトークン**が書けます。
 `windowBg`、`panel`、`surface`、`surfaceHover`、`border`、`text`、`textDim`、`accent` などが、その場のテーマに応じた色に解決されます。
+
+スタイルの値はリテラルだけでなく状態からも取れます（`size=zoom()`、`color=Look.tone`、`padding=Look.pad * 2`）。
+ビューは表示する他のものと同じく、イベントのたびに読み直します。
 
 テーマは `theme=` で、その要素から下にまとめて当てます。
 値はリテラルでも状態の読みでもよいので、アプリが自分のパレットを状態として持てます。
@@ -852,12 +894,12 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 
 - **辞書を挿入順で回すこと**。Python の辞書は挿入順、コンパイル後の辞書はキー順で並ぶためです。`sorted()` で回す形（キー順、両方で同じ）が用意されています。
 - **素の `d[k]` 読み**。無いキーの扱いを呼び出し側が決める `.get(key, default)` が読みの形です。
-- **変数での後ろから添字**（`xs[i]` の i が実行時に負になる形）。リテラルの `xs[-1]` は使えます。
 - **片方の分岐でしか代入していないローカルを後で読むこと**。実行されなかったとき Python なら NameError になる形です。if / else 両方で代入すれば読めます。
 - **`int ** int` の負の指数**。結果の型が実行時に変わるためで、どちらかを float にすれば書けます。
 - **辞書 state（`run(state={...})`）のコンパイル**。開発中は動きますが、コンパイルできる形は型付きの `State` です。
 - **Protocol 束縛のヘルパをビューから呼ぶこと**（ハンドラからは呼べます）。
 - **Value クラスのメソッドをビューから呼ぶこと**（ハンドラからは呼べます。ビューはフィールドを読みます）。
+- **ストアとモデルのメソッドをビューから呼ぶこと**。画面を組み立てる側は状態を読むだけで、メソッドは書き込みうるためです。読み取り専用の形は `@property` で、ビューはフィールドと同じように読めます。
 - **モデルのリストをビューで直接繰り返すこと**。今日は、表示したい文字列にストア側で組み立ててから `list_view` に渡します。
 - **ストアのフィールドを `Weak` にすること**。ストアは所有する側なので、所有しない参照はモデル側（逆向きのポインタ）に置きます。
 - **`Vec` などネイティブ側が既に使っている型名**。名指しで断られるので、別名（`V2` など）を選びます。
@@ -866,18 +908,14 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **`every` のコンパイル**。タイマーは開発実行の機能で、ヘッドレス実行でも走りません。黙って外すのではなく、呼び出しを名指しで断ります。
 - コンポーネントの `local` は**呼び出し位置で識別**されます。並べ替えは状態の付け替えです。
 - 同じ要素オブジェクトを**二回置くこと**。一度置いた要素は使い切りで、二か所には置けません。
-- **モジュール定数をハンドラやビューで読むこと**。`LIMIT = 10` はトップレベルの宣言として通りますが、ハンドラの中で読む形はまだありません。リテラルを書くか、値を `State` に持ちます。
-- **値を返すストアとモデルのメソッド**、`@property`、`@staticmethod`。派生値はビューが読むフィールドに持ちます。
-- **append 以外のほとんどのリスト操作**。読んだリストへの直接の添字（`items()[0]`、`self.xs[i]`）、変数による添字、スライス、リストへの `in`、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` / `zip`、step 付きの `range`、ローカルのリストと辞書。追加は `items.set(items() + [x])` で書き、添字はローカルに写してからリテラルで指定します。
+- **`T | None` を返すメソッド**。ストアとモデルのメソッドはスカラー、リスト、Value クラス、Enum を返せますが、Optional の返り値はまだありません。
+- **append と添字以外のほとんどのリスト操作**。スライス、リストへの `in`、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` / `zip`、step 付きの `range`、リスト同士の連結、ローカルのリストと辞書。追加は `items.set(items() + [x])` で書きます。
 - **str のメソッド、`len(s)`、型変換**。`.upper()`、`.split()`、`.strip()` など、`str()` / `int()` / `float()`、str への添字。数値の解釈は `strings.to_int` / `strings.to_float` で、値の文字列化は f-string で行います。
 - **`.Nf` 以外の書式指定**（ビューでの幅、`,`、`%`、`e`、`d`）と、ハンドラ内の f-string での書式指定すべて。
-- **辞書の動的なキー**（`d[name()] = v`、`"two words"`）、`.values()` / `.items()`、ハンドラ内の辞書リテラル。
-- **一部の制御構文**：`while True`、連鎖比較、条件式（`a if c else b`）、bool ローカルの裸の条件、ヘルパ内の早期 `return`、ヘルパの既定引数とキーワード引数、タプル代入、入れ子の def、`print`、`raise`、`assert`。
-- **ストアとモデルのメソッドへのキーワード引数**、モデルのコンストラクタ引数（`Node(v=3)`）、`Optional[T]` の綴り（`T | None` と書きます）。
-- **int や str のリテラルに対する `match`、ガード、`|` パターン**、Enum メンバーの `.name` / `.value`、Enum の反復。
-- **状態から決まるスタイル値**（`size=count()`、`color=name()`）、str 式からのテキスト（`text(Store.label)`）、`select` / `tab_bar` のリテラルの選択肢。スタイルは `if` で分岐し、テキストは f-string の穴に置き、選択肢は `State` に持ちます。
-- **str と int 以外のコンポーネント引数**、コールバックと State の引数、コンポーネント本体の先頭の `if`、リストを持つ `local`。
-- **`list_view` の行番号を添字以外に使うこと**（`lambda: Store.pick(i)`、`if i == sel`、`f"{i + 1}"`）。
+- **辞書の `.values()` / `.items()` の反復**。Python は挿入順、コンパイル後はキー順に回るためです。`sorted(d())` を回して `d().get(k, default)` で読みます。
+- **一部の制御構文**：タプル代入、入れ子の def、`print`、`raise`、`assert`、そしてビューの中の条件式（ビューでは要素を `if` で分けます）。
+- **直和型の腕に付けるガードと `|` パターン**（int、float、str、bool の値に対する `match` ではどちらも書けます）。
+- **Value クラスや Enum のコンポーネント引数**、コールバックと State の引数、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
 - **一段より深い型**：`list[bool]`、`list[Point]`、`list[list[int]]`、`dict[str, list[str]]`、int キーの辞書、tuple、set、`Point | None`、リストや Optional を持つ値クラスのフィールド、辞書や値クラスを持つモデルのフィールド。
 - **スカラーとリスト以外の `@py` の署名**（辞書、値クラス、Optional）。
 - **ストアの外からのフィールド書き込み**（`Cart.total = 5`）。メソッド経由で書きます。

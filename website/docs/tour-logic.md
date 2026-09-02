@@ -21,8 +21,10 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Available: `if` / `elif` / `else`, `while`, `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
-A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text.
+Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
+A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
+A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
 
@@ -78,11 +80,13 @@ items.set([])                # clear
 len(items())                 # count
 ```
 
-Indexing from the back takes a literal.
+Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.
 
 ```python
-r = names()
-tail.set(r[-1])              # last element (too short: the statement aborts)
+first.set(names()[0])        # a state read, indexed
+tail.set(names()[-1])        # last element (too short: the statement aborts)
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # `self.xs[i]` inside the store says the same
 ```
 
 Charts draw lists of float or int.
@@ -104,9 +108,23 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
+The row index is an int the row can use anywhere: in the text, in a condition, and in the row's own handlers.
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## Dicts
 
 Read with `.get`, write per key, count with `len`, iterate with `sorted()`.
+A key is any str the app can name — a literal, a state read, a loop variable.
 
 ```python
 prices["cherry"] = 200                 # per-key write

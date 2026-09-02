@@ -51,6 +51,9 @@ $ yokan build app.py --release                    # リリース: ネイティ�
 - **アプリ全体で共有するひとまとまりの状態**（カート、設定、画面ごとの状態）なら**ストア**（`@store`）。フィールドだけでもよく、操作はメソッドになります。
 - **何個も作れて、変更に画面が追随してほしいオブジェクト**なら**モデル**（`@model`）。
 
+変わらない値は状態ではありません。
+モジュールレベルに書いたリテラル（`LIMIT = 10`、`NAMES = ["a", "b"]`）は宣言で、ハンドラからもビューからも名前で読めます。
+
 ### State
 
 アプリの状態は、モジュールレベルに `State` で宣言します（`from yokan import State`）。
@@ -94,7 +97,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 フィールドは State と同じ型が使えます。
 メソッドの中身はハンドラと同じ書き方で、ストア同士の呼び合いもできます。
-メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れます。
+メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れ、キーワード引数と既定値も Python と同じように書けます。
+返り値の型を書いたメソッドは `return <式>` で終わり、ハンドラはその値を受け取れます（`Cart.count()`）。
+ビューは状態を読む場所なのでメソッドは呼べません。読み取り専用の形が `@property` で、式に名前を付けたものとして、フィールドと同じ場所で使えます。
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+ストアの `@staticmethod` はクラスの中に置いた普通の関数で、純粋ヘルパと同じくビューからも呼べます。
 
 ### モデル
 

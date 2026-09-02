@@ -81,6 +81,8 @@ There are three tools for holding state, chosen like this:
 - A **coherent area** (a cart, settings, one screen's state): a **store** (`@store`). Fields alone are fine; operations become methods.
 - **Objects you create many of and want the screen to react to**: a **model** (`@model`).
 
+A value that never changes is not state at all: a module-level literal (`LIMIT = 10`, `NAMES = ["a", "b"]`) is a declaration, and handlers and views read it by name.
+
 ### State
 
 App state is declared at module level with `State` (`from yokan import State`).
@@ -124,7 +126,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 Fields take the same types as State.
 Method bodies are written the same way as handlers, and stores can call each other's methods.
-Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums.
+Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums, and they take keyword arguments and defaults as Python does.
+A method annotated with a return type ends with `return <expression>`, and a handler reads what comes back (`Cart.count()`).
+A view reads state rather than calling methods, so the read-only form is a `@property`: a name for a formula over the fields, usable wherever a field is.
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+A `@staticmethod` is a plain function that happens to live in the class; views may call it, like any pure helper.
 
 ### Models
 
@@ -287,8 +303,10 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Available: `if` / `elif` / `else`, `while`, `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
-A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text.
+Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
+A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
+A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
 
@@ -344,11 +362,13 @@ items.set([])                # clear
 len(items())                 # count
 ```
 
-Indexing from the back takes a literal.
+Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.
 
 ```python
-r = names()
-tail.set(r[-1])              # last element (too short: the statement aborts)
+first.set(names()[0])        # a state read, indexed
+tail.set(names()[-1])        # last element (too short: the statement aborts)
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # `self.xs[i]` inside the store says the same
 ```
 
 Charts draw lists of float or int.
@@ -370,9 +390,23 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
+The row index is an int the row can use anywhere: in the text, in a condition, and in the row's own handlers.
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## Dicts
 
 Read with `.get`, write per key, count with `len`, iterate with `sorted()`.
+A key is any str the app can name — a literal, a state read, a loop variable.
 
 ```python
 prices["cherry"] = 200                 # per-key write
@@ -512,6 +546,19 @@ Narrowing is as shown in the walrus sections.
 Enums are ordinary `class Mood(Enum)` and compile as-is.
 `match` arms are `Mood.MEMBER` or `_`, and missing arms are reported.
 In text they render exactly as Python does: `Mood.HAPPY`.
+`.name` and `.value` read what Python reads (`auto()` counts from 1), and `for m in Mood:` walks the members in declaration order.
+
+`match` also takes int, float, str and bool values, with `|` alternatives and guards:
+
+```python
+match code():
+    case 0 | 1:
+        note.set("early")
+    case n if n > 100:
+        note.set("far")
+    case _:
+        note.set("middle")
+```
 
 ## Components
 
@@ -560,6 +607,9 @@ text(f"n={n()}", **chip)
 
 Colors take hex literals or **theme tokens**.
 `windowBg`, `panel`, `surface`, `surfaceHover`, `border`, `text`, `textDim`, `accent` and the rest resolve to the color the theme in effect dictates.
+
+A style value can come from state as well as from a literal: `size=zoom()`, `color=Look.tone`, `padding=Look.pad * 2`.
+The view re-reads it after every event, like everything else it shows.
 
 A theme is applied to a subtree with `theme=`.
 The value can be a literal or a state read, so an app can own its palette as state.
@@ -862,12 +912,12 @@ What Yokan cannot do as of today, with the reason for each refusal:
 
 - **Iterating a dict in insertion order.** A Python dict iterates in insertion order; the compiled dict is ordered by key. The provided form is `sorted()` iteration (key order, the same in both).
 - **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
-- **Indexing from the back through a variable** (an `xs[i]` whose i turns negative at runtime). The literal `xs[-1]` works.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
+- **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
@@ -876,18 +926,14 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Compiling `every`.** Timers are a development-run feature and do not run headless either; the call is refused by name rather than compiled away.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
-- **Reading a module constant in a handler or a view.** `LIMIT = 10` at module level is a declaration, but reading it inside a handler is not in the dialect yet; write the literal, or hold the value in a State.
-- **Store and model methods that return a value**, `@property` and `@staticmethod`. Keep derived values in a field the view reads.
-- **Most list operations beyond append.** Indexing a list read directly (`items()[0]`, `self.xs[i]`), a variable index, slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, and local lists and dicts. Append with `items.set(items() + [x])`; index through a local with a literal index.
+- **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
+- **Most list operations beyond append and indexing.** Slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, joining two lists, and local lists and dicts. Append with `items.set(items() + [x])`; the row index of a `list_view` covers what `enumerate` would.
 - **str methods, `len(s)` and conversions.** `.upper()`, `.split()`, `.strip()` and the rest, `str()` / `int()` / `float()`, indexing a str. Parse numbers with `strings.to_int` / `strings.to_float`; render values in f-strings.
 - **Format specs other than `.Nf`** in views (width, `,`, `%`, `e`, `d`), and any format spec in a handler f-string.
-- **Dynamic dict keys** (`d[name()] = v`, `"two words"`), `.values()` / `.items()`, and dict literals in handlers.
-- **Some control flow**: `while True`, chained comparisons, conditional expressions (`a if c else b`), a bool local as a bare condition, an early `return` in a helper, helper default and keyword arguments, tuple assignment, nested defs, `print`, `raise`, `assert`.
-- **Keyword arguments to store and model methods**, model constructor arguments (`Node(v=3)`), and the `Optional[T]` spelling (write `T | None`).
-- **`match` on int or str literals, guards and `|` patterns**; `.name` / `.value` on an Enum member; iterating an Enum.
-- **Style values from state** (`size=count()`, `color=name()`), text from a str expression (`text(Store.label)`), and literal option lists in `select` / `tab_bar`. Branch with `if`; put the text in an f-string hole; hold the options in a State.
-- **Component parameters other than str and int**, callback and State parameters, an `if` at the top of a component body, and a `local` holding a list.
-- **The row index in `list_view` beyond indexing** (`lambda: Store.pick(i)`, `if i == sel`, `f"{i + 1}"`).
+- **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
+- **Some control flow**: tuple assignment, nested defs, `print`, `raise`, `assert`, and a conditional expression in a view (branch the elements with `if` there).
+- **Guards and `|` patterns on a sum type's arms** (over int, float, str and bool values both work).
+- **A component parameter that is a value class or an enum**, callback and State parameters, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`).
 - **Types beyond one level**: `list[bool]`, `list[Point]`, `list[list[int]]`, `dict[str, list[str]]`, int-keyed dicts, tuple, set, `Point | None`, value-class fields that are lists or Optionals, model fields holding dicts or value classes.
 - **`@py` signatures beyond scalars and lists** (dict, value class, Optional).
 - **Writing a store field from outside the store** (`Cart.total = 5`). Write it through a method.

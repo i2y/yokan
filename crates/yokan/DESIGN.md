@@ -345,3 +345,159 @@ rendered head names the location and the category, and most messages
 name the category themselves ("`print(...)` is not in the dialect
 yet — …"), so the head now adds its prefix only to the messages that
 do not.
+
+## A module constant is a declaration, and the read is its value
+
+`LIMIT = 10` at module level was already a declaration — the compiled
+app reads the module rather than running it — but reading the name
+inside a handler was refused, so apps wrote the literal in six
+places. A constant is now resolved before the scan and written where
+it is read: the name and the value are interchangeable, because
+CPython evaluates the binding once at import and the compiled app has
+no import step at all. Locals, parameters and loop variables shadow
+it exactly as they do in Python.
+
+The collector is deliberately wider than the scan's own test for a
+constant: anything it takes that the scan does not count as a
+declaration is refused at the binding, as a module-level statement,
+so guessing wide cannot change what an app does.
+
+## A method may answer; a view may not ask
+
+A store or model method can now be annotated with a return type and
+end with `return <expression>`, and handlers read what comes back.
+Views cannot call it, and that is not a gap: building a view reads
+the world and a method may write to it, so the substrate refuses the
+call outright. The read-only form is `@property` — a single
+`return <expression>` over the store's fields, which the translator
+writes where it is read. A property is a name for a formula, so a
+view can use it wherever a field goes, and nothing about the view's
+purity changes.
+
+`@staticmethod` completes the set: a plain function that happens to
+live in the class, emitted as the same static a module-level helper
+becomes, and callable from views for the same reason.
+
+## One index, Python's meaning
+
+`items()[0]` worked only through a local, `self.xs[i]` not at all,
+`len(self.xs)` was refused where `len(Cart.xs)` was accepted, and a
+variable index was refused everywhere because it might turn negative.
+The four spellings are one story now: a list read, a store or model
+field written either way, or a local, indexed by a literal or an
+expression. A negative index counts from the back — the index is
+bound to a local and folded when it is negative — and an index past
+the end stops that statement in both runs, which is the containment
+the tour already promised for the literal case.
+
+The loop variable of `for i in range(n)` needed a fix underneath:
+the substrate bound it to the error type so the body would soft-pass,
+and the list-index rule then rejected it by name. A range now binds
+Int and a list binds its element type, which is what the syntax says.
+
+## The call site is Python's
+
+Keyword arguments, default arguments, model constructor arguments
+(`Acc(v=3)`) and the `Optional[T]` spelling were each refused for
+their own reason, and each refusal was arbitrary: the information
+needed to accept them was already in the signature. Arguments are
+now put back into the signature's order at the call site, defaults
+are filled from the def (literals only, so the value written is the
+value Python would have bound), a constructor with arguments builds
+the model and writes the fields the way a synthesized `__init__`
+does, and `Optional[T]` is rewritten to `T | None` before anything
+reads it.
+
+## Conditions, chains and the conditional expression
+
+A bool is a condition: `if on:` over a bool state, field, local or
+parameter asks nothing about truthiness, so it needed no comparison —
+and `while True:` is the same rule. `0 < n < 10` chains, with the
+middle read once (a plain read is written twice, anything else is
+bound to a local first), and `:=` binds outside a None test.
+`a if c else b` lowers in a handler to a local and an if/else, each
+branch keeping its own preparatory lines so an expression is still
+evaluated only on the path that uses it; a view has nowhere to put
+those lines, so there it stays refused with the shape to write
+instead.
+
+The mechanism under all of this is a statement prelude: an
+expression may ask for lines before the statement it appears in.
+Binding a model's receiver, wrapping a negative index and lowering a
+conditional expression all use it.
+
+## A helper is an ordinary function
+
+Helpers took the four scalars, no defaults, and a single trailing
+`return`. They now take and return what a method parameter does —
+lists, value classes, enums — return early from a branch, call
+themselves, and fill in default arguments at the call site. What is
+still refused is refused for its own reason: an Optional return has
+no lowering yet, and joining two lists is a list operation the
+dialect does not have, not a fact about helpers.
+
+## A literal reads best where a literal was written
+
+`text(Cart.label)` asked for an f-string wrapper, and
+`select(options=["a", "b"])` asked for a state cell to hold two
+constants. Both now take what the reader would write: a str-typed
+expression becomes the text (through the same interpolation the
+hole would have produced, so a literal inside a concatenation never
+has to survive as a quote inside a quote), and a list of string
+literals is lowered for `options:` / `labels:` directly by the
+engine.
+
+## `match` over values, and an Enum that answers questions
+
+pixie's `case` matches enum members and sum-type variants, so the
+dialect's `match` took only those. A `match` over int, float, str or
+bool is the if/elif chain it always was: the subject is read once
+into a local, each arm compares against it, `|` alternatives become
+`||`, and a guard that fails falls through to the next arm — which
+is exactly Python's rule.
+
+An Enum's `.name` and `.value` are answered where they are known: a
+member written out (`Mood.SAD.value`) is a constant, and a value that
+only arrives at runtime goes through a static synthesized for that
+enum, beside the one that renders `Mood.SAD` in text. `auto()` counts
+from 1 and an explicit value is taken as written, so the number the
+compiled app reads is the number CPython read. `for m in Mood:` walks
+the members in declaration order, which is the order Python walks
+them.
+
+## A style value is a value
+
+`size=`, `color=`, `padding=` and the rest took a literal, so an app
+that wanted a size to follow state had to duplicate the element under
+an `if`. They now take what a view can read: a state, a field, or
+arithmetic over them, re-read on every rebuild like anything else the
+view shows. The interpreting side always did this — it is Python
+calling a function — so this was a tier disagreement rather than a
+rule, and the fix landed in both halves: the translator stopped
+demanding a literal, and the engine's numeric property lowering
+learned the arithmetic its own documentation already promised
+(`fontSize: unit * qty`).
+
+## The row index is part of the row
+
+A `list_view` row builder takes an index, and the index was usable
+only to look the row up (`items()[i]`). Everything a list actually
+does with its position — numbering, marking the selected row, a
+delete button for that row — was outside the dialect. The repeater
+underneath binds the row's value; it now binds the row's index too
+(`for row, i in xs` in the substrate), so the index reads like any
+other local: in the text, in a condition, and in the row's handlers.
+A handler that reads it becomes a store function that TAKES it, with
+the repeater passing it at the call site — the element itself comes
+back from the index (`items[i]`), so one parameter carries the row.
+
+## A dict key is a str, not an identifier
+
+Keys had to be string literals shaped like identifiers, which is a
+rule about the emitter's quoting, not about dictionaries. A key is
+now any str the app can name — a literal with spaces, a state read, a
+loop variable — for writing, for `.get`, and for `in`. What stays
+refused is `.values()` / `.items()`, and for a reason that will not
+change: Python walks them in insertion order and the compiled dict is
+ordered by key, so the honest form is `sorted(d())` with
+`.get(k, default)`.
