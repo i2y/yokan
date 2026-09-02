@@ -170,6 +170,8 @@ def view():
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
+`data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
+列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 

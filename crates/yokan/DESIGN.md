@@ -302,3 +302,23 @@ instead. The rule going forward: a refusal that is not a decision
 appears in the list until the construct lands, and leaves the list
 in the same change that lands it; the guide's list is the same
 list. The design refusals stay at the top, worded as decisions.
+
+## The table element says what it draws
+
+`data_table` sat in the element catalog with nothing behind it: no
+demo used it, no sentence said what it does, and the landing page's
+"tables" pointed at it. It is not a bare container — the engine
+draws the frame, shades the first `row` child as a header and
+alternates the shading of the data rows below it — so the fix was
+to write that contract into the tour, the guide and the stub, and
+to add `demo/table.py`, which lines its columns up by giving the
+cells of one column the same `grow` share and setting the numeric
+column with `align="right"`. An element the catalog names but
+nothing demonstrates is a claim without a witness; every element in
+the catalog should have one.
+
+The same change made the gallery's own claim exact. "Every one of
+them passes the gate" was written when the sweep gated every demo,
+and it stayed after four dict-state demos became development-only
+by design. The sentence now names the exception and points at the
+gallery, where each of the four already says so.

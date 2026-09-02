@@ -172,6 +172,7 @@ def view():
 
 The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
+`data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
 The samples import elements bare — `from yokan import button, column, run, …`.
 If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 

@@ -89,6 +89,9 @@ the initial state, right after launch.
 #### todo — the classic todo list
 <img src="screenshots/todo.png" width="360">
 
+#### table — data_table: the first `row` is the header, later `row`s are data rows shaded in alternation, and the frame comes with the element
+<img src="screenshots/table.png" width="360">
+
 #### dialog — the modal: existing IS being open, so wrap it in `if`
 <img src="screenshots/dialog.png" width="360">
 

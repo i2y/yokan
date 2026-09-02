@@ -201,6 +201,7 @@ def view():
 
 The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
+`data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
 The samples import elements bare — `from yokan import button, column, run, …`.
 If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
@@ -778,6 +779,10 @@ mypy has a known limitation: it does not apply type transformations made by clas
 Under mypy, `@store` method calls are therefore misreported as "self is not passed".
 We recommend pyright for checking.
 
+A type checker knows Python's types, not the dialect's boundary.
+`yokan check app.py` answers that half: it runs the translator over every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
+No compiler is started, so it is the check to run while editing.
+
 ## Headless runs and the gate
 
 Running without a window is where verification starts.
@@ -839,7 +844,7 @@ $ yokan build demo/opsboard/app.py --release
 ```
 
 The small examples live as a set under `demo/` (counter, todo, ledger, moods, geometry, cards, styled, tryfetch, pyops and more).
-Every one of them passes the gate.
+Every one of them passes the gate, except the four that hold state in a dict (`run(state={...})`) — those are development-only by design, and the gallery says so on each.
 
 ## What does not work yet
 

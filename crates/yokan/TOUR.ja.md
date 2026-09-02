@@ -199,6 +199,8 @@ def view():
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
+`data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
+列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
@@ -765,6 +767,11 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 このため mypy では `@store` のメソッド呼び出しが「self が渡されていない」と誤検出されます。
 チェックには pyright を推奨します。
 
+型チェッカーが見るのは Python の型で、方言の境界ではありません。
+そちらは `yokan check app.py` が受け持ちます。
+アプリが import するモジュールをすべて翻訳器に通し、最初の拒否を `ファイル:行:列` の形で示し、方言の内側なら何も言いません。
+コンパイラを起動しないので、編集しながら何度でも回せます。
+
 ## ヘッドレス実行とゲート
 
 アプリはウィンドウなしでも動かせます。
@@ -826,7 +833,8 @@ $ yokan build demo/opsboard/app.py --release
 ```
 
 小さな例は `demo/` にひとそろいあります（counter、todo、ledger、moods、geometry、cards、styled、tryfetch、pyops など）。
-どれもゲートを通っています。
+辞書で状態を持つ 4 本（`run(state={...})`）を除いて、どれもゲートを通っています。
+その 4 本は設計上の開発専用で、ギャラリーにもそう書いてあります。
 
 ## 今できないこと
 

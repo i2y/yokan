@@ -85,6 +85,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### todo — 定番の TODO リスト
 <img src="images/demos/todo.png" width="360">
 
+#### table — data_table。最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になり、枠は要素が描く
+<img src="images/demos/table.png" width="360">
+
 #### dialog — モーダル。「存在すること」が「開いていること」なので、`if` で包む
 <img src="images/demos/dialog.png" width="360">
 

@@ -224,8 +224,10 @@ The catalog: `text`, `button`, `text_field`, `checkbox`, `switch`,
 `progress`, `spinner`. Containers are opened with `with`; elements
 add themselves to the open container. `grid(columns=, rows=)` lays
 equal tracks and a button spans cells with `col_span=` /
-`row_span=`. An element object is placed once; build fresh ones on
-every call.
+`row_span=`. In `data_table` the first `row` child is the header
+and later `row` children are data rows shaded in alternation;
+columns line up when the cells of one column share a `grow`. An
+element object is placed once; build fresh ones on every call.
 
 **Text holes** are f-strings. int, str, float, bool and Enum
 values render exactly as Python's `str()` (`2.0`, `True`,
