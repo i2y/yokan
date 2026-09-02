@@ -192,6 +192,10 @@ def task(
     on_error: Optional[Callable[[BaseException], Any]] = None,
 ) -> None: ...
 def py(f: Callable[P, R]) -> Callable[P, R]: ...
+# A line on stderr, from either run. `print` writes to stdout, which
+# is where a headless run's screen dump goes, so the dialect asks for
+# this instead.
+def log(msg: str) -> int: ...
 
 # Declared Rust crates (the app's `# [tool.yokan.crates]` block):
 # `crates.<name>.<fn>(...)` calls the crate in both runs.

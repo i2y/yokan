@@ -22,6 +22,7 @@ def tally():
 ```
 
 Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+`log("…")` writes a line to stderr from either run, and `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
 A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
@@ -104,6 +105,18 @@ The shipped app compiles this to a one-element append, so there is no copy cost.
 items.set(items() + [x])     # append
 items.set([])                # clear
 len(items())                 # count
+```
+
+The rest of Python's list vocabulary works in handlers: `in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` and `zip`, a stepped `range`, and joining two lists.
+A local list carries its element type in the annotation, which is what the compiled side reads.
+
+```python
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
 ```
 
 Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.

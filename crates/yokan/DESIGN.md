@@ -578,3 +578,64 @@ module gets a dataclass of the same shape, and the app's `@value`
 twin serves the interpreted run), and `T | None` — with the
 narrowing that goes with it: an optional local reads as its own
 name inside `if v is not None:`, which is what Python means there.
+
+## The list vocabulary, and where each piece comes from
+
+`in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`,
+comprehensions, `enumerate` / `zip`, a stepped `range` and joining
+two lists were all refused, and each was refused for a different
+missing piece rather than for a rule. They arrive from three places,
+which is worth writing down because the shape repeats:
+
+- What CPython answers and the engine has no opinion about — sorting,
+  the aggregates, membership, slicing, joining — is a static in the
+  standard library, per element type, written against Python's
+  semantics (an empty `min` raises there and traps here).
+- What is a loop wearing another name — a comprehension, `enumerate`,
+  `zip`, a stepped range — is lowered to the loop, with the
+  repeater's own index carrying `enumerate`.
+- What only needed a type — a local list — asks for the annotation
+  that says its element type, exactly as a state does.
+
+`out = out + [x]` is still the append the compiled app performs in
+place, whether `out` is a state or a local.
+
+## `print` writes where the screen does not
+
+A compiled `print` would write to stdout, and stdout is where a
+headless run's screen dump goes — the one channel the gate compares.
+So `print` keeps a refusal that names `log("…")`, which writes the
+same line to stderr from both runs: one implementation, no channel
+to share with the dump. `assert` and `raise` end the statement the
+way Python's exception does, contained by the runtime, and both are
+refused inside a `try` where the two runs would disagree about what
+the `except` catches.
+
+## A store field is written like any other field
+
+`Cart.total = 5` from outside the store was refused with "write it
+through a method", which is a style rule the language was enforcing:
+Python allows the write and so does the compiled side. It is allowed
+now, and the guidance stays guidance — a method is where an update
+with an invariant belongs. Models already worked this way, so the
+two agree.
+
+Names the compiled side reads as syntax (`flags`, `state`, `case`
+and the rest) are refused with a reason instead of reaching the
+emitter, where they became a parse error inside generated code —
+the compiler's bug to prevent, by D10.
+
+## One reader for types, one for defaults
+
+Every declaration had its own narrow table: a state's annotation
+knew `list[str]` but not `list[Point]`, a store field knew
+`dict[str, int]` but not `dict[str, list[str]]`, a model field knew
+scalars only. The substrate takes all of them — nested lists,
+dicts keyed by str or int, optionals of any of it, value classes
+inside containers — so the tables became one reader for annotations
+and one for defaults, and the combinations follow from the two.
+
+`tuple` and `set` stay out, and not for want of a table: a tuple has
+no compiled shape yet, and a Python set iterates in an order the
+compiled side would not reproduce — the same reason a dict iterates
+by key here.

@@ -22,6 +22,7 @@ def tally():
 ```
 
 `if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`log("…")` はどちらの実行でも stderr に一行書き、`assert` と `raise` は Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
 条件には bool をそのまま書け（`if on:`）、比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）も、`:=` での束縛も使えます。
 条件式（`a if c else b`）はハンドラの中で、int、float、str、bool について書けます。
 純粋ヘルパ（引数と返り値を注釈し、`return 式` で終わる関数）はハンドラからもビューのテキストからも呼べます。
@@ -108,6 +109,19 @@ text(f"{value():.2e}")          # 1.50e+00
 items.set(items() + [x])     # 追記
 items.set([])                # クリア
 len(items())                 # 件数
+```
+
+Python のリスト操作はハンドラの中でそのまま使えます。
+`in`、スライス、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` と `zip`、step 付きの `range`、二つのリストの連結です。
+ローカルのリストは注釈で要素の型を書きます（コンパイル側がそれを読みます）。
+
+```python
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
 ```
 
 添字は Python と同じ意味で読めます。

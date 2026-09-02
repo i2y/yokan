@@ -934,3 +934,260 @@ pub fn py_format_str(s: &str, spec: &str) -> String {
     };
     pad(body, String::new(), &sp, false)
 }
+
+
+// ---- Python's list, the operations the dialect leans on -----------
+// The same arrangement the str twins use: written against CPython's
+// semantics (empty `min` raises, a slice clamps, `sorted` is stable),
+// and the gate holds the two runs together.
+
+pub fn py_list_contains_str(xs: Vec<String>, v: &str) -> bool {
+    xs.iter().any(|x| x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_str(xs: Vec<String>, a: i64, b: i64) -> Vec<String> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_str(a: Vec<String>, b: Vec<String>) -> Vec<String> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_str(xs: Vec<String>) -> Vec<String> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_int(xs: Vec<i64>, v: i64) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_int(xs: Vec<i64>, a: i64, b: i64) -> Vec<i64> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_int(a: Vec<i64>, b: Vec<i64>) -> Vec<i64> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_int(xs: Vec<i64>) -> Vec<i64> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_float(xs: Vec<f64>, v: f64) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_float(xs: Vec<f64>, a: i64, b: i64) -> Vec<f64> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_float(a: Vec<f64>, b: Vec<f64>) -> Vec<f64> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_float(xs: Vec<f64>) -> Vec<f64> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_bool(xs: Vec<bool>, v: bool) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_bool(xs: Vec<bool>, a: i64, b: i64) -> Vec<bool> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_bool(a: Vec<bool>, b: Vec<bool>) -> Vec<bool> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_bool(xs: Vec<bool>) -> Vec<bool> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_sorted_str(xs: Vec<String>) -> Vec<String> {
+    let mut out = xs;
+    out.sort();
+    out
+}
+
+pub fn py_list_sorted_int(xs: Vec<i64>) -> Vec<i64> {
+    let mut out = xs;
+    out.sort();
+    out
+}
+
+pub fn py_list_sorted_float(xs: Vec<f64>) -> Vec<f64> {
+    let mut out = xs;
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+/// min(xs) / max(xs) — an empty list raises in Python, and traps here.
+pub fn py_list_min_int(xs: Vec<i64>) -> i64 {
+    if xs.is_empty() {
+        panic!("min() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v < m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_max_int(xs: Vec<i64>) -> i64 {
+    if xs.is_empty() {
+        panic!("max() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v > m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_sum_int(xs: Vec<i64>) -> i64 {
+    let mut t: i64 = 0;
+    for v in xs {
+        t += v;
+    }
+    t
+}
+
+pub fn py_min2_int(a: i64, b: i64) -> i64 {
+    if b < a { b } else { a }
+}
+
+pub fn py_max2_int(a: i64, b: i64) -> i64 {
+    if b > a { b } else { a }
+}
+
+/// min(xs) / max(xs) — an empty list raises in Python, and traps here.
+pub fn py_list_min_float(xs: Vec<f64>) -> f64 {
+    if xs.is_empty() {
+        panic!("min() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v < m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_max_float(xs: Vec<f64>) -> f64 {
+    if xs.is_empty() {
+        panic!("max() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v > m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_sum_float(xs: Vec<f64>) -> f64 {
+    let mut t: f64 = 0.0;
+    for v in xs {
+        t += v;
+    }
+    t
+}
+
+pub fn py_min2_float(a: f64, b: f64) -> f64 {
+    if b < a { b } else { a }
+}
+
+pub fn py_max2_float(a: f64, b: f64) -> f64 {
+    if b > a { b } else { a }
+}
+
+pub fn py_abs_int(v: i64) -> i64 {
+    if v == i64::MIN {
+        panic!("abs() of the smallest integer overflows");
+    }
+    v.abs()
+}
+
+pub fn py_abs_float(v: f64) -> f64 {
+    v.abs()
+}
+
+
+/// `log(msg)` — a line on stderr, from either run. stdout is where
+/// the headless dump lives, so a message that is not part of the
+/// screen does not go there.
+pub fn log_line(msg: &str) -> i64 {
+    eprintln!("{msg}");
+    0
+}
+
+/// `assert` and `raise`, once they have nothing left to say: end the
+/// statement the way a raised exception ends it. The runtime contains
+/// the abort, so the app keeps running.
+pub fn py_abort(msg: &str) -> i64 {
+    panic!("{msg}");
+}

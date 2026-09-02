@@ -387,6 +387,7 @@ class Translator:
         self.async_handlers = set()   # handler names emitted as `async fn`
         self.escape_structs = set()   # value classes crossing an @py signature
         self.timers = []          # module-level every(seconds, fn) declarations
+        self.in_try = False       # inside a try body: a raise would be caught there
         self.timer_handlers = {}  # handler name -> period in ms
         self.view = None
 
@@ -479,7 +480,10 @@ class Translator:
                                 raise Untranslatable(init, "a model reference starts as None — wire it in a handler")
                             return (f"{side.id}?", "nil")
                 if base is None:
-                    raise Untranslatable(ann, "an optional state is `int | None`, `float | None`, `str | None`, `bool | None` or a model reference — an optional value class or list is not in the dialect yet")
+                    wider = self._pix_ty(sl)
+                    if wider is None:
+                        raise Untranslatable(ann, "an optional state is a scalar, a list, a dict, a value class, an Enum or a model reference, each `| None`")
+                    return (wider, self._literal_of(call.args[0], wider))
                 init = call.args[0]
                 if isinstance(init, ast.Constant) and init.value is None:
                     return (f"{base}?", "nil")
@@ -515,9 +519,9 @@ class Translator:
                 and sl.value.id == "list"
                 and isinstance(sl.slice, ast.Name)
             ):
-                inner = {"str": "String", "int": "Int", "float": "Float"}.get(sl.slice.id)
+                inner = self._pix_ty(sl.slice)
                 if inner is None:
-                    raise Untranslatable(ann, f"list[{sl.slice.id}] is not in the dialect yet — list elements are int, float or str")
+                    raise Untranslatable(ann, f"list[{self._src(sl.slice)}] is not a state type — list elements are int, float, str, bool, a value class, an Enum, or a list or dict of those")
                 field = (f"List<{inner}>", self._list_literal(call.args[0], inner))
             elif (
                 isinstance(sl, ast.Subscript)
@@ -528,16 +532,18 @@ class Translator:
                 and isinstance(sl.slice.elts[0], ast.Name)
                 and isinstance(sl.slice.elts[1], ast.Name)
             ):
-                if sl.slice.elts[0].id != "str":
-                    raise Untranslatable(ann, "a dict state keys by str — int keys are not in the dialect yet")
-                inner = {"str": "String", "int": "Int", "float": "Float", "bool": "Bool"}.get(sl.slice.elts[1].id)
+                key = self._pix_ty(sl.slice.elts[0])
+                if key not in ("String", "Int"):
+                    raise Untranslatable(ann, "a dict keys by str or int")
+                inner = self._pix_ty(sl.slice.elts[1])
                 if inner is None:
-                    raise Untranslatable(ann, f"dict[str, {sl.slice.elts[1].id}] is not in the dialect yet — dict values are int, float, str or bool")
-                field = (f"Map<String, {inner}>", self._dict_literal(call.args[0], inner))
-            elif isinstance(sl, ast.Subscript) and isinstance(sl.value, ast.Name) and sl.value.id == "Optional":
-                raise Untranslatable(ann, "spell an optional state as `T | None` — `Optional[T]` is not read yet")
+                    raise Untranslatable(ann, f"dict[{self._src(sl.slice.elts[0])}, {self._src(sl.slice.elts[1])}] is not a state type — dict values are int, float, str, bool, a value class, an Enum, or a list or dict of those")
+                field = (f"Map<{key}, {inner}>", self._dict_literal(call.args[0], inner))
             else:
-                raise Untranslatable(ann, f"State[{self._src(sl)}] is not a state type — the state types are int, str, float, bool, list[...] and dict[str, ...] of those, `T | None`, an Enum, a value class or a sum type")
+                wider = self._pix_ty(sl)
+                if wider is None:
+                    raise Untranslatable(ann, f"State[{self._src(sl)}] is not a state type — the state types are int, str, float, bool, lists and str- or int-keyed dicts of those, value classes, Enums, sum types, and `T | None` of any of them")
+                field = (wider, self._literal_of(call.args[0], wider))
         else:
             field = self._state_field(call.args[0])
         # mark as a cell (kept alongside dict-style fields in self.state)
@@ -553,6 +559,87 @@ class Translator:
         "bool": ("Bool", "bool"),
     }
     PYRET = {"&str": "String"}
+
+    def _pix_ty(self, ann):
+        """The pixie type an annotation names, or None. Nesting goes as
+        far as the compiled side takes it: lists of lists, dicts of
+        lists, optionals of either."""
+        if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+            try:
+                ann = ast.parse(ann.value, mode="eval").body
+            except SyntaxError:
+                return None
+        if isinstance(ann, ast.Name):
+            t = self.HELPER_TY.get(ann.id)
+            if t:
+                return t
+            if ann.id in self.structs or ann.id in self.enums or ann.id in self.unions:
+                return ann.id
+            return None
+        if isinstance(ann, ast.BinOp) and isinstance(ann.op, ast.BitOr):
+            if isinstance(ann.right, ast.Constant) and ann.right.value is None:
+                inner = self._pix_ty(ann.left)
+                return f"{inner}?" if inner and not inner.endswith("?") else None
+            return None
+        if isinstance(ann, ast.Subscript) and isinstance(ann.value, ast.Name):
+            base = ann.value.id
+            if base == "list":
+                inner = self._pix_ty(ann.slice)
+                return f"List<{inner}>" if inner else None
+            if (
+                base == "dict"
+                and isinstance(ann.slice, ast.Tuple)
+                and len(ann.slice.elts) == 2
+            ):
+                k = self._pix_ty(ann.slice.elts[0])
+                v = self._pix_ty(ann.slice.elts[1])
+                if k in ("String", "Int") and v:
+                    return f"Map<{k}, {v}>"
+        return None
+
+    def _literal_of(self, node, ty: str) -> str:
+        """The pixie literal a default writes, for any type `_pix_ty`
+        reads. A container's items go through the same door, so a list
+        of value classes and a dict of lists need no special case."""
+        if ty.endswith("?"):
+            if isinstance(node, ast.Constant) and node.value is None:
+                return "nil"
+            return self._literal_of(node, ty[:-1])
+        if ty.startswith("List<"):
+            return self._list_literal(node, ty[5:-1])
+        if ty.startswith("Map<"):
+            return self._dict_literal(node, ty.split(", ", 1)[1][:-1])
+        if ty in self.unions:
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and self.union_of.get(node.func.id) == ty
+            ):
+                raise Untranslatable(node, f"a {ty} starts from one of its variants")
+            return self._variant_ctor(node)
+        if ty in self.structs:
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == ty
+            ):
+                raise Untranslatable(node, f"a {ty} starts from a {ty}(...) literal")
+            return self._struct_ctor(ty, node, "store", None)
+        if ty in self.enums:
+            if not (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == ty
+                and node.attr in self.enums[ty]
+            ):
+                raise Untranslatable(node, f"a {ty} starts from a member (`{ty}.MEMBER`)")
+            return f"{ty}.{node.attr}"
+        got, lit = self._state_field(node)
+        if got == "Int" and ty == "Float":
+            return repr(float(lit))
+        if got != ty:
+            raise Untranslatable(node, f"the value is {self._py_ty(got)}, the annotation says {self._py_ty(ty)}")
+        return lit
 
     def _escape_ty(self, ann):
         if isinstance(ann, ast.Name) and ann.id in self.PYTY:
@@ -810,6 +897,7 @@ class Translator:
             if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
                 if st.value is None:
                     raise Untranslatable(st, "a store field needs a default")
+                self._check_name(st.target, st.target.id, "store field")
                 fields.append((st.target.id, *self._store_field_ty(st.annotation, st.value)))
             elif isinstance(st, ast.FunctionDef):
                 methods.append(st)
@@ -849,6 +937,7 @@ class Translator:
             for a in m.args.args[1:]:
                 if a.annotation is None:
                     raise Untranslatable(a, "annotate every store method parameter")
+                self._check_name(a, a.arg, "parameter")
                 ty = self._param_ty(a.annotation)
                 if ty is None:
                     raise Untranslatable(
@@ -1012,7 +1101,10 @@ class Translator:
                 if isinstance(other, ast.Constant) and other.value is None and isinstance(side, ast.Name):
                     base = self.HELPER_TY.get(side.id)
             if base is None:
-                raise Untranslatable(ann, "an optional field is `int | None`, `float | None`, `str | None`, `bool | None` or a model reference — an optional value class or list is not in the dialect yet")
+                wider = self._pix_ty(ann)
+                if wider is None:
+                    raise Untranslatable(ann, "an optional field is a scalar, a list, a dict, a value class, an Enum or a model reference, each `| None`")
+                return wider, self._literal_of(default, wider)
             if isinstance(default, ast.Constant) and default.value is None:
                 return f"{base}?", "nil"
             got, lit = self._state_field(default)
@@ -1033,9 +1125,9 @@ class Translator:
             and ann.value.id == "list"
             and isinstance(ann.slice, ast.Name)
         ):
-            inner = {"str": "String", "int": "Int", "float": "Float"}.get(ann.slice.id)
+            inner = self._pix_ty(ann.slice)
             if inner is None:
-                raise Untranslatable(ann, f"list[{ann.slice.id}] is not in the dialect yet — list elements are int, float or str")
+                raise Untranslatable(ann, f"list[{self._src(ann.slice)}] is not a field type — list elements are int, float, str, bool, a value class, an Enum, or a list or dict of those")
             return f"List<{inner}>", self._list_literal(default, inner)
         if (
             isinstance(ann, ast.Subscript)
@@ -1043,15 +1135,18 @@ class Translator:
             and ann.value.id == "dict"
             and isinstance(ann.slice, ast.Tuple)
             and len(ann.slice.elts) == 2
-            and isinstance(ann.slice.elts[0], ast.Name)
-            and isinstance(ann.slice.elts[1], ast.Name)
-            and ann.slice.elts[0].id == "str"
         ):
-            inner = {"str": "String", "int": "Int", "float": "Float", "bool": "Bool"}.get(ann.slice.elts[1].id)
+            key = self._pix_ty(ann.slice.elts[0])
+            if key not in ("String", "Int"):
+                raise Untranslatable(ann, "a dict keys by str or int")
+            inner = self._pix_ty(ann.slice.elts[1])
             if inner is None:
-                raise Untranslatable(ann, "dict values are int, float, str or bool — other value types are not in the dialect yet")
-            return f"Map<String, {inner}>", self._dict_literal(default, inner)
-        raise Untranslatable(ann, "a store field is int/float/str/bool, list[...] or dict[str, ...] of those, an Enum, a value class, a sum type, `T | None` or a model reference — nested containers and lists of value classes are not in the dialect yet")
+                raise Untranslatable(ann, f"dict[{self._src(ann.slice.elts[0])}, {self._src(ann.slice.elts[1])}] is not a field type — dict values are int, float, str, bool, a value class, an Enum, or a list or dict of those")
+            return f"Map<{key}, {inner}>", self._dict_literal(default, inner)
+        wider = self._pix_ty(ann)
+        if wider is not None:
+            return wider, self._literal_of(default, wider)
+        raise Untranslatable(ann, "a store field is int/float/str/bool, lists and str- or int-keyed dicts of those, a value class, an Enum, a sum type, `T | None` of any of them, or a model reference")
 
     def _model_ref_ann(self, ann):
         """A model-reference annotation: `M | None` → (M, False),
@@ -1125,16 +1220,14 @@ class Translator:
                         raise Untranslatable(st.value, "a model-list field starts as `[]`")
                     fields.append((st.target.id, f"List<{lref}>", "[]"))
                     continue
-                if not isinstance(st.annotation, ast.Name) or st.annotation.id not in self.HELPER_TY:
+                ty = self._pix_ty(st.annotation)
+                if ty is None:
                     raise Untranslatable(
                         st.annotation or st,
-                        "a model field is int/float/str/bool, `M | None`, `Weak[M]` or list[M] — dicts, lists of scalars and value classes on a model are not in the dialect yet",
+                        "a model field is int/float/str/bool, lists and dicts of those, a value class, an Enum, `M | None`, `Weak[M]` or list[M]",
                     )
-                ty = self.HELPER_TY[st.annotation.id]
-                got, lit = self._state_field(st.value)
-                if got != ty:
-                    raise Untranslatable(st.value, f"the default is {self._py_ty(got)}, the annotation says {self._py_ty(ty)}")
-                fields.append((st.target.id, ty, lit))
+                self._check_name(st.target, st.target.id, "model field")
+                fields.append((st.target.id, ty, self._literal_of(st.value, ty)))
             elif isinstance(st, ast.FunctionDef):
                 methods.append(st)
             elif isinstance(st, (ast.Pass, ast.Expr)):
@@ -1212,23 +1305,17 @@ class Translator:
         seen_default = False
         for st in node.body:
             if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
-                ty = None
-                if isinstance(st.annotation, ast.Name):
-                    ty = self.HELPER_TY.get(st.annotation.id)
-                    # A field may be another value class — declared
-                    # EARLIER, so the nesting is grounded (pixie
-                    # structs nest freely; the twin rule rides this).
-                    if ty is None and st.annotation.id in self.structs:
-                        ty = st.annotation.id
-                        if st.value is not None:
-                            raise Untranslatable(st.value, "a value-class field of value-class type takes no default yet")
+                # A field may be another value class — declared
+                # EARLIER, so the nesting is grounded (pixie structs
+                # nest freely; the twin rule rides this) — a list, a
+                # dict, an Enum or an optional of any of them.
+                ty = self._pix_ty(st.annotation)
                 if ty is None:
-                    raise Untranslatable(st.annotation or st, "a value-class field is int, float, str, bool or a value class declared earlier — Enums, lists and Optionals on a value class are not in the dialect yet")
+                    raise Untranslatable(st.annotation or st, "a value-class field is int, float, str, bool, a value class declared earlier, an Enum, or a list, dict or optional of those")
+                self._check_name(st.target, st.target.id, "value-class field")
                 lit = None
                 if st.value is not None:
-                    got, lit = self._state_field(st.value)
-                    if got != ty:
-                        raise Untranslatable(st.value, f"the default is {self._py_ty(got)}, the annotation says {self._py_ty(ty)}")
+                    lit = self._literal_of(st.value, ty)
                     seen_default = True
                 elif seen_default:
                     raise Untranslatable(st, "non-default fields precede default fields (Python's own rule)")
@@ -1260,7 +1347,7 @@ class Translator:
                 return t
             if ann.id == own or ann.id in self.structs:
                 return ann.id
-        return None
+        return self._pix_ty(ann)
 
     def _take_struct_methods(self, sname: str, methods):
         """Methods on a value class, operator dunders included:
@@ -1420,14 +1507,24 @@ class Translator:
             if kw.arg is None:
                 raise Untranslatable(call, "`**` unpacking is not in the dialect — pass fields by name")
             by_kw[kw.arg] = kw.value
+        def arg_of(node, fty):
+            # A container or an optional field takes the literal shape
+            # its type names; everything else is an ordinary
+            # expression.
+            if isinstance(node, (ast.List, ast.Dict)) or (
+                isinstance(node, ast.Constant) and node.value is None
+            ):
+                return self._literal_of(node, fty)
+            return self.expr(node, ctx, param)
+
         vals = []
         for i, (f, _ty, dflt) in enumerate(fields):
             if i < len(call.args):
                 if f in by_kw:
                     raise Untranslatable(call, f"field `{f}` given twice")
-                vals.append(self.expr(call.args[i], ctx, param))
+                vals.append(arg_of(call.args[i], _ty))
             elif f in by_kw:
-                vals.append(self.expr(by_kw.pop(f), ctx, param))
+                vals.append(arg_of(by_kw.pop(f), _ty))
             elif dflt is not None:
                 vals.append(None)  # trailing default, may omit
             else:
@@ -1548,11 +1645,16 @@ class Translator:
 
     def _ann_literal(self, ann, default):
         """(type, pix literal) from an annotation + default expr."""
+        if isinstance(ann, ast.Name) and ann.id not in self.HELPER_TY and self._pix_ty(ann) is not None:
+            ty = self._pix_ty(ann)
+            return ty, self._literal_of(default, ty)
         if isinstance(ann, ast.Name):
             ty = {"int": "Int", "str": "String", "bool": "Bool", "float": "Float"}.get(ann.id)
             if ty is None:
                 raise Untranslatable(ann, f"`{ann.id}` is not a model field type — int/float/str/bool, list[...] of those, `M | None`, `Weak[M]` or list[M]; dicts and value classes on a model are not in the dialect yet")
             got, lit = self._state_field(default)
+            if got == "Int" and ty == "Float":
+                got, lit = "Float", repr(float(lit))
             if got != ty:
                 raise Untranslatable(default, f"the default is {self._py_ty(got)}, the annotation says {self._py_ty(ty)}")
             return ty, lit
@@ -1562,11 +1664,14 @@ class Translator:
             and ann.value.id == "list"
             and isinstance(ann.slice, ast.Name)
         ):
-            inner = {"str": "String", "int": "Int", "float": "Float"}.get(ann.slice.id)
+            inner = self._pix_ty(ann.slice)
             if inner is None:
-                raise Untranslatable(ann, f"list[{ann.slice.id}] is not in the dialect yet — list elements are int, float or str")
+                raise Untranslatable(ann, f"list[{self._src(ann.slice)}] is not a field type — list elements are int, float, str, bool, a value class, an Enum, or a list or dict of those")
             return f"List<{inner}>", self._list_literal(default, inner)
-        raise Untranslatable(ann, "a model field is int/float/str/bool, list[...] of those, `M | None`, `Weak[M]` or list[M] — dicts and value classes on a model are not in the dialect yet")
+        wider = self._pix_ty(ann)
+        if wider is not None:
+            return wider, self._literal_of(default, wider)
+        raise Untranslatable(ann, "a model field is int/float/str/bool, lists and dicts of those, a value class, an Enum, `M | None`, `Weak[M]` or list[M]")
 
     # ---- discovery ------------------------------------------------
 
@@ -1576,6 +1681,28 @@ class Translator:
         "Modal", "Image", "Svg", "BarChart", "LineChart", "ProgressBar",
         "Spinner", "Main", "App", "Slot", "Helpers",
     }
+
+    # Words the compiled side reads as syntax. A state, field, local or
+    # parameter carrying one would be written out as itself and turn
+    # into a parse error inside generated code, which is the compiler's
+    # bug to prevent — so the name is refused here, with a reason.
+    KEYWORDS = {
+        "class", "struct", "enum", "flags", "prop", "signal", "slot", "fn",
+        "init", "deinit", "test", "emit", "case", "when", "error", "async",
+        "await", "use", "view", "style", "try", "if", "else", "for", "while",
+        "break", "continue", "return", "let", "var", "self", "weak",
+        "consuming", "escaping", "pub", "trait", "impl", "store", "suite",
+        "static", "true", "false", "nil", "state", "of",
+    }
+
+    def _check_name(self, node, name: str, what: str):
+        if name in self.KEYWORDS:
+            raise Untranslatable(
+                node,
+                f"`{name}` is a word the compiled side reads as syntax, so a {what} "
+                f"cannot carry it — rename it (`{name}_` reads the same in Python)",
+            )
+        return name
 
     def scan(self):
         for mod in self.modules.values():
@@ -1744,12 +1871,14 @@ class Translator:
                     raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
                 if node.target.id in self.cells:
                     raise Untranslatable(node, f"state `{node.target.id}` is declared in two modules — rename one")
+                self._check_name(node.target, node.target.id, "state")
                 field = self._cell_field(node.value, node.annotation)
                 self.state[node.target.id] = field
                 self.cells[node.target.id] = field[0]
             elif isinstance(node, ast.Assign) and self._is_state_call(node.value):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
+                self._check_name(node.targets[0], node.targets[0].id, "state")
                 field = self._cell_field(node.value, None)
                 self.state[node.targets[0].id] = field
                 self.cells[node.targets[0].id] = field[0]
@@ -1969,10 +2098,15 @@ class Translator:
             if self.helper_params is not None:
                 return "an early `return` inside a helper is not in the dialect yet — end the helper with a single `return <expression>`"
             return "a `return` with a value is not in the dialect here — handlers and store methods return None; keep the result in a field or a State"
+        if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.List):
+            return (
+                "a local list needs its element type — annotate it "
+                "(`out: list[str] = []`), which is what the compiled app reads"
+            )
         if isinstance(stmt, (ast.Assign, ast.AnnAssign)) and isinstance(
-            stmt.value, (ast.List, ast.Dict, ast.ListComp, ast.DictComp)
+            stmt.value, (ast.Dict, ast.DictComp)
         ):
-            return "a local list or dict is not in the dialect yet — keep it in a State or a store field"
+            return "a local dict is not in the dialect yet — keep it in a State or a store field"
         if (
             isinstance(stmt, ast.Assign)
             and len(stmt.targets) == 1
@@ -2001,7 +2135,7 @@ class Translator:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             f = stmt.value.func
             if isinstance(f, ast.Name) and f.id == "print":
-                return "`print(...)` is not in the dialect yet — hold the text in a State to show it"
+                return "`print(...)` writes to stdout, which is where a headless run\'s screen dump goes — `log(\"…\")` writes the same line to stderr in both runs"
             if isinstance(f, ast.Attribute) and f.attr in ("append", "extend", "pop", "remove", "insert", "clear", "sort", "reverse"):
                 return (
                     f"in-place list methods such as `.{f.attr}()` are not in the dialect — "
@@ -2183,21 +2317,19 @@ class Translator:
 
     def _list_literal(self, node, inner) -> str:
         if not isinstance(node, ast.List):
-            raise Untranslatable(node, 'a list state starts from a list literal (`State([])`, `State(["a"])`)')
+            raise Untranslatable(node, 'a list starts from a list literal (`State([])`, `State(["a"])`)')
         parts = []
         for e in node.elts:
-            if not isinstance(e, ast.Constant):
-                raise Untranslatable(e, "a list literal's items are literals here — expressions inside a list literal are not in the dialect yet")
-            if inner == "String":
-                if not isinstance(e.value, str):
-                    raise Untranslatable(e, "a list literal here holds str items")
-                parts.append(f'"{esc(e.value)}"')
-            else:
-                if not isinstance(e.value, (int, float)) or isinstance(e.value, bool):
-                    raise Untranslatable(e, "a list literal here holds number items")
-                if type(e.value) is int:
-                    self._check_i64(e.value, e, False)
-                parts.append(self._pix_num(e.value, inner))
+            if isinstance(e, ast.Constant) or inner not in ("Int", "Float", "String", "Bool"):
+                parts.append(self._literal_of(e, inner))
+                continue
+            # An expression in a list literal: the handler reads it
+            # where the literal stands, so it lowers as itself, and its
+            # type has to be the list's.
+            got = self._num_ty(e, "store", None)
+            if got is not None and got != inner:
+                raise Untranslatable(e, f"this list holds {py_ty(inner)} — `{self._src(e)}` is {py_ty(got)}")
+            parts.append(self.expr(e, "store", None))
         return "[" + ", ".join(parts) + "]"
 
     def _dict_literal(self, node, inner) -> str:
@@ -2207,9 +2339,7 @@ class Translator:
         for k, v in zip(node.keys, node.values):
             if not (isinstance(k, ast.Constant) and type(k.value) is str):
                 raise Untranslatable(k or node, "a dict literal's keys are str literals")
-            got, lit = self._state_field(v)
-            if got != inner:
-                raise Untranslatable(v, f"the dict value is {self._py_ty(got)}, the annotation says {self._py_ty(inner)}")
+            lit = self._literal_of(v, inner)
             parts.append(f'"{esc(k.value)}": {lit}' if not k.value.isidentifier() else f"{k.value}: {lit}")
         if not parts:
             return "{}"
@@ -2468,6 +2598,15 @@ class Translator:
             and self._row_source_read(node.value)
         ):
             return self.row[2]
+        if isinstance(node, ast.ListComp):
+            return self._comprehension(node, ctx, param)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in self.LIST_BUILTINS
+            and node.func.id not in self.defs
+        ):
+            return self._list_builtin(node, ctx, param)
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
@@ -2604,7 +2743,7 @@ class Translator:
             and ctx != "store"
         ):
             raise Untranslatable(node, "a handler local cannot be read in a view — hold it in a State or a store field")
-        if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
+        if isinstance(node, ast.Subscript):
             indexed = self._index_read(node, ctx, param)
             if indexed is not None:
                 return indexed
@@ -3030,11 +3169,21 @@ class Translator:
                     node,
                     "arithmetic outside an f-string hole is not in the dialect in views — compute in a handler and render the result",
                 )
-            for side in (node.left, node.right):
-                c = self._cell_read(side)
-                if c is not None and self._ty(c).startswith("List"):
+            if isinstance(node.op, ast.Add) and (
+                self._list_of(node.left, ctx, param) is not None
+                or self._list_of(node.right, ctx, param) is not None
+            ):
+                    left = self._list_of(node.left, ctx, param)
+                    right = self._list_of(node.right, ctx, param)
+                    if left is not None and right is not None and left[1] == right[1]:
+                        self.uses_stdlib = True
+                        return f"Py.listConcat{left[2]}({left[0]}, {right[0]})"
+                    if left is not None and isinstance(node.right, ast.List):
+                        self.uses_stdlib = True
+                        lit = self._list_literal(node.right, left[1])
+                        return f"Py.listConcat{left[2]}({left[0]}, {lit})"
                     raise Untranslatable(
-                        node, "list expressions other than append (`xs.set(xs() + [e])`) are not in the dialect yet — slices, concatenation of two lists, comprehensions and `sorted` are planned"
+                        node, "joining lists takes two lists of the same type — a state read, a field, a local, or a list literal"
                     )
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}[type(node.op)]
             return f"{self.expr(node.left, ctx, param)} {op} {self.expr(node.right, ctx, param)}"
@@ -3177,6 +3326,12 @@ class Translator:
             and len(node.ops) == 1
             and isinstance(node.ops[0], (ast.In, ast.NotIn))
         ):
+            lst = self._list_of(node.comparators[0], ctx, param)
+            if lst is not None:
+                self.uses_stdlib = True
+                code, _el, suf = lst
+                bare = f"Py.listContains{suf}({code}, {self.expr(node.left, ctx, param)})"
+                return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
             if self._num_ty(node.comparators[0], ctx, param) == "String":
                 self.uses_stdlib = True
                 hay = self.expr(node.comparators[0], ctx, param)
@@ -3614,6 +3769,105 @@ class Translator:
             return None
         return entry[1]
 
+    LIST_SUFFIX = {"String": "Str", "Int": "Int", "Float": "Float", "Bool": "Bool"}
+
+    def _list_of(self, node, ctx, param):
+        """(code, element type, static suffix) for a list the dialect
+        can hand to a Py static: a state read, a field, or a local."""
+        src = self._list_source(node, ctx, param)
+        if src is None or not src[1].startswith("List<"):
+            return None
+        el = src[1][5:-1]
+        suf = self.LIST_SUFFIX.get(el)
+        return None if suf is None else (src[0], el, suf)
+
+    LIST_BUILTINS = ("min", "max", "sum", "abs", "sorted", "reversed")
+
+    def _comprehension(self, node: ast.ListComp, ctx, param):
+        """`[f(x) for x in xs if cond]` — the loop it stands for, built
+        into a local the expression then reads."""
+        if ctx != "store" or self.pre_lines is None:
+            raise Untranslatable(node, "a comprehension builds a list in a handler — a view reads one that is already built")
+        if len(node.generators) != 1:
+            raise Untranslatable(node, "a comprehension takes one `for` — nested comprehensions are not in the dialect yet")
+        gen = node.generators[0]
+        if gen.is_async or len(gen.ifs) > 1:
+            raise Untranslatable(node, "a comprehension takes at most one `if`")
+        if not isinstance(gen.target, ast.Name):
+            raise Untranslatable(gen.target, "a comprehension binds one plain name")
+        src = self._list_of(gen.iter, ctx, param)
+        if src is None:
+            raise Untranslatable(gen.iter, "a comprehension walks a list the dialect can name — a state read, a field or a local")
+        code, el, _suf = src
+        var = gen.target.id
+        prev_ty = self.typed_locals.get(var)
+        self.handler_locals.add(var)
+        self.typed_locals[var] = el
+        try:
+            item_ty = self._num_ty(node.elt, ctx, param) or el
+            suffix = self.LIST_SUFFIX.get(item_ty)
+            if suffix is None:
+                raise Untranslatable(node.elt, f"a comprehension builds a list of int, float, str or bool — this one builds {py_ty(item_ty)}")
+            item = self.expr(node.elt, ctx, param)
+            cond = self._cond(gen.ifs[0], ctx, param) if gen.ifs else None
+        finally:
+            self.handler_locals.discard(var)
+            if prev_ty is None:
+                self.typed_locals.pop(var, None)
+            else:
+                self.typed_locals[var] = prev_ty
+        out = f"__lc{len(self.handler_locals)}"
+        self.handler_locals.add(out)
+        self.typed_locals[out] = f"List<{item_ty}>"
+        body = [f"  {out}.push({item})"]
+        if cond is not None:
+            body = [f"  if {cond} {{", f"    {out}.push({item})", "  }"]
+        self.pre_lines += [
+            f"var {out} : List<{item_ty}> = []",
+            f"for {var} in {code} {{",
+            *body,
+            "}",
+        ]
+        return out
+
+    def _list_builtin(self, node: ast.Call, ctx, param):
+        """`sum(xs)`, `min(a, b)`, `sorted(xs)`, `abs(n)` — Python's
+        answers, from the same statics both runs would agree on."""
+        fn = node.func.id
+        if node.keywords:
+            raise Untranslatable(node, f"`{fn}(...)` takes positional arguments")
+        if fn in ("min", "max") and len(node.args) == 2:
+            t = self._num_ty(node.args[0], ctx, param) or self._num_ty(node.args[1], ctx, param)
+            if t not in ("Int", "Float"):
+                raise Untranslatable(node, f"`{fn}(a, b)` compares two ints or two floats")
+            self.uses_stdlib = True
+            a = self.expr(node.args[0], ctx, param)
+            b = self.expr(node.args[1], ctx, param)
+            return f"Py.{fn}{t}({a}, {b})"
+        if fn == "abs" and len(node.args) == 1:
+            t = self._num_ty(node.args[0], ctx, param)
+            if t not in ("Int", "Float"):
+                raise Untranslatable(node, "`abs(x)` takes an int or a float")
+            self.uses_stdlib = True
+            return f"Py.abs{t}({self.expr(node.args[0], ctx, param)})"
+        if len(node.args) != 1:
+            raise Untranslatable(node, f"`{fn}(...)` takes one list here")
+        lst = self._list_of(node.args[0], ctx, param)
+        if lst is None:
+            raise Untranslatable(
+                node.args[0],
+                f"`{fn}(...)` takes a list the dialect can name — a state read, a field or a local",
+            )
+        code, el, suf = lst
+        if fn in ("min", "max", "sum") and el not in ("Int", "Float"):
+            raise Untranslatable(node, f"`{fn}(xs)` takes a list of int or float — this one holds {py_ty(el)}")
+        if fn == "sorted" and el == "Bool":
+            raise Untranslatable(node, "`sorted(xs)` takes a list of int, float or str")
+        self.uses_stdlib = True
+        name = {"min": "listMin", "max": "listMax", "sum": "listSum",
+                "sorted": "listSorted", "reversed": "listReversed"}[fn]
+        return f"Py.{name}{suf}({code})"
+
     def _dict_key(self, node, ctx, param) -> str:
         """A dict key: any str the app can name. A literal is written
         as itself (`"two words"` included), and a str-typed expression
@@ -3645,6 +3899,24 @@ class Translator:
                 return f"{base}.{node.attr}", self.stores[base]["field_tys"][node.attr]
             if base == "self" and self.model_scope is not None and node.attr in self.model_scope[1]:
                 return node.attr, self.model_scope[1][node.attr]
+        if isinstance(node, ast.Attribute):
+            # A list held by a value class, read through it.
+            sname = self._struct_of(node.value)
+            if sname is not None:
+                for f, t, _d in self.structs[sname]:
+                    if f == node.attr and t.startswith(("List<", "Map<")):
+                        return f"({self.expr(node.value, ctx, param)}).{f}", t
+            # ...or held by a model, read through the instance.
+            if isinstance(node.value, ast.Name):
+                mn = self.model_instances.get(node.value.id) or (
+                    self.typed_locals.get(node.value.id)
+                    if self.typed_locals.get(node.value.id) in self.models
+                    else None
+                )
+                if mn is not None:
+                    for f, t, _d in self.models[mn]["fields"]:
+                        if f == node.attr and t.startswith(("List<", "Map<")):
+                            return f"{node.value.id}.{f}", t
         if isinstance(node, ast.Name) and self.comp_params and node.id in self.comp_params:
             return node.id, self.comp_params[node.id]
         if isinstance(node, ast.Name) and self.comp_locals and node.id in self.comp_locals:
@@ -3695,6 +3967,17 @@ class Translator:
         lit = self._literal_element(node)
         if lit is not None:
             return self.expr(lit, ctx, param)
+        if isinstance(node.slice, ast.Slice):
+            lst = self._list_of(node.value, ctx, param)
+            if lst is None:
+                return None
+            if node.slice.step is not None:
+                raise Untranslatable(node.slice, "a slice step is not in the dialect yet — `xs[a:b]` takes a start and a stop")
+            code, _el, suf = lst
+            self.uses_stdlib = True
+            lo = self.expr(node.slice.lower, ctx, param) if node.slice.lower else "0"
+            hi = self.expr(node.slice.upper, ctx, param) if node.slice.upper else f"{code}.length"
+            return f"Py.listSlice{suf}({code}, {lo}, {hi})"
         src = self._list_source(node.value, ctx, param)
         if src is None:
             return None
@@ -4212,14 +4495,44 @@ class Translator:
             and isinstance(stmt.targets[0], ast.Name)
         ):
             name = stmt.targets[0].id
+            if name not in self.cells:
+                self._check_name(stmt.targets[0], name, "local")
+            if isinstance(stmt.value, ast.List) and name not in self.cells:
+                raise Untranslatable(
+                    stmt,
+                    "a local list needs its element type — annotate it "
+                    "(`out: list[str] = []`), which is what the compiled app reads",
+                )
+            if (
+                name in self.handler_locals
+                and self.typed_locals.get(name, "").startswith("List<")
+                and isinstance(stmt.value, ast.BinOp)
+                and isinstance(stmt.value.op, ast.Add)
+                and isinstance(stmt.value.left, ast.Name)
+                and stmt.value.left.id == name
+                and isinstance(stmt.value.right, ast.List)
+                and len(stmt.value.right.elts) == 1
+            ):
+                # `out = out + [x]` is an append, and the compiled app
+                # appends rather than rebuilding the list.
+                el = self.typed_locals[name][5:-1]
+                got = self._num_ty(stmt.value.right.elts[0], "store", param)
+                if got is not None and got != el:
+                    raise Untranslatable(stmt.value.right.elts[0], f"this list holds {py_ty(el)} — the value is {py_ty(got)}")
+                return [f"{name}.push({self.expr(stmt.value.right.elts[0], 'store', param)})"]
             value = self.expr(stmt.value, "store", param)
             vt = self._num_ty(stmt.value, "store", param)
+            if vt is None:
+                src = self._list_of(stmt.value, "store", param)
+                if src is not None:
+                    vt = f"List<{src[1]}>"
             if vt is not None and (
                 vt in ("Int", "Float", "Bool", "String")
                 or vt in self.models
                 or vt in self.structs
                 or vt in self.enums
                 or vt.startswith("Map<")
+                or vt.startswith("List<")
                 or vt.endswith("?")
             ):
                 self.typed_locals[name] = vt
@@ -4229,11 +4542,85 @@ class Translator:
                 return [f"{name} = {value}"]
             self.handler_locals.add(name)
             return [f"var {name} = {value}"]
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.value is not None
+            and (lty := self._param_ty(stmt.annotation)) is not None
+            and lty.startswith("List<")
+        ):
+            # `out: list[str] = []` — a local list. The annotation is
+            # what tells the compiled side its element type, so the
+            # dialect asks for it here as it does for a state.
+            name = stmt.target.id
+            lit = self._list_literal(stmt.value, lty[5:-1]) if isinstance(stmt.value, ast.List) else None
+            if lit is None:
+                src = self._list_of(stmt.value, "store", param)
+                if src is None or f"List<{src[1]}>" != lty:
+                    raise Untranslatable(stmt.value, f"a `{py_ty(lty)}` local starts from a list literal or another list of the same type")
+                lit = src[0]
+            self.handler_locals.add(name)
+            self.typed_locals[name] = lty
+            return [f"var {name} : {lty} = {lit}"]
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Tuple)
+        ):
+            names = stmt.targets[0].elts
+            vals = stmt.value.elts if isinstance(stmt.value, ast.Tuple) else None
+            if vals is None or len(vals) != len(names) or not all(isinstance(n, ast.Name) for n in names):
+                raise Untranslatable(
+                    stmt,
+                    "a tuple assignment binds plain names from as many values "
+                    "(`a, b = 1, 2`) — the dialect has no tuple to unpack",
+                )
+            # Python evaluates the right side first, so the values are
+            # bound to temporaries before any name is written — which
+            # is what makes `a, b = b, a` a swap.
+            lines, tmps = [], []
+            for i, v in enumerate(vals):
+                tmp = f"__tu{len(self.handler_locals)}_{i}"
+                self.handler_locals.add(tmp)
+                vt = self._num_ty(v, "store", param)
+                if vt is not None:
+                    self.typed_locals[tmp] = vt
+                lines += self._stmt(at(ast.Assign(targets=[ast.Name(id=tmp, ctx=ast.Store())], value=v), stmt), param)
+                tmps.append((tmp, vt))
+            for n, (tmp, vt) in zip(names, tmps):
+                lines += self._stmt(at(ast.Assign(targets=[ast.Name(id=n.id, ctx=ast.Store())], value=ast.Name(id=tmp, ctx=ast.Load())), stmt), param)
+            return lines
         if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
             t = stmt.targets[0]
             if isinstance(t, ast.Subscript):
                 key = self._field(t, "store")
                 return [f"{key} = {self.expr(stmt.value, 'store', param)}"]
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Attribute)
+            and isinstance(stmt.targets[0].value, ast.Name)
+            and stmt.targets[0].value.id in self.stores
+        ):
+            # `Cart.total = 5` from outside the store. Python allows
+            # it and so does the compiled side; a method is the good
+            # habit where an update has an invariant, not a rule the
+            # language can hold up.
+            t0 = stmt.targets[0]
+            sname = t0.value.id
+            ftys = self.stores[sname]["field_tys"]
+            if t0.attr not in ftys:
+                raise Untranslatable(t0, f"`{t0.attr}` is not a field of store {sname}")
+            v0 = stmt.value
+            if isinstance(v0, ast.Constant) and v0.value is None:
+                if not ftys[t0.attr].endswith("?"):
+                    raise Untranslatable(v0, f"`{t0.attr}` is not optional — annotate it `T | None`")
+                return [f"{sname}.{t0.attr} = nil"]
+            if isinstance(v0, ast.List) and ftys[t0.attr].startswith("List<"):
+                return [f"{sname}.{t0.attr} = {self._list_literal(v0, ftys[t0.attr][5:-1])}"]
+            if isinstance(v0, ast.Dict) and ftys[t0.attr].startswith("Map<"):
+                return [f"{sname}.{t0.attr} = {self._dict_literal(v0, ftys[t0.attr].split(', ', 1)[1][:-1])}"]
+            return [f"{sname}.{t0.attr} = {self.expr(v0, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
             and len(stmt.targets) == 1
@@ -4256,6 +4643,8 @@ class Translator:
                 if not fty0.endswith("?"):
                     raise Untranslatable(v0, f"`{t0.attr}` is not optional — annotate it `T | None` to narrow it")
                 return [f"{base}.{t0.attr} = nil"]
+            if isinstance(v0, (ast.List, ast.Dict)):
+                return [f"{base}.{t0.attr} = {self._literal_of(v0, fty0)}"]
             return [f"{base}.{t0.attr} = {self.expr(v0, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
@@ -4534,6 +4923,54 @@ class Translator:
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "log")
+        ):
+            call = stmt.value
+            if len(call.args) != 1 or call.keywords:
+                raise Untranslatable(call, "log() takes one message")
+            self.uses_stdlib = True
+            name = f"__lg{len(self.handler_locals)}"
+            self.handler_locals.add(name)
+            msg = '"' + self._str_parts(call.args[0], "store", param) + '"'
+            return [f"var {name} = Py.log({msg})"]
+        if isinstance(stmt, ast.Assert):
+            if self.in_try:
+                raise Untranslatable(stmt, "an `assert` inside a `try` is not in the dialect — the two runs would disagree about what the `except` catches")
+            self.uses_stdlib = True
+            cond = self._cond(stmt.test, "store", param)
+            msg = "assertion failed"
+            if stmt.msg is not None:
+                msg = self._str_parts(stmt.msg, "store", param)
+            name = f"__as{len(self.handler_locals)}"
+            self.handler_locals.add(name)
+            return [f"if !({cond}) {{", f'  var {name} = Py.abort("{msg}")', "}"]
+        if isinstance(stmt, ast.Raise):
+            if self.in_try:
+                raise Untranslatable(stmt, "a `raise` inside a `try` is not in the dialect — the two runs would disagree about what the `except` catches")
+            if stmt.cause is not None:
+                raise Untranslatable(stmt, "`raise ... from ...` is not in the dialect")
+            self.uses_stdlib = True
+            what = "raised"
+            exc = stmt.exc
+            if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                inner = ""
+                if len(exc.args) == 1:
+                    inner = ": " + self._str_parts(exc.args[0], "store", param)
+                elif exc.args:
+                    raise Untranslatable(exc, "a raised exception takes one message")
+                what = f"{exc.func.id}{inner}"
+            elif isinstance(exc, ast.Name):
+                what = exc.id
+            elif exc is not None:
+                raise Untranslatable(exc, "`raise` takes an exception (`raise ValueError(\"…\")`)")
+            else:
+                raise Untranslatable(stmt, "a bare `raise` re-raises the exception being handled — the dialect has no handler to re-raise from")
+            name = f"__rs{len(self.handler_locals)}"
+            self.handler_locals.add(name)
+            return [f'var {name} = Py.abort("{what}")']
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
             and self._is_ui(stmt.value.func, "every")
         ):
             raise Untranslatable(
@@ -4644,6 +5081,21 @@ class Translator:
                 for f, t, _ in self.structs[s]:
                     if f == node.attr:
                         return t if t in self.structs else None
+            # A value class held by a store or a model, read through it.
+            if isinstance(node.value, ast.Name):
+                base = node.value.id
+                if base in self.stores:
+                    t = self.stores[base]["field_tys"].get(node.attr)
+                    return t if t in self.structs else None
+                mn = self.model_instances.get(base) or (
+                    self.typed_locals.get(base) if self.typed_locals.get(base) in self.models else None
+                )
+                if mn is not None:
+                    for f, t, _ in self.models[mn]["fields"]:
+                        if f == node.attr:
+                            return t if t in self.structs else None
+            if isinstance(node.value, ast.Attribute) and node.value.attr == "self" :
+                return None
         return None
 
     def _num_ty(self, node, ctx, param):
@@ -4725,6 +5177,19 @@ class Translator:
             and node.func.id not in self.defs
         ):
             return {"str": "String", "int": "Int", "float": "Float", "bool": "Bool", "round": "Int"}[node.func.id]
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("min", "max", "sum", "abs")
+            and node.func.id not in self.defs
+        ):
+            if len(node.args) == 2:
+                return self._num_ty(node.args[0], ctx, param) or self._num_ty(node.args[1], ctx, param)
+            if len(node.args) == 1:
+                if node.func.id == "abs":
+                    return self._num_ty(node.args[0], ctx, param)
+                lst = self._list_of(node.args[0], ctx, param)
+                return lst[1] if lst and lst[1] in ("Int", "Float") else None
         if isinstance(node, ast.Call):
             if (
                 isinstance(node.func, ast.Attribute)
@@ -4893,16 +5358,7 @@ class Translator:
             if ann.id in self.structs or ann.id in self.enums or ann.id in self.unions:
                 return ann.id
             return None
-        if (
-            isinstance(ann, ast.Subscript)
-            and isinstance(ann.value, ast.Name)
-            and ann.value.id == "list"
-            and isinstance(ann.slice, ast.Name)
-        ):
-            t = self.HELPER_TY.get(ann.slice.id)
-            if t:
-                return f"List<{t}>"
-        return None
+        return self._pix_ty(ann)
 
     ZERO_OF = {"Int": "0", "Float": "0.0", "String": '""', "Bool": "false"}
 
@@ -4925,6 +5381,13 @@ class Translator:
         tiers); stdlib failures resolve statically (they raise
         exactly RuntimeError); anything no clause catches keeps the
         plain contained path."""
+        prev_try, self.in_try = self.in_try, True
+        try:
+            return self._lower_try_inner(stmt, param)
+        finally:
+            self.in_try = prev_try
+
+    def _lower_try_inner(self, stmt, param) -> list[str]:
         clauses = []
         for h in stmt.handlers:
             if h.type is None:
@@ -5231,11 +5694,111 @@ class Translator:
             )
         return out
 
+    def _pair_for(self, stmt: ast.For, param) -> list[str]:
+        """`for i, x in enumerate(xs)` and `for a, b in zip(xs, ys)` —
+        the index loop each one stands for. enumerate rides the
+        repeater's own index; zip walks to the shorter list, as Python
+        does."""
+        names = stmt.target.elts
+        if len(names) != 2 or not all(isinstance(n, ast.Name) for n in names):
+            raise Untranslatable(stmt.target, "a pair target binds two plain names (`for i, x in enumerate(xs)`)")
+        a, b = names[0].id, names[1].id
+        it = stmt.iter
+        if not (isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("enumerate", "zip")):
+            raise Untranslatable(it, "a pair target walks enumerate() or zip()")
+        if it.func.id == "enumerate":
+            if len(it.args) != 1:
+                raise Untranslatable(it, "enumerate() takes the list — a start value is not in the dialect yet")
+            src = self._list_of(it.args[0], "store", param)
+            if src is None:
+                raise Untranslatable(it.args[0], "enumerate() walks a list the dialect can name — a state read, a field or a local")
+            code, el, _suf = src
+            lines = [f"for {b}, {a} in {code} {{"]
+            binds = [(a, "Int"), (b, el)]
+        else:
+            if len(it.args) != 2:
+                raise Untranslatable(it, "zip() takes two lists")
+            left = self._list_of(it.args[0], "store", param)
+            right = self._list_of(it.args[1], "store", param)
+            if left is None or right is None:
+                raise Untranslatable(it, "zip() walks two lists the dialect can name")
+            n = f"__zn{len(self.handler_locals)}"
+            i = f"__zi{len(self.handler_locals)}"
+            self.handler_locals.add(n)
+            lines = [
+                f"var {n} = {left[0]}.length",
+                f"if {right[0]}.length < {n} {{",
+                f"  {n} = {right[0]}.length",
+                "}",
+                f"for {i} in 0..{n} {{",
+                f"  var {a} = {left[0]}[{i}]",
+                f"  var {b} = {right[0]}[{i}]",
+            ]
+            binds = [(a, left[1]), (b, right[1])]
+        prev = {nm: self.typed_locals.get(nm) for nm, _t in binds}
+        for nm, t in binds:
+            self.handler_locals.add(nm)
+            self.typed_locals[nm] = t
+        try:
+            body = self._block(stmt.body, param)
+        finally:
+            for nm, _t in binds:
+                self.handler_locals.discard(nm)
+                if prev[nm] is None:
+                    self.typed_locals.pop(nm, None)
+                else:
+                    self.typed_locals[nm] = prev[nm]
+                self.dead_locals[nm] = f"`{nm}` is bound inside the loop only"
+        return lines + body + ["}"]
+
+    def _stepped_for(self, stmt: ast.For, it: ast.Call, param) -> list[str]:
+        """`for i in range(a, b, step)` — pixie counts by one, so the
+        loop counts turns and the variable is the value each turn
+        stands for."""
+        var = stmt.target.id
+        lo = self.expr(it.args[0], "store", param)
+        hi = self.expr(it.args[1], "store", param)
+        step_node = it.args[2]
+        neg = isinstance(step_node, ast.UnaryOp) and isinstance(step_node.op, ast.USub)
+        c = step_node.operand if neg else step_node
+        if not (isinstance(c, ast.Constant) and type(c.value) is int and c.value != 0):
+            raise Untranslatable(step_node, "range()'s step is a non-zero int literal")
+        step = -c.value if neg else c.value
+        k = len(self.handler_locals)
+        n, t = f"__rn{k}", f"__rt{k}"
+        self.handler_locals.update({n, t})
+        span = f"({hi}) - ({lo})" if step > 0 else f"({lo}) - ({hi})"
+        mag = abs(step)
+        lines = [
+            f"var {n} = {span}",
+            f"if {n} < 0 {{",
+            f"  {n} = 0",
+            "}",
+            f"{n} = ({n} + {mag - 1}) / {mag}",
+            f"for {t} in 0..{n} {{",
+            f"  var {var} = ({lo}) + {t} * {step}",
+        ]
+        prev = self.typed_locals.get(var)
+        self.handler_locals.add(var)
+        self.typed_locals[var] = "Int"
+        try:
+            body = self._block(stmt.body, param)
+        finally:
+            self.handler_locals.discard(var)
+            if prev is None:
+                self.typed_locals.pop(var, None)
+            else:
+                self.typed_locals[var] = prev
+            self.dead_locals[var] = f"`{var}` is bound inside the loop only"
+        return lines + body + ["}"]
+
     def _handler_for(self, stmt, param) -> list[str]:
         if stmt.orelse:
             raise Untranslatable(stmt, "for-else is not in the dialect yet")
+        if isinstance(stmt.target, ast.Tuple):
+            return self._pair_for(stmt, param)
         if not isinstance(stmt.target, ast.Name):
-            raise Untranslatable(stmt.target, "a for loop binds one plain name — tuple targets (`for k, v in ...`) are not in the dialect yet")
+            raise Untranslatable(stmt.target, "a for loop binds one plain name, or `k, v` over enumerate() / zip()")
         var = stmt.target.id
         if var in self.cells or var in self.handler_locals:
             raise Untranslatable(stmt.target, f"loop variable `{var}` shadows an existing name")
@@ -5246,8 +5809,10 @@ class Translator:
             and isinstance(it.func, ast.Name)
             and it.func.id == "range"
         ):
-            if it.keywords or not 1 <= len(it.args) <= 2:
-                raise Untranslatable(it, "range() takes one or two arguments — a step is not in the dialect yet")
+            if it.keywords or not 1 <= len(it.args) <= 3:
+                raise Untranslatable(it, "range() takes one, two or three arguments")
+            if len(it.args) == 3:
+                return self._stepped_for(stmt, it, param)
             if len(it.args) == 1:
                 lo, hi = "0", self.expr(it.args[0], "store", param)
                 nonneg = True
@@ -5328,9 +5893,14 @@ class Translator:
             ):
                 src = f"{it.value.id}.{it.attr}"
                 self._loop_src_elem = self.stores[it.value.id]["field_tys"][it.attr][5:-1]
+            if src is None and isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("sorted", "reversed") and len(it.args) == 1:
+                inner = self._list_of(it.args[0], "store", param)
+                if inner is not None:
+                    src = self._list_builtin(it, "store", param)
+                    self._loop_src_elem = inner[1]
             if src is None:
                 if isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("reversed", "enumerate", "zip"):
-                    raise Untranslatable(it, f"`{it.func.id}()` in a for loop is not in the dialect yet")
+                    raise Untranslatable(it, f"`{it.func.id}()` here takes a list the dialect can name — a state read, a field or a local")
                 if isinstance(it, ast.Call) and isinstance(it.func, ast.Attribute) and it.func.attr in ("values", "items", "keys"):
                     raise Untranslatable(
                         it,
@@ -7243,6 +7813,39 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn formatInt(v: Int, spec: String) String @rust("yokan_stdlib::py_format_int")\n'
             '  static fn formatFloat(v: Float, spec: String) String @rust("yokan_stdlib::py_format_float")\n'
             '  static fn formatStr(v: String, spec: String) String @rust("yokan_stdlib::py_format_str")\n'
+            '  static fn log(msg: String) Int @rust("yokan_stdlib::log_line")\n'
+            '  static fn abort(msg: String) Int @rust("yokan_stdlib::py_abort")\n'
+            '  static fn listContainsStr(xs: List<String>, v: String) Bool @rust("yokan_stdlib::py_list_contains_str")\n'
+            '  static fn listSliceStr(xs: List<String>, a: Int, b: Int) List<String> @rust("yokan_stdlib::py_list_slice_str")\n'
+            '  static fn listConcatStr(a: List<String>, b: List<String>) List<String> @rust("yokan_stdlib::py_list_concat_str")\n'
+            '  static fn listReversedStr(xs: List<String>) List<String> @rust("yokan_stdlib::py_list_reversed_str")\n'
+            '  static fn listContainsInt(xs: List<Int>, v: Int) Bool @rust("yokan_stdlib::py_list_contains_int")\n'
+            '  static fn listSliceInt(xs: List<Int>, a: Int, b: Int) List<Int> @rust("yokan_stdlib::py_list_slice_int")\n'
+            '  static fn listConcatInt(a: List<Int>, b: List<Int>) List<Int> @rust("yokan_stdlib::py_list_concat_int")\n'
+            '  static fn listReversedInt(xs: List<Int>) List<Int> @rust("yokan_stdlib::py_list_reversed_int")\n'
+            '  static fn listContainsFloat(xs: List<Float>, v: Float) Bool @rust("yokan_stdlib::py_list_contains_float")\n'
+            '  static fn listSliceFloat(xs: List<Float>, a: Int, b: Int) List<Float> @rust("yokan_stdlib::py_list_slice_float")\n'
+            '  static fn listConcatFloat(a: List<Float>, b: List<Float>) List<Float> @rust("yokan_stdlib::py_list_concat_float")\n'
+            '  static fn listReversedFloat(xs: List<Float>) List<Float> @rust("yokan_stdlib::py_list_reversed_float")\n'
+            '  static fn listContainsBool(xs: List<Bool>, v: Bool) Bool @rust("yokan_stdlib::py_list_contains_bool")\n'
+            '  static fn listSliceBool(xs: List<Bool>, a: Int, b: Int) List<Bool> @rust("yokan_stdlib::py_list_slice_bool")\n'
+            '  static fn listConcatBool(a: List<Bool>, b: List<Bool>) List<Bool> @rust("yokan_stdlib::py_list_concat_bool")\n'
+            '  static fn listReversedBool(xs: List<Bool>) List<Bool> @rust("yokan_stdlib::py_list_reversed_bool")\n'
+            '  static fn listSortedStr(xs: List<String>) List<String> @rust("yokan_stdlib::py_list_sorted_str")\n'
+            '  static fn listSortedInt(xs: List<Int>) List<Int> @rust("yokan_stdlib::py_list_sorted_int")\n'
+            '  static fn listSortedFloat(xs: List<Float>) List<Float> @rust("yokan_stdlib::py_list_sorted_float")\n'
+            '  static fn listMinInt(xs: List<Int>) Int @rust("yokan_stdlib::py_list_min_int")\n'
+            '  static fn listMaxInt(xs: List<Int>) Int @rust("yokan_stdlib::py_list_max_int")\n'
+            '  static fn listSumInt(xs: List<Int>) Int @rust("yokan_stdlib::py_list_sum_int")\n'
+            '  static fn minInt(a: Int, b: Int) Int @rust("yokan_stdlib::py_min2_int")\n'
+            '  static fn maxInt(a: Int, b: Int) Int @rust("yokan_stdlib::py_max2_int")\n'
+            '  static fn absInt(v: Int) Int @rust("yokan_stdlib::py_abs_int")\n'
+            '  static fn listMinFloat(xs: List<Float>) Float @rust("yokan_stdlib::py_list_min_float")\n'
+            '  static fn listMaxFloat(xs: List<Float>) Float @rust("yokan_stdlib::py_list_max_float")\n'
+            '  static fn listSumFloat(xs: List<Float>) Float @rust("yokan_stdlib::py_list_sum_float")\n'
+            '  static fn minFloat(a: Float, b: Float) Float @rust("yokan_stdlib::py_min2_float")\n'
+            '  static fn maxFloat(a: Float, b: Float) Float @rust("yokan_stdlib::py_max2_float")\n'
+            '  static fn absFloat(v: Float) Float @rust("yokan_stdlib::py_abs_float")\n'
             "}\n"
         )
     window = ""

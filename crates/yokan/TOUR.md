@@ -305,6 +305,7 @@ def tally():
 ```
 
 Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+`log("…")` writes a line to stderr from either run, and `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
 A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
@@ -387,6 +388,18 @@ The shipped app compiles this to a one-element append, so there is no copy cost.
 items.set(items() + [x])     # append
 items.set([])                # clear
 len(items())                 # count
+```
+
+The rest of Python's list vocabulary works in handlers: `in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` and `zip`, a stepped `range`, and joining two lists.
+A local list carries its element type in the annotation, which is what the compiled side reads.
+
+```python
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
 ```
 
 Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.
@@ -987,15 +1000,15 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
-- **Most list operations beyond append and indexing.** Slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, joining two lists, and local lists and dicts. Append with `items.set(items() + [x])`; the row index of a `list_view` covers what `enumerate` would.
+- **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
 - **str methods beyond the common set**: `.title()`, `.zfill()`, `.format()`, `.encode()` and the rest. `.upper()`, `.lower()`, `.strip()` / `.lstrip()` / `.rstrip()`, `.split()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.count()`, `len(s)`, `s[i]`, `s[a:b]` and `in` are in.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
 - **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
-- **Some control flow**: tuple assignment, nested defs, `print`, `raise`, `assert`, and a conditional expression in a view (branch the elements with `if` there).
+- **Some control flow**: nested defs (a closure has no compiled shape — define helpers at module level) and a conditional expression in a view (branch the elements with `if` there).
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
-- **Types beyond one level**: `list[bool]`, `list[Point]`, `list[list[int]]`, `dict[str, list[str]]`, int-keyed dicts, tuple, set, `Point | None`, value-class fields that are lists or Optionals, model fields holding dicts or value classes.
+- **`tuple` and `set`.** A tuple has no compiled shape yet; a Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered. A `list` covers both today.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
-- **Writing a store field from outside the store** (`Cart.total = 5`). Write it through a method.
+- **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In the standard library**: sqlite parameter binding and multi-column rows, http POST / headers / timeouts, fs directory listing, json writing, local time.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.

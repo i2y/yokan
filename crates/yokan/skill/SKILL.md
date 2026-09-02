@@ -389,7 +389,12 @@ def tally():
 - Lists: `xs[i]` reads an element with Python's meaning (a
   negative index counts from the back, past the end aborts the
   statement); `xs[i] = v` writes one. `len(xs)`, `Cart.xs` and
-  `self.xs` all say the same thing inside a store.
+  `self.xs` all say the same thing inside a store. `in`, slices,
+  `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions,
+  `enumerate` / `zip`, a stepped `range` and joining two lists all
+  work; a local list is annotated (`out: list[str] = []`).
+- `log("…")` writes a line to stderr from either run; `assert` and
+  `raise` end the statement the way Python's exception does.
 - Strings: `+`, `==`, `<`, `"-" * 3`, f-strings with Python's
   format specs, `len(s)`, `s[i]`, `s[a:b]`, `in`, and the common
   methods (`.upper()`, `.lower()`, the `.strip()` family,
@@ -558,10 +563,8 @@ Same list as the tour's closing section; each is refused by name.
 - Placing one element object twice.
 - A method that returns `T | None` (scalars, lists, value classes
   and enums do come back).
-- Most list operations beyond append and indexing: slices, `in`,
-  `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions,
-  `enumerate` / `zip`, stepped `range`, joining two lists, local
-  lists and dicts.
+- A local dict, and a local list without an annotation
+  (`out: list[str] = []`).
 - str methods beyond `.upper()` / `.lower()` / `.strip()` family /
   `.split()` / `.join()` / `.startswith()` / `.endswith()` /
   `.replace()` / `.find()` / `.count()` (those, `len(s)`, `s[i]`,
@@ -570,18 +573,17 @@ Same list as the tour's closing section; each is refused by name.
   `d` / `f` / `e` / `%` / `s`.
 - Iterating a dict's `.values()` / `.items()` (insertion order in
   Python, key order compiled): iterate `sorted(d())`.
-- Tuple assignment, nested defs, `print`, `raise`, `assert`, and a
+- Nested defs (no closures — helpers go at module level) and a
   conditional expression inside a view.
+- `print`: stdout carries the headless dump, so `log("…")` writes
+  to stderr in both runs instead.
 - Component parameters that are value classes or enums, and a body
   that is not one container (a top-level `if`, or several elements
   — wrap them in a `column`). Callbacks and State parameters work:
   the component becomes a view per call site.
-- Types beyond one level (`list[bool]`, `list[Point]`, nested
-  containers, int-keyed dicts, tuple, set, `Point | None`, list or
-  Optional fields on value classes, dict or value-class fields on
-  models).
+- `tuple` and `set`: a tuple has no compiled shape, and a Python
+  set iterates in an order the compiled side would not reproduce.
 - `@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals.
-- Writing a store field from outside the store: use a method.
 - Standard library: sqlite parameter binding and multi-column rows,
   http POST / headers / timeouts, fs directory listing, json
   writing, local time.

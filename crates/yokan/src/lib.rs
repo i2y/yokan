@@ -1745,6 +1745,11 @@ fn py_time_now_ms() -> i64 { yokan_stdlib::time_now_ms() }
 fn py_time_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
     py.detach(|| yokan_stdlib::time_format_ms(ms, fmt))
 }
+#[pyfunction] #[pyo3(name = "log")]
+fn py_log(py: Python<'_>, msg: &str) -> i64 {
+    py.detach(|| yokan_stdlib::log_line(msg))
+}
+
 #[pyfunction] #[pyo3(name = "sleep_ms")]
 fn py_time_sleep_ms(py: Python<'_>, ms: i64) -> i64 {
     py.detach(|| yokan_stdlib::time_sleep_ms(ms))
@@ -1896,6 +1901,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     randomm.add_function(wrap_pyfunction!(py_random_int, &randomm)?)?;
     randomm.add_function(wrap_pyfunction!(py_random_float, &randomm)?)?;
     m.add_submodule(&randomm)?;
+    m.add_function(wrap_pyfunction!(py_log, m)?)?;
     let timem = PyModule::new(m.py(), "time")?;
     timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
