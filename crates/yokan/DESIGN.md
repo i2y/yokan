@@ -255,3 +255,34 @@ no position; they now carry the lambda's own. Rejected: a Python
 traceback (it points into the translator, not the app) and the
 entry file's name for every refusal (wrong for imported modules,
 which is where the report mattered most).
+
+## Refusals speak the user's language
+
+A refusal is the one piece of prose most users read, and the
+translator's had been written from the inside: "cells" for what
+the tour calls State, "tiers" and "native" for the two runs,
+`List<String>` and `Map<String, Int>` for `list[str]` and
+`dict[str, int]`, `ui.State` and `@ui.store` when the documented
+spelling is bare, and a catch-all that printed an AST dump. Every
+message now uses the tour's words, quotes the construct it refused
+in the user's own source, and says what to write instead when
+there is something to write: `count.set(5)` at module level points
+at `run(view, on_start=setup)`, a str method at `strings.to_int`,
+an in-place `append` at `items.set(items() + [x])`, a store field
+written from outside at a method. The catch-alls for expressions,
+statements and conditions inspect the shape they were handed —
+a comprehension, a conditional expression, a walrus, `print`, a
+tuple assignment, `while True`, a chained comparison, an Enum's
+`.value` — and name it, so "not in the dialect" is never the whole
+message.
+
+The second rule is about time. "For now" and "yet" had been
+attached to most refusals, including ones the ledger had decided
+would never change, so a reader could not tell a constraint from a
+gap. Now a refusal that records a decision states the reason and
+stops — a bare `d[k]` raises in Python where a default would be
+answered, truthiness is not a comparison, an index that turns
+negative counts from the back — and only a refusal for something
+planned or undecided says "yet". The word is a promise, and the
+tour's closing list is where the promises are kept.
+
