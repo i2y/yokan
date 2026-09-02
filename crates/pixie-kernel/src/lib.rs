@@ -56,6 +56,7 @@ pub mod a11y;
 pub mod anim;
 pub mod script;
 pub mod theme;
+pub mod timer;
 pub use anim::Easing;
 
 pub type SignalId = u32;

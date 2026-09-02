@@ -163,7 +163,15 @@ pub fn run<C: Component>(
             let ms: f64 = ms
                 .parse()
                 .unwrap_or_else(|_| panic!("bad advance step `{step}`"));
-            rt.with(|w: &mut World| anim::advance(w, ms));
+            rt.with(|w: &mut World| {
+                anim::advance(w, ms);
+                // The clock moved, so the timers that were due in that
+                // span run — a script's `advance:` is how a headless
+                // run says "a second passed".
+                crate::timer::fire_due(w);
+            });
+            flush(rt, view, tree);
+            settle(rt, view, tree);
             *tree = rt.with(|w| build_prepared(w, view));
             timed = true;
         } else if let Some(rest) = step.strip_prefix("click") {

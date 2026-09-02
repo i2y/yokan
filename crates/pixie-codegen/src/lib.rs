@@ -9601,6 +9601,30 @@ fn emit_main(
         // A store is a ROOT: nothing ever releases it, so its count
         // never reaches zero and neither does anything it holds.
         writeln!(out, "    w.root({var}.erase());").unwrap();
+        // `fn tick @every(1000)` — a repeating callback, declared on
+        // the store and registered the moment the store exists. The
+        // clock is the animation clock, so a headless `advance:` fires
+        // exactly the ticks a window would have.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "every") else {
+                continue;
+            };
+            let ms: f64 = match a.args.first().map(|s| s.trim().parse::<f64>()) {
+                Some(Ok(v)) if v > 0.0 => v,
+                _ => {
+                    return err(a.span, "`@every(ms)` takes the period in milliseconds, a positive number");
+                }
+            };
+            if !m.params.is_empty() {
+                return err(a.span, "a timer's method takes no parameters — it is called by the clock");
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::timer::every(&mut w, {ms}f64, std::rc::Rc::new(move |w: &mut World| {{ {var}.{}(w); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
         // Class-typed props whose default CONSTRUCTS (§8.64). The
         // slot came out of `new()` empty, because `new()` has no
         // World; here it does, so the object is built and assigned

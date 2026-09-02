@@ -725,9 +725,15 @@ impl<C: Component> Render for Root<C> {
             }
             pixie_kernel::anim::set_reduced(w, reduced);
             pixie_kernel::anim::set_now(w, now);
+            // Declared timers run on the same clock the animations do,
+            // so a frame is the only place they fire — and while one
+            // exists the pump keeps asking for frames.
+            pixie_kernel::timer::fire_due(w);
+            let ticking = pixie_kernel::timer::any(w);
             let animating = pixie_kernel::anim::active(w);
-            let tree = (flipped || animating).then(|| pixie_kernel::build_prepared(w, view));
-            (tree, animating)
+            let tree = (flipped || animating || ticking)
+                .then(|| pixie_kernel::build_prepared(w, view));
+            (tree, animating || ticking)
         });
         if let Some(t) = rebuilt {
             self.tree = t;
