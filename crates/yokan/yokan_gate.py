@@ -44,10 +44,51 @@ def repo() -> str:
     sys.exit("compiling the native tier needs the pixie repo — set PIXIE_REPO=/path/to/pixie")
 
 
+SOURCES: dict = {}   # parsed file -> its lines, for refusal excerpts
+
+
+def parse_source(path: str) -> ast.Module:
+    """Parse a module and stamp every node with its file, so a
+    refusal raised deep inside a flattened import can still say
+    which file it came from."""
+    src = open(path).read()
+    tree = ast.parse(src, filename=path)
+    for n in ast.walk(tree):
+        n._yokan_file = path
+    SOURCES[path] = src.splitlines()
+    return tree
+
+
 class Untranslatable(Exception):
+    """A refusal: where (file, line, column) and why. `str(e)` is
+    the one-line form; `render()` adds the source excerpt."""
+
     def __init__(self, node, msg):
-        line = getattr(node, "lineno", "?")
-        super().__init__(f"line {line}: {msg}")
+        self.msg = msg
+        self.file = getattr(node, "_yokan_file", None)
+        self.line = getattr(node, "lineno", None)
+        self.col = getattr(node, "col_offset", None)
+        super().__init__(f"{self.where()}: {msg}")
+
+    def where(self) -> str:
+        if self.file is None:
+            return f"line {self.line if self.line is not None else '?'}"
+        rel = os.path.relpath(self.file)
+        path = rel if not rel.startswith("..") else self.file
+        if self.line is None:
+            return path
+        if self.col is None:
+            return f"{path}:{self.line}"
+        return f"{path}:{self.line}:{self.col + 1}"
+
+    def render(self, prefix: str = "not in the dialect") -> str:
+        head = f"{self.where()}: {prefix} — {self.msg}"
+        lines = SOURCES.get(self.file or "")
+        if not lines or self.line is None or not (1 <= self.line <= len(lines)):
+            return head
+        src = lines[self.line - 1]
+        caret = " " * (self.col or 0) + "^"
+        return f"{head}\n    {src}\n    {caret}"
 
 
 def esc(s: str) -> str:
@@ -4747,11 +4788,11 @@ def _local_modules(entry: str) -> dict:
                     continue
                 path = os.path.join(base, m + ".py")
                 if os.path.isfile(path):
-                    t = ast.parse(open(path).read(), filename=path)
+                    t = parse_source(path)
                     seen[m] = t
                     walk(t)
 
-    walk(ast.parse(open(entry).read(), filename=entry))
+    walk(parse_source(entry))
     return seen
 
 
@@ -5379,8 +5420,8 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
 
 
 def translate_file(path: str) -> tuple[str, "Translator"]:
-    tree = ast.parse(open(path).read(), filename=path)
-    tr = Translator(tree, _local_modules(path))
+    modules = _local_modules(path)   # parses (and stamps) the entry too
+    tr = Translator(parse_source(path), modules)
     decls = app_crate_decls(path)
     if decls:
         tr.crate_info = prepare_crates(path, decls)
@@ -6200,7 +6241,9 @@ def main():
 
     try:
         pix, tr = translate_file(args.app)
-    except (Untranslatable, ValueError) as e:
+    except Untranslatable as e:
+        sys.exit(e.render() if e.file else f"{args.app}: {e.render()}")
+    except ValueError as e:
         sys.exit(f"{args.app}: not in the dialect — {e}")
 
     if args.mode == "translate":

@@ -235,3 +235,23 @@ guide says so at its top. The tour stays the single specification;
 the guide is derived from it and is updated in the same change as
 the tour, like the website copies.
 
+## A refusal names its file, line and column
+
+A multi-module app is flattened into one program before
+translation, and a refusal reported only a line number — so a
+mistake in `widgets.py` came back as "line 9" of `app.py`, with no
+column and no quote of the offending line. Every parsed module now
+stamps its nodes with their file, and a refusal reads
+`widgets.py:5:40: not in the dialect — text() does not take
+`weight=``, followed by the source line and a caret under the
+construct. The shape is the one editors and terminals already parse
+(`file:line:col:`), so a build error is a click away from the code
+it names; the excerpt is there because the message talks about a
+construct, and the reader should not have to open the file to see
+which one. A refusal that has no node to point at — a missing
+`run(...)` under the guard — names the file alone. Lambda bodies
+used to report "line ?" because the synthesized statement carried
+no position; they now carry the lambda's own. Rejected: a Python
+traceback (it points into the translator, not the app) and the
+entry file's name for every refusal (wrong for imported modules,
+which is where the report mattered most).

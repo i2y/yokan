@@ -831,6 +831,15 @@ $ yokan build demo/opsboard/app.py --release
 ## 今できないこと
 
 この範囲の外にあるものは、黙って挙動を変えるのではなく、名指しで断られます。
+断りの文はファイル名と行と列を挙げ、該当行を引用します。
+
+```console
+$ yokan build app.py --release
+widgets.py:5:40: not in the dialect — text() does not take `weight=`
+        return text(label, size=12, weight=2)
+                                           ^
+```
+
 今日の時点でできないことと、その理由です。
 
 - **辞書を挿入順で回すこと**。Python の辞書は挿入順、コンパイル後の辞書はキー順で並ぶためです。`sorted()` で回す形（キー順、両方で同じ）が用意されています。

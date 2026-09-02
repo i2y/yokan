@@ -79,6 +79,15 @@ Every one of them passes the gate.
 ## What does not work yet
 
 What lies outside this range is refused by name — it does not silently change behavior.
+A refusal names the file, line and column and quotes the line:
+
+```console
+$ yokan build app.py --release
+widgets.py:5:40: not in the dialect — text() does not take `weight=`
+        return text(label, size=12, weight=2)
+                                           ^
+```
+
 What Yokan cannot do as of today, with the reason for each refusal:
 
 - **Iterating a dict in insertion order.** A Python dict iterates in insertion order; the compiled dict is ordered by key. The provided form is `sorted()` iteration (key order, the same in both).
