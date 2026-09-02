@@ -181,9 +181,11 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
 ) -> Element: ...
 def spinner(size: float = 0.0) -> Element: ...
-# Development-run only today: the compiler refuses a `task` call by
-# name until the compiled run has a worker thread for it (a compiled
-# handler runs to the end, window included).
+# The work runs off the UI thread in both runs — a Python thread
+# during development, the engine's pool for the standard-library
+# calls inside it once compiled. It is the last statement of its
+# handler; `on_error=` is development-run only (catch a failing call
+# with try/except around it).
 def task(
     work: Callable[[], Any],
     on_done: Optional[Callable[[Any], Any]] = None,
@@ -224,10 +226,9 @@ def component(
 ) -> Callable[[Callable[P, Any]], Callable[P, Element]]: ...
 def slot() -> None: ...
 def local(init: T) -> State[T]: ...
-# Development-run only. The compiler refuses an `every` call by name
-# (as it does any statement at module level; startup work goes in
-# `run(view, on_start=...)`), so a shipped app never silently starts
-# without its timer.
+# A timer is DECLARED at module level (or under the __main__ guard)
+# and starts with the app. Both runs fire it off the same clock: a
+# frame in a window, an `advance:<ms>` in a headless script.
 def every(seconds: float, on_tick: Callable[[], Any]) -> None: ...
 def run(
     view: Callable[..., Any],
@@ -337,6 +338,10 @@ class time:
     def now_ms() -> int: ...
     @staticmethod
     def format_ms(ms: int, fmt: str) -> str: ...
+    # Blocks the caller. Inside `task(...)` the compiled run awaits it,
+    # so the window keeps drawing while it waits.
+    @staticmethod
+    def sleep_ms(ms: int) -> int: ...
 
 class random:
     @staticmethod

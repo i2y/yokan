@@ -33,7 +33,7 @@ Call them from handlers (views stay pure).
 - **http**: `get_text` / `get_text_or` (synchronous)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
 - **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`)
-- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms)
+- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
@@ -143,7 +143,7 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-Annotate every parameter and the return (int / float / str / bool / list[...]).
+Annotate every parameter and the return: int, float, str, bool, `list[...]` and `dict[str, ...]` of those, a value class, and `T | None`.
 Compiled extensions like numpy work inside escapes.
 
 ## Heavy work and timers
@@ -154,17 +154,24 @@ Never block a handler (the window freezes).
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-`work` must not build UI elements; it just returns a value.
-Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
-Today `task` runs in the development run only, and the compiler refuses the call by name until the compiled run has a worker thread to give it (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
-Until then, a compiled handler that fetches over `http` waits for the reply, and the window waits with it.
+`on_error=` runs during development only; a failing standard-library call is caught with `try` / `except` around the call itself.
 
-`every(seconds, cb)` is a timer with a seconds interval.
-Call it before `run`.
-Timers are a development-run feature: rather than shipping an app that starts without the timer, the compiler refuses the `every` call by name (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
+`work` must not build UI elements; it just returns a value, and `task` is the last statement of its handler (in Python the statements after it run before the work finishes).
+Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+Both runs do the same thing with it: during development the work is a Python thread, and the compiled app awaits the standard-library calls inside it, which is what puts them on the engine's pool.
+Pure computation inside a task stays where it is written — what moves off the UI thread is the `fs`, `sqlite`, `http` or `time.sleep_ms` call.
+
+`every(seconds, cb)` is a timer, declared at module level (or under the `__main__` guard) and started with the app.
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+It is a declaration, not a call you make later: both runs start it when the app starts, and both fire it off the same clock — a frame in a window, an `advance:<ms>` in a headless script, so a minute of ticks is gate-checkable.
 

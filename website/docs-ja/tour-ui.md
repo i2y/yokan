@@ -31,6 +31,22 @@ with card("counters"):
     counter("b", 10)
 ```
 
+コンポーネントはコールバックや `State` のセルも受け取れます。
+子から親に返す手段がこれです。
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+ハンドラもセルも呼び出し側のものなので、それを受け取るコンポーネントは呼び出し箇所ごとのビューになります（同じものを渡す二か所は一つを共有します）。
+
 `local` は呼び出し位置で見分けられています。
 呼び出しの並びを入れ替えると、状態の対応も入れ替わります。
 

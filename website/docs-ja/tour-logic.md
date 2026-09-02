@@ -70,6 +70,35 @@ p.set(2 ** 10)        # 1024
 bool の値としても使えます（`both.set(hot() and not cold())`）。
 bool 以外に対する値としての `and` / `or` は断られます（Python では結果がどちらかの**オペランドそのもの**で、真偽値とは別物のため）。
 
+## 文字列
+
+文字列は Python と同じように扱えます。
+メソッド、長さ、添字とスライス、`in`、型変換が使えます。
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # コードポイントとスライス
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round は Python と同じ偶数丸め
+```
+
+算術と同じく、ここは二つの実行が別のコードを使う場所です。
+開発中は CPython のメソッド、コンパイル後は同じ答えを返すように書いた Rust の双子で、失敗の仕方まで同じです（`int("x")` はどちらでもその文を中断します）。
+その二つを突き合わせるのがゲートです。
+
+書式指定も Python のもので、ビューでもハンドラでも同じように書けます。
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # 10 桁で右寄せ
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## リスト、チャート、仮想化リスト
 
 リストへの追加は「連結して置き直す」形で書きます。

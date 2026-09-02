@@ -10,7 +10,7 @@ $ ./tools/gate_all.sh               # 全デモをゲートで一括チェック
 ```
 
 numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` で。
-`app` `csv_viewer` `dashboard` `tasks` の 4 本は辞書 state を使う開発専用デモで、ゲート対象外です（ツアーの[今できないこと](../TOUR.ja.md#今できないこと)参照）。
+`app` と `csv_viewer` の 2 本は辞書 state を使う開発専用デモで、ゲート対象外です（ツアーの[今できないこと](../TOUR.ja.md#今できないこと)参照）。
 スクリーンショットはすべて初期状態（起動直後）のものです。
 
 ## まず動きを見る
@@ -132,6 +132,12 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### rustcrate — `yokan add` で足した Rust crate。手元の path crate と crates.io の version crate が同居し、crate 本来の snake_case 名で呼ぶ。同じ宣言の pyproject 綴りが `demo/proj/`
 <img src="screenshots/rustcrate.png" width="360">
 
+#### dashboard — every()。モジュールレベルで宣言したタイマーが両方の実行で動く（ゲートは `advance:` で進める）
+<img src="screenshots/dashboard.png" width="360">
+
+#### tasks — task()。重い処理を UI スレッドの外へ、両方の実行で
+<img src="screenshots/tasks.png" width="360">
+
 ## CPython エスケープと開発専用
 
 #### pystats — @py + numpy。エスケープした関数はリリースバイナリに CPython ごと同梱される
@@ -140,14 +146,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### multi — マルチモジュール構成（state.py と widgets.py に分割、ヘルパはコンポーネントになる）
 <img src="screenshots/multi.png" width="360">
 
-#### dashboard — every() が毎秒動かすロードアベレージ表示（開発専用: 辞書 state）
-<img src="screenshots/dashboard.png" width="360">
-
 #### app — numpy 入りのダッシュボード（開発専用: 辞書 state）
 <img src="screenshots/app.png" width="360">
 
 #### csv_viewer — 10 万行の仮想化テーブル + numpy（開発専用: 辞書 state）
 <img src="screenshots/csv_viewer.png" width="360">
 
-#### tasks — task() のワーカースレッド（開発専用: 辞書 state）
-<img src="screenshots/tasks.png" width="360">

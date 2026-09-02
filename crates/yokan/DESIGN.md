@@ -501,3 +501,80 @@ refused is `.values()` / `.items()`, and for a reason that will not
 change: Python walks them in insertion order and the compiled dict is
 ordered by key, so the honest form is `sorted(d())` with
 `.get(k, default)`.
+
+## Python's str, as a twin rather than a port
+
+`.upper()`, `len(s)`, `s[i]`, `s[a:b]`, `in`, `int()`, `round()` —
+the everyday half of Python's strings and conversions — were refused
+because the compiled side had no implementation. It has one now: a
+set of statics in the standard library, each written to answer what
+CPython answers, including the failures (`int("x")` stops that
+statement, as the raise does).
+
+This is the arithmetic pattern, not the standard library's. `fs` and
+`sqlite` are one implementation both runs call; a str method cannot
+be, because the development run is Python calling Python's own
+method. So the compiled side gets a twin written against CPython's
+semantics and the gate holds the two together — `round` rounding
+half to even is exactly the kind of detail that arrangement exists
+to catch.
+
+The same reasoning covers format specs. `f"{x:.2f}"` was the only
+one the dialect took, because the engine implements that one; fill,
+align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`
+now go through a formatter written against CPython's mini-language,
+in views and handlers alike.
+
+## `task` is an async handler
+
+A `task` was refused because the compiled app had no worker to give
+it. The substrate had one all along — an `async fn` whose awaited
+binding calls run on the engine's pool — so a handler containing a
+task becomes async, and the standard-library calls inside the work
+are awaited. That is what moves the fetch off the UI thread; pure
+computation inside a task stays where it is written, and the docs
+say so rather than implying a thread that is not there.
+
+A task is the last statement of its handler. In Python the
+statements after it run BEFORE the work finishes, and a lowering
+that ran them after would be a silent reordering — so the dialect
+asks for them above the task instead. `on_error=` waits for the
+error union; the failing call is caught with `try` / `except` today.
+
+## A timer is a declaration
+
+`every(1.0, tick)` at module level now compiles, and the way it
+compiles is the point: a timer is not a call an app makes, it is a
+fact about the app, so it lives with the other declarations and both
+runs start it when the app starts. Underneath, the kernel grew a
+timer store on the animation clock — the same clock a headless
+script steps — so a window fires ticks on frames and `advance:<ms>`
+fires exactly the ticks that span would have. Timers became
+gate-checkable in the same change that made them compile, which is
+the only reason to have them at all.
+
+A tick that is late by more than one period does not repeat. The
+clock jumped (a slow frame, a script advancing a minute at once) and
+running a minute of ticks is nobody's intent.
+
+## A component takes what a component is given
+
+Component parameters carried values, so a component could not take a
+callback or a `State` cell — the two things a reusable fragment needs
+to talk back to its caller. Both now work, and neither crosses as a
+parameter: a component that takes one becomes a view per call site,
+with the handler and the cell written into the body where the
+parameter was named. Two call sites that pass the same thing share
+one view. A component's own parameter is readable in its handlers
+too, by passing it to the synthesized store function — the same
+mechanism a `list_view` row uses for its index.
+
+## The escape hatch takes the app's own shapes
+
+`@py` signatures took scalars and lists. They take str-keyed dicts
+(as std's `HashMap`, the marker the crate boundary already had), a
+value class (the generated crate declares the struct, the escape
+module gets a dataclass of the same shape, and the app's `@value`
+twin serves the interpreted run), and `T | None` — with the
+narrowing that goes with it: an optional local reads as its own
+name inside `if v is not None:`, which is what Python means there.

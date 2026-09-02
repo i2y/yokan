@@ -21,26 +21,27 @@ The sections below will not repeat this.
 4. [Form controls](#form-controls)
 5. [Handlers and control flow](#handlers-and-control-flow)
 6. [Arithmetic](#arithmetic)
-7. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
-8. [Dicts](#dicts)
-9. [Value classes and interfaces](#value-classes-and-interfaces)
-10. [Memory](#memory)
-11. [Sum types and match](#sum-types-and-match)
-12. [Optional and Enum](#optional-and-enum)
-13. [Components](#components)
-14. [Styles and themes](#styles-and-themes)
-15. [Animation](#animation)
-16. [The window](#the-window)
-17. [Error handling](#error-handling)
-18. [The standard library](#the-standard-library)
-19. [Calling a Rust crate](#calling-a-rust-crate)
-20. [CPython escapes](#cpython-escapes)
-21. [Heavy work and timers](#heavy-work-and-timers)
-22. [Working with type checkers](#working-with-type-checkers)
-23. [Headless runs and the gate](#headless-runs-and-the-gate)
-24. [Shipping](#shipping)
-25. [A real app](#a-real-app)
-26. [What does not work yet](#what-does-not-work-yet)
+7. [Strings](#strings)
+8. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
+9. [Dicts](#dicts)
+10. [Value classes and interfaces](#value-classes-and-interfaces)
+11. [Memory](#memory)
+12. [Sum types and match](#sum-types-and-match)
+13. [Optional and Enum](#optional-and-enum)
+14. [Components](#components)
+15. [Styles and themes](#styles-and-themes)
+16. [Animation](#animation)
+17. [The window](#the-window)
+18. [Error handling](#error-handling)
+19. [The standard library](#the-standard-library)
+20. [Calling a Rust crate](#calling-a-rust-crate)
+21. [CPython escapes](#cpython-escapes)
+22. [Heavy work and timers](#heavy-work-and-timers)
+23. [Working with type checkers](#working-with-type-checkers)
+24. [Headless runs and the gate](#headless-runs-and-the-gate)
+25. [Shipping](#shipping)
+26. [A real app](#a-real-app)
+27. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -351,6 +352,32 @@ Do fallible `/` `//` `%` `**` inside handlers and hand the view the result.
 They also work as bool values (`both.set(hot() and not cold())`).
 Using `and` / `or` as a value on non-bools is refused (Python returns **one of the operands themselves** there, which is a different thing from a truth value).
 
+## Strings
+
+Strings work as they do in Python: the methods, the length, indexing and slicing, `in`, and the conversions.
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # a code point, then a slice
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round-half-to-even, as Python does
+```
+
+As with Python's arithmetic, the two runs use different code here — CPython's own method while you develop, a Rust twin written to answer exactly the same thing once compiled, failures included, so `int("x")` stops that statement in both — and the gate is what holds them together.
+
+Format specs are Python's, in views and in handlers alike.
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # right-aligned in ten columns
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## Lists, charts, virtualized lists
 
 Append to a list by concatenating and putting it back.
@@ -537,6 +564,17 @@ match health():
 
 Missing arms are reported at compile time.
 Variant fields cannot take defaults, and a variant belongs to exactly one sum type.
+Arms take guards and `|` alternatives, and a guard that fails falls through to the arms below it, as Python's does.
+
+```python
+match health():
+    case Degraded(services) if services > 3:
+        text("badly degraded")
+    case Healthy() | Degraded(_):
+        text("fine enough")
+    case _:
+        text("down")
+```
 
 ## Optional and Enum
 
@@ -588,6 +626,21 @@ with card("counters"):
     counter("a", 1)
     counter("b", 10)
 ```
+
+A component can also take a callback or a `State` cell, which is how a child talks back to the caller.
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+A handler and a cell live in the caller, so a component that takes one becomes a view per call site — two calls that pass the same thing share one.
 
 `local` identity is call-site based.
 Reorder the calls and the states swap along with them.
@@ -683,7 +736,7 @@ Call them from handlers (views stay pure).
 - **http**: `get_text` / `get_text_or` (synchronous)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
 - **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`)
-- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms)
+- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
@@ -793,7 +846,7 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-Annotate every parameter and the return (int / float / str / bool / list[...]).
+Annotate every parameter and the return: int, float, str, bool, `list[...]` and `dict[str, ...]` of those, a value class, and `T | None`.
 Compiled extensions like numpy work inside escapes.
 
 ## Heavy work and timers
@@ -804,19 +857,26 @@ Never block a handler (the window freezes).
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-`work` must not build UI elements; it just returns a value.
-Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
-Today `task` runs in the development run only, and the compiler refuses the call by name until the compiled run has a worker thread to give it (see [What does not work yet](#what-does-not-work-yet)).
-Until then, a compiled handler that fetches over `http` waits for the reply, and the window waits with it.
+`on_error=` runs during development only; a failing standard-library call is caught with `try` / `except` around the call itself.
 
-`every(seconds, cb)` is a timer with a seconds interval.
-Call it before `run`.
-Timers are a development-run feature: rather than shipping an app that starts without the timer, the compiler refuses the `every` call by name (see [What does not work yet](#what-does-not-work-yet)).
+`work` must not build UI elements; it just returns a value, and `task` is the last statement of its handler (in Python the statements after it run before the work finishes).
+Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+Both runs do the same thing with it: during development the work is a Python thread, and the compiled app awaits the standard-library calls inside it, which is what puts them on the engine's pool.
+Pure computation inside a task stays where it is written — what moves off the UI thread is the `fs`, `sqlite`, `http` or `time.sleep_ms` call.
+
+`every(seconds, cb)` is a timer, declared at module level (or under the `__main__` guard) and started with the app.
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+It is a declaration, not a call you make later: both runs start it when the app starts, and both fire it off the same clock — a frame in a window, an `advance:<ms>` in a headless script, so a minute of ticks is gate-checkable.
 
 ## Working with type checkers
 
@@ -894,7 +954,7 @@ $ yokan build demo/opsboard/app.py --release
 ```
 
 The small examples live as a set under `demo/` (counter, todo, ledger, moods, geometry, cards, styled, tryfetch, pyops and more).
-Every one of them passes the gate, except the four that hold state in a dict (`run(state={...})`) — those are development-only by design, and the gallery says so on each.
+Every one of them passes the gate, except the two that hold state in a dict (`run(state={...})`) — those are development-only by design, and the gallery says so on each.
 
 ## What does not work yet
 
@@ -922,20 +982,19 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
 - **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused by name. Startup work goes in a def passed as `run(view, on_start=setup)`.
-- **Compiling `task`.** Worker threads are a development-run feature today, so the call is refused by name. A compiled handler runs to the end: one that fetches over `http` waits for the reply, and so does the window.
-- **Compiling `every`.** Timers are a development-run feature and do not run headless either; the call is refused by name rather than compiled away.
+- **Starting a timer from a handler.** A timer is a declaration (`every(1.0, tick)` at module level), so what a handler changes is what the tick reads.
+- **`task`'s `on_error=`.** The failure path waits on the error union; catch a failing standard-library call with `try` / `except` around the call.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
 - **Most list operations beyond append and indexing.** Slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, joining two lists, and local lists and dicts. Append with `items.set(items() + [x])`; the row index of a `list_view` covers what `enumerate` would.
-- **str methods, `len(s)` and conversions.** `.upper()`, `.split()`, `.strip()` and the rest, `str()` / `int()` / `float()`, indexing a str. Parse numbers with `strings.to_int` / `strings.to_float`; render values in f-strings.
-- **Format specs other than `.Nf`** in views (width, `,`, `%`, `e`, `d`), and any format spec in a handler f-string.
+- **str methods beyond the common set**: `.title()`, `.zfill()`, `.format()`, `.encode()` and the rest. `.upper()`, `.lower()`, `.strip()` / `.lstrip()` / `.rstrip()`, `.split()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.count()`, `len(s)`, `s[i]`, `s[a:b]` and `in` are in.
+- **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
 - **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
 - **Some control flow**: tuple assignment, nested defs, `print`, `raise`, `assert`, and a conditional expression in a view (branch the elements with `if` there).
-- **Guards and `|` patterns on a sum type's arms** (over int, float, str and bool values both work).
-- **A component parameter that is a value class or an enum**, callback and State parameters, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`).
+- **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
 - **Types beyond one level**: `list[bool]`, `list[Point]`, `list[list[int]]`, `dict[str, list[str]]`, int-keyed dicts, tuple, set, `Point | None`, value-class fields that are lists or Optionals, model fields holding dicts or value classes.
-- **`@py` signatures beyond scalars and lists** (dict, value class, Optional).
+- **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **Writing a store field from outside the store** (`Cart.total = 5`). Write it through a method.
 - **In the standard library**: sqlite parameter binding and multi-column rows, http POST / headers / timeouts, fs directory listing, json writing, local time.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.

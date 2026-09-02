@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Gate every demo through both runs (interpreted CPython and the
 # compiled binary) and fail on any dump difference. Run from
-# crates/yokan. Four demos are development-only BY DESIGN (dict
+# crates/yokan. Two demos are development-only BY DESIGN (dict
 # state — the honest-list item) and are listed, not gated.
 cd "$(dirname "$0")/.." || exit 1
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/pixie/target}"
@@ -22,6 +22,8 @@ gate calc    python3 yokan_gate.py gate demo/calc.py --script "click:7,click:×,
 gate calcgrid python3 yokan_gate.py gate demo/calcgrid.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate links   python3 yokan_gate.py gate demo/links.py --script "click:build,click:peek,click:drop,click:peek"
 gate table   python3 yokan_gate.py gate demo/table.py --script "click:refresh,dump,click:refresh"
+gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
+gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
 # Fixture- and dependency-carrying gates.
 gate rustcrate python3 yokan_gate.py gate demo/rustcrate.py --script "click:run"
 # Fixture- and dependency-carrying gates.
@@ -35,8 +37,8 @@ gate opsboard python3 yokan_gate.py gate demo/opsboard/app.py
 for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
-    counter|forms|links|calc|calcgrid|postcard|table|dbnotes|pystats|rustcrate) continue;;
-    app|csv_viewer|dashboard|tasks)
+    counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
+    app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac
   gate "$b" python3 yokan_gate.py gate "$f"

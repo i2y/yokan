@@ -31,6 +31,21 @@ with card("counters"):
     counter("b", 10)
 ```
 
+A component can also take a callback or a `State` cell, which is how a child talks back to the caller.
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+A handler and a cell live in the caller, so a component that takes one becomes a view per call site — two calls that pass the same thing share one.
+
 `local` identity is call-site based.
 Reorder the calls and the states swap along with them.
 

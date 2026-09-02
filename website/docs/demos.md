@@ -10,8 +10,8 @@ $ ./tools/gate_all.sh               # gate-check every demo at once
 ```
 
 The three numpy demos (pystats / csv_viewer / app) run with
-`uv run --with numpy`. Four demos — `app` `csv_viewer` `dashboard`
-`tasks` — use dict state and are development-only by design (see the
+`uv run --with numpy`. Two demos — `app` and `csv_viewer` —
+use dict state and are development-only by design (see the
 [What does not work yet](tour-ship.md#what-does-not-work-yet) section); they are listed here, not gated. All screenshots show
 the initial state, right after launch.
 
@@ -134,6 +134,12 @@ the initial state, right after launch.
 #### rustcrate — Rust crates, added with `yokan add`: a local path crate and a crates.io version crate side by side, called by their own snake_case names. The pyproject spelling of the same declaration is `demo/proj/`
 <img src="images/demos/rustcrate.png" width="360">
 
+#### dashboard — every(): a timer declared at module level, ticking in both runs (the gate steps it with `advance:`)
+<img src="images/demos/dashboard.png" width="360">
+
+#### tasks — task(): slow work off the UI thread, in both runs
+<img src="images/demos/tasks.png" width="360">
+
 ## Escapes and development-only
 
 #### pystats — @py + numpy: escaped functions ship with CPython embedded in the release binary
@@ -142,14 +148,9 @@ the initial state, right after launch.
 #### multi — a multi-module app (state.py and widgets.py; helpers become components)
 <img src="images/demos/multi.png" width="360">
 
-#### dashboard — a load-average display driven by every() (development-only: dict state)
-<img src="images/demos/dashboard.png" width="360">
-
 #### app — a dashboard with numpy (development-only: dict state)
 <img src="images/demos/app.png" width="360">
 
 #### csv_viewer — a 100k-row virtualized table + numpy (development-only: dict state)
 <img src="images/demos/csv_viewer.png" width="360">
 
-#### tasks — worker threads via task() (development-only: dict state)
-<img src="images/demos/tasks.png" width="360">

@@ -69,6 +69,32 @@ Do fallible `/` `//` `%` `**` inside handlers and hand the view the result.
 They also work as bool values (`both.set(hot() and not cold())`).
 Using `and` / `or` as a value on non-bools is refused (Python returns **one of the operands themselves** there, which is a different thing from a truth value).
 
+## Strings
+
+Strings work as they do in Python: the methods, the length, indexing and slicing, `in`, and the conversions.
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # a code point, then a slice
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round-half-to-even, as Python does
+```
+
+As with Python's arithmetic, the two runs use different code here — CPython's own method while you develop, a Rust twin written to answer exactly the same thing once compiled, failures included, so `int("x")` stops that statement in both — and the gate is what holds them together.
+
+Format specs are Python's, in views and in handlers alike.
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # right-aligned in ten columns
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## Lists, charts, virtualized lists
 
 Append to a list by concatenating and putting it back.

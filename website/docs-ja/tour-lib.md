@@ -33,7 +33,7 @@ except Exception as e:
 - **http**：`get_text` / `get_text_or`（同期）
 - **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
 - **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）
-- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）
+- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
@@ -127,7 +127,7 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-引数と返り値は全部注釈します（int / float / str / bool / list[...]）。
+引数と返り値は全部注釈します（int、float、str、bool、それらの `list[...]` と `dict[str, ...]`、Value クラス、`T | None`）。
 numpy のようなコンパイル済み拡張もエスケープの中で使えます。
 
 ## 重い処理とタイマー
@@ -138,18 +138,30 @@ numpy のようなコンパイル済み拡張もエスケープの中で使え�
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-渡す関数は UI 要素を作らず、値を返すだけにします。
-ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
-`task` は今のところ開発実行だけの機能で、コンパイル済みの実行にワーカースレッドが入るまで、コンパイラは呼び出しを名指しで断ります（[今できないこと](tour-ship.md#今できないこと)参照）。
-それまでは、`http` で取得するコンパイル済みのハンドラは応答を待ち、ウィンドウもその間止まります。
+`on_error=` は開発実行だけの形です。
+標準ライブラリ呼び出しの失敗は、その呼び出しを `try` / `except` で囲んで受けます。
 
-`every(seconds, cb)` は秒間隔のタイマーです。
-`run` より前に呼びます。
-タイマーは開発実行の機能です。
-コンパイラは、タイマーのないアプリを黙って作るのではなく、`every` の呼び出しを名指しで断ります（[今できないこと](tour-ship.md#今できないこと)参照）。
+渡す関数は UI 要素を作らず、値を返すだけにします。
+`task` はそのハンドラの最後の文にします（Python では task の後の文が仕事の完了より先に走るためです）。
+ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+どちらの実行も同じことをします。
+開発実行では Python のスレッドが、コンパイル済みの実行では中の標準ライブラリ呼び出しの `await` が、その仕事を UI スレッドの外に出します。
+task の中の純粋な計算は書いた場所で走ります。
+外に出るのは `fs`、`sqlite`、`http`、`time.sleep_ms` の呼び出しです。
+
+`every(seconds, cb)` は秒間隔のタイマーで、モジュールレベル（または `__main__` ガードの中）に書いて、アプリと一緒に始まります。
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+これは後から呼ぶものではなく宣言です。
+どちらの実行もアプリの開始時にタイマーを始め、同じ時計で発火します（ウィンドウならフレーム、ヘッドレスなら `advance:<ms>`）。
+そのため一分ぶんのティックもゲートで確かめられます。
 

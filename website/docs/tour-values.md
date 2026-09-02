@@ -117,6 +117,17 @@ match health():
 
 Missing arms are reported at compile time.
 Variant fields cannot take defaults, and a variant belongs to exactly one sum type.
+Arms take guards and `|` alternatives, and a guard that fails falls through to the arms below it, as Python's does.
+
+```python
+match health():
+    case Degraded(services) if services > 3:
+        text("badly degraded")
+    case Healthy() | Degraded(_):
+        text("fine enough")
+    case _:
+        text("down")
+```
 
 ## Optional and Enum
 

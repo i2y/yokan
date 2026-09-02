@@ -152,6 +152,24 @@ class OptionalSpelling(ast.NodeTransformer):
         return out
 
 
+class _CompArgs(ast.NodeTransformer):
+    """Write a component's by-reference arguments into its body: the
+    handler and the cell belong to the caller, so the specialized view
+    reads them where the parameter was named."""
+
+    def __init__(self, subs: dict):
+        self.subs = subs
+
+    def visit_Name(self, node):
+        if not isinstance(node.ctx, ast.Load) or node.id not in self.subs:
+            return node
+        val = copy.deepcopy(self.subs[node.id])
+        for n in ast.walk(val):
+            ast.copy_location(n, node)
+            n._yokan_file = getattr(node, "_yokan_file", None)
+        return val
+
+
 class ConstInliner(ast.NodeTransformer):
     """Write a module constant's value where its name is read.
 
@@ -363,6 +381,13 @@ class Translator:
         self.enum_values = {}     # Enum -> {member: the value Python gives it}
         self.enum_meta_used = set()   # enums whose .name / .value statics are emitted
         self.in_prop = False      # inside a numeric element property (arithmetic lowers there)
+        self.comp_specials = {}   # (component, argument text) -> the view built for that call
+        self.in_async = False     # translating a task's body: stdlib calls await
+        self.async_hit = False    # ...and the function around it is async
+        self.async_handlers = set()   # handler names emitted as `async fn`
+        self.escape_structs = set()   # value classes crossing an @py signature
+        self.timers = []          # module-level every(seconds, fn) declarations
+        self.timer_handlers = {}  # handler name -> period in ms
         self.view = None
 
     def _scan_import(self, node):
@@ -542,7 +567,57 @@ class Translator:
             pix, rust = self.PYTY[ann.slice.id]
             rust = "String" if rust == "&str" else rust
             return (f"List<{pix}>", f"Vec<{rust}>")
-        raise Untranslatable(ann, "an @py function's parameters and return are int/float/str/bool or list[...] of those — dicts, value classes and Optionals do not cross yet")
+        if (
+            isinstance(ann, ast.Subscript)
+            and isinstance(ann.value, ast.Name)
+            and ann.value.id == "dict"
+            and isinstance(ann.slice, ast.Tuple)
+            and len(ann.slice.elts) == 2
+            and isinstance(ann.slice.elts[0], ast.Name)
+            and isinstance(ann.slice.elts[1], ast.Name)
+        ):
+            if ann.slice.elts[0].id != "str":
+                raise Untranslatable(ann, "a dict crossing @py is keyed by str — int keys are not in the dialect yet")
+            v = ann.slice.elts[1].id
+            if v not in self.PYTY:
+                raise Untranslatable(ann, f"a dict crossing @py holds int, float, str or bool — `{v}` does not cross yet")
+            pix, rust = self.PYTY[v]
+            rust = "String" if rust == "&str" else rust
+            return (f"Map<String, {pix}>", f"std::collections::HashMap<String, {rust}>")
+        if isinstance(ann, ast.Name) and ann.id in self.structs:
+            # A value class crosses as a struct with the same fields:
+            # the generated crate declares it, and the escape module
+            # gets a dataclass of the same shape to build one in
+            # Python. Nested value classes do not cross yet.
+            for _f, t, _d in self.structs[ann.id]:
+                if t not in ("Int", "Float", "String", "Bool"):
+                    raise Untranslatable(
+                        ann,
+                        f"`{ann.id}` crosses @py when its fields are int, float, str or bool — "
+                        f"`{py_ty(t)}` inside it does not cross yet",
+                    )
+            self.escape_structs.add(ann.id)
+            return (ann.id, f"crate::{ann.id}")
+        opt = self._optional_of(ann)
+        if opt is not None:
+            if not (isinstance(opt, ast.Name) and opt.id in self.PYTY):
+                raise Untranslatable(ann, "an optional crossing @py holds int, float, str or bool")
+            pix, rust = self.PYTY[opt.id]
+            rust = "String" if rust == "&str" else rust
+            return (f"{pix}?", f"Option<{rust}>")
+        raise Untranslatable(ann, "an @py function's parameters and return are int/float/str/bool, `list[...]` or `dict[str, ...]` of those, or `T | None` — a value class does not cross yet")
+
+    @staticmethod
+    def _optional_of(ann):
+        """The `T` of a `T | None` annotation, or None."""
+        if (
+            isinstance(ann, ast.BinOp)
+            and isinstance(ann.op, ast.BitOr)
+            and isinstance(ann.right, ast.Constant)
+            and ann.right.value is None
+        ):
+            return ann.left
+        return None
 
     HELPER_TY = {"int": "Int", "float": "Float", "str": "String", "bool": "Bool"}
 
@@ -648,6 +723,12 @@ class Translator:
             fty9 = {f: t for f, t, _ in self.models[mi]["fields"]}.get(left.attr, "")
             if fty9.endswith("?"):
                 cell = ("instfield", f"{left.value.id}.{left.attr}")
+        elif (
+            isinstance(left, ast.Name)
+            and left.id in self.handler_locals
+            and self.typed_locals.get(left.id, "").endswith("?")
+        ):
+            cell = ("local", left.id)
         if cell is None:
             return None
         none_first = isinstance(test.ops[0], ast.Is)
@@ -804,7 +885,9 @@ class Translator:
             sig = ", ".join(f"{p}: {t}" for p, t in params)
             emitted = self._smeth(node.name, m.name)
             tail = f" {ret}" if ret is not None else ""
-            head = f"  fn {emitted}({sig}){tail} {{" if params else f"  fn {emitted}{tail} {{"
+            kw = "async fn" if self.async_hit else "fn"
+            self.async_hit = False
+            head = f"  {kw} {emitted}({sig}){tail} {{" if params else f"  {kw} {emitted}{tail} {{"
             self.stores[node.name]["methods"].append([head, *[f"    {l}" for l in stmts], "  }"])
             self.stores[node.name]["method_names"].add(m.name)
 
@@ -1678,6 +1761,14 @@ class Translator:
                     self._scan_main_guard(node)
             elif isinstance(node, ast.If) and self._is_type_checking_guard(node):
                 continue   # dead at runtime in both runs
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and self._is_ui(node.value.func, "every")
+            ):
+                # A timer is a declaration: it says the app ticks, and
+                # both runs start it when the app starts.
+                self._take_timer(node.value)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
                 # A literal constant is a declaration: nothing runs.
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
@@ -1711,6 +1802,8 @@ class Translator:
             call = stmt.value if isinstance(stmt, ast.Expr) else None
             if isinstance(call, ast.Call) and self._is_ui(call.func, "run"):
                 self._take_run(call)
+            elif isinstance(call, ast.Call) and self._is_ui(call.func, "every"):
+                self._take_timer(call)
             elif isinstance(stmt, ast.Pass) or (
                 isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
             ):
@@ -1725,15 +1818,25 @@ class Translator:
                 "def and pass it as run(view, on_start=setup)",
             )
 
+    def _take_timer(self, call: ast.Call):
+        """`every(seconds, tick)` at module level: the period and the
+        function to run. It is a declaration — the compiled app reads
+        it and starts the timer with the app, exactly as importing the
+        module does during development."""
+        kw = {k.arg: k.value for k in call.keywords if k.arg}
+        args = list(call.args)
+        secs = args[0] if args else kw.get("seconds")
+        fn = args[1] if len(args) > 1 else kw.get("on_tick")
+        if secs is None or fn is None:
+            raise Untranslatable(call, "every(seconds, on_tick) takes the period and the function to run")
+        neg = isinstance(secs, ast.UnaryOp) and isinstance(secs.op, ast.USub)
+        c = secs.operand if neg else secs
+        if neg or not (isinstance(c, ast.Constant) and type(c.value) in (int, float) and type(c.value) is not bool and c.value > 0):
+            raise Untranslatable(secs, "every()'s period is a positive number of seconds, written out (`every(1.0, tick)`)")
+        self.timers.append((float(c.value) * 1000.0, fn, call))
+
     def _refuse_module_stmt(self, node, under_guard: bool):
         call = node.value if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) else None
-        if call is not None and self._is_ui(call.func, "every"):
-            raise Untranslatable(
-                node,
-                "every(...) is not compiled yet — timers are a development-run feature, "
-                "and the compiled app would start without this one; drive the update "
-                "from a handler until timers compile",
-            )
         if call is not None and self._is_ui(call.func, "run"):
             raise Untranslatable(
                 node,
@@ -2175,6 +2278,7 @@ class Translator:
         ("json", "has"): ("Json", "has", 2),
         ("time", "now_ms"): ("Time", "nowMs", 0),
         ("time", "format_ms"): ("Time", "formatMs", 2),
+        ("time", "sleep_ms"): ("Time", "sleepMs", 1),
     }
 
     def _check_crate_structs(self, node, crate, entry):
@@ -2279,6 +2383,34 @@ class Translator:
             meta = self._enum_meta(node, ctx, param)
             if meta is not None:
                 return meta
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            sm = self._str_method(node, ctx, param)
+            if sm is not None:
+                return sm
+            if (
+                node.func.attr == "join"
+                and len(node.args) == 1
+                and not node.keywords
+                and self._num_ty(node.func.value, ctx, param) == "String"
+            ):
+                src = self._list_source(node.args[0], ctx, param)
+                if src is None or not src[1].startswith("List<String"):
+                    raise Untranslatable(node.args[0], "join() takes a list[str] — a state read, a field or a local holding one")
+                self.uses_stdlib = True
+                return f"Py.strJoin({self.expr(node.func.value, ctx, param)}, {src[0]})"
+        if (
+            isinstance(node, ast.Subscript)
+            and self._num_ty(node.value, ctx, param) == "String"
+        ):
+            recv = self.expr(node.value, ctx, param)
+            self.uses_stdlib = True
+            if isinstance(node.slice, ast.Slice):
+                if node.slice.step is not None:
+                    raise Untranslatable(node.slice, "a slice step is not in the dialect yet — `s[a:b]` takes a start and a stop")
+                lo = self.expr(node.slice.lower, ctx, param) if node.slice.lower else "0"
+                hi = self.expr(node.slice.upper, ctx, param) if node.slice.upper else f"Py.strLen({recv})"
+                return f"Py.strSlice({recv}, {lo}, {hi})"
+            return f"Py.strIndex({recv}, {self.expr(node.slice, ctx, param)})"
         if isinstance(node, ast.Name) and self.row is not None and node.id == self.row[1]:
             # The row index: the repeater binds it beside the row, so
             # it reads like any other local in the row's own scope.
@@ -2318,6 +2450,9 @@ class Translator:
             src0 = self._list_source(a0, ctx, param)
             if src0 is not None and (src0[1].startswith("List<") or src0[1].startswith("Map<")):
                 return f"{src0[0]}.length"
+            if self._num_ty(a0, ctx, param) == "String":
+                self.uses_stdlib = True
+                return f"Py.strLen({self.expr(a0, ctx, param)})"
             if isinstance(a0, (ast.List, ast.Tuple, ast.Set)):
                 return str(len(a0.elts))
             if isinstance(a0, ast.Dict):
@@ -2333,6 +2468,17 @@ class Translator:
             and self._row_source_read(node.value)
         ):
             return self.row[2]
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("str", "int", "float", "bool", "round")
+            and len(node.args) == 1
+            and not node.keywords
+            and node.func.id not in self.defs
+        ):
+            conv = self._conversion(node, ctx, param)
+            if conv is not None:
+                return conv
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -2470,9 +2616,12 @@ class Translator:
                 if isinstance(part, ast.Constant) and type(part.value) is str:
                     parts.append(esc(part.value))
                 elif isinstance(part, ast.FormattedValue):
-                    if part.format_spec is not None or part.conversion != -1:
-                        raise Untranslatable(part, "a format spec in a handler f-string is not in the dialect yet — hold the number in a State and format it in the view with `.Nf`")
-                    parts.append(self._splice(self._hole(part.value, "store", param)))
+                    if part.conversion != -1:
+                        raise Untranslatable(part, "`!r` / `!s` conversions are not in the dialect — a hole renders `str()` already")
+                    if part.format_spec is not None:
+                        parts.append("#{" + self._format_call(part.value, self._spec_text(part), "store", param) + "}")
+                    else:
+                        parts.append(self._splice(self._hole(part.value, "store", param)))
                 else:
                     raise Untranslatable(part, "this f-string part is not in the dialect — a hole holds a state read, a field, a parameter or `+ - *` arithmetic over them")
             return '"' + "".join(parts) + '"'
@@ -2765,7 +2914,19 @@ class Translator:
                 raise Untranslatable(node, f"`{mod}.{fn}` takes {arity} argument(s)")
             self.uses_stdlib = True
             args = ", ".join(self.expr(a, ctx, param) for a in node.args)
-            return f"{cls}.{camel}({args})"
+            call = f"{cls}.{camel}({args})"
+            if self.in_async and self.pre_lines is not None:
+                # `await` is a whole right-hand side in pixie, and the
+                # await is what puts the work on the background pool —
+                # so the call is bound first and read after.
+                tmp = f"__a{len(self.handler_locals)}"
+                self.handler_locals.add(tmp)
+                rt = self.STDLIB_RET.get((mod, fn))
+                if rt:
+                    self.typed_locals[tmp] = rt
+                self.pre_lines.append(f"var {tmp} = await {call}")
+                return tmp
+            return call
         if isinstance(node, ast.Call) and self._crate_call(node.func) is not None:
             crate, fn = self._crate_call(node.func)
             if ctx == "view":
@@ -3016,9 +3177,15 @@ class Translator:
             and len(node.ops) == 1
             and isinstance(node.ops[0], (ast.In, ast.NotIn))
         ):
+            if self._num_ty(node.comparators[0], ctx, param) == "String":
+                self.uses_stdlib = True
+                hay = self.expr(node.comparators[0], ctx, param)
+                needle = self.expr(node.left, ctx, param)
+                bare = f"Py.strContains({hay}, {needle})"
+                return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
             d = self._cell_read(node.comparators[0])
             if d is None or not self._ty(d).startswith("Map<"):
-                raise Untranslatable(node, '`in` tests dict membership (`"k" in prices()`) — `in` over a list or a str is not in the dialect yet')
+                raise Untranslatable(node, '`in` tests dict membership (`"k" in prices()`) — `in` over a list is not in the dialect yet')
             recv = d if ctx == "store" else f"App.{d}"
             bare = f"{recv}.contains({self._dict_key(node.left, ctx, param)})"
             return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
@@ -3135,6 +3302,87 @@ class Translator:
             self.in_wrapped_hole = prev
         return f"PyText.{fn}{ename}({recv})"
 
+    def _union_match(self, stmt: ast.Match, subj: str, uname: str, param):
+        """`match` over a sum type. pixie's `case` has one arm per
+        variant and no guards, so the arms are grouped by variant and
+        their guards become an if/else chain inside that arm — a
+        failing guard falling through to the wildcard body, which is
+        what Python does with the arms below it."""
+        groups: dict[str, list] = {}
+        order: list[str] = []
+        default = None
+        for case in stmt.cases:
+            pats = case.pattern.patterns if isinstance(case.pattern, ast.MatchOr) else [case.pattern]
+            if len(pats) > 1 and case.guard is not None:
+                raise Untranslatable(case.pattern, "a `|` arm with a guard is not in the dialect — write the variants as separate arms")
+            for pat in pats:
+                arm, binds = self._union_arm(pat, uname)
+                if arm == "when _":
+                    if len(pats) > 1 or case.guard is not None:
+                        raise Untranslatable(pat, "`_` is the arm that catches what is left, so it takes no guard and no alternatives")
+                    default = case.body
+                    continue
+                if len(pats) > 1 and binds:
+                    raise Untranslatable(pat, "a `|` arm binds nothing — the alternatives would have to bind the same names")
+                if arm not in groups:
+                    groups[arm] = []
+                    order.append(arm)
+                groups[arm].append((binds, case.guard, case.body))
+
+        def body_lines(binds, body, indent: str) -> list[str]:
+            for b, t in binds:
+                self.handler_locals.add(b)
+                self.typed_locals[b] = t
+            try:
+                out = [indent + l for l in self._block(body, param)]
+            finally:
+                for b, _t in binds:
+                    self.handler_locals.discard(b)
+                    self.typed_locals.pop(b, None)
+                    self.dead_locals[b] = f"`{b}` is bound inside its match arm only"
+            return out
+
+        lines = [f"case {subj} {{"]
+        for arm in order:
+            lines.append(f"  {arm} {{")
+            entries = groups[arm]
+            depth = 0
+            for binds, guard, body in entries:
+                if guard is None:
+                    lines += body_lines(binds, body, "    " + "  " * depth)
+                    break
+                for b, t in binds:
+                    self.handler_locals.add(b)
+                    self.typed_locals[b] = t
+                try:
+                    cond = self._cond(guard, "store", param)
+                finally:
+                    for b, _t in binds:
+                        self.handler_locals.discard(b)
+                        self.typed_locals.pop(b, None)
+                pad = "    " + "  " * depth
+                lines.append(f"{pad}if {cond} {{")
+                lines += body_lines(binds, body, pad + "  ")
+                lines.append(f"{pad}}} else {{")
+                depth += 1
+            else:
+                # every arm for this variant was guarded: what is left
+                # is the wildcard body, exactly as Python reads it.
+                if default is not None:
+                    lines += body_lines([], default, "    " + "  " * depth)
+            for d in range(depth - 1, -1, -1):
+                lines.append("    " + "  " * d + "}")
+            lines.append("  }")
+        if default is not None:
+            covered = set(order)
+            rest = [v for v in self.unions[uname] if f"when {v}" not in {a.split("(")[0] for a in covered}]
+            if rest:
+                lines.append("  when _ {")
+                lines += body_lines([], default, "    ")
+                lines.append("  }")
+        lines.append("}")
+        return lines
+
     def _match_literals(self, stmt: ast.Match, subj: str, param):
         """`match n:` over int, float, str or bool literals. pixie's
         `case` matches enum variants and sum-type constructors, so a
@@ -3247,6 +3495,124 @@ class Translator:
         if missing:
             raise Untranslatable(call, f"`{what}` is missing {', '.join(missing)}")
         return [slot[n] for n in names]
+
+    # (method, argument count) -> (static, pix return type). Each one
+    # is a Py static: written once in Rust, with CPython's meaning.
+    STR_METHOD_STATICS = {
+        ("upper", 0): ("strUpper", "String"),
+        ("lower", 0): ("strLower", "String"),
+        ("strip", 0): ("strStrip", "String"),
+        ("lstrip", 0): ("strLstrip", "String"),
+        ("rstrip", 0): ("strRstrip", "String"),
+        ("split", 1): ("strSplit", "List<String>"),
+        ("split", 0): ("strSplitWs", "List<String>"),
+        ("startswith", 1): ("strStartswith", "Bool"),
+        ("endswith", 1): ("strEndswith", "Bool"),
+        ("replace", 2): ("strReplace", "String"),
+        ("find", 1): ("strFind", "Int"),
+        ("count", 1): ("strCount", "Int"),
+    }
+
+    @staticmethod
+    def _spec_text(part: ast.FormattedValue) -> str:
+        """The literal text of a hole's format spec."""
+        spec = part.format_spec
+        if not (
+            isinstance(spec, ast.JoinedStr)
+            and len(spec.values) == 1
+            and isinstance(spec.values[0], ast.Constant)
+            and isinstance(spec.values[0].value, str)
+        ):
+            raise Untranslatable(part, "a format spec is written out (`:.2f`, `:>8`, `:,`) — a computed spec is not in the dialect")
+        return spec.values[0].value
+
+    def _format_call(self, node, spec: str, ctx, param) -> str:
+        """`f"{x:>8,.2f}"` — CPython's format mini-language, answered by
+        the same implementation in both runs."""
+        ty = self._num_ty(node, ctx, param)
+        fn = {"Int": "formatInt", "Float": "formatFloat", "String": "formatStr"}.get(ty)
+        if fn is None:
+            raise Untranslatable(
+                node,
+                f"a format spec applies to an int, a float or a str — `{self._src(node)}` is "
+                + (f"{py_ty(ty)} here" if ty else "of no type the dialect can format here"),
+            )
+        self.uses_stdlib = True
+        prev, self.in_wrapped_hole = self.in_wrapped_hole, True
+        try:
+            v = self.expr(node, ctx, param)
+        finally:
+            self.in_wrapped_hole = prev
+        return f'Py.{fn}({v}, "{esc(spec)}")'
+
+    def _conversion(self, node: ast.Call, ctx, param):
+        """`str(x)`, `int(x)`, `float(x)`, `bool(x)`, `round(x)` — the
+        five conversions, each with Python's own answer: `str` is the
+        text an f-string renders, `int` truncates a float and parses a
+        str (failing the way Python raises), `bool` is the comparison
+        the value stands for, and `round` rounds half to even."""
+        fn = node.func.id
+        a = node.args[0]
+        ty = self._num_ty(a, ctx, param)
+        if fn == "str":
+            return '"' + self._str_parts(a, ctx, param) + '"'
+        if fn == "bool":
+            if ty == "Bool":
+                return self.expr(a, ctx, param)
+            zero = {"Int": "0", "Float": "0.0", "String": '""'}.get(ty)
+            if zero is None:
+                return None
+            return f"({self.expr(a, ctx, param)} != {zero})"
+        self.uses_stdlib = True
+        inner = self.expr(a, ctx, param)
+        if fn == "round":
+            if ty == "Int":
+                return inner
+            return f"Py.round({inner})" if ty == "Float" else None
+        if fn == "int":
+            if ty == "Int":
+                return inner
+            if ty == "Float":
+                return f"Py.intOfFloat({inner})"
+            if ty == "String":
+                return f"Py.intOfStr({inner})"
+            return None
+        if fn == "float":
+            if ty == "Float":
+                return inner
+            if ty == "Int":
+                return f"Py.floatOfInt({inner})"
+            if ty == "String":
+                return f"Py.floatOfStr({inner})"
+        return None
+
+    def _str_method(self, node: ast.Call, ctx, param):
+        """`name().upper()` and the rest: a Py static over the same
+        receiver, so the compiled run answers what CPython answered
+        during development."""
+        f = node.func
+        if not isinstance(f, ast.Attribute) or node.keywords:
+            return None
+        entry = self.STR_METHOD_STATICS.get((f.attr, len(node.args)))
+        if entry is None:
+            return None
+        if f.attr == "join":
+            return None
+        if self._num_ty(f.value, ctx, param) != "String":
+            return None
+        fn, _ret = entry
+        self.uses_stdlib = True
+        args = [self.expr(f.value, ctx, param)] + [self.expr(a, ctx, param) for a in node.args]
+        return f"Py.{fn}({', '.join(args)})"
+
+    def _str_method_ty(self, node: ast.Call, ctx, param):
+        f = node.func
+        if not isinstance(f, ast.Attribute) or node.keywords:
+            return None
+        entry = self.STR_METHOD_STATICS.get((f.attr, len(node.args)))
+        if entry is None or self._num_ty(f.value, ctx, param) != "String":
+            return None
+        return entry[1]
 
     def _dict_key(self, node, ctx, param) -> str:
         """A dict key: any str the app can name. A literal is written
@@ -3472,20 +3838,13 @@ class Translator:
                 if part.conversion != -1:
                     raise Untranslatable(part, "`!r` / `!s` conversions are not in the dialect — a hole renders `str()` already")
                 if part.format_spec is not None:
-                    spec = part.format_spec
-                    ok = (
-                        isinstance(spec, ast.JoinedStr)
-                        and len(spec.values) == 1
-                        and isinstance(spec.values[0], ast.Constant)
-                        and re.fullmatch(r"\.\d+f", spec.values[0].value or "")
-                    )
-                    if not ok:
-                        raise Untranslatable(
-                            part,
-                            "the format spec here is `.Nf` (fixed decimals) — width, `,`, `%`, `e` and `d` are not in the dialect yet",
-                        )
-                    self._reject_bool_text(part.value)
-                    out += "#{" + self.expr(part.value, "view") + ":" + spec.values[0].value + "}"
+                    spec = self._spec_text(part)
+                    if re.fullmatch(r"\.\d+f", spec):
+                        # The engine formats fixed decimals itself.
+                        self._reject_bool_text(part.value)
+                        out += "#{" + self.expr(part.value, "view") + ":" + spec + "}"
+                    else:
+                        out += "#{" + self._format_call(part.value, spec, "view", None) + "}"
                 else:
                     out += self._splice(self._hole(part.value, "view", None))
             else:
@@ -3494,15 +3853,13 @@ class Translator:
 
     # ---- handlers --------------------------------------------------
 
-    def _row_handler(self, node, takes_text: bool):
-        """A row's handler reads the row index, which lives in the
-        repeater's scope. It becomes a store fn that TAKES the index —
-        the row passes it at the call site — so the body reads it like
-        any other parameter, and the element comes back from it
-        (`items[i]`)."""
+    def _scoped_handler(self, node, takes_text: bool, extras):
+        """A handler that reads something living in the VIEW's scope —
+        a repeater's row index, a component's parameter — becomes a
+        store fn that takes it, with the view passing it at the call
+        site. `extras` is [(name, pix type, what to pass)]."""
         if takes_text:
-            raise Untranslatable(node, "a row's callback that takes a value and reads the row index is not in the dialect yet — put a button in the row")
-        rparam, ixname = self.row[1], self.row[3]
+            raise Untranslatable(node, "a callback that takes a value and also reads the row index or a component parameter is not in the dialect yet — use a button")
         if isinstance(node, ast.Lambda):
             if node.args.args:
                 raise Untranslatable(node, "on_click takes a zero-argument callable")
@@ -3510,23 +3867,29 @@ class Translator:
         elif isinstance(node, ast.Name) and node.id in self.defs:
             body = self.defs[node.id].body
         else:
-            raise Untranslatable(node, "a row's handler is a lambda or a module-level def")
+            raise Untranslatable(node, "a handler here is a lambda or a module-level def")
         prev_row, prev_locals, prev_typed = self.row, self.handler_locals, self.typed_locals
-        prev_nonneg = set(self.nonneg_loop_vars)
+        prev_comp, prev_nonneg = self.comp_params, set(self.nonneg_loop_vars)
         self.row = None
-        self.handler_locals = {rparam}
-        self.typed_locals = {**prev_typed, rparam: "Int"}
-        self.nonneg_loop_vars.add(rparam)   # a row index is never negative
+        self.comp_params = None
+        self.handler_locals = {n for n, _t, _v in extras}
+        self.typed_locals = {**prev_typed, **{n: t for n, t, _v in extras}}
+        for n, t, _v in extras:
+            if t == "Int":
+                self.nonneg_loop_vars.discard(n)
         try:
             stmts = []
             for st in body:
                 stmts += self._stmt(st, None)
         finally:
             self.row, self.handler_locals, self.typed_locals = prev_row, prev_locals, prev_typed
-            self.nonneg_loop_vars = prev_nonneg
+            self.comp_params, self.nonneg_loop_vars = prev_comp, prev_nonneg
         name = f"h{len(self.handlers)}"
-        self.handlers.append((name, (rparam, "Int"), stmts))
-        return f"App.{name}({ixname})"
+        if self.async_hit:
+            self.async_handlers.add(name)
+            self.async_hit = False
+        self.handlers.append((name, [(n, t) for n, t, _v in extras], stmts))
+        return f"App.{name}({', '.join(v for _n, _t, v in extras)})"
 
     def _mentions_row(self, node) -> bool:
         """Does this handler read the row or its index?"""
@@ -3542,7 +3905,7 @@ class Translator:
         if self.comp_params is not None:
             return self._inline_handler(node, takes_text, implicit)
         if self.row is not None and self._mentions_row(node):
-            return self._row_handler(node, takes_text)
+            return self._scoped_handler(node, takes_text, [(self.row[1], "Int", self.row[3])])
         iname, ity = implicit
         param = None
         body = None
@@ -3605,6 +3968,9 @@ class Translator:
                 else:
                     self.typed_locals[param] = prev_pty
         name = f"h{len(self.handlers)}"
+        if self.async_hit:
+            self.async_handlers.add(name)
+            self.async_hit = False
         self.handlers.append((name, ity if param else None, stmts))
         return f"App.{name}({iname})" if param else f"App.{name}()"
 
@@ -3653,23 +4019,34 @@ class Translator:
         self.inline_implicit_name = iname
         local_lines: list[str] = []
         cell_stmts: list[str] = []
+        cell_reads: list[str] = []
         cell_uses_param = False
         try:
             for stmt in body:
                 for piece in self._flatten(stmt):
-                    kind, line, used = self._route_inline(piece, param)
+                    kind, line, used, reads = self._route_inline(piece, param)
                     if kind == "local":
                         local_lines.append(line)
                     else:
                         cell_stmts.append(line)
                         cell_uses_param = cell_uses_param or used
+                        for r in reads:
+                            if r not in cell_reads:
+                                cell_reads.append(r)
         finally:
             self.inline_text_param = prev_inline
             self.inline_implicit_name = prev_iname
         if cell_stmts:
             name = f"h{len(self.handlers)}"
-            self.handlers.append((name, ity if cell_uses_param else None, cell_stmts))
-            local_lines.append(f"App.{name}({iname})" if cell_uses_param else f"App.{name}()")
+            if self.async_hit:
+                self.async_handlers.add(name)
+                self.async_hit = False
+            sig = ([("t", ity)] if cell_uses_param else []) + [
+                (n, (self.comp_params or {}).get(n, "String")) for n in cell_reads
+            ]
+            self.handlers.append((name, sig or None, cell_stmts))
+            call = ([iname] if cell_uses_param else []) + cell_reads
+            local_lines.append(f"App.{name}({', '.join(call)})")
         if len(local_lines) == 1 and local_lines[0].startswith("App.h"):
             return local_lines[0]
         if not local_lines:
@@ -3706,19 +4083,29 @@ class Translator:
             ):
                 if len(call.args) != 1:
                     raise Untranslatable(call, "`.set` takes exactly one value")
-                return ("local", f"{f.value.id} = {self.expr(call.args[0], 'view', param)}", False)
+                return ("local", f"{f.value.id} = {self.expr(call.args[0], 'view', param)}", False, [])
         uses_param = param is not None and any(
             isinstance(n, ast.Name) and n.id == param for n in ast.walk(stmt)
         )
+        reads = [
+            n for n in (self.comp_params or {})
+            if any(isinstance(x, ast.Name) and x.id == n for x in ast.walk(stmt))
+        ]
         saved = self.inline_text_param
         self.inline_text_param = None
+        prev_locals, prev_typed, prev_comp = self.handler_locals, self.typed_locals, self.comp_params
+        if reads:
+            self.handler_locals = set(prev_locals) | set(reads)
+            self.typed_locals = {**prev_typed, **{n: prev_comp[n] for n in reads}}
+            self.comp_params = None
         try:
             lines = self._stmt(stmt, param)
         finally:
             self.inline_text_param = saved
+            self.handler_locals, self.typed_locals, self.comp_params = prev_locals, prev_typed, prev_comp
         if len(lines) != 1:
             raise Untranslatable(stmt, "a handler inside a component body takes one statement — use a def handler for more")
-        return ("cell", lines[0], uses_param)
+        return ("cell", lines[0], uses_param, reads)
 
     def _stmt(self, stmt, param) -> list[str]:
         """One statement, with a place for the lines an expression
@@ -3833,6 +4220,7 @@ class Translator:
                 or vt in self.structs
                 or vt in self.enums
                 or vt.startswith("Map<")
+                or vt.endswith("?")
             ):
                 self.typed_locals[name] = vt
             if name in self.handler_locals:
@@ -3979,7 +4367,9 @@ class Translator:
             if opt is not None:
                 src, binding, none_first = opt
                 kind, key = src
-                if kind == "cell":
+                if kind == "local":
+                    subject, sub_ty = key, self.typed_locals[key]
+                elif kind == "cell":
                     subject, sub_ty = key, self._ty(key)
                 elif kind == "selffield":
                     subject, sub_ty = key, self.model_scope[1][key]
@@ -3998,7 +4388,10 @@ class Translator:
                     subject, sub_ty = key, self.stores[sname]["field_tys"][fname]
                 some_body = stmt.orelse if none_first else stmt.body
                 none_body = stmt.body if none_first else stmt.orelse
-                v = binding or "__opt"
+                # A local narrows under its OWN name: `if v is not
+                # None:` reads `v` in the branch, and Python means the
+                # value there, not the optional.
+                v = binding or (key if kind == "local" else "__opt")
                 self.handler_locals.add(v)
                 prev_ty = self.typed_locals.get(v)
                 self.typed_locals[v] = sub_ty[:-1]
@@ -4101,24 +4494,7 @@ class Translator:
             ):
                 ety = self.stores[stmt.subject.value.id]["field_tys"].get(stmt.subject.attr)
             if ety in self.unions:
-                lines = [f"case {subj} {{"]
-                for case in stmt.cases:
-                    if case.guard is not None:
-                        raise Untranslatable(case.pattern, "a match guard (`case X if cond:`) is not in the dialect yet — test the condition inside the arm")
-                    arm, binds = self._union_arm(case.pattern, ety)
-                    lines.append(f"  {arm} {{")
-                    for b, t in binds:
-                        self.handler_locals.add(b)
-                        self.typed_locals[b] = t
-                    for inner in self._block(case.body, param):
-                        lines.append("  " + inner)
-                    for b, _t in binds:
-                        self.handler_locals.discard(b)
-                        self.typed_locals.pop(b, None)
-                        self.dead_locals[b] = f"`{b}` is bound inside its match arm only"
-                    lines.append("  }")
-                lines.append("}")
-                return lines
+                return self._union_match(stmt, subj, ety, param)
             if ety not in self.enums:
                 lit = self._match_literals(stmt, subj, param)
                 if lit is not None:
@@ -4158,16 +4534,97 @@ class Translator:
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
-            and self._is_ui(stmt.value.func, "task")
+            and self._is_ui(stmt.value.func, "every")
         ):
             raise Untranslatable(
                 stmt,
-                "task(...) is not compiled yet — worker threads are a development-run "
-                "feature today, so the compiled app cannot run this handler; until task "
-                "compiles, call the work directly (a compiled handler runs to the end, and "
-                "the window waits while it does) or keep the app development-only",
+                "a timer is declared, not started: write `every(1.0, tick)` at module "
+                "level and let the handler set what the tick reads",
             )
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "task")
+        ):
+            return self._task_stmt(stmt.value, param)
         raise Untranslatable(stmt, self._unknown_stmt(stmt))
+
+    def _task_stmt(self, call: ast.Call, param):
+        """`task(work, on_done=...)` — the handler around it becomes an
+        `async fn`, the work's standard-library calls are awaited (which
+        is what moves them off the UI thread), and `on_done` runs where
+        the work's value lands. The statements after a task would run
+        BEFORE the work finishes in Python, so a task is the last
+        statement of its handler."""
+        kw = {k.arg: k.value for k in call.keywords if k.arg}
+        args = list(call.args)
+        work = args[0] if args else kw.get("work")
+        on_done = args[1] if len(args) > 1 else kw.get("on_done")
+        on_error = args[2] if len(args) > 2 else kw.get("on_error")
+        if work is None:
+            raise Untranslatable(call, "task(work, on_done=...) takes the work to run")
+        if on_error is not None:
+            raise Untranslatable(
+                on_error,
+                "`on_error=` is not compiled yet — a failing standard-library call is "
+                "caught with `try` / `except` around the call itself",
+            )
+        if isinstance(work, ast.Lambda):
+            if work.args.args:
+                raise Untranslatable(work, "task's work takes no arguments")
+            wbody, value = [], work.body
+        elif isinstance(work, ast.Name) and work.id in self.defs:
+            d = self.defs[work.id]
+            if d.args.args:
+                raise Untranslatable(work, f"`{work.id}` takes arguments — task's work takes none")
+            if d.body and isinstance(d.body[-1], ast.Return) and d.body[-1].value is not None:
+                wbody, value = d.body[:-1], d.body[-1].value
+            else:
+                wbody, value = d.body, None
+        else:
+            raise Untranslatable(work, "task's work is a module-level def or a lambda that takes no arguments")
+
+        prev_async, prev_hit = self.in_async, self.async_hit
+        self.in_async = True
+        try:
+            lines = []
+            for st in wbody:
+                lines += self._stmt(st, None)
+            if value is not None:
+                tmp = f"__t{len(self.handler_locals)}"
+                assign = at(ast.Assign(targets=[ast.Name(id=tmp, ctx=ast.Store())], value=value), call)
+                ast.fix_missing_locations(assign)
+                lines += self._stmt(assign, None)
+                if on_done is not None:
+                    lines += self._done_lines(on_done, tmp, param)
+            elif on_done is not None:
+                raise Untranslatable(on_done, "on_done takes the work's value, and this work returns none")
+        finally:
+            self.in_async = prev_async
+        self.async_hit = True
+        return lines
+
+    def _done_lines(self, on_done, tmp: str, param):
+        """`on_done`'s body, with its parameter reading the local the
+        work's value landed in."""
+        if isinstance(on_done, ast.Lambda):
+            if len(on_done.args.args) != 1:
+                raise Untranslatable(on_done, "on_done takes exactly one argument, the work's value")
+            pname = on_done.args.args[0].arg
+            body = [at(ast.Expr(on_done.body), on_done.body)]
+        elif isinstance(on_done, ast.Name) and on_done.id in self.defs:
+            d = self.defs[on_done.id]
+            if len(d.args.args) != 1:
+                raise Untranslatable(on_done, f"`{on_done.id}` takes exactly one argument, the work's value")
+            pname = d.args.args[0].arg
+            body = d.body
+        else:
+            raise Untranslatable(on_done, "on_done is a one-argument lambda or a module-level def")
+        body = [_CompArgs({pname: ast.Name(id=tmp, ctx=ast.Load())}).visit(copy.deepcopy(st)) for st in body]
+        out = []
+        for st in body:
+            out += self._stmt(st, None)
+        return out
 
     EXC_BROAD = ("RuntimeError", "Exception", "BaseException")
 
@@ -4250,6 +4707,24 @@ class Translator:
                 if lt == "Int" and rt == "Int":
                     return "Int"
                 return None
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            smt = self._str_method_ty(node, ctx, param)
+            if smt is not None:
+                return smt if smt in ("Int", "Float", "Bool", "String") else None
+            if (
+                node.func.attr == "join"
+                and len(node.args) == 1
+                and self._num_ty(node.func.value, ctx, param) == "String"
+            ):
+                return "String"
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("str", "int", "float", "bool", "round")
+            and len(node.args) == 1
+            and node.func.id not in self.defs
+        ):
+            return {"str": "String", "int": "Int", "float": "Float", "bool": "Bool", "round": "Int"}[node.func.id]
         if isinstance(node, ast.Call):
             if (
                 isinstance(node.func, ast.Attribute)
@@ -4290,6 +4765,9 @@ class Translator:
                     return node.func.id
                 if node.func.id in self.models:
                     return node.func.id
+                if node.func.id in self.escapes:
+                    t = self.escapes[node.func.id]["ret"][0]
+                    return t if t in ("Int", "Float", "Bool", "String") or t.endswith("?") else None
                 d = self.defs.get(node.func.id)
                 if d is not None and d.returns is not None:
                     t = self._param_ty(d.returns)
@@ -4300,6 +4778,8 @@ class Translator:
                 if t in ("Int", "Float", "Bool", "String") or t in self.enums or t in self.structs:
                     return t
                 return None
+        if isinstance(node, ast.Subscript) and self._num_ty(node.value, ctx, param) == "String":
+            return "String"
         if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
             lit = self._literal_element(node)
             if lit is not None:
@@ -5392,7 +5872,7 @@ class Translator:
                 raise Untranslatable(
                     call, f"`{call.func.id}` takes no children — declare it @component(slots=True) and place them with slot()"
                 )
-            comp, params, _ = self._component(call.func.id)
+            comp, params, _ = self._component_for_call(call)
             props = self._component_props(call, params)
             lines = [f"{pad}{comp} {{"]
             if props:
@@ -5557,11 +6037,70 @@ class Translator:
         lines.append(f"{pad}}}")
         return lines
 
-    def _component(self, pyname: str):
+    def _by_reference(self, d: ast.FunctionDef) -> dict:
+        """The parameters a component takes by reference rather than by
+        value: a callback (no annotation, or `Callable[...]`) and a
+        `State[...]` cell. A pixie view parameter carries a value, so
+        these cannot cross as parameters."""
+        out = {}
+        for a in d.args.args:
+            ann = a.annotation
+            if ann is None:
+                out[a.arg] = "callback"
+            elif isinstance(ann, ast.Name) and ann.id == "Callable":
+                out[a.arg] = "callback"
+            elif isinstance(ann, ast.Subscript) and isinstance(ann.value, ast.Name) and ann.value.id == "Callable":
+                out[a.arg] = "callback"
+            elif isinstance(ann, ast.Subscript) and (
+                (isinstance(ann.value, ast.Name) and self.yokan_names.get(ann.value.id) == "State")
+                or (isinstance(ann.value, ast.Attribute) and ann.value.attr == "State")
+            ):
+                out[a.arg] = "state"
+        return out
+
+    def _component_for_call(self, call: ast.Call):
+        """The view a component call uses. A component whose parameters
+        are all values is one view, shared by every call site. One that
+        takes a callback or a State becomes a view PER CALL SITE, with
+        the argument written into the body — the handler and the cell
+        live in the caller, and a view parameter cannot carry them.
+        Two call sites that pass the same thing share one view."""
+        pyname = call.func.id
+        d = self.defs[pyname]
+        by_ref = self._by_reference(d)
+        if not by_ref:
+            return self._component(pyname)
+        names = [a.arg for a in d.args.args]
+        bound = {}
+        for i, a in enumerate(call.args):
+            if i >= len(names):
+                raise Untranslatable(a, f"{pyname}() takes {len(names)} argument(s)")
+            bound[names[i]] = a
+        for k in call.keywords:
+            if k.arg is None or k.arg not in names:
+                raise Untranslatable(k.value, f"`{k.arg}=` is not a parameter of {pyname}")
+            bound[k.arg] = k.value
+        missing = [n for n in by_ref if n not in bound]
+        if missing:
+            raise Untranslatable(call, f"{pyname}() needs {', '.join(missing)}")
+        key = (pyname,) + tuple(sorted(f"{n}={ast.unparse(bound[n])}" for n in by_ref))
+        if key in self.comp_specials:
+            return self.comp_specials[key]
+        spec = copy.deepcopy(d)
+        spec.args.args = [a for a in spec.args.args if a.arg not in by_ref]
+        subs = {n: bound[n] for n in by_ref}
+        _CompArgs(subs).visit(spec)
+        n = sum(1 for k2 in self.comp_specials if k2[0] == pyname)
+        alias = pyname if n == 0 else f"{pyname}_{n + 1}"
+        entry = self._component(alias, spec)
+        self.comp_specials[key] = entry
+        return entry
+
+    def _component(self, pyname: str, d: ast.FunctionDef | None = None):
         """Translate a helper def into a pixie component (once)."""
         if pyname in self.components:
             return self.components[pyname]
-        d = self.defs[pyname]
+        d = d if d is not None else self.defs[pyname]
         comp = pyname[0].upper() + pyname[1:]
         if comp in self.RESERVED or any(c[0] == comp for c in self.components.values()):
             raise Untranslatable(d, f"component name `{pyname}` collides with another name after capitalization — rename it")
@@ -5647,18 +6186,21 @@ class Translator:
         return self.components[pyname]
 
     def _component_props(self, node: ast.Call, params) -> str:
+        d = self.defs[node.func.id]
+        names = [a.arg for a in d.args.args]
+        want = {n for n, _ in params}
         args = {}
         for i, a in enumerate(node.args):
-            if i >= len(params):
-                raise Untranslatable(a, f"{node.func.id}() takes {len(params)} argument(s)")
-            args[params[i][0]] = a
+            if i >= len(names):
+                raise Untranslatable(a, f"{node.func.id}() takes {len(names)} argument(s)")
+            args[names[i]] = a
         for k in node.keywords:
-            if k.arg is None or k.arg not in dict(params):
+            if k.arg is None or k.arg not in names:
                 raise Untranslatable(k.value, f"`{k.arg}=` is not a parameter of {node.func.id}")
             args[k.arg] = k.value
-        if len(args) != len(params):
-            raise Untranslatable(node, f"{node.func.id}() needs all {len(params)} argument(s)")
-        return "; ".join(f"{name}: {self._comp_arg(args[name])}" for name, _ in params)
+        if set(args) != set(names):
+            raise Untranslatable(node, f"{node.func.id}() needs all {len(names)} argument(s)")
+        return "; ".join(f"{name}: {self._comp_arg(args[name])}" for name, _ in params if name in want)
 
     def _comp_arg(self, a) -> str:
         if isinstance(a, ast.JoinedStr):
@@ -5671,24 +6213,31 @@ class Translator:
             raise Untranslatable(
                 node, f"`{node.func.id}` takes children — use `with {node.func.id}(...):`"
             )
-        comp, params, _ = self._component(node.func.id)
-        args = {}
-        for i, a in enumerate(node.args):
-            if i >= len(params):
-                raise Untranslatable(a, f"{node.func.id}() takes {len(params)} argument(s)")
-            args[params[i][0]] = a
-        for k in node.keywords:
-            if k.arg is None or k.arg not in dict(params):
-                raise Untranslatable(k.value, f"`{k.arg}=` is not a parameter of {node.func.id}")
-            args[k.arg] = k.value
-        if len(args) != len(params):
-            raise Untranslatable(node, f"{node.func.id}() needs all {len(params)} argument(s)")
-        if not params:
+        comp, params, _ = self._component_for_call(node)
+        props = self._component_props(node, params)
+        if not props:
             return [f"{pad}{comp} {{ }}"]
-        props = "; ".join(f"{name}: {self._comp_arg(args[name])}" for name, _ in params)
         return [f"{pad}{comp} {{ {props} }}"]
 
     # ---- whole program ---------------------------------------------
+
+    def _emit_timers(self):
+        """One store method per declared timer, marked with the period
+        the engine fires it at."""
+        for i, (ms, fn, call) in enumerate(self.timers):
+            if not (
+                (isinstance(fn, ast.Name) and fn.id in self.defs)
+                or (
+                    isinstance(fn, ast.Attribute)
+                    and isinstance(fn.value, ast.Name)
+                    and fn.value.id in self.stores
+                )
+            ):
+                raise Untranslatable(fn, "every() runs a module-level def or a store's bound method")
+            callstr = self.handler(fn, takes_text=False)
+            name = f"__tick{i}"
+            self.timer_handlers[name] = ms
+            self.handlers.append((name, None, [callstr]))
 
     def translate(self) -> str:
         trees = [self.tree, *self.modules.values()]
@@ -5700,6 +6249,7 @@ class Translator:
             for tree in trees:
                 inline.visit(tree)
         self.scan()
+        self._emit_timers()
         if ("width" in self.window) != ("height" in self.window):
             raise Untranslatable(self.view, "width= and height= come as a pair")
         body = self.view.body
@@ -5791,11 +6341,12 @@ class Translator:
         for sname, sfields in sorted(self.structs.items()):
             if sname in self.union_of:
                 continue
-            if sname in crate_struct_names:
+            if sname in crate_struct_names or sname in self.escape_structs:
                 # A used crate's .rpi already declares this struct,
                 # WITH its @rust correspondence — the app's @value
                 # twin serves the interpreted run only. A second,
                 # correspondence-less declaration would shadow it.
+                # An @py escape's generated crate says the same thing.
                 if self.struct_methods.get(sname):
                     raise Untranslatable(
                         self.tree,
@@ -5857,10 +6408,12 @@ class Translator:
                 out.append(f"  state {iname} : {mname} = {mname}()")
             for name, param, stmts in self.handlers:
                 out.append("")
-                if isinstance(param, tuple):
-                    sig = f"  fn {name}({param[0]}: {param[1]}) {{"
+                kw = "async fn" if name in self.async_handlers else "fn"
+                mark = f" @every({self.timer_handlers[name]})" if name in self.timer_handlers else ""
+                if isinstance(param, list):
+                    sig = f"  {kw} {name}({', '.join(f'{n}: {t}' for n, t in param)}){mark} {{"
                 else:
-                    sig = f"  fn {name}(t: {param}) {{" if param else f"  fn {name} {{"
+                    sig = f"  {kw} {name}(t: {param}){mark} {{" if param else f"  {kw} {name}{mark} {{"
                 out.append(sig)
                 for st in stmts:
                     out.append(f"    {st}")
@@ -6651,6 +7204,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             "class Time {\n"
             '  static fn nowMs() Int @rust("yokan_stdlib::time_now_ms")\n'
             '  static fn formatMs(ms: Int, fmt: String) String @rust("yokan_stdlib::time_format_ms")\n'
+            '  static fn sleepMs(ms: Int) Int @rust("yokan_stdlib::time_sleep_ms")\n'
             "}\n"
             "\n"
             "class Py {\n"
@@ -6664,6 +7218,31 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn modFloat(a: Float, b: Float) Float @rust("yokan_stdlib::py_mod_float")\n'
             '  static fn powInt(a: Int, b: Int) Int @rust("yokan_stdlib::py_pow_int")\n'
             '  static fn powFloat(a: Float, b: Float) Float @rust("yokan_stdlib::py_pow_float")\n'
+            '  static fn strLen(s: String) Int @rust("yokan_stdlib::py_str_len")\n'
+            '  static fn strIndex(s: String, i: Int) String @rust("yokan_stdlib::py_str_index")\n'
+            '  static fn strSlice(s: String, a: Int, b: Int) String @rust("yokan_stdlib::py_str_slice")\n'
+            '  static fn strUpper(s: String) String @rust("yokan_stdlib::py_str_upper")\n'
+            '  static fn strLower(s: String) String @rust("yokan_stdlib::py_str_lower")\n'
+            '  static fn strStrip(s: String) String @rust("yokan_stdlib::py_str_strip")\n'
+            '  static fn strLstrip(s: String) String @rust("yokan_stdlib::py_str_lstrip")\n'
+            '  static fn strRstrip(s: String) String @rust("yokan_stdlib::py_str_rstrip")\n'
+            '  static fn strSplit(s: String, sep: String) List<String> @rust("yokan_stdlib::py_str_split")\n'
+            '  static fn strSplitWs(s: String) List<String> @rust("yokan_stdlib::py_str_split_ws")\n'
+            '  static fn strJoin(sep: String, parts: List<String>) String @rust("yokan_stdlib::py_str_join")\n'
+            '  static fn strStartswith(s: String, p: String) Bool @rust("yokan_stdlib::py_str_startswith")\n'
+            '  static fn strEndswith(s: String, p: String) Bool @rust("yokan_stdlib::py_str_endswith")\n'
+            '  static fn strContains(s: String, p: String) Bool @rust("yokan_stdlib::py_str_contains")\n'
+            '  static fn strReplace(s: String, from: String, to: String) String @rust("yokan_stdlib::py_str_replace")\n'
+            '  static fn strFind(s: String, p: String) Int @rust("yokan_stdlib::py_str_find")\n'
+            '  static fn strCount(s: String, p: String) Int @rust("yokan_stdlib::py_str_count")\n'
+            '  static fn intOfStr(s: String) Int @rust("yokan_stdlib::py_int_of_str")\n'
+            '  static fn floatOfStr(s: String) Float @rust("yokan_stdlib::py_float_of_str")\n'
+            '  static fn floatOfInt(v: Int) Float @rust("yokan_stdlib::py_float_of_int")\n'
+            '  static fn intOfFloat(v: Float) Int @rust("yokan_stdlib::py_int_of_float")\n'
+            '  static fn round(v: Float) Int @rust("yokan_stdlib::py_round")\n'
+            '  static fn formatInt(v: Int, spec: String) String @rust("yokan_stdlib::py_format_int")\n'
+            '  static fn formatFloat(v: Float, spec: String) String @rust("yokan_stdlib::py_format_float")\n'
+            '  static fn formatStr(v: String, spec: String) String @rust("yokan_stdlib::py_format_str")\n'
             "}\n"
         )
     window = ""
@@ -6686,9 +7265,14 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
     ]
     for name, e in sorted(tr.escapes.items()):
         args = ", ".join(f"{n}: {t[0]}" for n, t in e["params"])
-        rpi.append(f'  static fn {tr._camel(name)}({args}) {e["ret"][0]} @rust("escapes::{name}")')
+        # A dict crosses as std's HashMap on the Rust side; `stdmap:`
+        # is how a binding says so (the same marker rpi-gen writes).
+        mark = "stdmap:" if any(
+            t[0].startswith("Map<") for _n, t in e["params"]
+        ) or e["ret"][0].startswith("Map<") else ""
+        rpi.append(f'  static fn {tr._camel(name)}({args}) {e["ret"][0]} @rust("{mark}escapes::{name}")')
         rpi.append(
-            f'  static fn try{tr._camel(name)[0].upper()}{tr._camel(name)[1:]}({args}) !{e["ret"][0]} @rust("escapes::try_{name}")'
+            f'  static fn try{tr._camel(name)[0].upper()}{tr._camel(name)[1:]}({args}) !{e["ret"][0]} @rust("{mark}escapes::try_{name}")'
         )
     for wr in tr.try_wrappers:
         k = wr["k"]
@@ -6696,6 +7280,12 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         args = ", ".join(f"{n}: {t[0]}" for n, t in esc["params"])
         rpi.append(f'  static fn try{k}({args}) TryRes{k} @rust("escapes::try{k}")')
     rpi.append("}")
+    for sname in sorted(tr.escape_structs):
+        rpi.append("")
+        rpi.append(f'struct {sname} @rust("escapes::{sname}") {{')
+        for f, t, _d in tr.structs[sname]:
+            rpi.append(f"  var {f} : {t}")
+        rpi.append("}")
     for wr in tr.try_wrappers:
         k = wr["k"]
         esc = tr.escapes[wr["escape"]]
@@ -6710,7 +7300,16 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         '[package]\nname = "escapes"\nversion = "0.1.0"\nedition = "2024"\n\n'
         '[dependencies]\npyo3 = { version = "0.26", features = ["auto-initialize"] }\n\n[workspace]\n'
     )
+    dataclasses_py = []
+    for sname in sorted(tr.escape_structs):
+        dataclasses_py.append("@dataclass(frozen=True)")
+        dataclasses_py.append(f"class {sname}:")
+        for f, t, _d in tr.structs[sname]:
+            dataclasses_py.append(f"    {f}: {py_ty(t)}")
+        dataclasses_py.append("")
     src_py = "\n\n".join(e["src"] for _, e in sorted(tr.escapes.items()))
+    if dataclasses_py:
+        src_py = "from dataclasses import dataclass\n\n" + "\n".join(dataclasses_py) + "\n\n" + src_py
     for wr in tr.try_wrappers:
         k = wr["k"]
         esc = tr.escapes[wr["escape"]]
@@ -6812,6 +7411,41 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             "                std::io::Error::other(msg)",
             "            })",
             "    })",
+            "}",
+            "",
+        ]
+    for sname in sorted(tr.escape_structs):
+        fields = tr.structs[sname]
+        rustty = {"Int": "i64", "Float": "f64", "String": "String", "Bool": "bool"}
+        lib += [
+            "// A value class crossing @py: the struct the compiled side",
+            "// passes, converted field by field. The escape module holds",
+            "// a dataclass of the same shape for the Python side.",
+            "#[derive(Clone, Default)]",
+            f"pub struct {sname} {{",
+        ]
+        lib += [f"    pub {f}: {rustty[t]}," for f, t, _d in fields]
+        lib += [
+            "}",
+            "",
+            f"impl<'py> pyo3::FromPyObject<'py> for {sname} {{",
+            "    fn extract_bound(ob: &pyo3::Bound<'py, pyo3::PyAny>) -> PyResult<Self> {",
+            f"        Ok({sname} {{",
+        ]
+        lib += [f'            {f}: ob.getattr("{f}")?.extract()?,' for f, _t, _d in fields]
+        lib += [
+            "        })",
+            "    }",
+            "}",
+            "",
+            f"impl<'py> pyo3::IntoPyObject<'py> for {sname} {{",
+            "    type Target = pyo3::PyAny;",
+            "    type Output = pyo3::Bound<'py, pyo3::PyAny>;",
+            "    type Error = pyo3::PyErr;",
+            "    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {",
+            f'        let cls = module(py).bind(py).getattr("{sname}")?;',
+            "        cls.call1((" + ", ".join(f"self.{f}" for f, _t, _d in fields) + ",))",
+            "    }",
             "}",
             "",
         ]

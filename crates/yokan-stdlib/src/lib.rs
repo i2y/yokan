@@ -236,6 +236,16 @@ pub fn notify_send(title: &str, body: &str) {
     pixie_kernel::notify::send(title, body);
 }
 
+/// Sleep for `ms` milliseconds and answer 0. Both doors release
+/// before they call it: the interpreted one detaches from Python, and
+/// the compiled one is awaited, which puts it on the engine's pool.
+pub fn time_sleep_ms(ms: i64) -> i64 {
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+    }
+    0
+}
+
 /// Total float parse: the value or the default, never an error.
 pub fn strings_to_float(s: &str, default: f64) -> f64 {
     s.trim().parse::<f64>().unwrap_or(default)
@@ -559,4 +569,368 @@ pub fn py_pow_float(a: f64, b: f64) -> f64 {
         panic!("float power result too large");
     }
     if negate { -r } else { r }
+}
+
+// ---- Python's str, once, in Rust -----------------------------------
+// The compiled run calls these; the development run calls CPython's
+// own methods, so each one answers what CPython answers — including
+// the failures, which trap the statement the way a raised exception
+// ends it.
+
+/// len(s) — code points, not bytes.
+pub fn py_str_len(s: &str) -> i64 {
+    s.chars().count() as i64
+}
+
+/// s[i] — one code point, negative counting from the back; past the
+/// end raises IndexError in Python, and traps here.
+pub fn py_str_index(s: &str, i: i64) -> String {
+    let n = s.chars().count() as i64;
+    let k = if i < 0 { i + n } else { i };
+    if k < 0 || k >= n {
+        panic!("string index out of range");
+    }
+    s.chars().nth(k as usize).expect("bounds checked").to_string()
+}
+
+/// s[a:b] — Python's slice: negative counts from the back, ends
+/// clamp instead of failing, and a start past the stop answers "".
+pub fn py_str_slice(s: &str, a: i64, b: i64) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let n = cs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return String::new();
+    }
+    cs[lo..hi].iter().collect()
+}
+
+pub fn py_str_upper(s: &str) -> String {
+    s.to_uppercase()
+}
+
+pub fn py_str_lower(s: &str) -> String {
+    s.to_lowercase()
+}
+
+/// .strip() / .lstrip() / .rstrip() with no argument: Python strips
+/// whitespace, which is the set Rust's `char::is_whitespace` names.
+pub fn py_str_strip(s: &str) -> String {
+    s.trim().to_string()
+}
+
+pub fn py_str_lstrip(s: &str) -> String {
+    s.trim_start().to_string()
+}
+
+pub fn py_str_rstrip(s: &str) -> String {
+    s.trim_end().to_string()
+}
+
+/// s.split(sep) — the separator form: an empty separator raises in
+/// Python, and "a,,b".split(",") keeps the empty field.
+pub fn py_str_split(s: &str, sep: &str) -> Vec<String> {
+    if sep.is_empty() {
+        panic!("empty separator");
+    }
+    s.split(sep).map(|p| p.to_string()).collect()
+}
+
+/// s.split() with no argument: runs of whitespace, no empty fields.
+pub fn py_str_split_ws(s: &str) -> Vec<String> {
+    s.split_whitespace().map(|p| p.to_string()).collect()
+}
+
+pub fn py_str_join(sep: &str, parts: Vec<String>) -> String {
+    parts.join(sep)
+}
+
+pub fn py_str_startswith(s: &str, p: &str) -> bool {
+    s.starts_with(p)
+}
+
+pub fn py_str_endswith(s: &str, p: &str) -> bool {
+    s.ends_with(p)
+}
+
+pub fn py_str_contains(s: &str, p: &str) -> bool {
+    s.contains(p)
+}
+
+pub fn py_str_replace(s: &str, from: &str, to: &str) -> String {
+    if from.is_empty() {
+        // CPython inserts `to` between every character; the dialect
+        // has no use for that, and guessing would be worse than a
+        // named failure.
+        panic!("replace() with an empty search string");
+    }
+    s.replace(from, to)
+}
+
+/// s.find(p) — the code-point index, or -1.
+pub fn py_str_find(s: &str, p: &str) -> i64 {
+    match s.find(p) {
+        Some(byte) => s[..byte].chars().count() as i64,
+        None => -1,
+    }
+}
+
+/// s.count(p) — non-overlapping occurrences, Python's rule for the
+/// empty pattern included.
+pub fn py_str_count(s: &str, p: &str) -> i64 {
+    if p.is_empty() {
+        return s.chars().count() as i64 + 1;
+    }
+    s.matches(p).count() as i64
+}
+
+/// int(s) — Python's parse: surrounding whitespace and an optional
+/// sign; anything else raises, and traps here.
+pub fn py_int_of_str(s: &str) -> i64 {
+    match s.trim().parse::<i64>() {
+        Ok(v) => v,
+        Err(_) => panic!("invalid literal for int(): {s:?}"),
+    }
+}
+
+/// float(s) — the same shape, for floats.
+pub fn py_float_of_str(s: &str) -> f64 {
+    match s.trim().parse::<f64>() {
+        Ok(v) => v,
+        Err(_) => panic!("could not convert string to float: {s:?}"),
+    }
+}
+
+/// float(i) — the widening Python does silently.
+pub fn py_float_of_int(v: i64) -> f64 {
+    v as f64
+}
+
+/// int(f) — Python truncates toward zero, and refuses nan/inf.
+pub fn py_int_of_float(v: f64) -> i64 {
+    if v.is_nan() || v.is_infinite() {
+        panic!("cannot convert float NaN or infinity to integer");
+    }
+    v.trunc() as i64
+}
+
+/// round(f) — Python rounds half to EVEN, which is not what Rust's
+/// `f64::round` does.
+pub fn py_round(v: f64) -> i64 {
+    if v.is_nan() || v.is_infinite() {
+        panic!("cannot convert float NaN or infinity to integer");
+    }
+    let f = v.floor();
+    let diff = v - f;
+    let out = if diff > 0.5 {
+        f + 1.0
+    } else if diff < 0.5 {
+        f
+    } else if (f as i64) % 2 == 0 {
+        f
+    } else {
+        f + 1.0
+    };
+    out as i64
+}
+
+
+// ---- Python's format mini-language ---------------------------------
+// `f"{x:>10,.2f}"` in the development run is CPython's own formatter;
+// the compiled run calls these, so the same spec has to produce the
+// same text. The subset is the one the tour documents: fill and
+// align, a sign, zero padding, a width, `,` grouping, a precision,
+// and the types d / f / e / % / s.
+
+struct Spec {
+    fill: char,
+    align: Option<char>,
+    sign: char,
+    zero: bool,
+    width: usize,
+    comma: bool,
+    precision: Option<usize>,
+    ty: Option<char>,
+}
+
+fn parse_spec(spec: &str) -> Spec {
+    let cs: Vec<char> = spec.chars().collect();
+    let mut i = 0;
+    let mut out = Spec {
+        fill: ' ',
+        align: None,
+        sign: '-',
+        zero: false,
+        width: 0,
+        comma: false,
+        precision: None,
+        ty: None,
+    };
+    // [[fill]align]
+    if cs.len() >= 2 && matches!(cs[1], '<' | '>' | '^' | '=') {
+        out.fill = cs[0];
+        out.align = Some(cs[1]);
+        i = 2;
+    } else if !cs.is_empty() && matches!(cs[0], '<' | '>' | '^' | '=') {
+        out.align = Some(cs[0]);
+        i = 1;
+    }
+    if i < cs.len() && matches!(cs[i], '+' | '-' | ' ') {
+        out.sign = cs[i];
+        i += 1;
+    }
+    if i < cs.len() && cs[i] == '0' {
+        out.zero = true;
+        out.fill = '0';
+        if out.align.is_none() {
+            out.align = Some('=');
+        }
+        i += 1;
+    }
+    let start = i;
+    while i < cs.len() && cs[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i > start {
+        out.width = cs[start..i].iter().collect::<String>().parse().unwrap_or(0);
+    }
+    if i < cs.len() && cs[i] == ',' {
+        out.comma = true;
+        i += 1;
+    }
+    if i < cs.len() && cs[i] == '.' {
+        i += 1;
+        let ps = i;
+        while i < cs.len() && cs[i].is_ascii_digit() {
+            i += 1;
+        }
+        out.precision = Some(cs[ps..i].iter().collect::<String>().parse().unwrap_or(0));
+    }
+    if i < cs.len() {
+        out.ty = Some(cs[i]);
+    }
+    out
+}
+
+fn group3(digits: &str) -> String {
+    let mut out = String::new();
+    for (n, c) in digits.chars().rev().enumerate() {
+        if n > 0 && n % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out.chars().rev().collect()
+}
+
+fn sign_of(neg: bool, sign: char) -> String {
+    if neg {
+        "-".into()
+    } else if sign == '+' {
+        "+".into()
+    } else if sign == ' ' {
+        " ".into()
+    } else {
+        String::new()
+    }
+}
+
+fn pad(body: String, sign: String, sp: &Spec, numeric: bool) -> String {
+    let text = format!("{sign}{body}");
+    let len = text.chars().count();
+    if len >= sp.width {
+        return text;
+    }
+    let fill = sp.fill;
+    let n = sp.width - len;
+    match sp.align.unwrap_or(if numeric { '>' } else { '<' }) {
+        '<' => format!("{text}{}", fill.to_string().repeat(n)),
+        '^' => {
+            let left = n / 2;
+            format!(
+                "{}{text}{}",
+                fill.to_string().repeat(left),
+                fill.to_string().repeat(n - left)
+            )
+        }
+        '=' => format!("{sign}{}{body}", fill.to_string().repeat(n)),
+        _ => format!("{}{text}", fill.to_string().repeat(n)),
+    }
+}
+
+/// CPython's exponent form: at least two digits, always signed.
+fn exp_form(v: f64, precision: usize) -> (String, bool) {
+    let neg = v.is_sign_negative();
+    let a = v.abs();
+    let e = format!("{a:.*e}", precision);
+    let (mant, exp) = e.split_once('e').expect("Rust {:e} has an exponent");
+    let exp: i32 = exp.parse().unwrap_or(0);
+    (
+        format!(
+            "{mant}e{}{:02}",
+            if exp < 0 { '-' } else { '+' },
+            exp.abs()
+        ),
+        neg,
+    )
+}
+
+/// format(int, spec)
+pub fn py_format_int(v: i64, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    match sp.ty {
+        Some('f') | Some('e') | Some('%') => return py_format_float(v as f64, spec),
+        _ => {}
+    }
+    let neg = v < 0;
+    let digits = v.unsigned_abs().to_string();
+    let body = if sp.comma { group3(&digits) } else { digits };
+    pad(body, sign_of(neg, sp.sign), &sp, true)
+}
+
+/// format(float, spec)
+pub fn py_format_float(v: f64, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    let prec = sp.precision.unwrap_or(6);
+    let (body, neg) = match sp.ty {
+        Some('e') => exp_form(v, prec),
+        Some('%') => {
+            let x = v * 100.0;
+            (format!("{:.*}%", prec, x.abs()), x.is_sign_negative())
+        }
+        Some('f') => (format!("{:.*}", prec, v.abs()), v.is_sign_negative()),
+        _ => {
+            // No type: `str(v)`'s text, which is what a bare hole
+            // renders — a width or a fill may still apply.
+            let t = py_float_repr(v);
+            match t.strip_prefix('-') {
+                Some(rest) => (rest.to_string(), true),
+                None => (t, false),
+            }
+        }
+    };
+    let body = if sp.comma {
+        match body.split_once('.') {
+            Some((int, rest)) => format!("{}.{rest}", group3(int)),
+            None => group3(&body),
+        }
+    } else {
+        body
+    };
+    pad(body, sign_of(neg, sp.sign), &sp, true)
+}
+
+/// format(str, spec) — width, fill and alignment, and a precision
+/// that truncates.
+pub fn py_format_str(s: &str, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    let body = match sp.precision {
+        Some(p) => s.chars().take(p).collect::<String>(),
+        None => s.to_string(),
+    };
+    pad(body, String::new(), &sp, false)
 }

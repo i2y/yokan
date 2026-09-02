@@ -67,9 +67,10 @@ $ yokan build app.py --release                    # ship: the native binary
   `run(...)` only.
 - Module level holds declarations: imports, `State`, classes,
   defs, `style()`, type aliases, literal constants, the guard. A
-  statement there (`count.set(5)`, `fs.write_text(...)`,
-  `every(...)`) is refused by name; startup work goes in a def
-  passed as `run(view, on_start=setup)`.
+  statement there (`count.set(5)`, `fs.write_text(...)`) is
+  refused by name; startup work goes in a def passed as
+  `run(view, on_start=setup)`. `every(1.0, tick)` IS a
+  declaration and belongs there.
 - A literal constant (`LIMIT = 10`, `NAMES = ["a", "b"]`) is read
   by name from handlers and views — it is a declaration, not
   state.
@@ -243,7 +244,8 @@ element object is placed once; build fresh ones on every call.
 
 **Text holes** are f-strings. int, str, float, bool and Enum
 values render exactly as Python's `str()` (`2.0`, `True`,
-`Mood.HAPPY`); `f"{x:.1f}"` pins decimals; `+` `-` `*` compute in a
+`Mood.HAPPY`); Python's format specs work (`:.1f`, `:,`, `:>8`,
+`:.1%`, `:.2e`) in views and handlers alike; `+` `-` `*` compute in a
 hole (`f"{n * 2 + 1}"`). `/` `//` `%` `**` can fail, so compute
 them in a handler and render the result. `len(items())`,
 `d().get("k", fallback)` and pure helpers are fine in holes.
@@ -387,9 +389,13 @@ def tally():
   negative index counts from the back, past the end aborts the
   statement); `xs[i] = v` writes one. `len(xs)`, `Cart.xs` and
   `self.xs` all say the same thing inside a store.
-- Strings: `+`, `==`, `<`, `"-" * 3`, f-strings without format
-  specs, `strings.to_int(s, default)` to parse. Methods such as
-  `.upper()` and `len(s)` are not in the subset yet.
+- Strings: `+`, `==`, `<`, `"-" * 3`, f-strings with Python's
+  format specs, `len(s)`, `s[i]`, `s[a:b]`, `in`, and the common
+  methods (`.upper()`, `.lower()`, the `.strip()` family,
+  `.split()`, `.join()`, `.startswith()`, `.endswith()`,
+  `.replace()`, `.find()`, `.count()`). `int()` / `float()` /
+  `str()` / `bool()` / `round()` convert, failing the way Python
+  raises; `strings.to_int(s, default)` is the total form.
 - Helpers: parameters annotated int/float/str/bool (or a
   Protocol), the return annotated int/float/str/bool, body ending
   in `return expression`; callable from handlers and from view
@@ -463,21 +469,26 @@ def slug(t: str) -> str:
 
 An `@py` function stays real Python in both runs (numpy works).
 Sole decorator; annotate every parameter and the return with
-int/float/str/bool or `list[...]` of those; call it from handlers.
+int/float/str/bool, `list[...]` or `dict[str, ...]` of those, a
+value class, or `T | None`; call it from handlers.
 A shipped app with escapes needs CPython: `--bundle` ships a
 runtime folder, `--onefile` one file (about 17 MB; 21 MB with
 numpy).
 
 ## Heavy work and timers
 
-`task(work, on_done=, on_error=)` runs `work` on a worker thread
-and the continuations on the UI thread; headless runs wait for it.
-It is a development-run feature today: the compiler refuses the
-call by name, and a compiled handler runs to the end (an `http`
-fetch there holds the window until the reply). `every(seconds,
-cb)` is a timer, likewise development-only and refused by name;
-timers do not run headless either. An app that needs either stays
-development-only for now.
+`task(work, on_done=)` runs `work` off the UI thread and the
+continuation on it; headless runs wait for it, and it is the last
+statement of its handler (in Python the statements after it run
+first). Both runs do it: a Python thread during development, and
+in the compiled app the standard-library calls inside the work are
+awaited, which is what moves them. `on_error=` is not compiled —
+catch a failing call with `try` / `except` around it.
+
+`every(seconds, cb)` is a timer DECLARED at module level (or under
+the `__main__` guard) and started with the app. Both runs fire it
+off the same clock: a frame in a window, an `advance:<ms>` in a
+headless script, so ticks are gate-checkable.
 
 ## The window and startup
 
@@ -539,7 +550,9 @@ Same list as the tour's closing section; each is refused by name.
 - Type names the compiled side uses, such as `Vec`: pick another.
 - Statements at module level: startup work goes in
   `run(view, on_start=setup)`.
-- Compiling `task` and `every`: development-run features today.
+- Starting a timer from a handler: `every(1.0, tick)` is a
+  module-level declaration.
+- `task`'s `on_error=`: catch a failing call with try/except.
 - A component's `local` is identified by call site.
 - Placing one element object twice.
 - A method that returns `T | None` (scalars, lists, value classes
@@ -548,25 +561,25 @@ Same list as the tour's closing section; each is refused by name.
   `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions,
   `enumerate` / `zip`, stepped `range`, joining two lists, local
   lists and dicts.
-- str methods, `len(s)`, `str()` / `int()` / `float()`, indexing a
-  str: parse with `strings.to_int` / `to_float`, render in
-  f-strings.
-- Format specs other than `.Nf` in views; any spec in a handler
-  f-string.
+- str methods beyond `.upper()` / `.lower()` / `.strip()` family /
+  `.split()` / `.join()` / `.startswith()` / `.endswith()` /
+  `.replace()` / `.find()` / `.count()` (those, `len(s)`, `s[i]`,
+  `s[a:b]` and `in` are in).
+- Format specs beyond fill, align, sign, width, `,`, precision and
+  `d` / `f` / `e` / `%` / `s`.
 - Iterating a dict's `.values()` / `.items()` (insertion order in
   Python, key order compiled): iterate `sorted(d())`.
 - Tuple assignment, nested defs, `print`, `raise`, `assert`, and a
   conditional expression inside a view.
-- Guards and `|` patterns on a sum type's arms (both work over
-  int, float, str and bool values).
-- Component parameters that are value classes or enums (callbacks
-  and State too), and a body that is not one container (a
-  top-level `if`, or several elements — wrap them in a `column`).
+- Component parameters that are value classes or enums, and a body
+  that is not one container (a top-level `if`, or several elements
+  — wrap them in a `column`). Callbacks and State parameters work:
+  the component becomes a view per call site.
 - Types beyond one level (`list[bool]`, `list[Point]`, nested
   containers, int-keyed dicts, tuple, set, `Point | None`, list or
   Optional fields on value classes, dict or value-class fields on
   models).
-- `@py` signatures beyond scalars and lists.
+- `@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals.
 - Writing a store field from outside the store: use a method.
 - Standard library: sqlite parameter binding and multi-column rows,
   http POST / headers / timeouts, fs directory listing, json

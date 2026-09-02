@@ -22,14 +22,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyModule, PyTuple};
 use std::cell::{Cell, RefCell};
 use std::ffi::CString;
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::{Context as TaskCx, Poll};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 static T0: OnceLock<Instant> = OnceLock::new();
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -1110,38 +1107,35 @@ fn task(work: Py<PyAny>, on_done: Option<Py<PyAny>>, on_error: Option<Py<PyAny>>
 }
 
 // ---------------------------------------------------------------------------
-// Timers: a never-completing future polled by the engine's 16 ms pump.
+// Timers: declared before `run()`, fired by the kernel off the
+// animation clock — a frame in a window, an `advance:<ms>` in a
+// script, so both runs tick the same number of times.
 
 thread_local! {
     static PENDING_TIMERS: RefCell<Vec<(f64, Py<PyAny>)>> = const { RefCell::new(Vec::new()) };
 }
 
-struct Every {
-    ctx: AsyncCtx,
-    hv: ErasedHandle,
-    period: Duration,
-    next: Instant,
-    cb: Py<PyAny>,
-}
-
-impl Future for Every {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, _cx: &mut TaskCx) -> Poll<()> {
-        let this = self.get_mut();
-        let now = Instant::now();
-        if now >= this.next {
-            Python::attach(|py| {
-                if let Err(e) = this.cb.call0(py) {
-                    e.print(py);
-                }
-            });
-            let _hv = this.hv;
-            this.ctx.with(after_py_callback);
-            while this.next <= now {
-                this.next += this.period;
-            }
-        }
-        Poll::Pending
+/// Move the queued `every` registrations into the kernel's timer
+/// store. The kernel fires them off the animation clock — a frame in
+/// a window, an `advance:<ms>` in a script — which is what lets the
+/// compiled run and this one tick the same number of times.
+fn install_timers(rt: &Runtime) {
+    for (secs, cb) in PENDING_TIMERS.with(|t| t.take()) {
+        let ms = secs * 1000.0;
+        rt.with(move |w: &mut World| {
+            pixie_kernel::timer::every(
+                w,
+                ms,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
     }
 }
 
@@ -1362,7 +1356,7 @@ fn run(
         // task would spin the settle loop; scripted time is
         // `advance:`'s business.
         if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
-            let _ = PENDING_TIMERS.with(|t| t.take());
+            install_timers(&rt);
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -1393,15 +1387,7 @@ fn run(
             });
             rt.with(|w: &mut World| after_py_callback(w));
         }
-        for (secs, cb) in PENDING_TIMERS.with(|t| t.take()) {
-            rt.spawn(Every {
-                ctx: rt.ctx(),
-                hv: h.erase(),
-                period: Duration::from_secs_f64(secs),
-                next: Instant::now() + Duration::from_secs_f64(secs),
-                cb,
-            });
-        }
+        install_timers(&rt);
         let watch_opt = if watch {
             src_path.map(|p| make_watch(p, shared.clone(), h.erase()))
         } else {
@@ -1596,6 +1582,7 @@ fn _headless(
         CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
         let rt = Runtime::new(w);
         CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
+        install_timers(&rt);
         rt.with(drain_spawns);
         if let Some(f) = &on_start {
             // The startup hook: contained like any handler — a
@@ -1758,6 +1745,10 @@ fn py_time_now_ms() -> i64 { yokan_stdlib::time_now_ms() }
 fn py_time_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
     py.detach(|| yokan_stdlib::time_format_ms(ms, fmt))
 }
+#[pyfunction] #[pyo3(name = "sleep_ms")]
+fn py_time_sleep_ms(py: Python<'_>, ms: i64) -> i64 {
+    py.detach(|| yokan_stdlib::time_sleep_ms(ms))
+}
 
 #[pymodule]
 pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1908,6 +1899,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let timem = PyModule::new(m.py(), "time")?;
     timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_sleep_ms, &timem)?)?;
     m.add_submodule(&timem)?;
     let sysmod = m.py().import("sys")?.getattr("modules")?;
     sysmod.set_item("yokan.fs", &fs)?;
