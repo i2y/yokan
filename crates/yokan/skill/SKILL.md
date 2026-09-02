@@ -66,7 +66,8 @@ $ yokan build app.py --release                    # ship: the native binary
   machinery would otherwise start a second app) and holds
   `run(...)` only.
 - Module level holds declarations: imports, `State`, classes,
-  defs, `style()`, type aliases, literal constants, the guard. A
+  defs, `style()`, type aliases, literal constants, `every(...)`
+  timers, the guard. A
   statement there (`count.set(5)`, `fs.write_text(...)`) is
   refused by name; startup work goes in a def passed as
   `run(view, on_start=setup)`. `every(1.0, tick)` IS a
