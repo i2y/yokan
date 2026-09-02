@@ -219,3 +219,19 @@ and the headless run waiting for completion as the interpreted run
 already does, is future work; naming the gap is what keeps the
 closing list honest until then.
 
+## The agent guide follows the tour
+
+`skill/SKILL.md` is the guide an agent reads before writing an app.
+It had grown by appending a paragraph per feature, so it opened with
+dict state (which does not compile), said both that a bare float
+renders and that it needs `.Nf`, and both that an enum must be
+matched to a string and that it renders as Python prints it. A
+guide that contradicts itself teaches trial and error, which is the
+thing the refusals exist to prevent. The guide is now a condensed
+tour: the tour's order, the tour's vocabulary ("interpreted and
+compiled", "State", "store", "model"), the same code shapes, and the
+same closing list. When the two disagree, the tour is right, and the
+guide says so at its top. The tour stays the single specification;
+the guide is derived from it and is updated in the same change as
+the tour, like the website copies.
+

@@ -1,418 +1,339 @@
 ---
 name: yokan
-description: Writing native desktop UIs in Python with yokan — a GPU-rendered window (pixie's gpui engine) driven from real CPython. Trigger when the user asks for a yokan app, imports yokan, or wants a native (non-web) Python UI with instant start and live reload.
+description: Writing desktop apps with Yokan, a compiler for a statically typed subset of Python. Develop on CPython with live reload, ship a native binary, and verify the two runs against each other. Trigger when the user asks for a yokan app, imports yokan, or wants a native (non-web) desktop UI written in Python.
 ---
 
-# yokan — agent guide
+# Yokan — agent guide
 
-yokan is a Python extension module: real CPython (numpy and the
-whole ecosystem work) driving a native, GPU-rendered window. No
-browser, no server. Apps are one file, runnable with
-`uv run app.py` — declare `dependencies = ["yokan"]` in the PEP 723
-header and uv fetches it from PyPI.
+Yokan is a compiler for a statically typed subset of Python that
+builds native desktop apps. Inside the subset, code behaves exactly
+as Python: while you develop, the whole app runs on real CPython
+with a state-preserving live reload; `yokan build` turns the same
+source into a machine-code executable; and `yokan gate` replays one
+interaction script against both runs and byte-compares the screens.
+What the subset cannot take is refused by name when you translate
+or build — behavior never changes silently. The closing section
+lists what is refused and why; write inside that boundary from the
+start instead of discovering it at build time.
 
-Spelling convention: import everything bare —
-`from yokan import State, store, model, value, component, py,
-local, button, column, row, text, run, …`. If you prefer a
-namespace, `import yokan as ui` works identically (`ui.button`,
-`ui.run`); the two spellings compile the same. `@yokan.store`
-(module-prefixed) works too.
+This guide follows the language tour (`TOUR.md`) section by
+section and says the same things more briefly. When the two
+disagree, the tour is right.
+
+Spelling: import everything bare —
+`from yokan import State, store, model, value, component, local,
+slot, py, button, column, row, text, text_field, run, …`. A
+namespace alias (`import yokan as ui`, then `ui.button`) compiles
+identically.
 
 ## The shape of every app
 
-Two view spellings, freely mixable — both build the same tree:
-
 ```python
-def view(s):                      # functional
-    return column(text(f"n={s['n']}"), spacing=12)
+# /// script
+# dependencies = ["yokan"]
+# ///
+from yokan import State, button, column, run, text
 
-def view(s):                      # declarative (return nothing)
-    with column(spacing=12):
-        text(f"n={s['n']}")
-        with row():
-            button("+1", on_click=lambda: s.update(n=s["n"] + 1))
+count: State[int] = State(0)
+
+def view():
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
+
+if __name__ == "__main__":
+    run(view, title="counter")
 ```
 
-Dict state still RUNS on CPython but no longer compiles — typed
-cells are the compiled story (they validate the native i64 range on
-every write; a plain dict cannot).
+```console
+$ uv run app.py                                    # develop: CPython + live reload
+$ yokan gate app.py --script "click:+1,click:+1"  # verify: both runs, same script
+$ yokan build app.py --release                    # ship: the native binary
+```
 
-Typed State cells (the compiled story):
+- State is declared at module level with `State`, read with
+  `count()`, written with `count.set(v)`. Always annotate: the
+  annotation is where the compiled type comes from.
+- `view()` opens one root container with `with` and builds the
+  screen from state. It is pure: no writes, no standard-library,
+  crate or `@py` calls inside it.
+- Handlers (`on_click`, `on_change`, …) do the mutating; the view
+  re-runs after every event.
+- The `if __name__ == "__main__":` guard is required (the reload
+  machinery would otherwise start a second app) and holds
+  `run(...)` only.
+- Module level holds declarations: imports, `State`, classes,
+  defs, `style()`, type aliases, literal constants, the guard. A
+  statement there (`count.set(5)`, `fs.write_text(...)`,
+  `every(...)`) is refused by name; startup work goes in a def
+  passed as `run(view, on_start=setup)`.
+
+## Holding state
+
+Three tools, chosen by what is being held: a **single value** is a
+`State[T]`; a **coherent area** (a cart, settings, one screen) is a
+`@store`; **objects you create many of and want the screen to
+follow** are a `@model`. Data itself belongs in value classes on
+store fields.
+
+### State
 
 ```python
 count: State[int] = State(0)
 name: State[str] = State("")
-
-def view():                       # zero-arg: cells close over module scope
-    with column(spacing=12):
-        text(f"count: {count()}")
-        button("+1", on_click=lambda: count.set(count() + 1))
-        text_field(name(), on_change=name.set)   # bound .set is a handler
+show: State[bool] = State(False)
+items: State[list[str]] = State([])
+prices: State[dict[str, int]] = State({"apple": 120})
 ```
 
-Annotate cells (`State[int]`) — the annotation is the type source
-for native compilation. Reads are `count()`, writes `count.set(v)`;
-reload preserves cell values by name. Do not mix cells with a state
-dict in one app.
+Types: int, str, float, bool, lists and dicts (str keys) of those,
+Optional (`int | None`), Enum, value classes and sum types. An int
+state checks the 64-bit range on every write, in both runs.
 
-List cells and the patterns that translate natively:
-
-```python
-items: State[list[str]] = State([])       # annotate lists — always
-values: State[list[float]] = State([1.0]) # fine as CHART DATA
-
-items.set(items() + [x])   # append (translates to an in-place push)
-items.set([])              # clear
-len(items())               # count
-list_view(len(items()), row)   # row = def row(i): return text(items()[i])
-line_chart(values(), height=120.0)
-```
-
-Bare float/bool/enum TEXT renders exactly as CPython's str() in
-both tiers (`2.0`, `True`, `Mood.HAPPY`) — the compiled side
-reproduces CPython's results exactly. `.Nf` specs remain available for fixed
-decimals. `+`/`-`/`*` arithmetic works inside text holes.
-
-CPython escapes — `@py` keeps a function REAL Python in both
-tiers (interpreted in dev, embedded CPython in the native build):
-
-```python
-@py
-def slug(t: str) -> str:      # annotate every param AND the return
-    import re                  # imports go inside the escape
-    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
-```
-
-Call escapes from handlers and put results in state; sole decorator;
-types are int/float/str/bool/list[...]. The native binary needs a
-CPython on the machine for escaped parts (stdlib free; third-party
-must be importable there).
-
-Shipping an `@py` app self-contained: add `--bundle` to the gate
-(`yokan gate app.py --script … --release --bundle`; the `yokan`
-command ships with the wheel — `uv tool install yokan`) — the dist
-folder carries its own python runtime, and the app's declared
-`dependencies` (PEP 723 inline block, or the nearest
-`pyproject.toml` when the app is a project — `yokan` itself is
-filtered out) are installed into its site-packages; the target machine needs nothing. `--onefile` goes
-further: ONE distributable file (~17 MB stdlib-only, ~21 MB with
-numpy) that unpacks into the user cache on first run and starts in
-~40 ms after; the gate replays its script through that single file.
-When the app has PEP 723 deps, run the gate itself under
-`uv run --with <dep>` so the CPython tier can import them too.
-To just produce the artifact without the two-tier comparison:
-`yokan build app.py --release [--bundle|--onefile]` (no --script,
-no deps needed on the build machine). Compiling needs the pixie repo
-(auto-found in-tree/from cwd, else `PIXIE_REPO=…`); `translate`
-works anywhere.
-
-The standard library — `yokan.fs` and friends: one native
-implementation shared by the interpreted and the compiled app, so
-it works identically in both, and needs no CPython in the shipped
-binary:
-
-`ui` stays the UI-building alias; modules import from the package:
-
-```python
-from yokan import fs
-
-def save():
-    n.set(fs.write_text("out/note.txt", "hi"))   # -> bytes written
-def load():
-    content.set(fs.read_text("out/note.txt"))    # errors abort the
-flag.set(fs.exists("out/note.txt"))              # statement, app lives
-```
-
-Call them from handlers only (views stay pure). More modules
-(sqlite, http) follow the same shape.
-
-Styling — named bags are plain dicts, used by splat; `|`
-composes; `theme=` scopes a subtree's palette:
-
-```python
-chip = style(size=18, color="accent")     # tokens resolve per theme
-key  = style(background="#313244", hover_background="#45475a")
-hot  = key | style(background="#fab387")  # native style merge
-
-text(f"n={n()}", **chip)                  # one ** per element
-with column(theme=mode()):                # "light"/"dark" cell or literal
-    ...
-```
-
-Form controls — one shape: value in from state, handler receives
-THE NEW VALUE (one argument) and writes it back. `checkbox(label,
-checked=..., on_change=cb)` / `switch(...)` (cb gets a bool;
-script step: `click:<label>` toggles) · `slider(value=, min=,
-max=, step=, on_change=cb)` (cb gets a float; script `slide:<v>`,
-clamped + step-snapped) · `select(options=, selected=,
-on_change=cb)` / `radio_group(...)` / `tab_bar(labels=,
-active=, on_change=cb)` (cb gets the chosen INDEX; script
-`select:<label>`). Bindings are state/store-field reads; tab
-content switches with a plain `if` on the active index.
-
-Standard library, continued — `from yokan import math, json,
-time` (same shared-implementation rule; yokan.math is yokan's
-math in BOTH tiers, so results match by construction): `math.sqrt/sin/cos/pow/fabs/
-floor/ceil/pi`; `json.get_text/get_int/get_float/get_bool/length/
-has(src, "a.b.0")` (typed, panics-with-path on mismatch,
-contained); `time.now_ms()`, `time.format_ms(ms, "%Y-%m-%d")`
-(UTC; feed fixed ms in gate scripts).
-
-Enums — plain `class Mood(Enum)` compiles to a native enum;
-`match` is the native `case` (exhaustiveness checked; arms are
-`Mood.MEMBER` or `_`), in handlers and view bodies. Enum cells:
-`State[Mood] = State(Mood.HAPPY)`; never render an enum in
-text — match it to a string.
-
-Optionals — `State[int | None]`, `.set(None)`, and narrowing by
-walrus (Python's own `if let`):
-
-```python
-if (v := sel()) is not None:
-    text(f"picked {v}")      # v is bound, branch-scoped
-else:
-    text("(none)")
-```
-
-Animation — `animate=` (ms) / `easing=` ("linear|in|out|inOut") /
-`enter=True` / `exit=True` on text and containers; frames come
-from the shared kernel clock, so `advance:60` in a script stands
-inside the tween identically in both tiers.
-
-Error handling, in order of reach-for: (1) `*_or` totals —
-`fs.read_text_or(p, "")`, `http.get_text_or(url, "")`,
-`sqlite.query_int_or(p, sql, 0)`, `sqlite.query_text_or(p, sql)`
-(→ [] on failure) — the default for the standard library; (2) try/except when
-the failure reason matters; (3) uncaught = contained.
-
-try/except is the full Python form: any statements in the body
-(`a = risky(...)` locals live on after), multiple clauses, tuples
-(`except (ValueError, KeyError) as e:`), `else`, `finally` (finally
-needs a catch-all clause — the message says why). Matching for
-escape exceptions is real CPython's:
-
-```python
-try:
-    num.set(risky(mode))
-except ValueError as e:  note.set(f"VE: {e}")
-except KeyError as e:    note.set(f"KE: {e}")
-except Exception:        note.set("other")
-```
-
-Errors — `try/except` is native `case ok/err` for @py escape
-calls (a raised Python exception's `str(e)` is the message in BOTH
-tiers) and for the fallible
-standard-library calls (http.get_text, fs.read_text,
-sqlite.query_int): one
-statement in the try, `except Exception as e` binds the message
-(same string in both tiers). Anything uncaught stays contained.
-
-```python
-try:
-    body.set(http.get_text(url))
-except Exception as e:
-    status.set(f"offline: {e}")
-```
-
-Optional/enum types work on store/model FIELDS as well as cells
-(`last: int | None = None`, `trend: Mood = Mood.HAPPY`, match over
-`self.trend`, view-narrow `(t := Tracker.last) is not None`).
-Buttons take animate=/easing= too.
-
-Helpers — full bodies (ifs, locals, reassignment) ending in
-`return expr`; callable from HANDLERS and VIEW TEXT (they compile
-to native receiver-less static fns). Locals behave like Python
-locals (mutable). Protocol-bounded helpers remain handler-only.
-
-`yokan.random` — seeded and deterministic: `random.seed(n)`,
-`random.int(lo, hi)` (inclusive), `random.float()`. Seed in your
-reset handler and gate scripts replay identical sequences.
-
-`notify.send(title, body)` queues an OS notification — delivered
-through Notification Center when the app runs as an `.app` bundle
-(`--app`); bare dev runs and headless runs drop it quietly.
-
-Sum types — frozen dataclasses + a `type` alias compile to a
-native payload enum; `match` destructures everywhere:
-
-```python
-@dataclass(frozen=True)
-class Circle: r: float
-@dataclass(frozen=True)
-class Rect: w: float; h: float
-type Shape = Circle | Rect
-
-sel: State[Shape] = State(Circle(2.0))
-match sel():                       # handlers AND view bodies
-    case Circle(r): text(f"r={r:.1f}")   # float binds need .Nf
-    case Rect(w, h): ...
-```
-
-Variant fields take no defaults; a variant belongs to one union.
-
-Value types — `@value` (shorthand for `@dataclass(frozen=True)`;
-both spellings compile) makes a native struct. Value classes take
-METHODS too: operator dunders `__add__`/`__sub__`/`__mul__` give
-`+`/`-`/`*` their meaning (both tiers), plain methods are
-handler-callable; bodies are a single `return expr`. Bool logic as
-a VALUE works over bools (`hot() and not cold()`). Immutability is what
-makes Python references and native values mean the same thing:
-
-```python
-from dataclasses import dataclass, replace
-
-@dataclass(frozen=True)
-class Point:
-    x: int
-    y: int = 0
-
-sel: State[Point] = State(Point(3, 4))
-sel.set(replace(sel(), x=10))      # functional update, both tiers
-text(f"x={sel().x}")            # field reads in views/handlers
-```
-
-Observed objects — `@model` (instantiable; fields need
-defaults; methods compile with the full handler dialect). Models
-REFERENCE models: owning `kid: Node | None = None` / `kids:
-list[Node] = []`, non-owning back pointer `parent: Weak[Node] =
-None` (from yokan import Weak; compiled twin is pixie's weak
-prop — a dead target reads as None). Wire references in handlers
-(`a.kid = b`; construct with `Node()`); narrow reads with the
-walrus. Stores hold models the same way (`root: Node | None`) but
-never weakly (owners are strong):
-
-```python
-@model
-class Circle:
-    r: float = 1.0
-    def grow(self, by: float) -> None:
-        self.r += by
-
-left = Circle()                    # module-level instances
-button("grow", on_click=lambda: left.grow(0.5))   # def handlers may call left.grow(...)
-text(f"r is set")               # views read left.<field> reactively
-```
-
-Interfaces — `typing.Protocol` with method stubs compiles to a
-native trait; a model listing it as a base implements it, and a
-Protocol-typed helper becomes a statically-dispatched generic:
-
-```python
-class Shape(Protocol):
-    def area(self) -> float: ...
-
-@model
-class Circle(Shape):
-    r: float = 1.0
-    def area(self) -> float:       # protocol methods: single return
-        return self.r * self.r * 3.0
-
-def area_of(s: Shape) -> float:    # bounded generic natively
-    return s.area()
-```
-
-Startup — `run(view, on_start=Store.load)` runs once after
-mount, contained (a failing start prints; the app opens). Gate
-persistent apps with `--fresh path/to/file.db` so the interpreted
-run's writes never leak into the compiled run's startup read.
-
-Window — `run(view, title="OpsBoard", width=1100, height=820)`:
-title and size cross into the compiled binary too (baked through
-the project's pixie.toml `[window]`). width/height are logical
-pixels and come as a pair; omitted = the engine default (420x560).
-Headless dumps never contain them, so they are gate-neutral.
-
-Dict defaults read anywhere: `d().get("key", fallback)` (and
-`Store.field.get(...)`) works in handlers AND view text — total in
-both tiers. Loop variables are Int and render in holes
-(`f"items.{i}.title"` builds dynamic json paths).
-
-Named stores — `@store`: a singleton with fields AND methods
-(the decorator returns the instance, so the class name is the
-store). Fields take cell-grade types; methods use the full handler
-dialect; stores may call each other; bound methods work as
-handlers. Method params take int/float/str/bool, list[...] of
-those, a value class, or an enum:
+### Stores
 
 ```python
 @store
 class Cart:
     items: list[str] = []
     total: int = 0
+
     def add(self, name: str, price: int) -> None:
-        self.items = self.items + [name]   # -> native push
+        self.items = self.items + [name]
         self.total += price
 
+    def clear(self) -> None:
+        Cart.reset_total()          # a sibling is called through the class name
+        self.items = []
+
+    def reset_total(self) -> None:
+        self.total = 0
+
 button("add", on_click=lambda: Cart.add("apple", 120))
-button("clear", on_click=Cart.clear)    # bound method, no lambda
+button("clear", on_click=Cart.clear)       # a bound method is a handler
 text(f"n={len(Cart.items)} total={Cart.total}")
 ```
 
-Grouped state is a fields-only `@store` — direct reads in views
-(`Mixer.volume`), writes through methods, no instance line.
-(There is no separate bundle decorator.)
+The decorator returns the singleton, so the class name is the
+store. Fields take the same types as `State` and are read directly
+in views (`Cart.total`); writes go through methods. Methods return
+`None`, take positional int/float/str/bool, `list[...]` of those,
+value classes and Enums, and are written like handlers. Stores can
+call each other's methods.
 
-Components with children — declare `@component(slots=True)`,
-place them with `slot()`, pass them with `with`:
+### Models
 
 ```python
+@model
+class Node:
+    label: str = "n"
+    kid: Node | None = None
+    parent: Weak[Node] = None       # the back reference does not own
+
+@store
+class Tree:
+    root: Node | None = None
+
+    def build(self) -> None:
+        a = Node()
+        a.label = "alpha"
+        b = Node()
+        a.kid = b
+        b.parent = a                # no cycle: parent is Weak
+        self.root = a
+```
+
+Fields need defaults; construct with `Node()` and set fields in
+handlers. An owning reference is `Node | None` or `list[Node]`;
+the non-owning back reference is `Weak[Node]` (`from yokan import
+Weak`; a checker sees `Node | None`, a dead target reads None).
+Read a reference with the walrus: `if (r := Tree.root) is not
+None: text(f"root: {r.label}")`. Models are reference-counted in
+the compiled run and cycles are never collected, so back pointers
+are `Weak` — the CPython you develop on does collect cycles, which
+is the one place the two runs' memory behavior differs.
+
+### Value classes
+
+```python
+from dataclasses import replace
+
+@value
+class V2:
+    x: int
+    y: int = 0
+
+    def __add__(self, o: "V2") -> "V2":
+        return V2(self.x + o.x, self.y + o.y)
+
+    def dot(self, o: "V2") -> int:
+        return self.x * o.x + self.y * o.y
+
+sel: State[V2] = State(V2(3, 4))
+sel.set(replace(sel(), x=10))          # functional update
+c.set(a() + b())                       # + goes to __add__ in both runs
+text(f"x={sel().x}")                   # views read fields
+```
+
+`@value` is `@dataclass(frozen=True)` (that spelling works too).
+Updates are `replace`. Methods are a single `return expression`;
+`__add__` / `__sub__` / `__mul__` give `+` `-` `*` their meaning;
+plain methods are called from handlers (views read fields). A
+field may hold another value class declared earlier.
+
+### Sum types
+
+```python
+@value
+class Healthy: pass
+@value
+class Degraded: services: int
+
+type Health = Healthy | Degraded
+health: State[Health] = State(Healthy())
+
+match health():                        # in handlers and in views
+    case Healthy():
+        text("nominal")
+    case Degraded(services):
+        text(f"{services} degraded")
+```
+
+Missing arms are compile errors. Variant fields take no defaults,
+and a variant belongs to one sum type.
+
+### Enum, Optional, Protocol
+
+- `class Mood(Enum)` compiles as-is. `match` arms are `Mood.MEMBER`
+  or `_`; missing arms are reported. In text an enum renders as
+  Python does (`Mood.HAPPY`). Compare with `==`.
+- Optional works in state and in fields (`last: int | None =
+  None`); narrow with the walrus, `if (v := sel()) is not None:`,
+  in handlers and views alike (`v` is bound only in that branch).
+- `typing.Protocol` with method stubs is an interface: a model
+  listing it as a base implements it, and a helper with a
+  Protocol-typed parameter is statically dispatched. Such helpers
+  are called from handlers, not views.
+
+## Views
+
+The catalog: `text`, `button`, `text_field`, `checkbox`, `switch`,
+`slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`,
+`grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`,
+`data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`,
+`progress`, `spinner`. Containers are opened with `with`; elements
+add themselves to the open container. `grid(columns=, rows=)` lays
+equal tracks and a button spans cells with `col_span=` /
+`row_span=`. An element object is placed once; build fresh ones on
+every call.
+
+**Text holes** are f-strings. int, str, float, bool and Enum
+values render exactly as Python's `str()` (`2.0`, `True`,
+`Mood.HAPPY`); `f"{x:.1f}"` pins decimals; `+` `-` `*` compute in a
+hole (`f"{n * 2 + 1}"`). `/` `//` `%` `**` can fail, so compute
+them in a handler and render the result. `len(items())`,
+`d().get("k", fallback)` and pure helpers are fine in holes.
+
+**Structure** inside a `with` block is element calls, nested `with`
+blocks, `if` / `elif` / `else` and `match`. No loops and no locals
+in views: long lists go to `list_view`, derived values go to store
+fields or helpers. A modal is open by existing, so wrap it in an
+`if`:
+
+```python
+if show():
+    with modal():
+        text("confirm?")
+        button("yes", on_click=lambda: (done.set(True), show.set(False)))
+```
+
+**Lists and charts.** `items.set(items() + [x])` appends (the
+compiled run does an in-place push), `items.set([])` clears,
+`len(items())` counts, `items[0] = v` writes one slot, and a
+literal `xs[-1]` reads from the back. Charts draw lists of float or
+int: `line_chart(values(), height=120.0)`, `bar_chart(data,
+labels=names, height=100.0)`. `list_view(len(items()), row,
+item_height=22.0, height=200.0)` is virtualized — `row(i)` runs
+only for visible rows and returns `text(items()[i])`; `grow=1.0`
+fills the parent instead of `height=`.
+
+**Components.** `@component` with `local` for per-instance state;
+`@component(slots=True)` takes children at `slot()`:
+
+```python
+@component
+def counter(label: str, step: int):
+    n: State[int] = local(0)           # per call site, survives rebuilds
+    with row(spacing=6):
+        text(f"{label}: {n()}")
+        button(f"+{step}", on_click=lambda: n.set(n() + step))
+
 @component(slots=True)
 def card(title: str):
     with column(border_width=1.0, border_color="accent", padding=8):
         text(title, size=18)
         slot()
 
-with card("counters"):        # children keep use-site identity
+with card("counters"):
     counter("a", 1)
     counter("b", 10)
 ```
 
-Per-instance components — `@component` + `local`:
+Parameters are str and int. `local` identity is the call site:
+reordering calls reassigns the states.
+
+**Styles and themes.** `style()` makes a named dict; splat one per
+element with `**`; compose with `|`. Colors are hex literals or
+theme tokens (`windowBg`, `panel`, `surface`, `surfaceHover`,
+`border`, `text`, `textDim`, `accent`). `theme=` on a container
+scopes a palette and takes a literal or a state read; theming the
+root follows down to the window ground.
 
 ```python
-@component
-def counter(label: str, step: int):
-    n: State[int] = local(0)     # per-call-site state, survives rebuilds
-    with row():
-        text(f"{label}: {n()}")
-        button(f"+{step}", on_click=lambda: n.set(n() + step))
+chip = style(size=18, color="accent")
+key = style(background="surface", hover_background="surfaceHover")
+hot = key | style(background="#fab387")
+
+text(f"n={n()}", **chip)
+with column(background="windowBg", grow=1.0, theme=mode()):
+    ...
 ```
 
-Identity is positional (reordering call sites reassigns state).
-Float text: allowed ONLY with an explicit spec — `f"{x:.1f}"`;
-bare `f"{x}"` of a float stays untranslatable.
+Sizes are px floats and `0.0` means the engine default; `grow=1.0`
+fills the parent's main axis. Other style values are literals —
+to change a size or color with state, branch with `if`.
 
-Multi-module apps work: put cells in one module, helpers in
-another, `from state import count` as usual. Helpers that return an
-element become native components when compiled — annotate their
-parameters (`def badge(label: str):`), keep them stateless over
-cells, and don't reference parameters inside their handlers.
+**Animation.** `animate=` (ms), `easing="linear|in|out|inOut"`,
+`enter=True` / `exit=True` on text, buttons and containers.
+Frames come from the shared clock, so `advance:<ms>` in a script
+lands identically in both runs.
 
-Conditionals — Python `if` in with-blocks, ternaries in functional
-style; conditions are bool cells or explicit comparisons:
+## Form controls
+
+Value in from state; the handler receives **the one new value**
+and writes it back. Bind to a `State` or a store field.
+
+| element | value in | handler gets | script step |
+|---|---|---|---|
+| `text_field(value, placeholder=, on_change=, on_submit=)` | str | str | `input:<text>`, `submit` |
+| `checkbox(label, checked=, on_change=)` / `switch(...)` | bool | bool | `click:<label>` |
+| `slider(value=, min=, max=, step=, on_change=)` | float | float | `slide:<v>` |
+| `select(options=, selected=, on_change=)` / `radio_group(...)` | list, index | index | `select:<label>` |
+| `tab_bar(labels=, active=, on_change=)` | list, index | index | `select:<label>` |
+
+`text_field(name(), on_change=name.set)` binds a str state
+directly. Tab content switches with an `if` / `elif` on the active
+index. Options and labels come from a list state or field.
+
+## Handlers and control flow
+
+Three forms: a lambda (a tuple for several operations, `lambda:
+(a.set(x), b.set(y))`), a module-level def, and a store's bound
+method (`on_click=Cart.clear`). A def body compiles with real
+control flow:
 
 ```python
-show: State[bool] = State(False)   # bool: conditions yes, TEXT no
-
-if show():
-    with modal():                     # no open= — presence IS openness
-        text("confirm?")
-        button("yes", on_click=lambda: (done.set(True), show.set(False)))
-else:
-    text("(closed)")
-```
-
-Tuple-bodied lambdas (`lambda: (a.set(x), b.set(y))`) are the
-idiom for multi-action handlers in lambda position; use a def for
-anything longer.
-
-def-handlers compile with real control flow — if/elif/else, while,
-for over range() or a list cell, break/continue — plus locals and
-pure helper fns (annotated, single return) that become NATIVE free
-functions:
-
-```python
-def double(v: int) -> int:          # compiles to a native fn
+def double(v: int) -> int:             # a pure helper: annotated, ends in return
     return v * 2
 
 def tally():
@@ -423,158 +344,179 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Arithmetic: `/` `//` `%` `**` compile with CPython's exact results
-(true division always float; floor/mod follow the divisor's sign;
-zero/overflow abort the statement contained, both tiers). int**int
-needs a non-negative literal exponent. Compute the fallible four in
-handlers; `+`/`-`/`*` are fine in text holes too.
+- `if` / `elif` / `else`, `while`, `for` (over `range()` with one or
+  two arguments, a list state, a list field, a list parameter, or
+  `sorted(d())`), `break` / `continue`, locals (reassignable).
+- A local assigned in **both** arms of an `if` / `else` reads after
+  the branch; assigned in one arm only, it is refused (Python would
+  raise NameError on the other path). Loop variables do not outlive
+  the loop.
+- Conditions are bool states/fields or explicit comparisons —
+  `if name() == "":`, not `if name():`. `and` / `or` / `not` work in
+  conditions and as bool values over bools.
+- Arithmetic is exactly Python's: `/` is always float, `//` floors,
+  `%` takes the divisor's sign, `**` is power. Division by zero and
+  overflow abort the statement in both runs; the app lives on.
+  `int ** int` takes a non-negative literal exponent.
+- Dicts: `prices["cherry"] = 200` writes a key, `d().get(k,
+  default)` reads, `"k" in d()` tests, `len(d())` counts, `for k in
+  sorted(d())` iterates in key order. Bare `d[k]` and bare
+  iteration are refused.
+- Strings: `+`, `==`, `<`, `"-" * 3`, f-strings without format
+  specs, `strings.to_int(s, default)` to parse. Methods such as
+  `.upper()` and `len(s)` are not in the subset yet.
+- Helpers: parameters annotated int/float/str/bool (or a
+  Protocol), the return annotated int/float/str/bool, body ending
+  in `return expression`; callable from handlers and from view
+  text. Lists, value classes and Optionals do not cross a helper
+  yet; store methods take them.
+- A store method calls a sibling through the class name
+  (`Cart.reset_total()`), not bare.
 
-Rules that bite: a local assigned on BOTH arms of if/else (elif
-chains included) outlives the branch like in Python; a one-armed
-assignment is still block-scoped (Python would NameError the
-untaken path). Loop vars do not outlive the loop. `xs[-1]`-style
-LITERAL negative indexing works on locals; a variable that turns
-out negative does not.
-
-Dict cells — order-free operations only (Python orders dicts by
-insertion, native maps by key, so iteration stays out BY NAME):
-
-```python
-prices: State[dict[str, int]] = State({"apple": 120})
-prices["cherry"] = 200                 # per-key write, in place BOTH tiers
-picked.set(prices().get("apple", -1))  # total read: default on missing
-if "cherry" in prices(): ...           # membership; len(prices()) counts
-```
-
-Bare `d[k]` reads are refused (Python raises where native answers
-nil) — `.get(key, default)` is the read. Iterate a dict with
-`for k in sorted(d())` (key order — identical in both tiers);
-bare iteration stays refused (insertion order is Python-only).
-
-More standard library: `strings.to_int(s, default)` (total numeric
-parsing — bad input becomes the default in BOTH tiers) and
-`sqlite.query_int(path, sql)` (scalar aggregates; wrap in
-COALESCE). `from yokan import sqlite, http` —
-`sqlite.exec(path, sql) -> int`, `sqlite.query_text(path, sql) ->
-list[str]` (column 0 as text; ORDER BY for determinism), and
-`http.get_text(url) -> str` (blocking). Same shared-implementation
-rule as fs; call from handlers.
-
-In a `with` block, constructors auto-append to the open container;
-passing an element explicitly as a child argument moves it there
-instead. A with-style view must build exactly one root and return
-nothing. Containers usable as `with`: column/row/grid/stack/
-scroll_view/h_scroll_view/data_table/modal.
+**Errors**, in order of reach-for: `*_or` totals
+(`fs.read_text_or(p, "")`, `http.get_text_or(url, "")`,
+`sqlite.query_int_or(p, sql, 0)`); then `try` / `except` in its
+full Python form (several statements, per-exception clauses,
+tuples, `else`, `finally`; `@py` exceptions are caught with
+Python's own message); then nothing — an uncaught failure aborts
+its statement and the app keeps running.
 
 ```python
-import yokan as ui
-
-def view(s):                      # called on every rebuild; PURE over s
-    return column(
-        text(f"count: {s['count']}", size=34),
-        button("+1", on_click=lambda: s.update(count=s["count"] + 1)),
-        spacing=12, padding=16,
-    )
-
-if __name__ == "__main__":        # REQUIRED guard (reload re-execs the module)
-    run(view, state={"count": 0}, title="counter")
+try:
+    body.set(http.get_text(url))
+except Exception as e:
+    status.set(f"offline: {e}")
 ```
 
-- **State is any Python object** you own (a dict is idiomatic).
-  Event callbacks mutate it; the view re-runs after every event.
-- **view() must be pure over state**: build the tree from `s`, no
-  side effects. Handlers (`on_click`, `on_change`, ...) do the
-  mutating.
-- **`if __name__ == "__main__":` is required.** Live reload
-  re-executes the file under a different module name and swaps
-  `view` while the state object survives; without the guard the
-  reload would try to start a second app (it is a no-op, but keep
-  the guard).
+## The standard library
 
-## Rules that bite
+`from yokan import fs, sqlite, http, math, json, time, strings,
+random, notify`. One implementation in Rust serves both runs; the
+shipped binary needs no Python. Call it from handlers only.
 
-1. **An element can appear once.** Constructors consume their
-   children; placing one element twice raises. Build fresh elements
-   each call.
-2. **TextField is controlled**: pass the current value from state
-   and write it back in `on_change` —
-   `text_field(s["q"], on_change=lambda t: s.update(q=t))`.
-3. **`every(seconds, cb)` must be called before `run`** (put
-   it under the `__main__` guard). Timer changes need an app
-   restart; reloads keep the original timers. Timers are
-   development-only: the compiler refuses `every` by name, as it
-   does any other statement at module level (startup work goes
-   in `run(view, on_start=...)`).
-4. **`list_view` is virtualized**: `list_view(count, row)` calls
-   `row(i)` only for visible rows (~14–17 of 100k). Never
-   pre-build big lists as columns; use `list_view`.
-5. Charts take sequences of floats: `bar_chart(data, height=140.0)`;
-   numpy arrays work (`.tolist()` not required, but cheap and safe).
-6. Expensive recomputation belongs in handlers, not in `view()` —
-   e.g. recompute a filtered index in `on_change` and store it in
-   state; `view()` just reads it.
-7. Colors are hex strings (`"#8a8f98"`); sizes are px floats; `0.0`
-   usually means "engine default"; `grow=1.0` fills the parent's
-   main axis.
+- **fs**: `read_text` / `write_text` / `exists` / `read_text_or`
+- **sqlite**: `exec(path, sql) -> int` / `query_text(path, sql) ->
+  list[str]` (column 0 as text; `ORDER BY` for determinism) /
+  `query_int` / `query_int_or` / `query_text_or` — wrap aggregates
+  in `COALESCE`. There is no parameter binding yet; keep user text
+  out of SQL.
+- **http**: `get_text(url)` / `get_text_or` (synchronous)
+- **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` /
+  `ceil` / `pi()`
+- **json**: `get_text` / `get_int` / `get_float` / `get_bool` /
+  `length` / `has` by dotted path (`"items.0.title"`); read-only
+- **time**: `now_ms()`, `format_ms(ms, "%Y-%m-%d")` (UTC; pass a
+  fixed ms in verification scripts)
+- **strings**: `to_int(s, default)` / `to_float(s, default)`
+- **random**: `seed(n)` / `int(lo, hi)` (inclusive) / `float()`;
+  seed in `on_start` or a reset handler so scripts replay
+- **notify**: `send(title, body)` — delivered when the app runs as
+  an `.app` bundle; dev and headless runs drop it quietly
 
-## Catalog
+Determinism is the rule underneath: fixed times, seeded randomness,
+and `--fresh path/to/file.db` on the gate for apps that persist.
 
-`text` `button` `text_field` `column` `row` `grid` (`columns=`,
-`rows=`; a button inside spans cells with `col_span=`/`row_span=`)
-`stack` `list_view` `scroll_view` `h_scroll_view` `data_table`
-`modal` `image` `svg` `bar_chart` `line_chart` `progress`
-`spinner` — plus `every(seconds, cb)`, `task(work, on_done,
-on_error)` and `run(view, state=None, title="yokan", watch=True,
-theme=None)` (`theme="light"|"dark"`; Cmd+T flips live). Buttons
-take `color`/`hover_background`/`active_background`/`border_*`;
-containers take `border_radius`/`border_width`/`border_color`.
+## Rust crates
 
-## Slow work: task
+`yokan add app.py deunicode 1` (crates.io) or `yokan add app.py
+hexfmt --path native/hexfmt` declares a crate in the PEP 723 block
+(or pyproject.toml for a project); `from yokan import crates` and
+`crates.deunicode.deunicode(s)` calls it, same implementation in
+both runs. Scalars, str, lists and Optionals of those, str-keyed
+dicts, structs and enums with a same-shaped `@value` twin in the
+app, and `Result` cross the boundary; anything else is refused by
+name.
 
-Never block a handler — `time.sleep`, requests, file crunching all
-freeze the window. Instead:
+## CPython escapes
 
 ```python
-def start():
-    s.update(busy=True)
-    task(fetch_data, on_done=lambda v: s.update(busy=False, data=v),
-            on_error=lambda e: s.update(busy=False, error=str(e)))
+@py
+def slug(t: str) -> str:
+    import re                          # imports live inside the escape
+    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-`work` runs on a worker thread — it must NOT build UI elements;
-return a value instead. `on_done`/`on_error` run on the UI
-thread and may mutate state freely; a rebuild follows automatically.
-Callable from handlers, timer ticks, other callbacks, or before
-`run()`. Headless scripts wait for task completion deterministically,
-so `_headless` tests cover task flows too. `task` is development-only
-today: the compiler refuses the call by name (a compiled handler runs
-to the end, so an `http` fetch there blocks the window until the
-reply).
+An `@py` function stays real Python in both runs (numpy works).
+Sole decorator; annotate every parameter and the return with
+int/float/str/bool or `list[...]` of those; call it from handlers.
+A shipped app with escapes needs CPython: `--bundle` ships a
+runtime folder, `--onefile` one file (about 17 MB; 21 MB with
+numpy).
 
-## Running and reload
+## Heavy work and timers
+
+`task(work, on_done=, on_error=)` runs `work` on a worker thread
+and the continuations on the UI thread; headless runs wait for it.
+It is a development-run feature today: the compiler refuses the
+call by name, and a compiled handler runs to the end (an `http`
+fetch there holds the window until the reply). `every(seconds,
+cb)` is a timer, likewise development-only and refused by name;
+timers do not run headless either. An app that needs either stays
+development-only for now.
+
+## The window and startup
+
+`run(view, title="OpsBoard", width=1100, height=820,
+on_start=boot)`. Title and size are baked into the binary; width
+and height come as a pair in logical pixels. `on_start` runs once
+after mount (a failure prints and the app opens) and is the one
+place for startup work — loading data, seeding the RNG.
+
+## Headless runs, the gate, shipping
 
 ```console
-$ uv run app.py        # PEP 723 header may declare numpy etc.
+$ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no window
+$ yokan gate app.py --script "click:+1,input:Momo" --release
+GATE OK — 2 dump lines identical across tiers
+$ yokan build app.py --release [--app] [--bundle | --onefile]
 ```
 
-Edit `view()` while the window is open and save: the window updates
-in place; state (and typed TextField content bound to state)
-survives. A Python exception in a handler prints to the terminal and
-the app keeps running; an exception in `view()` renders an error
-line instead of the tree.
+Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
+`slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`,
+`theme:light|dark`, `a11y`, `mem`, `dump`. `@n` picks the n-th
+match in tree order; `dump` prints the screen mid-script; a comma
+in text is `\,`. From tests, `yokan._headless(view, None, script)`
+returns the same string. Apps with PEP 723 dependencies run the
+gate under `uv run --with <dep>`. Building needs the repository
+checkout (or `PIXIE_REPO`); `translate` works anywhere. `--app`
+makes `dist/<Title>.app` (a `<stem>.png` beside the file becomes
+the icon); it excludes `--onefile`.
 
-## Verification habit
+Verify headless first; then run windowed once and look at it — the
+gate proves the two runs agree, not that the window looks right.
 
-Verify WITHOUT a window first: `PIXIE_SCRIPT="click:+1,input:hello"
-uv run app.py` runs the app headless and dumps the element tree
-before and after the steps (steps: `click[@n]:<label>`,
-`input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`,
-`select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`,
-`mem`, `dump`). `@n` picks the n-th match in tree order; `dump`
-prints the screen mid-script (an intermediate state becomes a
-checked output); a comma inside text is `\,`. Assert on the dump in tests via
-`_headless(view, state, script) -> str`. Timers do not run
-headless. Then run windowed once to confirm the look. For
-virtualized lists, `PIXIE_TRACE_LAZY=1` prints the built row
-ranges — `building rows 0..17 of 100000` is what correct looks
-like.
+## Type checkers
+
+Stubs ship with the package; pyright (Pylance) works as-is, and
+`@store` methods type as bound calls (`Settings.set_dark(True)`,
+`on_change=Settings.set_dark`). mypy does not apply class-decorator
+transformations and misreports store methods; use pyright.
+
+## What does not work yet
+
+Same list as the tour's closing section; each is refused by name.
+
+- Iterating a dict in insertion order (compiled dicts are
+  key-ordered): use `sorted(d())`.
+- Bare `d[k]` reads: use `.get(key, default)`.
+- Indexing from the back through a variable: the literal `xs[-1]`
+  works.
+- Reading a local assigned in one branch only.
+- Negative exponents on `int ** int`: make a side float.
+- Compiling dict state (`run(state={...})`): development only;
+  the compiled form is typed `State`.
+- Calling Protocol-bound helpers or value-class methods from views
+  (handlers can; views read fields).
+- Iterating a list of models in a view: assemble strings on the
+  store side and hand them to `list_view`.
+- A `Weak` field on a store (stores own; the back pointer lives on
+  the model).
+- Type names the compiled side uses, such as `Vec`: pick another.
+- Statements at module level: startup work goes in
+  `run(view, on_start=setup)`.
+- Compiling `task` and `every`: development-run features today.
+- A component's `local` is identified by call site.
+- Placing one element object twice.
+- At the Rust-crate boundary: payload-carrying enums and methods
+  on a twin; enum- or list-typed struct fields.
+- macOS on Apple silicon is the measured platform.
