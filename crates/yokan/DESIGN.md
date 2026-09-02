@@ -286,3 +286,19 @@ negative counts from the back — and only a refusal for something
 planned or undecided says "yet". The word is a promise, and the
 tour's closing list is where the promises are kept.
 
+## The closing list is the whole boundary
+
+The tour's closing list — what does not work yet, with a reason for
+each — carried a dozen items while the translator refused a few
+hundred shapes, so a reader who wrote inside the documented dialect
+still met refusals the documentation had not mentioned: a module
+constant read in a handler, a str method, a slice, a store method
+returning a value, a style value taken from state, the row index of
+a `list_view` used in a handler. An audit of the boundary (one
+probe app per construct, run through `translate`) produced the
+missing items, and the list now carries all of them, grouped by
+what a reader was trying to do, each with the form to write
+instead. The rule going forward: a refusal that is not a decision
+appears in the list until the construct lands, and leaves the list
+in the same change that lands it; the guide's list is the same
+list. The design refusals stay at the top, worded as decisions.

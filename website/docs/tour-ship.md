@@ -106,6 +106,22 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Compiling `every`.** Timers are a development-run feature and do not run headless either; the call is refused by name rather than compiled away.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
+- **Reading a module constant in a handler or a view.** `LIMIT = 10` at module level is a declaration, but reading it inside a handler is not in the dialect yet; write the literal, or hold the value in a State.
+- **Store and model methods that return a value**, `@property` and `@staticmethod`. Keep derived values in a field the view reads.
+- **Most list operations beyond append.** Indexing a list read directly (`items()[0]`, `self.xs[i]`), a variable index, slices, `in` over a list, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` / `zip`, `range` with a step, and local lists and dicts. Append with `items.set(items() + [x])`; index through a local with a literal index.
+- **str methods, `len(s)` and conversions.** `.upper()`, `.split()`, `.strip()` and the rest, `str()` / `int()` / `float()`, indexing a str. Parse numbers with `strings.to_int` / `strings.to_float`; render values in f-strings.
+- **Format specs other than `.Nf`** in views (width, `,`, `%`, `e`, `d`), and any format spec in a handler f-string.
+- **Dynamic dict keys** (`d[name()] = v`, `"two words"`), `.values()` / `.items()`, and dict literals in handlers.
+- **Some control flow**: `while True`, chained comparisons, conditional expressions (`a if c else b`), a bool local as a bare condition, an early `return` in a helper, helper default and keyword arguments, tuple assignment, nested defs, `print`, `raise`, `assert`.
+- **Keyword arguments to store and model methods**, model constructor arguments (`Node(v=3)`), and the `Optional[T]` spelling (write `T | None`).
+- **`match` on int or str literals, guards and `|` patterns**; `.name` / `.value` on an Enum member; iterating an Enum.
+- **Style values from state** (`size=count()`, `color=name()`), text from a str expression (`text(Store.label)`), and literal option lists in `select` / `tab_bar`. Branch with `if`; put the text in an f-string hole; hold the options in a State.
+- **Component parameters other than str and int**, callback and State parameters, an `if` at the top of a component body, and a `local` holding a list.
+- **The row index in `list_view` beyond indexing** (`lambda: Store.pick(i)`, `if i == sel`, `f"{i + 1}"`).
+- **Types beyond one level**: `list[bool]`, `list[Point]`, `list[list[int]]`, `dict[str, list[str]]`, int-keyed dicts, tuple, set, `Point | None`, value-class fields that are lists or Optionals, model fields holding dicts or value classes.
+- **`@py` signatures beyond scalars and lists** (dict, value class, Optional).
+- **Writing a store field from outside the store** (`Cart.total = 5`). Write it through a method.
+- **In the standard library**: sqlite parameter binding and multi-column rows, http POST / headers / timeouts, fs directory listing, json writing, local time.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 

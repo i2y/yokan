@@ -517,6 +517,46 @@ Same list as the tour's closing section; each is refused by name.
 - Compiling `task` and `every`: development-run features today.
 - A component's `local` is identified by call site.
 - Placing one element object twice.
+- Reading a module constant in a handler or view: write the
+  literal, or hold the value in a State.
+- Store and model methods that return a value, `@property`,
+  `@staticmethod`: keep derived values in a field.
+- Most list operations beyond append: direct indexing of a list
+  read (`items()[0]`, `self.xs[i]`), variable indices, slices,
+  `in`, `sorted` / `reversed` / `min` / `max` / `sum`,
+  comprehensions, `enumerate` / `zip`, stepped `range`, local
+  lists and dicts.
+- str methods, `len(s)`, `str()` / `int()` / `float()`, indexing a
+  str: parse with `strings.to_int` / `to_float`, render in
+  f-strings.
+- Format specs other than `.Nf` in views; any spec in a handler
+  f-string.
+- Dynamic dict keys, `.values()` / `.items()`, dict literals in
+  handlers.
+- `while True`, chained comparisons, `a if c else b`, a bool local
+  as a bare condition, early `return` in a helper, helper default
+  and keyword arguments, tuple assignment, nested defs, `print`,
+  `raise`, `assert`.
+- Keyword arguments to store/model methods, model constructor
+  arguments, the `Optional[T]` spelling.
+- `match` on int/str literals, guards, `|` patterns; Enum
+  `.name` / `.value`; iterating an Enum.
+- Style values from state, `text(Store.label)`, literal option
+  lists: branch with `if`, use an f-string hole, hold options in a
+  State.
+- Component parameters other than str and int (callbacks and State
+  included), an `if` at the top of a component body, a list
+  `local`.
+- The `list_view` row index beyond indexing.
+- Types beyond one level (`list[bool]`, `list[Point]`, nested
+  containers, int-keyed dicts, tuple, set, `Point | None`, list or
+  Optional fields on value classes, dict or value-class fields on
+  models).
+- `@py` signatures beyond scalars and lists.
+- Writing a store field from outside the store: use a method.
+- Standard library: sqlite parameter binding and multi-column rows,
+  http POST / headers / timeouts, fs directory listing, json
+  writing, local time.
 - At the Rust-crate boundary: payload-carrying enums and methods
   on a twin; enum- or list-typed struct fields.
 - macOS on Apple silicon is the measured platform.
