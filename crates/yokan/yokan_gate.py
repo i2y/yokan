@@ -119,6 +119,7 @@ class Translator:
         self.state_node = None    # the dict literal, for tier A
         self.handlers = []        # (name, param: str|None, [pix stmt lines])
         self.defs = {}            # module-level def name -> FunctionDef
+        self.consts = {}          # module-level literal constants: name -> value node
         self.view = None
 
     def _scan_import(self, node):
@@ -1325,11 +1326,188 @@ class Translator:
                 field = self._cell_field(node.value, None)
                 self.state[node.targets[0].id] = field
                 self.cells[node.targets[0].id] = field[0]
-            elif entry and isinstance(node, ast.If) and self._is_main_guard(node):
-                for stmt in node.body:
-                    call = stmt.value if isinstance(stmt, ast.Expr) else None
-                    if isinstance(call, ast.Call) and self._is_ui(call.func, "run"):
-                        self._take_run(call)
+            elif isinstance(node, ast.If) and self._is_main_guard(node):
+                # An imported module's guard body runs in neither run
+                # (its __name__ is never "__main__"), so only the
+                # entry's guard is read.
+                if entry:
+                    self._scan_main_guard(node)
+            elif isinstance(node, ast.If) and self._is_type_checking_guard(node):
+                continue   # dead at runtime in both runs
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
+                # A literal constant is a declaration: nothing runs.
+                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                    if isinstance(t, ast.Name):
+                        self.consts[t.id] = node.value
+            elif isinstance(node, ast.AnnAssign) and node.value is None:
+                continue   # a bare annotation declares nothing that runs
+            elif isinstance(node, ast.ClassDef):
+                continue   # a plain class: declared here, refused where it is used
+            elif isinstance(node, ast.Pass):
+                continue
+            elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                continue   # docstring
+            elif isinstance(node, ast.Expr) and self._is_sys_path_call(node.value):
+                continue   # import plumbing (`sys.path.insert(0, …)`), effect-free for the app
+            else:
+                self._refuse_module_stmt(node, under_guard=False)
+
+    # Module level is declarations. The module runs once per import in
+    # CPython, again on every live reload, and never in the compiled
+    # app, so a statement whose effect depends on which of those
+    # happened cannot be verified by the gate; startup work has one
+    # place, `run(view, on_start=…)`, which both runs call once.
+    DECLS = (
+        "imports, State, classes, defs, style(), type aliases, literal "
+        "constants and the __main__ guard"
+    )
+
+    def _scan_main_guard(self, node: ast.If):
+        for stmt in node.body:
+            call = stmt.value if isinstance(stmt, ast.Expr) else None
+            if isinstance(call, ast.Call) and self._is_ui(call.func, "run"):
+                self._take_run(call)
+            elif isinstance(stmt, ast.Pass) or (
+                isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
+            ):
+                continue
+            else:
+                self._refuse_module_stmt(stmt, under_guard=True)
+        if node.orelse:
+            raise Untranslatable(
+                node.orelse[0],
+                "the __main__ guard takes no else branch: the compiled app reads the "
+                "module's declarations and does not execute it; put startup work in a "
+                "def and pass it as run(view, on_start=setup)",
+            )
+
+    def _refuse_module_stmt(self, node, under_guard: bool):
+        call = node.value if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) else None
+        if call is not None and self._is_ui(call.func, "every"):
+            raise Untranslatable(
+                node,
+                "every(...) is not compiled yet — timers are a development-run feature, "
+                "and the compiled app would start without this one; drive the update "
+                "from a handler until timers compile",
+            )
+        if call is not None and self._is_ui(call.func, "run"):
+            raise Untranslatable(
+                node,
+                "run(...) belongs under the `if __name__ == \"__main__\":` guard — the "
+                "gate and the live reload import the module without running it",
+            )
+        what = self._describe_stmt(node)
+        if under_guard:
+            raise Untranslatable(
+                node,
+                f"under the __main__ guard, only run(...) is compiled: {what} there runs "
+                "for `python app.py` but not in the compiled app; put startup work in a "
+                "def and pass it as run(view, on_start=setup)",
+            )
+        if isinstance(node, ast.If):
+            raise Untranslatable(
+                node,
+                "a module-level `if` is not compiled: only the `if __name__ == "
+                "\"__main__\":` guard is read at module level; make the choice in a "
+                "handler or in run(view, on_start=setup)",
+            )
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            raise Untranslatable(
+                node,
+                f"{what} is computed when the module runs, and the compiled app does "
+                "not run it: a module-level assignment declares a State, a style(), a "
+                "model instance or a literal constant; compute the value in "
+                "run(view, on_start=setup) and keep it in a State",
+            )
+        raise Untranslatable(
+            node,
+            f"a module-level {what} is not compiled: the compiled app reads the "
+            f"module's declarations ({self.DECLS}) and does not execute it; put "
+            "startup work in a def and pass it as run(view, on_start=setup)",
+        )
+
+    @staticmethod
+    def _describe_stmt(node) -> str:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            return f"`{ast.unparse(node.value.func)}(...)` call"
+        if isinstance(node, ast.Expr):
+            return "expression statement"
+        if isinstance(node, ast.Assign):
+            return f"`{' = '.join(ast.unparse(t) for t in node.targets)} = ...`"
+        if isinstance(node, ast.AnnAssign):
+            return f"`{ast.unparse(node.target)}: {ast.unparse(node.annotation)} = ...`"
+        if isinstance(node, ast.AugAssign):
+            return f"`{ast.unparse(node.target)} {ast.unparse(node.op)}= ...`"
+        kw = {
+            ast.For: "for", ast.While: "while", ast.With: "with", ast.Try: "try",
+            ast.TryStar: "try", ast.Raise: "raise", ast.Assert: "assert",
+            ast.Delete: "del", ast.Global: "global", ast.Nonlocal: "nonlocal",
+            ast.Match: "match", ast.If: "if", ast.AsyncFunctionDef: "async def",
+            ast.AsyncFor: "async for", ast.AsyncWith: "async with",
+            ast.Import: "import", ast.ImportFrom: "import",
+            ast.FunctionDef: "def", ast.ClassDef: "class",
+        }.get(type(node))
+        return f"`{kw}` statement" if kw else f"{type(node).__name__} statement"
+
+    def _is_const_expr(self, e) -> bool:
+        """A pure literal (nested containers, unary/binary ops over
+        literals, an Enum member, a value-class literal, an earlier
+        constant): binding it is a declaration, not behavior."""
+        if e is None:
+            return False
+        if isinstance(e, ast.Constant):
+            return True
+        if isinstance(e, (ast.List, ast.Tuple, ast.Set)):
+            return all(self._is_const_expr(x) for x in e.elts)
+        if isinstance(e, ast.Dict):
+            return all(k is not None and self._is_const_expr(k) for k in e.keys) and all(
+                self._is_const_expr(v) for v in e.values
+            )
+        if isinstance(e, ast.UnaryOp):
+            return self._is_const_expr(e.operand)
+        if isinstance(e, ast.BinOp):
+            return self._is_const_expr(e.left) and self._is_const_expr(e.right)
+        if isinstance(e, ast.BoolOp):
+            return all(self._is_const_expr(v) for v in e.values)
+        if isinstance(e, ast.Compare):
+            return self._is_const_expr(e.left) and all(self._is_const_expr(c) for c in e.comparators)
+        if isinstance(e, ast.JoinedStr):
+            return all(
+                isinstance(v, ast.Constant) or (isinstance(v, ast.FormattedValue) and self._is_const_expr(v.value))
+                for v in e.values
+            )
+        if isinstance(e, ast.Name):
+            return e.id in self.consts
+        if isinstance(e, ast.Attribute):
+            return (
+                isinstance(e.value, ast.Name)
+                and e.value.id in self.enums
+                and e.attr in self.enums[e.value.id]
+            )
+        if isinstance(e, ast.Call) and isinstance(e.func, ast.Name) and e.func.id in self.structs:
+            return all(self._is_const_expr(a) for a in e.args) and all(
+                self._is_const_expr(k.value) for k in e.keywords
+            )
+        return False
+
+    @staticmethod
+    def _is_sys_path_call(e) -> bool:
+        f = e.func if isinstance(e, ast.Call) else None
+        return (
+            isinstance(f, ast.Attribute)
+            and f.attr in ("insert", "append")
+            and isinstance(f.value, ast.Attribute)
+            and f.value.attr == "path"
+            and isinstance(f.value.value, ast.Name)
+            and f.value.value.id == "sys"
+        )
+
+    @staticmethod
+    def _is_type_checking_guard(node: ast.If) -> bool:
+        t = node.test
+        return (isinstance(t, ast.Name) and t.id == "TYPE_CHECKING") or (
+            isinstance(t, ast.Attribute) and t.attr == "TYPE_CHECKING"
+        )
 
     @staticmethod
     def _is_main_guard(node: ast.If) -> bool:
@@ -2386,7 +2564,7 @@ class Translator:
                 param = args[0].arg
             elif args:
                 raise Untranslatable(node, "on_click takes a zero-argument callable")
-            body = [ast.Expr(node.body)]
+            body = [ast.copy_location(ast.Expr(node.body), node.body)]
         elif (
             isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name)
@@ -2456,7 +2634,7 @@ class Translator:
                 param = args[0].arg
             elif args:
                 raise Untranslatable(node, "on_click takes a zero-argument callable")
-            body = [ast.Expr(node.body)]
+            body = [ast.copy_location(ast.Expr(node.body), node.body)]
         elif isinstance(node, ast.Name) and node.id in self.defs:
             d = self.defs[node.id]
             if takes_text:
@@ -2963,6 +3141,18 @@ class Translator:
         # stays refused: store methods declare `-> None`.
         if isinstance(stmt, ast.Return) and stmt.value is None:
             return ["return"]
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "task")
+        ):
+            raise Untranslatable(
+                stmt,
+                "task(...) is not compiled yet — worker threads are a development-run "
+                "feature today, so the compiled app cannot run this handler; until task "
+                "compiles, call the work directly (a compiled handler runs to the end, and "
+                "the window waits while it does) or keep the app development-only",
+            )
         raise Untranslatable(stmt, "handler statements are updates/assignments to state for now")
 
     EXC_BROAD = ("RuntimeError", "Exception", "BaseException")

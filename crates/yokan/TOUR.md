@@ -599,6 +599,7 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 `width` / `height` are logical pixels, given as a pair (omitted, the engine default applies).
 The declaration is baked into the compiled binary as well.
 `on_start` is a handler that runs once right after mount, and a failure prints and continues (use it for loading startup data or seeding the RNG).
+It is also the only place for startup work: module level holds declarations, and a statement there (`count.set(5)`, say, or `fs.write_text(...)`) is refused by name, because the compiled app reads the module and never executes it.
 
 ## Error handling
 
@@ -759,10 +760,12 @@ def start():
 
 `work` must not build UI elements; it just returns a value.
 Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+Today `task` runs in the development run only, and the compiler refuses the call by name until the compiled run has a worker thread to give it (see [What does not work yet](#what-does-not-work-yet)).
+Until then, a compiled handler that fetches over `http` waits for the reply, and the window waits with it.
 
 `every(seconds, cb)` is a timer with a seconds interval.
 Call it before `run`.
-Timers are a development-run feature and are not compiled (see [What does not work yet](#what-does-not-work-yet)).
+Timers are a development-run feature: rather than shipping an app that starts without the timer, the compiler refuses the `every` call by name (see [What does not work yet](#what-does-not-work-yet)).
 
 ## Working with type checkers
 
@@ -854,7 +857,9 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
-- **Compiling `every`.** Timers are a development-run feature and do not run headless either.
+- **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused by name. Startup work goes in a def passed as `run(view, on_start=setup)`.
+- **Compiling `task`.** Worker threads are a development-run feature today, so the call is refused by name. A compiled handler runs to the end: one that fetches over `http` waits for the reply, and so does the window.
+- **Compiling `every`.** Timers are a development-run feature and do not run headless either; the call is refused by name rather than compiled away.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.

@@ -161,8 +161,10 @@ def start():
 
 `work` must not build UI elements; it just returns a value.
 Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+Today `task` runs in the development run only, and the compiler refuses the call by name until the compiled run has a worker thread to give it (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
+Until then, a compiled handler that fetches over `http` waits for the reply, and the window waits with it.
 
 `every(seconds, cb)` is a timer with a seconds interval.
 Call it before `run`.
-Timers are a development-run feature and are not compiled (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
+Timers are a development-run feature: rather than shipping an app that starts without the timer, the compiler refuses the `every` call by name (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
 

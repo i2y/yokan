@@ -178,6 +178,9 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
 ) -> Element: ...
 def spinner(size: float = 0.0) -> Element: ...
+# Development-run only today: the compiler refuses a `task` call by
+# name until the compiled run has a worker thread for it (a compiled
+# handler runs to the end, window included).
 def task(
     work: Callable[[], Any],
     on_done: Optional[Callable[[Any], Any]] = None,
@@ -218,6 +221,10 @@ def component(
 ) -> Callable[[Callable[P, Any]], Callable[P, Element]]: ...
 def slot() -> None: ...
 def local(init: T) -> State[T]: ...
+# Development-run only. The compiler refuses an `every` call by name
+# (as it does any statement at module level; startup work goes in
+# `run(view, on_start=...)`), so a shipped app never silently starts
+# without its timer.
 def every(seconds: float, on_tick: Callable[[], Any]) -> None: ...
 def run(
     view: Callable[..., Any],

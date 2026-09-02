@@ -501,7 +501,10 @@ if __name__ == "__main__":        # REQUIRED guard (reload re-execs the module)
    `text_field(s["q"], on_change=lambda t: s.update(q=t))`.
 3. **`every(seconds, cb)` must be called before `run`** (put
    it under the `__main__` guard). Timer changes need an app
-   restart; reloads keep the original timers.
+   restart; reloads keep the original timers. Timers are
+   development-only: the compiler refuses `every` by name, as it
+   does any other statement at module level (startup work goes
+   in `run(view, on_start=...)`).
 4. **`list_view` is virtualized**: `list_view(count, row)` calls
    `row(i)` only for visible rows (~14–17 of 100k). Never
    pre-build big lists as columns; use `list_view`.
@@ -543,7 +546,10 @@ return a value instead. `on_done`/`on_error` run on the UI
 thread and may mutate state freely; a rebuild follows automatically.
 Callable from handlers, timer ticks, other callbacks, or before
 `run()`. Headless scripts wait for task completion deterministically,
-so `_headless` tests cover task flows too.
+so `_headless` tests cover task flows too. `task` is development-only
+today: the compiler refuses the call by name (a compiled handler runs
+to the end, so an `http` fetch there blocks the window until the
+reply).
 
 ## Running and reload
 

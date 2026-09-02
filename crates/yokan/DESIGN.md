@@ -165,3 +165,57 @@ encodes them. `just publish <version>` bumps, builds, smokes, asks
 once, then uploads, commits, tags and writes the release; the smoke
 step is a hard gate, and the upload is the only irreversible move,
 so it is the only one that asks.
+
+## Module level is declarations
+
+The translator used to accept a module-level statement — an
+`every(1.0, tick)`, a `count.set(5)`, a `fs.write_text(...)`, a
+store call — and emit an app without it. That was the one hole in
+"refused by name, never silently changed": the gate could see the
+difference only when a script happened to exercise it, and a timer
+never fires headless, so the gate could not see that one at all.
+Module level now takes declarations only — imports, `State`,
+classes, defs, `style()`, type aliases, model instances, literal
+constants and the `__main__` guard, which holds `run(...)` alone —
+and every other statement is refused with what to write instead: a
+def passed as `run(view, on_start=setup)`, which both runs call
+once after mount. `every` gets its own message, because a compiled
+timer is a design still to be made rather than a constraint.
+
+The reason is timing, not the emitter's convenience. The three ways
+an app runs execute module level differently: `python app.py` runs
+it once at import and again on every live reload; the gate's
+interpreted run imports the module without `__main__`, so the
+guard's body does not run there at all; the compiled app never
+runs it. A statement whose effect depends on which of those
+happened cannot be verified, so it is not a dialect statement.
+Binding a literal is not a statement in this sense — nothing runs —
+which is why `DB = "x.db"` stays a declaration; `sys.path.insert`
+is import plumbing with no effect on the app and passes for the
+same reason.
+
+Rejected: compiling module-level statements into the store's
+initializer. It would give startup work a second mechanism with a
+different moment (before mount rather than after) and would still
+not match a live reload, which re-executes the module with the app
+running. Rejected: keeping the drop and printing a warning — a
+warning is not a refusal, and the timer case shows the gate cannot
+back it up. Compiling `every` (a kernel clock that headless scripts
+advance) is future work; the refusal is what makes it safe to add
+later, because nothing now depends on the drop.
+
+## `task` is refused by name until it compiles
+
+`task(work, on_done, on_error)` has always been a development-run
+feature: the translator has no lowering for it, and it refused the
+call with the generic handler-statement message, so a reader learned
+that something was wrong, not that worker threads were the thing.
+The refusal now names `task` and says what the compiled app does
+instead — a compiled handler runs to the end, so an `http` fetch
+there holds the window until the reply — and the tour's closing
+list carries the same sentence. Compiling `task` onto the
+substrate's async functions, with the continuation on the UI thread
+and the headless run waiting for completion as the interpreted run
+already does, is future work; naming the gap is what keeps the
+closing list honest until then.
+
