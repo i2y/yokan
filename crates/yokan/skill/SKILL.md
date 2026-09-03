@@ -231,9 +231,10 @@ and a variant belongs to one sum type.
 
 ## Views
 
-The catalog: `text`, `button`, `text_field`, `checkbox`, `switch`,
-`slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`,
-`grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`,
+The catalog: `text`, `link`, `button`, `text_field`, `number_field`,
+`int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`,
+`tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`,
+`divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
 `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`,
 `progress`, `spinner`. Containers are opened with `with`; elements
 add themselves to the open container. `grid(columns=, rows=)` lays
@@ -242,6 +243,20 @@ equal tracks and a button spans cells with `col_span=` /
 and later `row` children are data rows shaded in alternation;
 columns line up when the cells of one column share a `grow`. An
 element object is placed once; build fresh ones on every call.
+`spacer()` takes a row's or column's remaining space, `divider()`
+draws a rule (vertical in a row), `link(label, url)` opens a URL.
+`text` takes `bold=` / `italic=` / `mono=` / `underline=`,
+`wrap="nowrap"|"ellipsis"` with `width=`, `max_lines=`, and a box
+(`background=`, `padding=`, `border_radius=`) — a status pill is a
+text with a box. `table(columns, count, row)` is a `list_view` with a
+header and column tracks: `row(i)` returns a `row` of one cell per
+column, `widths=` are the tracks' shares, `selected=` / `on_select`
+and `sort=` / `descending=` / `on_sort` hand indices back and the app
+re-sorts its own lists. Charts take `min=` / `max=`, `axis=True`,
+`series=` (a `list[list[float]]` field) with `colors=`; negatives hang
+below the zero line. `progress(value)` takes `width=` / `height=`,
+`label=` and `indeterminate=True`. Every element takes `tooltip=`,
+`role=` and `a11y_label=`.
 
 **Text holes** are f-strings. int, str, float, bool and Enum
 values render exactly as Python's `str()` (`2.0`, `True`,
@@ -337,6 +352,8 @@ and writes it back. Bind to a `State` or a store field.
 | `slider(value=, min=, max=, step=, on_change=)` | float | float | `slide:<v>` |
 | `select(options=, selected=, on_change=)` / `radio_group(...)` | list, index | index | `select:<label>` |
 | `tab_bar(labels=, active=, on_change=)` | list, index | index | `select:<label>` |
+| `segmented(options=, selected=, on_change=)` | list, index | index | `select:<label>` |
+| `number_field(value, min=, max=, step=, on_change=)` / `int_field(...)` | float / int | float / int | `input:<text>` (commits) |
 
 `text_field(name(), on_change=name.set)` binds a str state
 directly. Tab content switches with an `if` / `elif` on the active

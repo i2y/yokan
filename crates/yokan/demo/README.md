@@ -104,6 +104,33 @@ the initial state, right after launch.
 #### cards — components with slots (components that take children)
 <img src="screenshots/cards.png" width="360">
 
+#### layout — spacer and divider: a spacer pushes the button to the row's edge, a divider draws a rule (thicker and accent-colored between the sections)
+<img src="screenshots/layout.png" width="360">
+
+#### about — link: text that opens a URL, beside a button that copies one to the clipboard
+<img src="screenshots/about.png" width="360">
+
+#### badges — text with a box of its own: status pills, a monospaced hash, an underlined note, an ellipsis and a two-line clamp
+<img src="screenshots/badges.png" width="360">
+
+#### filter — segmented: the toggle-button chooser over a filtered list
+<img src="screenshots/filter.png" width="360">
+
+#### quantities — number_field and int_field: typed numeric inputs that commit on enter, clamp into the range and snap to the step
+<img src="screenshots/quantities.png" width="360">
+
+#### loading — progress with a label, a size, and an indeterminate sweep for work with no known length
+<img src="screenshots/loading.png" width="360">
+
+#### charts — negative values below the zero line, a pinned range, an axis with gridlines, and two series with their own colors
+<img src="screenshots/charts.png" width="360">
+
+#### roster — table: a virtualized table with column tracks, row selection and header sort (the app re-sorts its own lists)
+<img src="screenshots/roster.png" width="360">
+
+#### labels — the accessibility riders `role=` and `a11y_label=`, printed by a script's `a11y` step
+<img src="screenshots/labels.png" width="360">
+
 ## The standard library
 
 #### picker — file dialogs and dropped files: `fs.open_dialog` / `save_dialog` inside a `task`, `on_file_drop`; a script answers with `file:<path>` and drops with `drop:<path>`

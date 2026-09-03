@@ -185,10 +185,18 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
+要素カタログ：`text`、`link`、`button`、`text_field`、`number_field`、`int_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`segmented`、`column`、`row`、`grid`、`stack`、`spacer`、`divider`、`list_view`、`table`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
 `data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
 列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
+`spacer()` は行や列の余った幅を引き受けます（`grow=` で複数に分け合えます）。
+`divider()` は親を横切る罫線で、行の中では縦線、それ以外では横線になります。
+`link("Docs", "https://…")` はクリックでその URL をブラウザで開く一行のテキストです。ヘッドレス実行の `click:` は受け付けられますが、何も開きません。
+
+`text` には文字の体裁と、自分の箱を持たせられます。
+`bold=`、`italic=`、`mono=`、`underline=` が体裁、`wrap="nowrap"` か `wrap="ellipsis"`（切り詰めの基準になる `width=` と組で）と `max_lines=` が折り返し、`background=`、`padding=`、`border_radius=` がテキストの背後の箱です。状態を示すピルはこの箱で書きます（`demo/badges.py`）。
+どれも他の場所のスタイル値と同じもの（リテラルか状態の読み出し）を取るので、ピルの背景を状態に追従させられます。
+
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
@@ -225,6 +233,8 @@ class Settings:
     fruit: int = 0
     tabs: list[str] = ["General", "Details"]
     tab: int = 0
+    count: int = 1
+    price: float = 2.5
 
     def set_dark(self, on: bool) -> None:
         self.dark = on
@@ -241,6 +251,12 @@ class Settings:
     def pick_tab(self, i: int) -> None:
         self.tab = i
 
+    def set_count(self, n: int) -> None:
+        self.count = n
+
+    def set_price(self, p: float) -> None:
+        self.price = p
+
 
 checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
 switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
@@ -248,14 +264,19 @@ slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.se
 select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
+number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
 
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
-- **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **select / radio_group / tab_bar / segmented**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。`segmented` は同じ契約を、現在の区画を塗りつぶした一つのピル群として描きます。
+- **number_field / int_field**：型付きの数値。入力中は何も報告せず、`enter`、矢印キー、フィールドを離れることで確定します。テキストは Python の `float()` / `int()` の規則で読まれ、`min=` / `max=`（両方 0 なら範囲なし）に収められ、`step=` に吸着し、値が変わったときだけハンドラが走ります。数値でないテキストは捨てられ、フィールドはアプリの値に戻ります。スクリプトでは `input:<テキスト>` が一段で確定します。
 - **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
 
 どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
+支援技術に届くライダーがあと二つあります。`role=` は要素が自分で導く役割（スクリーンリーダーの "button"、"heading"、"list" など）を上書きし、`a11y_label=` は読み上げられる名前です。ヘッドレススクリプトの `a11y` ステップがその木を印字します（`demo/labels.py`）。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 

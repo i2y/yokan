@@ -215,10 +215,18 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
+要素カタログ：`text`、`link`、`button`、`text_field`、`number_field`、`int_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`segmented`、`column`、`row`、`grid`、`stack`、`spacer`、`divider`、`list_view`、`table`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
 `data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
 列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
+`spacer()` は行や列の余った幅を引き受けます（`grow=` で複数に分け合えます）。
+`divider()` は親を横切る罫線で、行の中では縦線、それ以外では横線になります。
+`link("Docs", "https://…")` はクリックでその URL をブラウザで開く一行のテキストです。ヘッドレス実行の `click:` は受け付けられますが、何も開きません。
+
+`text` には文字の体裁と、自分の箱を持たせられます。
+`bold=`、`italic=`、`mono=`、`underline=` が体裁、`wrap="nowrap"` か `wrap="ellipsis"`（切り詰めの基準になる `width=` と組で）と `max_lines=` が折り返し、`background=`、`padding=`、`border_radius=` がテキストの背後の箱です。状態を示すピルはこの箱で書きます（`demo/badges.py`）。
+どれも他の場所のスタイル値と同じもの（リテラルか状態の読み出し）を取るので、ピルの背景を状態に追従させられます。
+
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
@@ -255,6 +263,8 @@ class Settings:
     fruit: int = 0
     tabs: list[str] = ["General", "Details"]
     tab: int = 0
+    count: int = 1
+    price: float = 2.5
 
     def set_dark(self, on: bool) -> None:
         self.dark = on
@@ -271,6 +281,12 @@ class Settings:
     def pick_tab(self, i: int) -> None:
         self.tab = i
 
+    def set_count(self, n: int) -> None:
+        self.count = n
+
+    def set_price(self, p: float) -> None:
+        self.price = p
+
 
 checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
 switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
@@ -278,14 +294,19 @@ slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.se
 select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
+number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
 
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
-- **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **select / radio_group / tab_bar / segmented**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。`segmented` は同じ契約を、現在の区画を塗りつぶした一つのピル群として描きます。
+- **number_field / int_field**：型付きの数値。入力中は何も報告せず、`enter`、矢印キー、フィールドを離れることで確定します。テキストは Python の `float()` / `int()` の規則で読まれ、`min=` / `max=`（両方 0 なら範囲なし）に収められ、`step=` に吸着し、値が変わったときだけハンドラが走ります。数値でないテキストは捨てられ、フィールドはアプリの値に戻ります。スクリプトでは `input:<テキスト>` が一段で確定します。
 - **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
 
 どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
+支援技術に届くライダーがあと二つあります。`role=` は要素が自分で導く役割（スクリーンリーダーの "button"、"heading"、"list" など）を上書きし、`a11y_label=` は読み上げられる名前です。ヘッドレススクリプトの `a11y` ステップがその木を印字します（`demo/labels.py`）。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 
@@ -448,7 +469,14 @@ for i in range(len(Cart.items)):
 values: State[list[float]] = State([])
 line_chart(values(), height=120.0)
 bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+bar_chart(Books.profit, labels=Books.months, axis=True)          # 負の月は 0 の線の下に垂れる
+line_chart(series=Traffic.lines, colors=["accent", "#f38ba8"], axis=True)
 ```
+
+範囲はデータ全体にまたがり、常に 0 を含むので、負の値は 0 の線の下に垂れます。`min=` / `max=` を与えれば範囲を固定できます。
+`axis=True` で目盛りのラベルとグリッド線が付きます。
+`series=` は `list[list[float]]` のフィールドを取り、線やバーの組を複数描きます。`colors=` は系列ごとの色、`color=` は単一系列の色です（`demo/charts.py`）。
+`progress(value)` はトラックを埋めます。`width=` / `height=` が大きさ、`label=` が見出し、`indeterminate=True` は長さの分からない作業のために、値の代わりに区画を往復させます。
 
 行数の多いリストは `list_view` に渡します。
 **仮想化**されていて、行を作る関数 `row(i)` は見えている範囲についてだけ呼ばれます（10 万行でも十数回）。
@@ -459,6 +487,20 @@ def row(i):
 
 list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
+```
+
+表は、ヘッダーと列トラックを持つ `list_view` です。
+`table(columns, count, row)` は見えている行についてだけ `row(i)` を呼び、行を作る関数はセルを列ごとに一つずつ並べた `row` を返します。`widths=` はトラックの比率です。
+`selected=` はその行を塗り、`on_select` はクリックされた行のインデックスを受け取ります。`sort=` / `descending=` はヘッダーの矢印を描き、`on_sort` はクリックされた列のインデックスを受け取ります。並べ替えはアプリ側が自分のリストに対して行います。
+スクリプトでは `select:<先頭セル>` で行を選び、`click:<列名>` でソートします（`demo/roster.py`）。
+
+```python
+def cells(i: int):
+    return row(text(Roster.names[i]), text(f"{Roster.scores[i]}"))
+
+table(["member", "score"], len(Roster.names), cells, widths=[2.0, 1.0],
+      selected=Roster.sel, on_select=Roster.pick,
+      sort=Roster.sort_col, descending=Roster.desc, on_sort=Roster.sort_by, grow=1.0)
 ```
 
 行番号は int としてそのまま使えます。
@@ -990,7 +1032,7 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
-ステップの語彙は `click[@n]:<ラベル>`、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump`。
+ステップの語彙は `click[@n]:<ラベル>`（ボタン、リンク、表の列見出し）、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`（選択肢のある要素の項目、または表の行を先頭セルで）、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump`。
 `@n` はツリー順で n 番目の一致を選ぶので、同じラベルのボタンが並ぶ行にも届きます（`click@2:削除`）。
 `dump` はその時点の画面を出力します。これで途中の状態も検査対象になり、最初と最後だけを見る形ではなくなります。
 テキストに含めるカンマは `\,` と書きます（`input:hello\, world`）。
@@ -1086,6 +1128,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
 - **標準ライブラリでは**：文字列から時刻を読み戻すこと、ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード、入れ子の json の書き出し（書き出す dict やリストの中の値は str、int、float、bool のいずれか）。
+- **新しい要素の周辺**。表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。チャートにはホバーでの読み取りと凡例がありません。`select` はキーボードで操作できません。ツールチップの表示はスクリプトからホバーで確かめられません（文字列自体はダンプに出ます）。いずれもヘッドレスの検証にまだ無い動詞を待っています。
 - **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
 - **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。
 - **Rust crate の境界で、ペイロード付き enum と、双子へのメソッドは、まだ越えられない。** スカラ、String、List、Optional、str キーの辞書、構造体（入れ子・幅付きフィールド込み）、enum、Result（複合型の返りも）までは越えます。残る二つの前提: ペイロード enum は rpi-gen 自体の残件、メソッドは rpi 宣言済み struct への実装接合。構造体のフィールドに enum やリストを置く形もまだで、どれも呼ぶと理由を名指しして断られます。

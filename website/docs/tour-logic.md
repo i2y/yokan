@@ -153,7 +153,14 @@ Charts draw lists of float or int.
 values: State[list[float]] = State([])
 line_chart(values(), height=120.0)
 bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+bar_chart(Books.profit, labels=Books.months, axis=True)          # negative months hang below the zero line
+line_chart(series=Traffic.lines, colors=["accent", "#f38ba8"], axis=True)
 ```
+
+The range spans the data and always contains zero, so a negative value hangs below the zero line; `min=` / `max=` pin it instead.
+`axis=True` adds tick labels and gridlines.
+`series=` takes a `list[list[float]]` field for several lines or bar groups, `colors=` names one color per series, and `color=` colors a single series (`demo/charts.py`).
+`progress(value)` fills a track: `width=` / `height=` size it, `label=` captions it, and `indeterminate=True` sweeps a segment instead, for work with no known length.
 
 Long lists go to `list_view`.
 It is **virtualized**: the row builder `row(i)` is called only for the visible range (a dozen or so calls even at 100k rows).
@@ -164,6 +171,20 @@ def row(i):
 
 list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
+```
+
+A table is a `list_view` with a header and column tracks.
+`table(columns, count, row)` calls `row(i)` for the visible rows only, and the builder returns a `row` of one cell per column; `widths=` are the tracks' shares.
+`selected=` tints a row and `on_select` receives the clicked row's index; `sort=` / `descending=` draw the header's arrow and `on_sort` receives the clicked column's index — the app re-sorts its own lists.
+In scripts, `select:<first cell>` picks a row and `click:<column>` sorts (`demo/roster.py`).
+
+```python
+def cells(i: int):
+    return row(text(Roster.names[i]), text(f"{Roster.scores[i]}"))
+
+table(["member", "score"], len(Roster.names), cells, widths=[2.0, 1.0],
+      selected=Roster.sel, on_select=Roster.pick,
+      sort=Roster.sort_col, descending=Roster.desc, on_sort=Roster.sort_by, grow=1.0)
 ```
 
 The row index is an int the row can use anywhere: in the text, in a condition, and in the row's own handlers.

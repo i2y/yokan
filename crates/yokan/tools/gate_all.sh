@@ -26,6 +26,16 @@ gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow
 gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
 gate keys    python3 yokan_gate.py gate demo/keys.py --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
 gate picker  python3 yokan_gate.py gate demo/picker.py --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
+# Wave 1 of the widget fleet (2026-09-03): each new element in its own demo.
+gate layout  python3 yokan_gate.py gate demo/layout.py --script "click:ping"
+gate about   python3 yokan_gate.py gate demo/about.py --script "click:copy link,dump,click:Website"
+gate filter  python3 yokan_gate.py gate demo/filter.py --script "select:crit,dump,select:all"
+gate loading python3 yokan_gate.py gate demo/loading.py --script "click:step,click:step,dump,click:busy"
+gate labels  python3 yokan_gate.py gate demo/labels.py --script "dump,click:save,dump"
+gate badges  python3 yokan_gate.py gate demo/badges.py --script "click:flip,dump,click:flip"
+gate quantities python3 yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
+gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,click:next month"
+gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
@@ -48,6 +58,7 @@ for f in demo/*.py; do
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker) continue;;
+    layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac

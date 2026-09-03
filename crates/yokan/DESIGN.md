@@ -791,3 +791,126 @@ nothing changed and 25 s when everything had to be rebuilt, and the
 44-demo sweep went from over an hour to 19 minutes. Nothing about
 what the gate CHECKS changed — the same two runs, the same
 byte comparison.
+
+## A table is a `list_view` with a header
+
+`table(columns, count, row)` calls `row(i)` for the visible rows
+only, exactly as `list_view` does, and the builder answers a `row`
+of one cell per column laid on tracks whose shares are `widths=`.
+The widget holds no order of its own: `on_select` hands back the
+clicked row's index and `on_sort` the clicked column's, and the app
+re-sorts its own lists; `sort=` / `descending=` only say which arrow
+the header shows. Headless, `select:<first cell>` picks a row (a
+table counts with the choosers) and `click:<column>` sorts, so both
+wirings are gated. Rejected: a table that sorts its rows itself (a
+second copy of the data, and two runs could disagree on ties); a
+`cell(i, j)` builder (the row is the unit of virtualization and of
+the dialect's row index); retiring `data_table`, which stays as the
+static, styled container for a handful of rows.
+
+## Text carries typography and a box
+
+`text` took a size, a color and an alignment, so a status pill was
+a colored bullet and a long line had nowhere to stop. It now takes
+`bold` / `italic` / `mono` / `underline`, `wrap="nowrap"` or
+`"ellipsis"` with a `width` to clip against, `max_lines`, and the
+containers' box decoration (`background`, `padding`,
+`border_radius` and the border props) painted on the text's own div
+— a padded, rounded text in a row hugs its content, and that is the
+pill. Every prop joins the dump only when set, so existing dumps
+are byte-identical, and the style bag learned the same keys.
+Rejected: selectable text (engine state no dump can see), mixed
+styles inside one string (a different element), arbitrary font
+families (an unknown name fails silently; `mono` is a promise the
+engine can keep). The shared bool lowering now names its property,
+so a bad flag no longer reports Modal's `open:`.
+
+## A link opens a URL and changes nothing
+
+`link(label, url)` is accent-colored, underlined text that opens the
+URL in the browser. It carries no listener: opening a URL is not
+application state, so a headless `click:` on a link is accepted and
+does nothing, the contract `notify.send` already has. It derives the
+`link` role with the label as its name.
+
+## Charts plot over a range that contains zero
+
+The charts normalized by the positive maximum alone, so a loss
+clamped to nothing and an all-negative series drew nothing. The
+range is now `min(0, smallest) .. max(0, largest)` unless `min=` /
+`max=` pin it, and the zero line is the baseline a bar hangs from
+and a polyline crosses. `axis=True` adds tick labels and gridlines
+as ordinary text beside the painted plot; `series=` takes one
+`list[list[float]]` field for several lines or bar groups, `colors=`
+one color per series (a four-hue palette otherwise), `color=` a
+single series' color. Rejected: a nested list literal for `series`
+(a literal cannot reflect state, and a nested literal has no
+lowering in a view); a legend, hover readouts and the data-swap
+tween, each waiting on a verb or the kernel.
+
+## Spacer and divider, the purely-layout leaves
+
+A `spacer` takes the space its row or column has left, `grow=`
+sharing it between several (0 = one share, since a spacer that grew
+by nothing would never do anything). A `divider` is a rule whose
+orientation is read off its slot rather than authored — vertical
+inside a row, horizontal elsewhere, the way a text field reads its
+width — in the theme's border color unless told otherwise. Neither
+paints from state, carries a handler, or reaches the accessibility
+tree.
+
+## Typed numeric inputs commit; they do not report keystrokes
+
+`number_field` (float) and `int_field` (int) show a bound value, as
+`text_field` and `slider` do, and differ in when an edit counts:
+typing reports nothing, and `enter`, an arrow key or leaving the
+field commits — the text is parsed with Python's own `float()` /
+`int()` rules, clamped into `min` / `max` (both zero = no range),
+snapped onto `step` with the slider's rounding, and the handler runs
+only when the result differs from the bound value. Text that is not
+a number commits nothing and the field shows the app's value again,
+so a half-typed "1" on the way to "12" is never a value of 1. The
+shown text is `str(value)`, the function an f-string goes through,
+so `3.0` reads the same everywhere. Headless, `input:` commits in
+one step and `submit` is accepted and inert. Rejected: reporting
+every keystroke, rounding a bad parse to zero, a grouped-thousands
+display (it would break the equality with `str()`).
+
+## Segmented is the fourth chooser
+
+`segmented(options, selected, on_change)` shares the contract of
+`select`, `radio_group` and `tab_bar` — a list of options, the
+current index, an index-carrying handler — painted as one joined
+pill whose current segment is filled in the accent. It exists
+because an app that wanted a pressed look wrote an `if` / `else`
+per button with two style bags; the widget carries the state now.
+It derives the `radioGroup` role and answers `select:`.
+
+## Accessibility riders reach the dialect
+
+pixie's universal `role:` / `label:` riders had no Python spelling.
+Every element takes `role=` and `a11y_label=` beside `tooltip=`: a
+literal role is checked against the kernel's vocabulary at translate
+time, a bound one is resolved by the shared kernel in both runs
+(an unknown name falls back to the derived role), and `a11y_label`
+is absent from `checkbox` and `switch`, whose own label already is
+their name. Landing it surfaced a nesting bug in the tooltip rider —
+applied outermost, one layer too far when an element also animates,
+is themed or spans a cell — fixed so the runtime nests the riders
+the way both lowerers do.
+
+## Progress takes a size, a caption and an indeterminate sweep
+
+`progress` took only a value. `width` / `height` size the track,
+`label` draws a caption above it and doubles as the accessible name,
+and `indeterminate=True` ignores the value and sweeps a segment left
+to right off the animation clock the spinner uses, parked under
+reduced motion. Existing dumps are unchanged; new props join only
+when set.
+
+## The interpreted run eases the way the compiled run does
+
+`animate=` without `easing=` tweened linearly in the interpreted run
+and eased out in the compiled one. The dump carries the duration but
+not the curve, so the gate could not see the disagreement; the
+runtime now defaults to `out` like both lowerers.

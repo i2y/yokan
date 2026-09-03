@@ -186,9 +186,16 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
+The element catalog: `text`, `link`, `button`, `text_field`, `number_field`, `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`, `divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
 `data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
+`spacer()` takes the space its row or column has left (`grow=` shares it between several), and `divider()` draws a rule across its parent — vertical inside a row, horizontal elsewhere.
+`link("Docs", "https://…")` is a line of text that opens the URL in the browser; a headless `click:` on it is accepted and opens nothing.
+
+`text` carries typography and a box of its own.
+`bold=`, `italic=`, `mono=` and `underline=` are the typography; `wrap="nowrap"` or `wrap="ellipsis"` (with a `width=` to clip against) and `max_lines=` control the wrapping; `background=`, `padding=` and `border_radius=` paint a box behind the text, which is how a status pill is written (`demo/badges.py`).
+Each of these takes what a style value takes anywhere else — a literal or a state read — so a pill's background can follow state.
+
 The samples import elements bare — `from yokan import button, column, run, …`.
 If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
@@ -224,6 +231,8 @@ class Settings:
     fruit: int = 0
     tabs: list[str] = ["General", "Details"]
     tab: int = 0
+    count: int = 1
+    price: float = 2.5
 
     def set_dark(self, on: bool) -> None:
         self.dark = on
@@ -240,6 +249,12 @@ class Settings:
     def pick_tab(self, i: int) -> None:
         self.tab = i
 
+    def set_count(self, n: int) -> None:
+        self.count = n
+
+    def set_price(self, p: float) -> None:
+        self.price = p
+
 
 checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
 switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
@@ -247,14 +262,19 @@ slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.se
 select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
+number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
 
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
-- **select / radio_group / tab_bar**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`.
+- **select / radio_group / tab_bar / segmented**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`. `segmented` is the same contract painted as one joined pill group, the current segment filled in.
+- **number_field / int_field**: a typed number. Typing reports nothing; `enter`, an arrow key or leaving the field commits — the text is parsed with Python's `float()` / `int()` rules, clamped into `min=` / `max=` (both 0 = no range), snapped to `step=`, and the handler runs only when the value changed. Text that is not a number is dropped, and the field shows the app's value again. In scripts, `input:<text>` commits in one step.
 - **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
 
 Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
+Two more riders reach assistive technology: `role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on) and `a11y_label=` is the name it is read by; the `a11y` step of a headless script prints that tree (`demo/labels.py`).
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 

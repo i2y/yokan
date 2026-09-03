@@ -101,6 +101,33 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### cards — スロット付きコンポーネント（子要素を受け取る部品）
 <img src="screenshots/cards.png" width="360">
 
+#### layout — spacer と divider。spacer がボタンを行の端に押しやり、divider が罫線を引く（節の間は太い accent 色の線）
+<img src="screenshots/layout.png" width="360">
+
+#### about — link。URL を開くテキストと、URL をクリップボードに写すボタン
+<img src="screenshots/about.png" width="360">
+
+#### badges — 自分の箱を持つ text。状態のピル、等幅のハッシュ、下線付きの注記、省略記号、二行での打ち切り
+<img src="screenshots/badges.png" width="360">
+
+#### filter — segmented。トグルボタン群で絞り込むリスト
+<img src="screenshots/filter.png" width="360">
+
+#### quantities — number_field と int_field。enter で確定し、範囲に収め、step に吸着する型付きの数値入力
+<img src="screenshots/quantities.png" width="360">
+
+#### loading — progress の見出しと大きさ、長さの分からない作業のための不確定の往復
+<img src="screenshots/loading.png" width="360">
+
+#### charts — 0 の線の下に垂れる負の値、固定した範囲、グリッド線付きの軸、色の異なる二つの系列
+<img src="screenshots/charts.png" width="360">
+
+#### roster — table。列トラック、行の選択、見出しでのソートを持つ仮想化された表（並べ替えはアプリ側）
+<img src="screenshots/roster.png" width="360">
+
+#### labels — アクセシビリティのライダー `role=` と `a11y_label=`。スクリプトの `a11y` ステップが印字する
+<img src="screenshots/labels.png" width="360">
+
 ## 標準ライブラリ
 
 #### picker — ファイルダイアログと落とされたファイル。`task` の中の `fs.open_dialog` / `save_dialog`、`on_file_drop`。スクリプトは `file:<path>` で答え、`drop:<path>` で落とす

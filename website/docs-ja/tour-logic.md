@@ -161,7 +161,14 @@ for i in range(len(Cart.items)):
 values: State[list[float]] = State([])
 line_chart(values(), height=120.0)
 bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+bar_chart(Books.profit, labels=Books.months, axis=True)          # 負の月は 0 の線の下に垂れる
+line_chart(series=Traffic.lines, colors=["accent", "#f38ba8"], axis=True)
 ```
+
+範囲はデータ全体にまたがり、常に 0 を含むので、負の値は 0 の線の下に垂れます。`min=` / `max=` を与えれば範囲を固定できます。
+`axis=True` で目盛りのラベルとグリッド線が付きます。
+`series=` は `list[list[float]]` のフィールドを取り、線やバーの組を複数描きます。`colors=` は系列ごとの色、`color=` は単一系列の色です（`demo/charts.py`）。
+`progress(value)` はトラックを埋めます。`width=` / `height=` が大きさ、`label=` が見出し、`indeterminate=True` は長さの分からない作業のために、値の代わりに区画を往復させます。
 
 行数の多いリストは `list_view` に渡します。
 **仮想化**されていて、行を作る関数 `row(i)` は見えている範囲についてだけ呼ばれます（10 万行でも十数回）。
@@ -172,6 +179,20 @@ def row(i):
 
 list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
+```
+
+表は、ヘッダーと列トラックを持つ `list_view` です。
+`table(columns, count, row)` は見えている行についてだけ `row(i)` を呼び、行を作る関数はセルを列ごとに一つずつ並べた `row` を返します。`widths=` はトラックの比率です。
+`selected=` はその行を塗り、`on_select` はクリックされた行のインデックスを受け取ります。`sort=` / `descending=` はヘッダーの矢印を描き、`on_sort` はクリックされた列のインデックスを受け取ります。並べ替えはアプリ側が自分のリストに対して行います。
+スクリプトでは `select:<先頭セル>` で行を選び、`click:<列名>` でソートします（`demo/roster.py`）。
+
+```python
+def cells(i: int):
+    return row(text(Roster.names[i]), text(f"{Roster.scores[i]}"))
+
+table(["member", "score"], len(Roster.names), cells, widths=[2.0, 1.0],
+      selected=Roster.sel, on_select=Roster.pick,
+      sort=Roster.sort_col, descending=Roster.desc, on_sort=Roster.sort_by, grow=1.0)
 ```
 
 行番号は int としてそのまま使えます。

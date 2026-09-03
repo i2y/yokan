@@ -216,9 +216,16 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
+The element catalog: `text`, `link`, `button`, `text_field`, `number_field`, `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`, `divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
 `data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
+`spacer()` takes the space its row or column has left (`grow=` shares it between several), and `divider()` draws a rule across its parent — vertical inside a row, horizontal elsewhere.
+`link("Docs", "https://…")` is a line of text that opens the URL in the browser; a headless `click:` on it is accepted and opens nothing.
+
+`text` carries typography and a box of its own.
+`bold=`, `italic=`, `mono=` and `underline=` are the typography; `wrap="nowrap"` or `wrap="ellipsis"` (with a `width=` to clip against) and `max_lines=` control the wrapping; `background=`, `padding=` and `border_radius=` paint a box behind the text, which is how a status pill is written (`demo/badges.py`).
+Each of these takes what a style value takes anywhere else — a literal or a state read — so a pill's background can follow state.
+
 The samples import elements bare — `from yokan import button, column, run, …`.
 If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
@@ -254,6 +261,8 @@ class Settings:
     fruit: int = 0
     tabs: list[str] = ["General", "Details"]
     tab: int = 0
+    count: int = 1
+    price: float = 2.5
 
     def set_dark(self, on: bool) -> None:
         self.dark = on
@@ -270,6 +279,12 @@ class Settings:
     def pick_tab(self, i: int) -> None:
         self.tab = i
 
+    def set_count(self, n: int) -> None:
+        self.count = n
+
+    def set_price(self, p: float) -> None:
+        self.price = p
+
 
 checkbox("Dark mode", checked=Settings.dark, on_change=Settings.set_dark)
 switch("Wi-Fi", checked=Settings.wifi, on_change=Settings.set_wifi)
@@ -277,14 +292,19 @@ slider(value=Settings.volume, min=0.0, max=10.0, step=1.0, on_change=Settings.se
 select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
+segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
+number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
 
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
-- **select / radio_group / tab_bar**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`.
+- **select / radio_group / tab_bar / segmented**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`. `segmented` is the same contract painted as one joined pill group, the current segment filled in.
+- **number_field / int_field**: a typed number. Typing reports nothing; `enter`, an arrow key or leaving the field commits — the text is parsed with Python's `float()` / `int()` rules, clamped into `min=` / `max=` (both 0 = no range), snapped to `step=`, and the handler runs only when the value changed. Text that is not a number is dropped, and the field shows the app's value again. In scripts, `input:<text>` commits in one step.
 - **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
 
 Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
+Two more riders reach assistive technology: `role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on) and `a11y_label=` is the name it is read by; the `a11y` step of a headless script prints that tree (`demo/labels.py`).
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 
@@ -439,7 +459,14 @@ Charts draw lists of float or int.
 values: State[list[float]] = State([])
 line_chart(values(), height=120.0)
 bar_chart(Metrics.svc_reqs, labels=Metrics.svc_names, height=100.0)
+bar_chart(Books.profit, labels=Books.months, axis=True)          # negative months hang below the zero line
+line_chart(series=Traffic.lines, colors=["accent", "#f38ba8"], axis=True)
 ```
+
+The range spans the data and always contains zero, so a negative value hangs below the zero line; `min=` / `max=` pin it instead.
+`axis=True` adds tick labels and gridlines.
+`series=` takes a `list[list[float]]` field for several lines or bar groups, `colors=` names one color per series, and `color=` colors a single series (`demo/charts.py`).
+`progress(value)` fills a track: `width=` / `height=` size it, `label=` captions it, and `indeterminate=True` sweeps a segment instead, for work with no known length.
 
 Long lists go to `list_view`.
 It is **virtualized**: the row builder `row(i)` is called only for the visible range (a dozen or so calls even at 100k rows).
@@ -450,6 +477,20 @@ def row(i):
 
 list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
+```
+
+A table is a `list_view` with a header and column tracks.
+`table(columns, count, row)` calls `row(i)` for the visible rows only, and the builder returns a `row` of one cell per column; `widths=` are the tracks' shares.
+`selected=` tints a row and `on_select` receives the clicked row's index; `sort=` / `descending=` draw the header's arrow and `on_sort` receives the clicked column's index — the app re-sorts its own lists.
+In scripts, `select:<first cell>` picks a row and `click:<column>` sorts (`demo/roster.py`).
+
+```python
+def cells(i: int):
+    return row(text(Roster.names[i]), text(f"{Roster.scores[i]}"))
+
+table(["member", "score"], len(Roster.names), cells, widths=[2.0, 1.0],
+      selected=Roster.sel, on_select=Roster.pick,
+      sort=Roster.sort_col, descending=Roster.desc, on_sort=Roster.sort_by, grow=1.0)
 ```
 
 The row index is an int the row can use anywhere: in the text, in a condition, and in the row's own handlers.
@@ -993,7 +1034,7 @@ Running without a window is where verification starts.
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
-The step vocabulary is `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
+The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's column header), `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>` (a chooser's option, or a table's row by its first cell), `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
 `@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
 A comma inside text is written `\,` (`input:hello\, world`).
@@ -1089,6 +1130,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In the standard library**: reading a time back from text, file metadata (size, times) and copying or renaming, streaming or binary downloads, and nested json writing (a value inside a written dict or list is a str, int, float or bool).
+- **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no hover readout and no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
