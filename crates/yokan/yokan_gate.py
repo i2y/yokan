@@ -825,43 +825,6 @@ class Translator:
         ("time", "local_offset_minutes"): "Int",
     }
 
-    def _tooltip_prop(self, kw):
-        """`tooltip=` as a pixie property, or None. The rider belongs
-        to the element it is written on, whichever element that is."""
-        if "tooltip" not in kw:
-            return None
-        v = kw.pop("tooltip")
-        if isinstance(v, ast.Constant) and type(v.value) is str:
-            return f"tooltip: {pixstr(v.value)}"
-        cell = self._cell_read(v)
-        if cell is None or self._ty(cell) != "String":
-            raise Untranslatable(v, "tooltip= takes a str literal or a str state read")
-        return f"tooltip: App.{cell}"
-
-    def _anim_props(self, kw) -> list[str]:
-        """§8.35's riders as kwargs: animate= (ms), easing=,
-        enter=/exit= (bools) — stripped into Element::Anim by both
-        lowerers; interpolation runs in the shared kernel, so
-        `advance:` frames dump identically."""
-        props = []
-        if "animate" in kw:
-            v = kw.pop("animate")
-            if not (isinstance(v, ast.Constant) and type(v.value) in (int, float) and type(v.value) is not bool):
-                raise Untranslatable(v, "animate= takes a duration in ms (number literal)")
-            props.append(f"animate: {v.value}")
-        if "easing" in kw:
-            v = kw.pop("easing")
-            if not (isinstance(v, ast.Constant) and v.value in self.EASINGS):
-                raise Untranslatable(v, 'easing= is one of "linear", "in", "out", "inOut"')
-            props.append(f'easing: "{v.value}"')
-        for flag in ("enter", "exit"):
-            if flag in kw:
-                v = kw.pop(flag)
-                if not (isinstance(v, ast.Constant) and v.value is True):
-                    raise Untranslatable(v, f"{flag}= takes True (omit it otherwise)")
-                props.append(f"{flag}: true")
-        return props
-
     def _str_value_or_lit(self, v, what: str):
         """A `.pix` String-typed prop value: a string literal, or a
         String-typed state/store-field read (the `theme:`/`role:`
@@ -883,43 +846,137 @@ class Translator:
             return RawPix(f"{v.value.id}.{v.attr}")
         raise Untranslatable(v, f"{what} takes a string literal or a str state/store-field read")
 
-    def _a11y_props(self, kw, allow_label: bool = True) -> list[str]:
-        """The a11y のライダー (§5 of the widget gaps notes): `role=` /
-        `a11y_label=` are universal riders — stripped into
-        `Element::Semantics` by both lowerers, exactly like `theme:`
-        and the animation riders, so an `a11y` script step sees
-        identical trees in both tiers. `role=` is checked against
-        `a11y.rs`'s vocabulary when it is a literal; a state/store-
-        field read is checked at run time by the shared kernel (an
-        unknown role there falls back to the element's derived role,
-        never an error). `a11y_label=` becomes pixie's `label:` — any
-        string expression, no vocabulary.
-        `allow_label=False` is Checkbox/Switch's own restriction: pixie's
-        `lower_semantics` never lets `label:` ride on them (their own
-        `label:` prop already IS their visible text AND their derived
-        accessible name), so an independent `a11y_label=` has nothing
-        to attach to in the dialect."""
+    # The rider table: every cross-cutting kwarg an element takes, the
+    # pixie property it becomes, and the kind of value it reads. This
+    # is one of the three copies that must agree — the runtime's
+    # `Riders` struct and `apply_riders` in `src/lib.rs`, and the
+    # `Riders` TypedDict in `yokan.pyi` — so a new rider is one line
+    # here and one line in each of those, never a new prop on thirty
+    # elements.
+    RIDERS = (
+        # TODO(riders): the sizing riders and `disabled=` wait on the
+        # pixie side's `Element::Sized` / `Element::Disabled`:
+        # ("width", "width", "num"),
+        # ("height", "height", "num"),
+        # ("min_width", "minWidth", "num"),
+        # ("max_width", "maxWidth", "num"),
+        # ("disabled", "disabled", "bool"),
+        ("theme", "theme", "str"),
+        ("animate", "animate", "ms"),
+        ("easing", "easing", "easing"),
+        ("enter", "enter", "flag"),
+        ("exit", "exit", "flag"),
+        ("col_span", "colSpan", "num"),
+        ("row_span", "rowSpan", "num"),
+        ("role", "role", "role"),
+        ("a11y_label", "label", "str"),
+        ("tooltip", "tooltip", "str"),
+    )
+    RIDER_KWARGS = frozenset(k for k, _, _ in RIDERS)
+
+    # `a11y_label=` has nothing to attach to on these: their own
+    # `label:` prop already IS their visible text AND the accessible
+    # name pixie derives from it, and `lower_semantics` refuses to let
+    # the rider ride on them too — so the runtime leaves the kwarg out
+    # of their signatures and the translator says why.
+    NO_A11Y_LABEL = ("checkbox", "switch", "progress")
+
+    def _riders(self, kw, node=None) -> list[str]:
+        """Every cross-cutting kwarg, stripped from `kw` BEFORE the
+        element's own emitter runs and answered as the pixie rider
+        properties both lowerers strip into wrappers (Semantics,
+        Tooltip, Themed, Anim, GridCell). A rider belongs to the
+        element it is written on, whichever element that is.
+
+        Each value takes what its kind takes anywhere else: a literal,
+        a state or store-field read, arithmetic for the numbers — with
+        the vocabularies kept, because a typo in a closed set should
+        be a build error, not a shrug at run time (`role=` against
+        `a11y.rs`'s roles, `easing=` against the four curves, and
+        `theme=` against the palettes, which pixie checks itself)."""
         props = []
-        if "role" in kw:
-            v = kw.pop("role")
-            text = self._str_value_or_lit(v, "role=")
-            if not isinstance(text, RawPix) and text not in self.A11Y_ROLES:
-                raise Untranslatable(
-                    v, f"unknown role `{text}` — one of {', '.join(self.A11Y_ROLES)}"
-                )
-            props.append(f"role: {pixstr(text)}")
-        if "a11y_label" in kw:
-            v = kw.pop("a11y_label")
-            if not allow_label:
-                raise Untranslatable(
-                    v,
-                    "checkbox()/switch() derive their accessible name from label= — "
-                    "a11y_label= cannot give them a different one (the dialect's `label:` "
-                    "rider does not apply to a toggle's own label)",
-                )
-            text = self._str_value_or_lit(v, "a11y_label=")
-            props.append(f"label: {pixstr(text)}")
+        for key, prop, kind in self.RIDERS:
+            if key not in kw:
+                continue
+            v = kw.pop(key)
+            if kind == "num":
+                props.append(f"{prop}: {self._num({key: v}, key)}")
+            elif kind == "bool":
+                props.append(f"{prop}: {self._boolean({key: v}, key)}")
+            elif kind == "ms":
+                if not (
+                    isinstance(v, ast.Constant)
+                    and type(v.value) in (int, float)
+                    and type(v.value) is not bool
+                ):
+                    raise Untranslatable(v, "animate= takes a duration in ms (number literal)")
+                props.append(f"{prop}: {v.value}")
+            elif kind == "easing":
+                if not (isinstance(v, ast.Constant) and v.value in self.EASINGS):
+                    raise Untranslatable(v, 'easing= is one of "linear", "in", "out", "inOut"')
+                props.append(f'{prop}: "{v.value}"')
+            elif kind == "flag":
+                if not (isinstance(v, ast.Constant) and v.value is True):
+                    raise Untranslatable(v, f"{key}= takes True (omit it otherwise)")
+                props.append(f"{prop}: true")
+            elif kind == "role":
+                text = self._str_value_or_lit(v, "role=")
+                if not isinstance(text, RawPix) and text not in self.A11Y_ROLES:
+                    raise Untranslatable(
+                        v, f"unknown role `{text}` — one of {', '.join(self.A11Y_ROLES)}"
+                    )
+                props.append(f"{prop}: {pixstr(text)}")
+            else:
+                if key == "a11y_label" and node is not None and any(
+                    self._is_ui(node.func, n) for n in self.NO_A11Y_LABEL
+                ):
+                    which = next(n for n in self.NO_A11Y_LABEL if self._is_ui(node.func, n))
+                    raise Untranslatable(
+                        v,
+                        f"{which}() derives its accessible name from label= — "
+                        "a11y_label= cannot give it a different one (the dialect's "
+                        "`label:` rider does not apply to an element that owns a label)",
+                    )
+                try:
+                    text = self._str_value_or_lit(v, key + "=")
+                except Untranslatable:
+                    if key != "theme":
+                        raise
+                    raise Untranslatable(
+                        v, 'theme= takes "light", "dark" or a str state read'
+                    ) from None
+                props.append(f"{prop}: {pixstr(text)}")
         return props
+
+    def _strip_riders(self, node) -> list[str]:
+        """Pop the riders off an element call and answer their pixie
+        properties. The call's remaining keywords are the element's
+        own, so every emitter below sees only what it knows."""
+        if not isinstance(node, ast.Call):
+            return []
+        kw = {k.arg: k.value for k in node.keywords if k.arg}
+        if not (self.RIDER_KWARGS & kw.keys()):
+            return []
+        props = self._riders(kw, node)
+        node.keywords = [k for k in node.keywords if k.arg not in self.RIDER_KWARGS]
+        return props
+
+    @staticmethod
+    def _with_riders(lines: list[str], props: list[str], pad: str) -> list[str]:
+        """Put the rider properties inside the element's own block —
+        both spellings the emitters produce (a `Tag {` head with a
+        body under it, and the one-line `Tag { a; b }`)."""
+        if not props:
+            return lines
+        if lines and lines[0].rstrip().endswith("{"):
+            return [lines[0], *[f"{pad}  {p}" for p in props], *lines[1:]]
+        head = lines[0]
+        brace = head.index("{")
+        rest = head[brace + 1:]
+        joined = "; ".join(props)
+        if rest.strip() == "}":
+            return [f"{head[:brace + 1]} {joined} }}", *lines[1:]]
+        return [f"{head[:brace + 1]} {joined};{rest}", *lines[1:]]
 
     def _optional_test(self, test):
         """Recognize the narrowing shapes over an optional cell:
@@ -6483,24 +6540,11 @@ class Translator:
 
     def element(self, node, indent: int) -> list[str]:
         """One element, with the riders every element takes applied
-        around it. `tooltip=` is handled here rather than in each
-        widget: it belongs to the element, whichever element it is."""
-        tip = None
-        if isinstance(node, ast.Call):
-            kw = {k.arg: k.value for k in node.keywords if k.arg}
-            tip = self._tooltip_prop(kw)
-            if tip is not None:
-                node.keywords = [k for k in node.keywords if k.arg != "tooltip"]
+        around it. They are handled here rather than in each widget:
+        a rider belongs to the element, whichever element it is."""
+        riders = self._strip_riders(node)
         lines = self._element_inner(node, indent)
-        if tip is None:
-            return lines
-        pad = "  " * indent
-        if lines and lines[0].rstrip().endswith("{"):
-            return [lines[0], f"{pad}  {tip}", *lines[1:]]
-        # the one-line form: `Tag { a; b }`
-        head = lines[0]
-        brace = head.index("{")
-        return [f"{head[:brace + 1]} {tip};{head[brace + 1:]}", *lines[1:]]
+        return self._with_riders(lines, riders, "  " * indent)
 
     def _element_inner(self, node, indent: int) -> list[str]:
         pad = "  " * indent
@@ -6523,15 +6567,6 @@ class Translator:
             if style_rider is not None:
                 raise Untranslatable(k.value, "one style per element — compose with `|` first")
             style_rider = self.styles[k.value.id][0]
-        theme_rider = None
-        if "theme" in kw:
-            tv = kw.pop("theme")
-            if isinstance(tv, ast.Constant) and type(tv.value) is str:
-                theme_rider = f'"{esc(tv.value)}"'
-            elif (tc := self._cell_read(tv)) is not None and self._ty(tc) == "String":
-                theme_rider = f"App.{tc}"
-            else:
-                raise Untranslatable(tv, 'theme= takes "light", "dark" or a str state read')
         num = lambda name: self._num(kw, name)  # noqa: E731
         strlit = lambda name: self._strlit(kw, name)  # noqa: E731
 
@@ -6540,10 +6575,6 @@ class Translator:
             lines = [f"{pad}{tag} {{"]
             if style_rider:
                 lines.append(f"{pad}  style: {style_rider}")
-            if theme_rider:
-                lines.append(f"{pad}  theme: {theme_rider}")
-            for p in self._a11y_props(kw):
-                lines.append(f"{pad}  {p}")
             lines += self._container_props(kw, pad)
             for child in node.args:
                 lines += self.element(child, indent + 1)
@@ -6556,7 +6587,6 @@ class Translator:
             props = []
             if style_rider:
                 props.append(f"style: {style_rider}")
-            props += self._anim_props(kw)
             props.append(f"text: {self._text_value(node.args[0])}")
             size = num("size")
             if size is not None:
@@ -6610,7 +6640,6 @@ class Translator:
                 val = strlit(pykey)
                 if val is not None:
                     props.append(f"{pixkey}: {pixstr(val)}")
-            props += self._a11y_props(kw)
             for k in kw:
                 if k not in self.TEXT_KEYS:
                     raise Untranslatable(kw[k], f"text() does not take `{k}=`")
@@ -6622,12 +6651,6 @@ class Translator:
             label = self._text_value(node.args[0])
             h = self.handler(kw["on_click"], takes_text=False) if "on_click" in kw else None
             sty = [f"style: {style_rider}"] if style_rider else []
-            sty += self._anim_props(kw)
-            for pykey, prop in (("col_span", "colSpan"), ("row_span", "rowSpan")):
-                sp = self._num(kw, pykey)
-                if sp is not None:
-                    sty.append(f"{prop}: {sp}")
-            sty += self._a11y_props(kw)
             if isinstance(h, tuple):
                 lines = [f"{pad}Button {{"] + [f"{pad}  {p}" for p in sty]
                 lines += [f"{pad}  text: {label}", f"{pad}  onClick: {{"]
@@ -6646,7 +6669,6 @@ class Translator:
             size = num("size")
             if size is not None:
                 props.append(f"fontSize: {size}")
-            props += self._a11y_props(kw)
             for k in kw:
                 if k not in ("size",):
                     raise Untranslatable(kw[k], f"link() does not take `{k}=`")
@@ -6695,8 +6717,6 @@ class Translator:
                 if "multiline" not in kw:
                     raise Untranslatable(v, "rows= belongs to a multiline field — write `multiline=True` beside it")
                 lines.append(f"{pad}  rows: {v.value}")
-            for p in self._a11y_props(kw):
-                lines.append(f"{pad}  {p}")
             for pykey, prop in (("on_change", "onTextChanged"), ("on_submit", "onSubmitted")):
                 if pykey not in kw:
                     continue
@@ -6731,8 +6751,6 @@ class Translator:
             g = self._num(kw, "grow")
             if g is not None:
                 lines.append(f"{pad}  grow: {g}")
-            for p in self._a11y_props(kw):
-                lines.append(f"{pad}  {p}")
             lines += self._row_repeater(count_cell, rf, rparam, rbody, pad, indent)
             lines.append(f"{pad}}}")
             return lines
@@ -6815,8 +6833,6 @@ class Translator:
                 raise Untranslatable(v, f"{what} is a list of number literals, or a list[float] state or store-field read")
 
             lines = [f"{pad}Table {{"]
-            for p in self._a11y_props(kw):
-                lines.append(f"{pad}  {p}")
             lines.append(f"{pad}  columns: {list_read(spec['columns'], 'columns=')}")
             if "widths" in kw:
                 lines.append(f"{pad}  widths: {float_list_read(kw['widths'], 'widths=')}")
@@ -6861,7 +6877,6 @@ class Translator:
                     props.append(f"checked: {'true' if cv.value else 'false'}")
                 else:
                     props.append(f"checked: {typed_read(cv, 'Bool', 'checked=')}")
-                props += self._a11y_props(kw, allow_label=False)
                 if "on_change" in kw:
                     h = self.handler(kw["on_change"], takes_text=True, implicit=("checked", "Bool"))
                     if isinstance(h, tuple):
@@ -6880,7 +6895,6 @@ class Translator:
                 n2 = self._num(kw, k2)
                 if n2 is not None:
                     props.append(f"{k2}: {n2}")
-            props += self._a11y_props(kw)
             if "on_change" in kw:
                 h = self.handler(kw["on_change"], takes_text=True, implicit=("value", "Float"))
                 if isinstance(h, tuple):
@@ -6920,7 +6934,6 @@ class Translator:
             if ph is not None:
                 props.append(f"placeholder: {pixstr(ph)}")
             handler = kw.get("on_change")
-            props += self._a11y_props(kw)
             for k2 in kw:
                 if k2 not in ("min", "max", "step", "placeholder", "on_change"):
                     raise Untranslatable(kw[k2], f"{fname}() does not take `{k2}=`")
@@ -6949,7 +6962,6 @@ class Translator:
                     f"{pixlist}: {list_read(kw[listkey], listkey + '=')}",
                     f"{pixsel}: {typed_read(kw[selkey], 'Int', selkey + '=')}",
                 ]
-                props += self._a11y_props(kw)
                 if "on_change" in kw:
                     h = self.handler(kw["on_change"], takes_text=True, implicit=("index", "Int"))
                     if isinstance(h, tuple):
@@ -7017,7 +7029,6 @@ class Translator:
                     props.append(f'color: "{esc(col)}"')
                 if "colors" in kw:
                     props.append(f"colors: {self._color_list(kw['colors'])}")
-                props += self._a11y_props(kw)
                 return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
 
         if self._is_ui(node.func, "grid"):
@@ -7028,8 +7039,6 @@ class Translator:
                 if val is not None:
                     lines.append(f"{pad}  {prop}: {val}")
             lines += self._container_props(kw2, pad)
-            for p in self._a11y_props(kw2):
-                lines.append(f"{pad}  {p}")
             for child in node.args:
                 lines += self.element(child, indent + 1)
             lines.append(f"{pad}}}")
@@ -7040,8 +7049,6 @@ class Translator:
             h = self._num(kw, "height")
             if h is not None:
                 lines.append(f"{pad}  height: {h}")
-            for p in self._a11y_props(kw):
-                lines.append(f"{pad}  {p}")
             for child in node.args:
                 lines += self.element(child, indent + 1)
             lines.append(f"{pad}}}")
@@ -7057,7 +7064,7 @@ class Translator:
                 val = f"App.{pc}"
             else:
                 raise Untranslatable(v, "progress takes a float literal or a float state read")
-            props = [f"value: {val}"] + self._a11y_props(kw)
+            props = [f"value: {val}"]
             for prop in ("width", "height"):
                 n = self._num(kw, prop)
                 if n is not None:
@@ -7077,7 +7084,6 @@ class Translator:
             sz = self._num(kw, "size")
             if sz is not None:
                 props.append(f"size: {sz}")
-            props += self._a11y_props(kw)
             body = "; ".join(props)
             return [f"{pad}Spinner {{ {body} }}" if body else f"{pad}Spinner {{ }}"]
 
@@ -7086,7 +7092,6 @@ class Translator:
             g = self._num(kw, "grow")
             if g is not None:
                 props.append(f"grow: {g}")
-            props += self._a11y_props(kw)
             for k in kw:
                 if k != "grow":
                     raise Untranslatable(kw[k], f"spacer() does not take `{k}=`")
@@ -7101,7 +7106,6 @@ class Translator:
             t = self._num(kw, "thickness")
             if t is not None:
                 props.append(f"thickness: {t}")
-            props += self._a11y_props(kw)
             for k in kw:
                 if k not in ("color", "thickness"):
                     raise Untranslatable(kw[k], f"divider() does not take `{k}=`")
@@ -7120,7 +7124,6 @@ class Translator:
                     val = self._num(kw, prop)
                     if val is not None:
                         props.append(f"{prop}: {val}")
-                props += self._a11y_props(kw)
                 return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
 
         for fname, tag in (("stack", "Stack"), ("h_scroll_view", "HScrollView"), ("data_table", "DataTable"), ("modal", "Modal")):
@@ -7128,8 +7131,6 @@ class Translator:
                 if tag == "Modal" and "open" in kw:
                     raise Untranslatable(node, "a modal is open by existing — wrap it in `if show():` instead of passing open=")
                 lines = [f"{pad}{tag} {{"]
-                for p in self._a11y_props(kw):
-                    lines.append(f"{pad}  {p}")
                 for child in node.args:
                     lines += self.element(child, indent + 1)
                 lines.append(f"{pad}}}")
@@ -7401,30 +7402,13 @@ class Translator:
             if style_rider is not None:
                 raise Untranslatable(k.value, "one style per element — compose with `|` first")
             style_rider = self.styles[k.value.id][0]
-        theme_rider = None
-        if "theme" in kw:
-            if tag not in ("Column", "Row"):
-                raise Untranslatable(call, "theme= goes on a column or row (it scopes that subtree) — other elements do not take it yet")
-            tv = kw.pop("theme")
-            if isinstance(tv, ast.Constant) and type(tv.value) is str:
-                theme_rider = f'"{esc(tv.value)}"'
-            elif (tc := self._cell_read(tv)) is not None and self._ty(tc) == "String":
-                theme_rider = f"App.{tc}"
-            else:
-                raise Untranslatable(tv, 'theme= takes "light", "dark" or a str state read')
+        riders = self._riders(kw, call)
         if tag == "Modal" and "open" in kw:
             raise Untranslatable(call, "a modal is open by existing — wrap it in `if show():` instead of passing open=")
         lines = [f"{pad}{tag} {{"]
         if style_rider:
             lines.append(f"{pad}  style: {style_rider}")
-        if theme_rider:
-            lines.append(f"{pad}  theme: {theme_rider}")
-        tip = self._tooltip_prop(kw)
-        if tip is not None:
-            lines.append(f"{pad}  {tip}")
-        for p in self._anim_props(kw):
-            lines.append(f"{pad}  {p}")
-        for p in self._a11y_props(kw):
+        for p in riders:
             lines.append(f"{pad}  {p}")
         if tag == "Grid":
             for prop in ("columns", "rows"):
