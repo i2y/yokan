@@ -93,7 +93,10 @@ fn split_steps(script: &str) -> Vec<String> {
     out
 }
 
-/// The step loop. Steps: `click[@n]:<label>` · `input[@n]:<text>` ·
+/// The step loop. Steps: `click[@n]:<label>` (a Button or a Link,
+/// counted together in tree order; clicking a Link is accepted and
+/// does nothing — opening a browser is not app state) ·
+/// `input[@n]:<text>` ·
 /// `submit[@n]` · `slide[@n]:<value>` (the n-th Slider in tree
 /// order, default 0: clamp the value to `[min, max]`, snap it to
 /// the nearest step multiple counted from min, run `onChange`) ·
@@ -183,11 +186,14 @@ pub fn run<C: Component>(
             *tree = rt.with(|w| build_prepared(w, view));
             timed = true;
         } else if let Some(rest) = step.strip_prefix("click") {
-            // Buttons keep priority; when none carries the label, a
-            // Checkbox/Switch answers (tree order among toggles) and
-            // clicking it runs `onToggle` with the NEW value. `@n`
-            // counts matches of the SAME label in tree order, which
-            // is how a row of identical buttons is reached.
+            // Buttons and Links keep priority (counted together, one
+            // shared index, by `find_button_nth`); when none carries
+            // the label, a Checkbox/Switch answers (tree order among
+            // toggles) and clicking it runs `onToggle` with the NEW
+            // value. A Link's "click" is a no-op — opening a URL is
+            // not app state — so it is accepted and changes nothing.
+            // `@n` counts matches of the SAME label in tree order,
+            // which is how a row of identical buttons is reached.
             let (n, label) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')

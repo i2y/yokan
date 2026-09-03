@@ -1,0 +1,19 @@
+store Doc {
+  state clicks : Int = 0
+
+  fn bump {
+    clicks = clicks + 1
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text { text: "Yokan"; fontSize: 22.0 }
+    Link { text: "Docs"; url: "https://example.com"; fontSize: 16.0 }
+    Text { text: "clicks: #{Doc.clicks}" }
+    Button { text: "bump"; onClick: Doc.bump() }
+  }
+}

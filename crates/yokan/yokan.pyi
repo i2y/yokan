@@ -221,6 +221,9 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
     tooltip: str = "",
 ) -> Element: ...
+def link(label: str, url: str, size: float = 0.0, tooltip: str = "") -> Element:
+    """Text that opens `url` in the browser when clicked; a headless
+    run records the click and opens nothing."""
 def table(
     columns: Sequence[str],
     count: int,

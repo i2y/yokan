@@ -49,6 +49,8 @@ pub enum Role {
     ComboBox,
     RadioGroup,
     TabList,
+    /// A Link: AccessKit's `Link`, spelled in pixie's words.
+    Link,
 }
 
 impl Role {
@@ -71,6 +73,7 @@ impl Role {
             "comboBox" => Role::ComboBox,
             "radioGroup" => Role::RadioGroup,
             "tabList" => Role::TabList,
+            "link" => Role::Link,
             _ => return None,
         })
     }
@@ -94,6 +97,7 @@ impl Role {
             Role::ComboBox => "comboBox",
             Role::RadioGroup => "radioGroup",
             Role::TabList => "tabList",
+            Role::Link => "link",
         }
     }
 
@@ -116,6 +120,7 @@ impl Role {
         Role::ComboBox,
         Role::RadioGroup,
         Role::TabList,
+        Role::Link,
     ];
 }
 
@@ -190,6 +195,7 @@ pub fn role_of(el: &Element) -> Option<Role> {
         Element::Select { .. } => Some(Role::ComboBox),
         Element::RadioGroup { .. } => Some(Role::RadioGroup),
         Element::TabBar { .. } => Some(Role::TabList),
+        Element::Link { .. } => Some(Role::Link),
         Element::Table { .. } => Some(Role::Table),
         _ => None,
     }
@@ -214,6 +220,8 @@ pub fn name_of(el: &Element) -> Str {
             options, selected, ..
         } => options.get(*selected).unwrap_or_else(Str::new),
         Element::TabBar { labels, active, .. } => labels.get(*active).unwrap_or_else(Str::new),
+        // Mirrors how Button derives `button`: the label IS the name.
+        Element::Link { label, .. } => label.clone(),
         _ => Str::new(),
     }
 }

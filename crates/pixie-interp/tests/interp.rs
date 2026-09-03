@@ -946,6 +946,51 @@ fn choosers_require_their_props() {
     }
 }
 
+#[test]
+fn link_dumps_label_and_url() {
+    // Mirrors Text's dump (copy of its `font_size` join-when-set
+    // rule): the label and url are the widget's whole meaning and
+    // always print — codegen's `Element::Link` arm, one tier over.
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view(r#"Link { text: "Docs"; url: "https://example.com" }"#),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Link(Docs, https://example.com)]");
+    let tree = build_view(
+        &chart_view(r#"Link { text: "Docs"; url: "https://example.com"; fontSize: 18.0 }"#),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Link(Docs, https://example.com, fontSize=18)]"
+    );
+}
+
+#[test]
+fn link_requires_text_and_url() {
+    // Mirrors codegen's required-prop errors (`choosers_require_their_props`'s pattern).
+    let (w, e) = charts_world();
+    for (body, needle) in [
+        ("Link { }", "Link needs `text:`"),
+        (r#"Link { text: "Docs" }"#, "Link needs `url:`"),
+    ] {
+        match build_view(&chart_view(body), &e, &tables(), &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(
+                err.contains(needle),
+                "error should name the missing prop: {err}"
+            ),
+        }
+    }
+}
+
 fn charts_world() -> (World, FieldEnv) {
     let mut w = World::new();
     let mut values: List<f64> = List::new();

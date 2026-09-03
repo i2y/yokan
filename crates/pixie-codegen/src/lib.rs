@@ -6080,6 +6080,25 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(active, cx, "active")?
             ))
         }
+        "Link" => {
+            let text = element_prop(el, "text").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Link needs `text:`".into(),
+            })?;
+            let url = element_prop(el, "url").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Link needs `url:`".into(),
+            })?;
+            let font_size = match element_prop(el, "fontSize") {
+                Some(v) => lower_view_float(v, cx, "fontSize")?,
+                None => "0f64".into(),
+            };
+            Ok(format!(
+                "Element::Link {{ label: {}, url: {}, font_size: {font_size} }}",
+                lower_view_text(text, cx)?,
+                lower_view_text(url, cx)?
+            ))
+        }
         "Table" => {
             // The header is the element's identity, so `columns:` is
             // required; everything else has ListView's "unset" shape.
@@ -6166,7 +6185,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 "element `{other}` is not in the engine vocabulary yet \
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
-                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Table), and no \
+                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Link / Table), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),
@@ -6305,6 +6324,7 @@ pub fn a11y_roles() -> &'static [&'static str] {
         "comboBox",
         "radioGroup",
         "tabList",
+        "link",
     ]
 }
 

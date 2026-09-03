@@ -622,6 +622,15 @@ fn tiers_agree_on_every_demo() {
         // tier that lowered one of them differently is caught here
         // rather than in a screenshot.
         ("examples/badges/badges.pix", "click:flip,click:flip"),
+        // Link: `click[@n]:<label>` matches it the way it matches a
+        // Button (one shared tree-order index), and running the click
+        // is a no-op in BOTH tiers — opening a browser is not app
+        // state — so the reading is that the dump never moves, before
+        // or after the click, in either tier.
+        (
+            "examples/link/link.pix",
+            "click:Docs,click:bump,click:Docs",
+        ),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);

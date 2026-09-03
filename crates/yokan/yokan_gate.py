@@ -6565,6 +6565,20 @@ class Translator:
             props = sty + [f"text: {label}"] + ([f"onClick: {h}"] if h else [])
             return [f"{pad}Button {{ {'; '.join(props)} }}"]
 
+        if self._is_ui(node.func, "link"):
+            if len(node.args) < 2:
+                raise Untranslatable(node, 'link() takes the label and the url: `link("Docs", "https://…")`')
+            label = self._text_value(node.args[0])
+            url = self._text_value(node.args[1])
+            props = [f"text: {label}", f"url: {url}"]
+            size = num("size")
+            if size is not None:
+                props.append(f"fontSize: {size}")
+            for k in kw:
+                if k not in ("size",):
+                    raise Untranslatable(kw[k], f"link() does not take `{k}=`")
+            return [f"{pad}Link {{ {'; '.join(props)} }}"]
+
         if self._is_ui(node.func, "text_field"):
             if not node.args:
                 raise Untranslatable(node, "text_field() needs its value")
@@ -6931,7 +6945,7 @@ class Translator:
         if isinstance(node.func, ast.Name) and node.func.id in self.defs:
             return self._component_use(node, indent)
 
-        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner")
+        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, link, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner")
 
     def _rows_source(self, ca, what):
         """The list a row-built element (list_view, table) counts with
