@@ -190,6 +190,9 @@ pub fn role_of(el: &Element) -> Option<Role> {
         Element::Select { .. } => Some(Role::ComboBox),
         Element::RadioGroup { .. } => Some(Role::RadioGroup),
         Element::TabBar { .. } => Some(Role::TabList),
+        // Every segment is always visible and one is always the
+        // current choice — the same shape RadioGroup reports.
+        Element::Segmented { .. } => Some(Role::RadioGroup),
         _ => None,
     }
 }
@@ -213,6 +216,9 @@ pub fn name_of(el: &Element) -> Str {
             options, selected, ..
         } => options.get(*selected).unwrap_or_else(Str::new),
         Element::TabBar { labels, active, .. } => labels.get(*active).unwrap_or_else(Str::new),
+        Element::Segmented {
+            options, selected, ..
+        } => options.get(*selected).unwrap_or_else(Str::new),
         _ => Str::new(),
     }
 }

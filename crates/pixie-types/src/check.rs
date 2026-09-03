@@ -601,8 +601,9 @@ impl<'a> Checker<'a> {
             let _ = self.synth(&mut child, value);
             return;
         }
-        // Chooser handlers (Select / RadioGroup / TabBar `onSelect:`)
-        // bind an implicit `index : Int` — the chosen 0-based index.
+        // Chooser handlers (Select / RadioGroup / TabBar / Segmented
+        // `onSelect:`) bind an implicit `index : Int` — the chosen
+        // 0-based index.
         if key == "onSelect" {
             let mut child = env.child();
             child.bind("index", Type::Prim(Prim::Int));

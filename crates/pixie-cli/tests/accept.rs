@@ -599,6 +599,17 @@ fn tiers_agree_on_every_demo() {
             "examples/choosers/choosers.pix",
             "select:banana,select@1:cherry,select@2:Settings",
         ),
+        // Segmented: the fourth chooser (Select / RadioGroup / TabBar
+        // contract — `options:`/`selected:`, an index-carrying
+        // `onSelect`), painted as one joined pill group instead of a
+        // dropdown, a radio column or a tab strip. `select:` picks a
+        // segment by exact text and runs `onSelect` with its 0-based
+        // index, echoed by the Text — the same proof the other three
+        // choosers give, on the new paint.
+        (
+            "examples/segmented/segmented.pix",
+            "select:crit,select:warn,select:all",
+        ),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);

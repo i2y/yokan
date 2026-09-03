@@ -177,6 +177,14 @@ def tab_bar(
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
 ) -> Element: ...
+def segmented(
+    options: Sequence[str] = (),
+    selected: int = 0,
+    on_change: Optional[Callable[[int], Any]] = None,
+) -> Element:
+    """A row of joined toggle buttons; the handler receives the
+    chosen index."""
+
 def spinner(size: float = 0.0) -> Element: ...
 def task(
     work: Callable[[], Any],

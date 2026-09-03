@@ -904,8 +904,8 @@ pub type BoolListener = Rc<dyn Fn(&mut World, bool)>;
 /// new value.
 pub type FloatListener = Rc<dyn Fn(&mut World, f64)>;
 
-/// Argful listener for the choosers (Select / RadioGroup / TabBar):
-/// the payload is the chosen 0-based index.
+/// Argful listener for the choosers (Select / RadioGroup / TabBar /
+/// Segmented): the payload is the chosen 0-based index.
 pub type IntListener = Rc<dyn Fn(&mut World, i64)>;
 
 #[derive(Clone)]
@@ -1212,13 +1212,13 @@ pub enum Element {
     },
     /// A closed dropdown chooser: the control shows the option at
     /// `selected` and clicking an option reports its 0-based index
-    /// through `on_select`. The three choosers (Select / RadioGroup /
-    /// TabBar) share one contract — a `List<String>` of choices, an
-    /// Int for the current one, an index-carrying handler. The
-    /// options are DATA, not child elements, so the tree walkers
-    /// treat all three as leaves. Whether the option list is popped
-    /// open is engine-side transient state keyed by element path
-    /// (the TextField rule) — headless scripts choose directly
+    /// through `on_select`. The four choosers (Select / RadioGroup /
+    /// TabBar / Segmented) share one contract — a `List<String>` of
+    /// choices, an Int for the current one, an index-carrying
+    /// handler. The options are DATA, not child elements, so the
+    /// tree walkers treat all four as leaves. Whether the option list
+    /// is popped open is engine-side transient state keyed by element
+    /// path (the TextField rule) — headless scripts choose directly
     /// through `find_chooser`, so no open flag rides here for a dump
     /// to see.
     Select {
@@ -1238,6 +1238,18 @@ pub enum Element {
     TabBar {
         labels: List<Str>,
         active: i64,
+        on_select: Option<IntListener>,
+    },
+    /// The joined-pill chooser: one clickable segment per option in a
+    /// single rounded group, the `selected` one painted solid instead
+    /// of underlined or ringed. Same contract as Select/RadioGroup —
+    /// `options`/`selected`, not TabBar's `labels`/`active` — because
+    /// it is a chooser over arbitrary options, not a strip of view
+    /// tabs. No engine-side transient state (unlike Select's popover):
+    /// every segment is always visible, like RadioGroup.
+    Segmented {
+        options: List<Str>,
+        selected: i64,
         on_select: Option<IntListener>,
     },
 }
@@ -1740,6 +1752,13 @@ impl Element {
                     labels.iter().map(|l| l.as_str().to_string()).collect();
                 format!("TabBar(active={active})[{}]", inner.join(", "))
             }
+            Element::Segmented {
+                options, selected, ..
+            } => {
+                let inner: Vec<String> =
+                    options.iter().map(|o| o.as_str().to_string()).collect();
+                format!("Segmented(selected={selected})[{}]", inner.join(", "))
+            }
         }
     }
 
@@ -2036,9 +2055,9 @@ impl Element {
         let mut seen = 0;
         walk(self, w, &mut seen, n)
     }    /// The n-th chooser in document order (headless-script targeting).
-    /// Select, RadioGroup and TabBar count TOGETHER — they share one
-    /// contract, so `select@n:` numbers them as one family: the
-    /// option/label list and the `onSelect` listener.
+    /// Select, RadioGroup, TabBar and Segmented count TOGETHER — they
+    /// share one contract, so `select@n:` numbers them as one family:
+    /// the option/label list and the `onSelect` listener.
     #[allow(clippy::type_complexity)]
     pub fn find_chooser(
         &self,
@@ -2062,6 +2081,9 @@ impl Element {
                     labels: options,
                     on_select,
                     ..
+                }
+                | Element::Segmented {
+                    options, on_select, ..
                 } => {
                     if *seen == n {
                         return Some((options.clone(), on_select.clone()));

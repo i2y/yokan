@@ -946,6 +946,44 @@ fn choosers_require_their_props() {
     }
 }
 
+#[test]
+fn segmented_dumps_options_and_the_current_index() {
+    // Segmented is the fourth chooser: same `options:`/`selected:`
+    // contract as Select/RadioGroup, the dump NAME mirroring TabBar's
+    // shape (`Segmented(selected=N)[...]`, per the port spec).
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view("Segmented { options: todo.items; selected: counter.count }"),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Segmented(selected=3)[a, b]]");
+}
+
+#[test]
+fn segmented_requires_its_props() {
+    // Mirrors codegen's required-prop errors, which the emission
+    // tests assert on the other tier.
+    let (w, e) = charts_world();
+    for (body, needle) in [
+        ("Segmented { }", "Segmented needs `options:`"),
+        (
+            "Segmented { options: todo.items }",
+            "Segmented needs `selected:`",
+        ),
+    ] {
+        match build_view(&chart_view(body), &e, &tables(), &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(
+                err.contains(needle),
+                "error should name the missing prop: {err}"
+            ),
+        }
+    }
+}
+
 fn charts_world() -> (World, FieldEnv) {
     let mut w = World::new();
     let mut values: List<f64> = List::new();

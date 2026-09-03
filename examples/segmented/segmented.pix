@@ -1,0 +1,15 @@
+store App {
+  state levels : List<String> = ["all", "crit", "warn"]
+  state level : Int = 0
+
+  fn pick(i: Int) {
+    level = i
+  }
+}
+
+view Main {
+  Column {
+    Text { text: "level: #{App.level}" }
+    Segmented { options: App.levels; selected: App.level; onSelect: App.pick(index) }
+  }
+}

@@ -98,7 +98,7 @@ fn split_steps(script: &str) -> Vec<String> {
 /// order, default 0: clamp the value to `[min, max]`, snap it to
 /// the nearest step multiple counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
-/// TabBar — picks the option with exactly this text) ·
+/// TabBar / Segmented — picks the option with exactly this text) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -266,9 +266,10 @@ pub fn run<C: Component>(
             crate::contain("slide handler", || rt.with(|w: &mut World| f(w, v)));
         } else if let Some(rest) = step.strip_prefix("select") {
             // `select:<label>` / `select@n:<label>` — the nth CHOOSER
-            // (Select, RadioGroup or TabBar, counted together in tree
-            // order; default 0) picks the option/label with exactly
-            // this text, running `onSelect` with its 0-based index.
+            // (Select, RadioGroup, TabBar or Segmented, counted
+            // together in tree order; default 0) picks the
+            // option/label with exactly this text, running `onSelect`
+            // with its 0-based index.
             let (n, label) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
@@ -284,7 +285,7 @@ pub fn run<C: Component>(
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar)"));
+                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)
