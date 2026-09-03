@@ -1132,7 +1132,41 @@ fn child_flex(el: &Element) -> (f64, f64) {
     }
 }
 
+/// How much stack `render_el` insists on before it recurses, and the
+/// size of the segment it borrows from the heap when there is less.
+/// The walk below is one function with an arm per variant, and an
+/// unoptimized build gives it one frame big enough for every arm at
+/// once — near a megabyte — so the depth of a tree is what bounds it:
+/// every rider around an element is one more level (a sized, disabled
+/// element with a tooltip and a role sits four deeper than the element
+/// alone), and the fleet's riders pushed a nine-deep tree past the
+/// main thread's 8 MiB. gpui guards its own element recursion the same
+/// way (`#[stacksafe]` on `Drawable`); this is that guard, sized for
+/// this frame. A segment holds dozens of levels, nested calls on it
+/// measure against it, and it goes back to the heap when the subtree
+/// is rendered.
+const RENDER_RED_ZONE: usize = 4 * 1024 * 1024;
+const RENDER_STACK: usize = 32 * 1024 * 1024;
+
+#[allow(clippy::too_many_arguments)]
 fn render_el<C: Component>(
+    el: &Element,
+    pass: &mut RenderPass,
+    inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
+    scrolls: &mut HashMap<Vec<usize>, ScrollState>,
+    selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    slot: Slot,
+    sem: Sem<'_>,
+    th: &'static Theme,
+    cx: &mut Context<Root<C>>,
+) -> gpui::AnyElement {
+    stacker::maybe_grow(RENDER_RED_ZONE, RENDER_STACK, || {
+        render_el_in(el, pass, inputs, scrolls, selects, slot, sem, th, cx)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_el_in<C: Component>(
     el: &Element,
     pass: &mut RenderPass,
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
