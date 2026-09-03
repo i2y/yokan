@@ -7,7 +7,10 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented.
+//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented,
+//! plus the riders every element takes — Themed / Semantics / Tooltip /
+//! Disabled / Sized / Anim (and the GridCell above) — each a wrapper
+//! around exactly one element, transparent to path-keying.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
 //! survives rebuilds — positional state transfer, engine-side. The
@@ -314,6 +317,116 @@ impl Render for PixieTooltip {
             .text_color(rgb(th.text))
             .text_size(px(12.))
             .child(self.label.clone())
+    }
+}
+
+/// How much a `Disabled` rider dims what it wraps.
+const DISABLED_OPACITY: f32 = 0.5;
+
+/// The flex participation a rider wrapper takes over from the element
+/// it wraps, so the extra div changes no layout: the element's own
+/// `grow:`/`basis:` share, and — in a Row — the `flex_1` claim a text
+/// field makes for itself (the TextField arm's rule), since the
+/// wrapper is the Row's item now and the field only fills the wrapper.
+fn wrapper_flex(mut d: gpui::Div, child: &Element, slot: Slot) -> gpui::Div {
+    let (grow, basis) = child_flex(child);
+    if grow > 0.0 {
+        d = d.flex_grow(grow as f32).flex_shrink_0();
+        if basis > 0.0 {
+            d = d.flex_basis(px(basis as f32));
+        }
+    } else if slot == Slot::Row
+        && matches!(
+            child.inner(),
+            Element::TextField { .. } | Element::NumberField { .. } | Element::IntField { .. }
+        )
+    {
+        d = d.flex_1().min_w(px(160.));
+    }
+    d
+}
+
+/// The accessibility half of the `Disabled` rider. gpui's div builder
+/// has no `aria_disabled` at the pinned rev — `AriaProperties` stops
+/// at the value, the placeholder and the counts — but the tree gpui
+/// hands AccessKit is built from `Element::a11y_role` /
+/// `write_a11y_info`, which any element implements. So the rider is
+/// its own element: one node of role `Group` carrying AccessKit's
+/// `Disabled` flag ("a control or group of controls that disallows
+/// input" — AccessKit's own words), with the dimmed subtree as its
+/// children. The kernel's `a11y` dump marks each node under the rider
+/// instead — the per-node form of the same flag, since a kernel node
+/// has nowhere else to put it. Layout, prepaint and paint are the
+/// child's, untouched.
+struct A11yDisabled {
+    id: usize,
+    child: gpui::AnyElement,
+}
+
+impl gpui::Element for A11yDisabled {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    /// An id is what puts an element in the accessibility tree at all
+    /// (`Element::a11y_role`'s contract); the render pass hands out
+    /// one unique per frame, as it does for every interactive div.
+    fn id(&self) -> Option<gpui::ElementId> {
+        Some(gpui::ElementId::from(self.id))
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn a11y_role(&self) -> Option<gpui::Role> {
+        Some(gpui::Role::Group)
+    }
+
+    fn write_a11y_info(&self, node: &mut gpui::accesskit::Node) {
+        node.set_disabled();
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (gpui::LayoutId, Self::RequestLayoutState) {
+        (self.child.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.child.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        _prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.child.paint(window, cx);
+    }
+}
+
+impl IntoElement for A11yDisabled {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
     }
 }
 
@@ -720,6 +833,10 @@ struct RenderPass {
     /// a lazy row: those paths are only walked when the row range is
     /// built, never in the eager pass.
     lazy_prefixes: Vec<Vec<usize>>,
+    /// True while the walk is inside a `Disabled` rider: the fields
+    /// under it stay out of the tab ring — a keyboard must not reach
+    /// what the mouse cannot.
+    disabled: bool,
 }
 
 impl<C: Component> Render for Root<C> {
@@ -795,6 +912,7 @@ impl<C: Component> Render for Root<C> {
             order: Vec::new(),
             overlays: Vec::new(),
             lazy_prefixes: Vec::new(),
+            disabled: false,
         };
         let body = render_el(
             &self.tree,
@@ -1113,11 +1231,13 @@ fn with_a11y<E: gpui::StatefulInteractiveElement>(d: E, el: &Element, sem: Sem<'
     d
 }
 
-/// The flex participation a fading wrapper has to stand in for. Only
+/// The flex participation a rider wrapper has to stand in for. Only
 /// the elements that HAVE `grow:` answer; everything else hugs its
-/// content either way.
+/// content either way. Read through the riders, so a wrapper around a
+/// wrapper (a fade around a sized, disabled column) copies the share
+/// of the element they all decorate.
 fn child_flex(el: &Element) -> (f64, f64) {
-    match el {
+    match el.inner() {
         Element::Button { grow, basis, .. } => (*grow, *basis),
         Element::Column { grow, .. } | Element::Row { grow, .. } | Element::Grid { grow, .. } => {
             (*grow, 0.0)
@@ -1376,7 +1496,9 @@ fn render_el_in<C: Component>(
                 }
             };
             pass.seen.push(key);
-            pass.order.push(entity.clone());
+            if !pass.disabled {
+                pass.order.push(entity.clone());
+            }
             let root = cx.entity().downgrade();
             let commit_cb = on_change
                 .clone()
@@ -1566,6 +1688,90 @@ fn render_el_in<C: Component>(
                 })
                 .into_any_element()
         }
+        // The disabled rider. The child renders as it would anywhere,
+        // dimmed, under a shield that owns the mouse: a bare
+        // `absolute().inset_0()` div creates no hitbox (the Select
+        // panel's rule), so the shield asks for one by blocking the
+        // mouse, and every hitbox beneath it stops being hovered —
+        // the first thing a Button's `on_click`, a field's
+        // focus-by-click, a Select's popover toggle and a hover style
+        // all test. Scroll wheels still pass
+        // (`block_mouse_except_scroll`, the form gpui's own docs
+        // prefer over `occlude`): a disabled list is still there to be
+        // read. The default cursor rides on the shield, so the hand a
+        // Button would show never appears. The wrapper is a flex
+        // column like the containers, so the child stretches across it
+        // exactly as it would across its parent, and it copies the
+        // child's flex share, so dimming changes no layout. What
+        // assistive technology hears is `A11yDisabled`'s business.
+        Element::Disabled { children } => {
+            let Some(child) = children.first() else {
+                return div().into_any_element();
+            };
+            let was = pass.disabled;
+            pass.disabled = true;
+            pass.path.push(0);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            pass.path.pop();
+            pass.disabled = was;
+            let d = wrapper_flex(
+                div().flex().flex_col().opacity(DISABLED_OPACITY),
+                child,
+                slot,
+            );
+            let shield = div()
+                .absolute()
+                .inset_0()
+                .block_mouse_except_scroll()
+                .cursor_default();
+            pass.next_id += 1;
+            A11yDisabled {
+                id: pass.next_id,
+                child: d.child(rendered).child(shield).into_any_element(),
+            }
+            .into_any_element()
+        }
+        // The sizing rider: a box, and the child fills it. The box is
+        // a flex column like the window frame itself, so a Column or
+        // Row inside stretches across it and takes its height through
+        // `grow:` exactly as the root view takes the window's, and a
+        // leaf stretches across it too — a Text wraps at the box, a
+        // field fills it. `w`/`h` pin the box (with `flex_shrink_0`,
+        // or a crowded Row could squeeze it); `min_w`/`max_w` clamp
+        // whatever the parent would have given. The wrapper copies
+        // the child's flex share (the Tooltip rule), so a grown
+        // element keeps growing in its parent — and a field in a Row
+        // keeps its `flex_1` claim only while no `width:` pins it.
+        // The child renders in the Flow slot: the box IS its slot now.
+        Element::Sized {
+            width,
+            height,
+            min_width,
+            max_width,
+            children,
+        } => {
+            let Some(child) = children.first() else {
+                return div().into_any_element();
+            };
+            pass.path.push(0);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, Slot::Flow, sem, th, cx);
+            pass.path.pop();
+            let claim = if *width > 0.0 { Slot::Flow } else { slot };
+            let mut d = wrapper_flex(div().flex().flex_col(), child, claim);
+            if *width > 0.0 {
+                d = d.w(px(*width as f32)).flex_shrink_0();
+            }
+            if *height > 0.0 {
+                d = d.h(px(*height as f32)).flex_shrink_0();
+            }
+            if *min_width > 0.0 {
+                d = d.min_w(px(*min_width as f32));
+            }
+            if *max_width > 0.0 {
+                d = d.max_w(px(*max_width as f32));
+            }
+            d.child(rendered).into_any_element()
+        }
         // §8.35. A settled wrapper renders NOTHING of its own: the
         // child goes straight out, so `animate:` on a grown element
         // costs no layout box. Only a running fade introduces a div,
@@ -1696,6 +1902,7 @@ fn render_el_in<C: Component>(
                                 // they are dropped. Documented.
                                 overlays: Vec::new(),
                                 lazy_prefixes: Vec::new(),
+                                disabled: false,
                             };
                             for (k, el) in built.iter().enumerate() {
                                 row_pass.path.push(range.start + k);
@@ -3074,6 +3281,7 @@ fn render_el_in<C: Component>(
                                 // (ListView's documented limit).
                                 overlays: Vec::new(),
                                 lazy_prefixes: Vec::new(),
+                                disabled: false,
                             };
                             for (k, row) in built.iter().enumerate() {
                                 let i = range.start + k;
@@ -3413,7 +3621,9 @@ fn number_field<C: Component>(
         }
     };
     pass.seen.push(key);
-    pass.order.push(entity.clone());
+    if !pass.disabled {
+        pass.order.push(entity.clone());
+    }
     let p = placeholder.as_str().to_string();
     entity.update(cx, |inp, cx| {
         inp.numeric = Some(num);

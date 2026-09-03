@@ -976,6 +976,31 @@ pub enum Element {
         text: Str,
         children: Vec<Element>,
     },
+    /// The disabled rider: the wrapped element is shown but takes no
+    /// input. Produced by the lowerers when an element carries
+    /// `disabled: true` — a literal, or a bound Bool that reads true;
+    /// a false one produces no wrapper, so an enabled element dumps
+    /// exactly as it always did — never written directly in a view;
+    /// `children` holds exactly the one wrapped element. The engine
+    /// paints the subtree dimmed and swallows its clicks; the finders
+    /// hand a script a no-op for anything inside, so a step that
+    /// targets a disabled control is accepted and does nothing (a
+    /// person cannot press it either) while still counting toward
+    /// `@n`, and the accessibility tree marks every node under it.
+    Disabled { children: Vec<Element> },
+    /// The sizing rider: a box the wrapped element fills. Produced by
+    /// the lowerers when an element carries a `width:` / `height:` it
+    /// has no native field for (Button, Image, Svg, Text, the charts
+    /// and ProgressBar keep their own, so their dumps do not change),
+    /// or `minWidth:` / `maxWidth:`, which always ride here; never
+    /// written directly in a view. `0.0` = that side is unset.
+    Sized {
+        width: f64,
+        height: f64,
+        min_width: f64,
+        max_width: f64,
+        children: Vec<Element>,
+    },
     /// The animation wrapper (§8.35). Produced by the lowerers when
     /// an element carries any of the universal riders `animate:` /
     /// `easing:` / `enter:` / `exit:`, never written directly in a
@@ -1675,6 +1700,31 @@ fn box_props(radius: f64, width: f64, color: &Str) -> Vec<String> {
     out
 }
 
+/// What the finders hand a script for a control inside a `Disabled`
+/// rider: a listener that is accepted and does nothing, one per
+/// listener shape. A person cannot press a disabled control, so a
+/// script cannot either — the Link rule (`click:` on a Link opens
+/// nothing headless) generalized to every verb.
+fn inert() -> Listener {
+    Rc::new(|_: &mut World| {})
+}
+
+fn inert_text() -> TextListener {
+    Rc::new(|_: &mut World, _: Str| {})
+}
+
+fn inert_bool() -> BoolListener {
+    Rc::new(|_: &mut World, _: bool| {})
+}
+
+fn inert_float() -> FloatListener {
+    Rc::new(|_: &mut World, _: f64| {})
+}
+
+fn inert_int() -> IntListener {
+    Rc::new(|_: &mut World, _: i64| {})
+}
+
 impl Element {
     /// All-defaults constructors for the styleable variants — the
     /// spikes and tests build trees through these so growing the
@@ -1987,6 +2037,40 @@ impl Element {
             Element::Tooltip { text, children } => {
                 let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
                 format!("Tooltip({text})[{}]", inner.join(", "))
+            }
+            Element::Disabled { children } => {
+                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                format!("Disabled[{}]", inner.join(", "))
+            }
+            // Each side joins only when set (the `GridCell` rule): a
+            // bound size that reads `0.0` this frame dumps as a bare
+            // `Sized[..]` rather than inventing a `width=0`.
+            Element::Sized {
+                width,
+                height,
+                min_width,
+                max_width,
+                children,
+            } => {
+                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let mut props: Vec<String> = Vec::new();
+                if *width != 0.0 {
+                    props.push(format!("width={width}"));
+                }
+                if *height != 0.0 {
+                    props.push(format!("height={height}"));
+                }
+                if *min_width != 0.0 {
+                    props.push(format!("minWidth={min_width}"));
+                }
+                if *max_width != 0.0 {
+                    props.push(format!("maxWidth={max_width}"));
+                }
+                if props.is_empty() {
+                    format!("Sized[{}]", inner.join(", "))
+                } else {
+                    format!("Sized({})[{}]", props.join(", "), inner.join(", "))
+                }
             }
             Element::Semantics {
                 role,
@@ -2407,17 +2491,20 @@ impl Element {
     }
 
     /// Look through the compiler-produced wrappers to the element
-    /// they decorate. `GridCell`, `Anim`, `Semantics` and `Themed`
-    /// are all riders on the SAME element and each holds exactly one
-    /// child, so any question of the form "what IS this" has to skip
-    /// them — otherwise writing `role:` next to `animate:` would make
-    /// one of the two stop working depending on which lowered first.
+    /// they decorate. `GridCell`, `Anim`, `Themed`, `Sized`,
+    /// `Disabled`, `Tooltip` and `Semantics` are all riders on the
+    /// SAME element and each holds exactly one child, so any question
+    /// of the form "what IS this" has to skip them — otherwise writing
+    /// `role:` next to `animate:` would make one of the two stop
+    /// working depending on which lowered first.
     pub fn inner(&self) -> &Element {
         match self {
             Element::GridCell { children, .. }
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
             | Element::Tooltip { children, .. }
+            | Element::Disabled { children }
+            | Element::Sized { children, .. }
             | Element::Themed { children, .. } => match children.first() {
                 Some(c) => c.inner(),
                 None => self,
@@ -2432,6 +2519,8 @@ impl Element {
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
             | Element::Tooltip { children, .. }
+            | Element::Disabled { children }
+            | Element::Sized { children, .. }
             | Element::Themed { children, .. } => match children.first_mut() {
                 Some(c) => c.inner_mut(),
                 // A wrapper with no child decorates nothing; it is
@@ -2450,17 +2539,26 @@ impl Element {
     /// The n-th button carrying `label`, in tree order (`click@n:`).
     /// Rows of identical buttons — a "delete" per row — are only
     /// reachable by position, so the finders that take an index and
-    /// the ones that take a label meet here.
+    /// the ones that take a label meet here. A match inside a
+    /// `Disabled` rider still counts — the numbering has to match the
+    /// window — but hands back a no-op (the Link rule): the click is
+    /// accepted and does nothing, exactly as a person's would.
     pub fn find_button_nth(&self, w: &World, label: &str, n: usize) -> Option<Listener> {
         let mut skip = n;
-        self.find_button_skip(w, label, &mut skip)
+        self.find_button_skip(w, label, &mut skip, false)
     }
 
-    fn find_button_skip(&self, w: &World, label: &str, skip: &mut usize) -> Option<Listener> {
+    fn find_button_skip(
+        &self,
+        w: &World,
+        label: &str,
+        skip: &mut usize,
+        disabled: bool,
+    ) -> Option<Listener> {
         match self {
             Element::Button { label: l, on_click, .. } if l.as_str() == label => {
                 if *skip == 0 {
-                    Some(on_click.clone())
+                    Some(if disabled { inert() } else { on_click.clone() })
                 } else {
                     *skip -= 1;
                     None
@@ -2473,13 +2571,19 @@ impl Element {
             // accepted and does nothing, headless.
             Element::Link { label: l, .. } if l.as_str() == label => {
                 if *skip == 0 {
-                    let noop: Listener = Rc::new(|_: &mut World| {});
-                    Some(noop)
+                    Some(inert())
                 } else {
                     *skip -= 1;
                     None
                 }
             }
+            // Everything under a `Disabled` rider is walked exactly as
+            // it would be anywhere, with `disabled` set for the whole
+            // subtree — so a control inside is found and counted, and
+            // what it hands back does nothing.
+            Element::Disabled { children: cs } => cs
+                .iter()
+                .find_map(|c| c.find_button_skip(w, label, skip, true)),
             Element::Column { children: cs, .. }
             | Element::Row { children: cs, .. }
             | Element::Grid { children: cs, .. }
@@ -2487,21 +2591,24 @@ impl Element {
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
             | Element::Tooltip { children: cs, .. }
+            | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
-            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_button_skip(w, label, skip)),
+            | Element::DataTable(cs) => cs
+                .iter()
+                .find_map(|c| c.find_button_skip(w, label, skip, disabled)),
             // The walk ignores `virtualized`: which rows the engine
             // paints is a rendering decision, not a tree edit.
             Element::ListView { children, lazy, .. } => children
                 .iter()
-                .find_map(|c| c.find_button_skip(w, label, skip))
+                .find_map(|c| c.find_button_skip(w, label, skip, disabled))
                 .or_else(|| {
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| c.find_button_skip(w, label, skip))
+                            .find_map(|c| c.find_button_skip(w, label, skip, disabled))
                     })
                 }),
             // A Table's header labels click like buttons when the
@@ -2520,6 +2627,9 @@ impl Element {
                     for (j, col) in columns.iter().enumerate() {
                         if col.as_str() == label {
                             if *skip == 0 {
+                                if disabled {
+                                    return Some(inert());
+                                }
                                 let f = f.clone();
                                 return Some(Rc::new(move |w: &mut World| f(w, j as i64)));
                             }
@@ -2529,19 +2639,21 @@ impl Element {
                 }
                 children
                     .iter()
-                    .find_map(|c| c.find_button_skip(w, label, skip))
+                    .find_map(|c| c.find_button_skip(w, label, skip, disabled))
                     .or_else(|| {
                         lazy.as_ref().and_then(|rows| {
                             (rows.build)(w, 0..rows.len)
                                 .iter()
-                                .find_map(|c| c.find_button_skip(w, label, skip))
+                                .find_map(|c| c.find_button_skip(w, label, skip, disabled))
                         })
                     })
             }
             // Headless scripts must be able to reach a closed dialog's
             // buttons, so the walk ignores `open` (a rendered-visibility
             // flag, not a tree edit).
-            Element::Modal { children, .. } => children.iter().find_map(|c| c.find_button_skip(w, label, skip)),
+            Element::Modal { children, .. } => children
+                .iter()
+                .find_map(|c| c.find_button_skip(w, label, skip, disabled)),
             _ => None,
         }
     }
@@ -2550,9 +2662,18 @@ impl Element {
     /// targeting). TextField, NumberField and IntField count TOGETHER
     /// — they share the `input:` verb the way the three choosers share
     /// `select:` — so `input@1:` reaches the second box on the screen
-    /// whatever kind it is.
+    /// whatever kind it is. A field inside a `Disabled` rider counts
+    /// too, and answers with listeners that do nothing (the
+    /// `find_button` rule), so `input:` / `submit` on it are accepted
+    /// and change nothing.
     pub fn find_input(&self, w: &World, n: usize) -> Option<InputTarget> {
-        fn walk(el: &Element, w: &World, seen: &mut usize, n: usize) -> Option<InputTarget> {
+        fn walk(
+            el: &Element,
+            w: &World,
+            seen: &mut usize,
+            n: usize,
+            disabled: bool,
+        ) -> Option<InputTarget> {
             match el {
                 Element::TextField {
                     value,
@@ -2561,10 +2682,15 @@ impl Element {
                     ..
                 } => {
                     if *seen == n {
+                        let (on_change, on_submit) = if disabled {
+                            (Some(inert_text()), Some(inert_text()))
+                        } else {
+                            (on_change.clone(), on_submit.clone())
+                        };
                         return Some(InputTarget::Text {
                             value: value.clone(),
-                            on_change: on_change.clone(),
-                            on_submit: on_submit.clone(),
+                            on_change,
+                            on_submit,
                         });
                     }
                     *seen += 1;
@@ -2584,7 +2710,7 @@ impl Element {
                             min: *min,
                             max: *max,
                             step: *step,
-                            on_change: on_change.clone(),
+                            on_change: if disabled { Some(inert_float()) } else { on_change.clone() },
                         });
                     }
                     *seen += 1;
@@ -2604,11 +2730,14 @@ impl Element {
                             min: *min,
                             max: *max,
                             step: *step,
-                            on_change: on_change.clone(),
+                            on_change: if disabled { Some(inert_int()) } else { on_change.clone() },
                         });
                     }
                     *seen += 1;
                     None
+                }
+                Element::Disabled { children: cs } => {
+                    cs.iter().find_map(|c| walk(c, w, seen, n, true))
                 }
                 Element::Column { children: cs, .. }
                 | Element::Row { children: cs, .. }
@@ -2617,34 +2746,35 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
-                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
+                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n, disabled)),
                 // Same as `find_button`: virtualization never hides a
                 // row from document order.
                 Element::ListView { children, lazy, .. }
                 | Element::Table { children, lazy, .. } => {
-                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
                         return Some(hit);
                     }
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| walk(c, w, seen, n))
+                            .find_map(|c| walk(c, w, seen, n, disabled))
                     })
                 }
                 // Same relaxation as `find_button`: a closed Modal's
                 // fields still count in document order.
                 Element::Modal { children, .. } => {
-                    children.iter().find_map(|c| walk(c, w, seen, n))
+                    children.iter().find_map(|c| walk(c, w, seen, n, disabled))
                 }
                 _ => None,
             }
         }
         let mut seen = 0;
-        walk(self, w, &mut seen, n)
+        walk(self, w, &mut seen, n, false)
     }
 
     /// The first Checkbox or Switch labeled `label`, in tree order:
@@ -2669,7 +2799,7 @@ impl Element {
         n: usize,
     ) -> Option<(bool, Option<BoolListener>)> {
         let mut skip = n;
-        self.find_toggle_skip(w, label, &mut skip)
+        self.find_toggle_skip(w, label, &mut skip, false)
     }
 
     fn find_toggle_skip(
@@ -2677,6 +2807,7 @@ impl Element {
         w: &World,
         label: &str,
         skip: &mut usize,
+        disabled: bool,
     ) -> Option<(bool, Option<BoolListener>)> {
         match self {
             Element::Checkbox {
@@ -2690,12 +2821,15 @@ impl Element {
                 on_toggle,
             } if l.as_str() == label => {
                 if *skip == 0 {
-                    Some((*checked, on_toggle.clone()))
+                    Some((*checked, if disabled { Some(inert_bool()) } else { on_toggle.clone() }))
                 } else {
                     *skip -= 1;
                     None
                 }
             }
+            Element::Disabled { children: cs } => cs
+                .iter()
+                .find_map(|c| c.find_toggle_skip(w, label, skip, true)),
             Element::Column { children: cs, .. }
             | Element::Row { children: cs, .. }
             | Element::Grid { children: cs, .. }
@@ -2703,27 +2837,30 @@ impl Element {
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
             | Element::Tooltip { children: cs, .. }
+            | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
-            | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_toggle_skip(w, label, skip)),
+            | Element::DataTable(cs) => cs
+                .iter()
+                .find_map(|c| c.find_toggle_skip(w, label, skip, disabled)),
             // Same relaxations as `find_button`: virtualization and a
             // closed Modal never hide a toggle from a script.
             Element::ListView { children, lazy, .. }
             | Element::Table { children, lazy, .. } => children
                 .iter()
-                .find_map(|c| c.find_toggle_skip(w, label, skip))
+                .find_map(|c| c.find_toggle_skip(w, label, skip, disabled))
                 .or_else(|| {
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| c.find_toggle_skip(w, label, skip))
+                            .find_map(|c| c.find_toggle_skip(w, label, skip, disabled))
                     })
                 }),
-            Element::Modal { children, .. } => {
-                children.iter().find_map(|c| c.find_toggle_skip(w, label, skip))
-            }
+            Element::Modal { children, .. } => children
+                .iter()
+                .find_map(|c| c.find_toggle_skip(w, label, skip, disabled)),
             _ => None,
         }
     }
@@ -2742,6 +2879,7 @@ impl Element {
             w: &World,
             seen: &mut usize,
             n: usize,
+            disabled: bool,
         ) -> Option<(f64, f64, f64, Option<FloatListener>)> {
             match el {
                 Element::Slider {
@@ -2752,10 +2890,14 @@ impl Element {
                     ..
                 } => {
                     if *seen == n {
-                        return Some((*min, *max, *step, on_change.clone()));
+                        let on_change = if disabled { Some(inert_float()) } else { on_change.clone() };
+                        return Some((*min, *max, *step, on_change));
                     }
                     *seen += 1;
                     None
+                }
+                Element::Disabled { children: cs } => {
+                    cs.iter().find_map(|c| walk(c, w, seen, n, true))
                 }
                 Element::Column { children: cs, .. }
                 | Element::Row { children: cs, .. }
@@ -2764,35 +2906,38 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
-                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
+                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n, disabled)),
                 // Same as `find_button`: virtualization never hides a
                 // row from document order.
                 Element::ListView { children, lazy, .. }
                 | Element::Table { children, lazy, .. } => {
-                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
                         return Some(hit);
                     }
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| walk(c, w, seen, n))
+                            .find_map(|c| walk(c, w, seen, n, disabled))
                     })
                 }
                 // Same relaxation as `find_button`: a closed Modal's
                 // sliders still count in document order.
                 Element::Modal { children, .. } => {
-                    children.iter().find_map(|c| walk(c, w, seen, n))
+                    children.iter().find_map(|c| walk(c, w, seen, n, disabled))
                 }
                 _ => None,
             }
         }
         let mut seen = 0;
-        walk(self, w, &mut seen, n)
-    }    /// The n-th chooser in document order (headless-script targeting).
+        walk(self, w, &mut seen, n, false)
+    }
+
+    /// The n-th chooser in document order (headless-script targeting).
     /// Select, RadioGroup, TabBar, Segmented and Table count TOGETHER — they share
     /// one contract, so `select@n:` numbers them as one family: the
     /// option/label list (a Table's rows by their first cell) and the
@@ -2808,6 +2953,7 @@ impl Element {
             w: &World,
             seen: &mut usize,
             n: usize,
+            disabled: bool,
         ) -> Option<(List<Str>, Option<IntListener>)> {
             match el {
                 Element::Select {
@@ -2825,10 +2971,14 @@ impl Element {
                     options, on_select, ..
                 } => {
                     if *seen == n {
-                        return Some((options.clone(), on_select.clone()));
+                        let on_select = if disabled { Some(inert_int()) } else { on_select.clone() };
+                        return Some((options.clone(), on_select));
                     }
                     *seen += 1;
                     None
+                }
+                Element::Disabled { children: cs } => {
+                    cs.iter().find_map(|c| walk(c, w, seen, n, true))
                 }
                 Element::Column { children: cs, .. }
                 | Element::Row { children: cs, .. }
@@ -2837,21 +2987,22 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
-                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
+                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n, disabled)),
                 // Same as `find_input`: virtualization never hides a
                 // row from document order.
                 Element::ListView { children, lazy, .. } => {
-                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
                         return Some(hit);
                     }
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| walk(c, w, seen, n))
+                            .find_map(|c| walk(c, w, seen, n, disabled))
                     })
                 }
                 // A Table is a chooser too: its options are the rows'
@@ -2876,28 +3027,29 @@ impl Element {
                                 options.push(c.first_cell_text());
                             }
                         }
-                        return Some((options, on_select.clone()));
+                        let on_select = if disabled { Some(inert_int()) } else { on_select.clone() };
+                        return Some((options, on_select));
                     }
                     *seen += 1;
-                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
                         return Some(hit);
                     }
                     lazy.as_ref().and_then(|rows| {
                         (rows.build)(w, 0..rows.len)
                             .iter()
-                            .find_map(|c| walk(c, w, seen, n))
+                            .find_map(|c| walk(c, w, seen, n, disabled))
                     })
                 }
                 // Same relaxation as `find_button`: a closed Modal's
                 // choosers still count in document order.
                 Element::Modal { children, .. } => {
-                    children.iter().find_map(|c| walk(c, w, seen, n))
+                    children.iter().find_map(|c| walk(c, w, seen, n, disabled))
                 }
                 _ => None,
             }
         }
         let mut seen = 0;
-        walk(self, w, &mut seen, n)
+        walk(self, w, &mut seen, n, false)
     }
 }
 

@@ -275,6 +275,71 @@ fn container_prop_allowlists_match_across_tiers() {
         pixie_kernel::theme::NAMES,
         "the `theme:` vocabulary diverges between codegen and the kernel"
     );
+    // The disabled rider — seventh universal table.
+    assert_eq!(
+        pixie_codegen::disabled_prop_keys(),
+        pixie_interp::disabled_prop_keys(),
+        "disabled rider allowlists diverge"
+    );
+    assert_eq!(pixie_codegen::disabled_prop_keys(), ["disabled"]);
+    // The sizing riders — eighth universal table — and beside them the
+    // table of sides each element keeps for itself, which is what
+    // decides whether a `width:` lands on the element or in a `Sized`
+    // box around it. Both tiers must draw that line in the same place
+    // for every name in the catalog (and for none outside it).
+    assert_eq!(
+        pixie_codegen::sized_prop_keys(),
+        pixie_interp::sized_prop_keys(),
+        "sizing rider allowlists diverge"
+    );
+    assert_eq!(
+        pixie_codegen::sized_prop_keys(),
+        ["width", "height", "minWidth", "maxWidth"]
+    );
+    for element in [
+        "Text",
+        "Button",
+        "TextField",
+        "Column",
+        "Row",
+        "Grid",
+        "Stack",
+        "ListView",
+        "ScrollView",
+        "HScrollView",
+        "Image",
+        "Svg",
+        "DataTable",
+        "Modal",
+        "BarChart",
+        "LineChart",
+        "ProgressBar",
+        "Spinner",
+        "Checkbox",
+        "Switch",
+        "Slider",
+        "Select",
+        "RadioGroup",
+        "TabBar",
+        "Spacer",
+        "Divider",
+        "Link",
+        "Table",
+        "NumberField",
+        "IntField",
+        "Segmented",
+        "Nonesuch",
+    ] {
+        assert_eq!(
+            pixie_codegen::native_size_keys(element),
+            pixie_interp::native_size_keys(element),
+            "native-size tables diverge for `{element}`"
+        );
+    }
+    assert_eq!(pixie_codegen::native_size_keys("Button"), ["width", "height"]);
+    assert_eq!(pixie_codegen::native_size_keys("Text"), ["width"]);
+    assert_eq!(pixie_codegen::native_size_keys("ListView"), ["height"]);
+    assert!(pixie_codegen::native_size_keys("Column").is_empty());
     assert!(pixie_codegen::container_prop_keys("HScrollView").is_empty());
 }
 
@@ -658,6 +723,20 @@ fn tiers_agree_on_every_demo() {
         (
             "examples/segmented/segmented.pix",
             "select:crit,select:warn,select:all",
+        ),
+        // The two riders every element takes. `disabled:` wraps the
+        // field and the save button while `App.locked` reads true —
+        // the second, third and fourth steps land on disabled
+        // controls (the Select is disabled by a literal) and are
+        // accepted and inert in BOTH tiers, so nothing in the dump
+        // moves until `lock` is clicked again and the last `save`
+        // fires. `Sized` boxes the Column with the `width:` it has no
+        // field for while the Text keeps its own, and the last Text
+        // carries every rider at once: the dump holds both lowerers
+        // to the one nesting order.
+        (
+            "examples/riders/riders.pix",
+            "click:lock,click:save,input:typed,select:b,click:lock,click:save",
         ),
     ];
     for (rel, script) in demos {

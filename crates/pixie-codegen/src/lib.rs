@@ -5399,13 +5399,26 @@ fn lower_element(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, Em
     let col = element_prop(el, "colSpan");
     let row = element_prop(el, "rowSpan");
     let inner = lower_element_inner(el, cx, ind)?;
-    // Innermost of the three wrappers: `role:`/`label:` describe the
+    // The riders nest in one fixed order, innermost first — element,
+    // Semantics, Tooltip, Disabled, Sized, Themed, Anim, GridCell —
+    // and `pixie_interp::build_element` nests them identically; the
+    // tier gate is what holds the two to it.
+    //
+    // Innermost of the wrappers: `role:`/`label:` describe the
     // ELEMENT, and the accessibility walk reads the role off whatever
     // `Semantics` wraps directly.
     let inner = lower_semantics(el, inner, cx)?;
     // The tooltip sits just outside the semantics wrapper: it belongs
     // to the element, and what it says is not the element's own name.
     let inner = lower_tooltip(el, inner, cx)?;
+    // Disabling covers the whole decorated element (its tooltip and
+    // its semantics included — the dimmed thing is what a person
+    // sees), and sits inside the sizing box, which is layout.
+    let inner = lower_disabled(el, inner, cx)?;
+    // The box is layout, so it goes outside everything that describes
+    // the element and inside the theme scope, which has to contain
+    // everything that paints.
+    let inner = lower_sized(el, inner, cx)?;
     // Outside the semantics wrapper, inside the animation one: the
     // scope has to CONTAIN the element whose tokens it re-resolves.
     let inner = lower_themed(el, inner, cx)?;
@@ -5469,6 +5482,61 @@ fn lower_tooltip(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, Em
     let text = lower_view_text(t, cx)?;
     Ok(format!(
         "Element::Tooltip {{ text: {text}, children: vec![{inner}] }}"
+    ))
+}
+
+/// Wrap `inner` in an `Element::Disabled` when the element carries the
+/// universal `disabled:` rider and it reads true. A literal decides
+/// here — `disabled: false` emits no wrapper at all, so an enabled
+/// element's code and dump are what they always were — and a bound
+/// Bool decides the same thing at build time, in the generated code.
+fn lower_disabled(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
+    let Some(d) = element_prop(el, "disabled") else {
+        return Ok(inner);
+    };
+    let flag = lower_view_bool(d, cx, "disabled")?;
+    Ok(match flag.as_str() {
+        "false" => inner,
+        "true" => format!("Element::Disabled {{ children: vec![{inner}] }}"),
+        _ => format!(
+            "{{ let __el = {inner}; if {flag} {{ Element::Disabled {{ children: vec![__el] }} }} else {{ __el }} }}"
+        ),
+    })
+}
+
+/// Wrap `inner` in an `Element::Sized` when the element carries a
+/// `width:` / `height:` it has no native field for, or a `minWidth:` /
+/// `maxWidth:` (which always ride here). `native_size_keys` says which
+/// sides an element keeps for itself, so a Button's `width:` still
+/// lands on the Button and its dump does not move.
+fn lower_sized(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
+    let native = native_size_keys(&el.name.name);
+    let side = |key: &str| {
+        if native.contains(&key) {
+            None
+        } else {
+            element_prop(el, key)
+        }
+    };
+    let width = side("width");
+    let height = side("height");
+    let min_width = element_prop(el, "minWidth");
+    let max_width = element_prop(el, "maxWidth");
+    if width.is_none() && height.is_none() && min_width.is_none() && max_width.is_none() {
+        return Ok(inner);
+    }
+    let lower = |e: Option<&Expr>, key: &str| -> Result<String, EmitError> {
+        match e {
+            Some(v) => lower_view_float(v, cx, key),
+            None => Ok("0f64".into()),
+        }
+    };
+    Ok(format!(
+        "Element::Sized {{ width: {}, height: {}, min_width: {}, max_width: {}, children: vec![{inner}] }}",
+        lower(width, "width")?,
+        lower(height, "height")?,
+        lower(min_width, "minWidth")?,
+        lower(max_width, "maxWidth")?
     ))
 }
 
@@ -6554,6 +6622,35 @@ pub fn theme_prop_keys() -> &'static [&'static str] {
     &["theme"]
 }
 
+/// The disabled rider — the seventh universal table, same contract
+/// and same cross-tier equality test as the others.
+pub fn disabled_prop_keys() -> &'static [&'static str] {
+    &["disabled"]
+}
+
+/// The sizing riders — the eighth universal table. `width` and
+/// `height` are in it although some elements consume them natively:
+/// this table says what any element may carry, and which sides an
+/// element keeps for itself is `native_size_keys`'s question.
+pub fn sized_prop_keys() -> &'static [&'static str] {
+    &["width", "height", "minWidth", "maxWidth"]
+}
+
+/// The sides an element sizes on its own — its arm reads them into
+/// its own fields and its dump prints them where it always has — so
+/// the `Sized` rider takes only the rest. Mirrored in `pixie_interp`
+/// and equality-tested beside the other tables (ledger §11.12).
+pub fn native_size_keys(element: &str) -> &'static [&'static str] {
+    match element {
+        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" => {
+            &["width", "height"]
+        }
+        "Text" => &["width"],
+        "ListView" | "ScrollView" | "Table" => &["height"],
+        _ => &[],
+    }
+}
+
 /// The palettes a `theme:` rider may name. `pixie_kernel::theme::NAMES`
 /// owns the real list (the easing/role rule: this crate does not
 /// depend on the kernel), and the accept test asserts they agree.
@@ -6637,6 +6734,8 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
                 && !semantic_prop_keys().contains(&key.as_str())
                 && !theme_prop_keys().contains(&key.as_str())
                 && !tooltip_prop_keys().contains(&key.as_str())
+                && !disabled_prop_keys().contains(&key.as_str())
+                && !sized_prop_keys().contains(&key.as_str())
                 && !container_prop_keys(&el.name.name).contains(&key.as_str())
             {
                 return err(

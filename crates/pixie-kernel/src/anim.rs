@@ -449,6 +449,23 @@ fn slots(el: &mut Element) -> Vec<(&'static str, Slot<'_>)> {
             ("itemHeight", Slot::Num(item_height)),
             ("height", Slot::Num(height)),
         ],
+        // The sizing rider's box tweens like a Button's own `width:`
+        // does: `animate:` on a sized Column slides the box, and the
+        // engine reads the eased numbers straight off the wrapper.
+        // Its own names, because the rider shares the element's track
+        // path (`tween_riders`) and a `Text` inside has a `width` too.
+        Element::Sized {
+            width,
+            height,
+            min_width,
+            max_width,
+            ..
+        } => vec![
+            ("sizedWidth", Slot::Num(width)),
+            ("sizedHeight", Slot::Num(height)),
+            ("sizedMinWidth", Slot::Num(min_width)),
+            ("sizedMaxWidth", Slot::Num(max_width)),
+        ],
         _ => Vec::new(),
     }
 }
@@ -559,7 +576,7 @@ fn walk(
             if let Some(child) = children.first_mut() {
                 // Through any semantics/theme wrapper: `animate:` and
                 // `role:` on one element must not disable each other.
-                tween_props(st, child.inner_mut(), path, dur, ease);
+                tween_riders(st, child, path, dur, ease);
             }
         }
     }
@@ -607,6 +624,31 @@ fn walk(
         .any(|c| matches!(c, Element::Anim { exit: true, .. }))
     {
         kids.insert(path.clone(), cs.clone());
+    }
+}
+
+/// `tween_props` for the element under a stack of riders — and for the
+/// riders on the way down, since one of them carries numbers of its
+/// own: the sizing rider's box eases under the same `animate:` as the
+/// element it holds (its slot names are its own, so a `Sized` around a
+/// `Text` with a `width:` of each keeps two tracks).
+fn tween_riders(st: &mut AnimStore, el: &mut Element, path: &Path, dur: f64, ease: Easing) {
+    if matches!(el, Element::Sized { .. }) {
+        tween_props(st, el, path, dur, ease);
+    }
+    match el {
+        Element::GridCell { children, .. }
+        | Element::Anim { children, .. }
+        | Element::Semantics { children, .. }
+        | Element::Tooltip { children, .. }
+        | Element::Disabled { children }
+        | Element::Sized { children, .. }
+        | Element::Themed { children, .. } => {
+            if let Some(c) = children.first_mut() {
+                tween_riders(st, c, path, dur, ease);
+            }
+        }
+        _ => tween_props(st, el, path, dur, ease),
     }
 }
 
@@ -703,6 +745,9 @@ fn children_of(el: &mut Element) -> Option<&mut Vec<Element>> {
         | Element::GridCell { children, .. }
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
+        | Element::Tooltip { children, .. }
+        | Element::Disabled { children }
+        | Element::Sized { children, .. }
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }

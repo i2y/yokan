@@ -1,0 +1,64 @@
+store App {
+  state locked : Bool = false
+  state saves : Int = 0
+  state notes : String = ""
+  state pick : Int = 0
+  state options : List<String> = ["a", "b", "c"]
+
+  fn toggle {
+    locked = !locked
+  }
+
+  fn save {
+    saves = saves + 1
+  }
+
+  fn edit(t: String) {
+    notes = t
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+    width: 260.0
+    minWidth: 200.0
+    background: "panel"
+
+    Text { text: "locked: #{App.locked}  saves: #{App.saves}" }
+    Text { text: "notes: #{App.notes}  pick: #{App.pick}" }
+    Button { text: "lock"; onClick: App.toggle() }
+
+    # Disabled while locked: the field cannot take the caret and the
+    # button cannot fire, in the window or from a script.
+    TextField {
+      placeholder: "notes"
+      text: App.notes
+      onTextChanged: App.edit(text)
+      disabled: App.locked
+    }
+    Button { text: "save"; onClick: App.save(); disabled: App.locked }
+
+    # Disabled outright: never opens.
+    Select {
+      options: App.options
+      selected: App.pick
+      onSelect: { App.pick = index }
+      disabled: true
+    }
+
+    # Every rider at once. `width:` is the Text's own; `maxWidth:` is
+    # the box around it.
+    Text {
+      text: "every rider at once"
+      tooltip: "tooltip, role, disabled, width and animate on one Text"
+      role: "heading"
+      disabled: true
+      width: 200.0
+      maxWidth: 240.0
+      theme: "dark"
+      animate: 200.0
+    }
+  }
+}

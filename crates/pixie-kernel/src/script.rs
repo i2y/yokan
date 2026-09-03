@@ -116,6 +116,12 @@ fn split_steps(script: &str) -> Vec<String> {
 /// step picks a ROW and runs `onSelect` with its index) ·
 /// `click:<column>` on a sorting Table (a header label matches like a
 /// button and runs `onSort` with the column's index) ·
+/// any of those verbs on a target inside a `Disabled` rider
+/// (`disabled: true` on the element or on an ancestor) is ACCEPTED
+/// AND DOES NOTHING — the target still counts toward `@n`, so the
+/// numbering matches the window, but a person cannot press a
+/// disabled control and neither can a script; the dump shows the
+/// `Disabled[..]` wrapper, so the state itself is checked ·
 /// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
 /// `menu:<item>` (pick a menu item by name) ·
 /// `file:<path>` (the answer the next file dialog gets) ·
