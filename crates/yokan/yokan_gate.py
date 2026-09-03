@@ -854,13 +854,11 @@ class Translator:
     # here and one line in each of those, never a new prop on thirty
     # elements.
     RIDERS = (
-        # TODO(riders): the sizing riders and `disabled=` wait on the
-        # pixie side's `Element::Sized` / `Element::Disabled`:
-        # ("width", "width", "num"),
-        # ("height", "height", "num"),
-        # ("min_width", "minWidth", "num"),
-        # ("max_width", "maxWidth", "num"),
-        # ("disabled", "disabled", "bool"),
+        ("width", "width", "num"),
+        ("height", "height", "num"),
+        ("min_width", "minWidth", "num"),
+        ("max_width", "maxWidth", "num"),
+        ("disabled", "disabled", "bool"),
         ("theme", "theme", "str"),
         ("animate", "animate", "ms"),
         ("easing", "easing", "easing"),
@@ -881,6 +879,32 @@ class Translator:
     # of their signatures and the translator says why.
     NO_A11Y_LABEL = ("checkbox", "switch", "progress")
 
+    # The sides an element reads into its OWN prop, so the sizing
+    # rider leaves them to it and its dump does not move. The mirror
+    # of `pixie_codegen::native_size_keys`, element for element —
+    # `min_width` / `max_width` always ride.
+    NATIVE_SIZE = {
+        "button": ("width", "height"),
+        "image": ("width", "height"),
+        "svg": ("width", "height"),
+        "bar_chart": ("width", "height"),
+        "line_chart": ("width", "height"),
+        "progress": ("width", "height"),
+        "text": ("width",),
+        "list_view": ("height",),
+        "scroll_view": ("height",),
+        "table": ("height",),
+    }
+
+    def _native_sides(self, node) -> tuple[str, ...]:
+        """The `width=` / `height=` an element takes as its own prop."""
+        if node is None or not isinstance(node, ast.Call):
+            return ()
+        for name, sides in self.NATIVE_SIZE.items():
+            if self._is_ui(node.func, name):
+                return sides
+        return ()
+
     def _riders(self, kw, node=None) -> list[str]:
         """Every cross-cutting kwarg, stripped from `kw` BEFORE the
         element's own emitter runs and answered as the pixie rider
@@ -893,10 +917,16 @@ class Translator:
         the vocabularies kept, because a typo in a closed set should
         be a build error, not a shrug at run time (`role=` against
         `a11y.rs`'s roles, `easing=` against the four curves, and
-        `theme=` against the palettes, which pixie checks itself)."""
+        `theme=` against the palettes, which pixie checks itself).
+
+        `width=` / `height=` on an element that owns that side are
+        left in `kw` for its own emitter — a button's width still
+        lands on the button, which is what keeps its dump where it
+        was."""
         props = []
+        native = self._native_sides(node)
         for key, prop, kind in self.RIDERS:
-            if key not in kw:
+            if key not in kw or key in native:
                 continue
             v = kw.pop(key)
             if kind == "num":
@@ -957,8 +987,12 @@ class Translator:
         kw = {k.arg: k.value for k in node.keywords if k.arg}
         if not (self.RIDER_KWARGS & kw.keys()):
             return []
+        before = set(kw)
         props = self._riders(kw, node)
-        node.keywords = [k for k in node.keywords if k.arg not in self.RIDER_KWARGS]
+        # Only what `_riders` actually took: a natively-sized element's
+        # `width=` stays behind for its own emitter.
+        taken = before - set(kw)
+        node.keywords = [k for k in node.keywords if k.arg not in taken]
         return props
 
     @staticmethod
@@ -6651,6 +6685,13 @@ class Translator:
             label = self._text_value(node.args[0])
             h = self.handler(kw["on_click"], takes_text=False) if "on_click" in kw else None
             sty = [f"style: {style_rider}"] if style_rider else []
+            # A Button sizes itself (`native_size_keys`), so `width=` /
+            # `height=` land on its own props rather than on a `Sized`
+            # box — the interpreted run has always put them there.
+            for pykey in ("width", "height"):
+                val = self._num(kw, pykey)
+                if val is not None:
+                    sty.append(f"{pykey}: {val}")
             if isinstance(h, tuple):
                 lines = [f"{pad}Button {{"] + [f"{pad}  {p}" for p in sty]
                 lines += [f"{pad}  text: {label}", f"{pad}  onClick: {{"]

@@ -613,6 +613,46 @@ fn wrap_tip(el: Element, tooltip: &str) -> Element {
     Element::Tooltip { text: Str::from(tooltip), children: vec![el] }
 }
 
+/// The disabling rider, tier-A side: the engine paints the subtree
+/// dimmed and swallows its clicks, and a script step that targets a
+/// control inside is accepted and does nothing — a person cannot
+/// press it either. `disabled=False` builds no wrapper at all, the
+/// way `lower_disabled` emits none, so an enabled element's dump is
+/// what it always was.
+fn wrap_disabled(el: Element, disabled: bool) -> Element {
+    if !disabled {
+        return el;
+    }
+    Element::Disabled { children: vec![el] }
+}
+
+/// The sizing rider, tier-A side: a box the wrapped element fills.
+/// PRESENCE decides, not the number — `lower_sized` wraps whenever
+/// the property was written, so a bound width that reads 0.0 this
+/// frame still dumps a bare `Sized[…]` in both runs. That is why
+/// these arrive as `Option`s: a pyfunction cannot otherwise tell
+/// `width=0` from a width nobody wrote. The sides an element carries
+/// natively never reach here — they are its own props, exactly as
+/// `native_size_keys` says on the other side.
+fn wrap_sized(
+    el: Element,
+    width: Option<f64>,
+    height: Option<f64>,
+    min_width: Option<f64>,
+    max_width: Option<f64>,
+) -> Element {
+    if width.is_none() && height.is_none() && min_width.is_none() && max_width.is_none() {
+        return el;
+    }
+    Element::Sized {
+        width: width.unwrap_or(0.0),
+        height: height.unwrap_or(0.0),
+        min_width: min_width.unwrap_or(0.0),
+        max_width: max_width.unwrap_or(0.0),
+        children: vec![el],
+    }
+}
+
 /// The tree SCOPE rider (§8.37): tokens under this node resolve in
 /// the named palette, in both runs, because the resolution runs in
 /// the shared kernel.
@@ -634,14 +674,14 @@ fn wrap_theme(el: Element, theme: &str) -> Element {
 // `element_fn!`, so no element's signature can drift from the table.
 
 struct Riders {
-    // TODO(riders): the sizing riders wait on the pixie side's
-    // `Element::Sized { width, height, min_width, max_width, children }`.
-    // width: f64,
-    // height: f64,
-    // min_width: f64,
-    // max_width: f64,
-    // TODO(riders): `disabled` waits on `Element::Disabled { children }`.
-    // disabled: bool,
+    // `None` is "nobody wrote this side", which is not the same as a
+    // zero — see `wrap_sized`. The sides an element owns natively are
+    // its own props and always arrive here as `None`.
+    width: Option<f64>,
+    height: Option<f64>,
+    min_width: Option<f64>,
+    max_width: Option<f64>,
+    disabled: bool,
     theme: String,
     animate: f64,
     easing: String,
@@ -664,10 +704,8 @@ struct Riders {
 fn apply_riders(el: Element, r: &Riders) -> Element {
     let el = wrap_sem(el, &r.role, &r.a11y_label);
     let el = wrap_tip(el, &r.tooltip);
-    // TODO(riders): with `Element::Disabled` / `Element::Sized` these
-    // two lines are the whole runtime half of those riders.
-    // let el = wrap_disabled(el, r.disabled);
-    // let el = wrap_sized(el, r.width, r.height, r.min_width, r.max_width);
+    let el = wrap_disabled(el, r.disabled);
+    let el = wrap_sized(el, r.width, r.height, r.min_width, r.max_width);
     let el = wrap_theme(el, &r.theme);
     let el = wrap_anim(el, r.animate, &r.easing, r.enter, r.exit);
     wrap_span(el, r.col_span, r.row_span)
@@ -683,10 +721,15 @@ fn apply_riders(el: Element, r: &Riders) -> Element {
 /// Flavors, because a few elements own a rider's NAME or take
 /// children: `container` collects `*children` (the block builds the
 /// element with an empty child list and the macro fills it, so a
-/// `with` block on any container still works), `native_size` is an
-/// element with `width:`/`height:` props of its own (the sizing rider
-/// is for the rest), and `no_a11y_label` is checkbox, switch and
-/// progress, whose own `label` already IS their accessible name.
+/// `with` block on any container still works); `native_size` /
+/// `native_width` / `native_height` say which sides an element reads
+/// into its own props, mirroring `pixie_codegen::native_size_keys`
+/// side for side (Button, Image, Svg, the charts and ProgressBar own
+/// both; Text owns its width; ListView, ScrollView and Table own
+/// their height) — the `Sized` box takes only the rest, which is what
+/// keeps those elements' dumps where they were; and `no_a11y_label`
+/// is checkbox, switch and progress, whose own `label` already IS
+/// their accessible name.
 ///
 /// The container flavor spells its varargs parameter out here rather
 /// than at the call site on purpose: pyo3 spans its `_args`
@@ -702,16 +745,15 @@ macro_rules! element_fn {
     (@go [$($m:tt)*] $name:ident
      kids[$($kn:ident)?][$($kty:ty)?]
      ($($sig:tt)*) [$($p:tt)*]
-     size[$($ss:tt)*][$($sp:tt)*] lbl[$($ls:tt)*][$($lp:tt)*][$($li:tt)*] $body:block) => {
+     size[$($ss:tt)*][$($sp:tt)*][$($si:tt)*]
+     lbl[$($ls:tt)*][$($lp:tt)*][$($li:tt)*] $body:block) => {
         $($m)*
         #[pyfunction(signature = (
             $( *$kn, )?
             $($sig)*
             // The rider tail — the same kwargs, in the same order, on
-            // every element. TODO(riders): the sizing and disabled
-            // riders join it the moment the pixie side lands
-            // `Element::Sized` / `Element::Disabled`:
-            // $($ss)* min_width=0.0, max_width=0.0, disabled=false,
+            // every element.
+            $($ss)* min_width=None, max_width=None, disabled=false,
             theme=String::new(),
             animate=0.0, easing=String::new(), enter=false, exit=false,
             col_span=1, row_span=1,
@@ -721,13 +763,17 @@ macro_rules! element_fn {
         fn $name(
             $( children: $kty, )?
             $($p)*
-            // TODO(riders): $($sp)* min_width: f64, max_width: f64, disabled: bool,
+            $($sp)* min_width: Option<f64>, max_width: Option<f64>, disabled: bool,
             theme: String,
             animate: f64, easing: String, enter: bool, exit: bool,
             col_span: i64, row_span: i64,
             role: String, $($lp)* tooltip: String,
         ) -> PyResult<Reg> {
             let riders = Riders {
+                $($si)*
+                min_width,
+                max_width,
+                disabled,
                 theme,
                 animate,
                 easing,
@@ -751,11 +797,11 @@ macro_rules! element_fn {
     };
 
     // A container that also owns `height:` (scroll_view).
-    ($(#[$m:meta])* container native_size $name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
+    ($(#[$m:meta])* container native_height $name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
         element_fn!(@go [$(#[$m])*] $name
             kids[children][&Bound<'_, PyTuple>]
             ($($sig)*) [$($p)*]
-            size[][]
+            size[width=None,][width: Option<f64>,][width, height: None,]
             lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
     };
 
@@ -764,7 +810,7 @@ macro_rules! element_fn {
         element_fn!(@go [$(#[$m])*] $name
             kids[children][&Bound<'_, PyTuple>]
             ($($sig)*) [$($p)*]
-            size[width=0.0, height=0.0,][width: f64, height: f64,]
+            size[width=None, height=None,][width: Option<f64>, height: Option<f64>,][width, height,]
             lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
     };
 
@@ -773,16 +819,35 @@ macro_rules! element_fn {
         element_fn!(@go [$(#[$m])*] $name
             kids[][]
             ($($sig)*) [$($p)*]
-            size[][]
+            size[][][width: None, height: None,]
             lbl[][][a11y_label: String::new(),] $body);
     };
 
-    // An element with its own `width:`/`height:` props.
+    // An element with its own `width:` AND `height:` props.
     ($(#[$m:meta])* native_size $name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
         element_fn!(@go [$(#[$m])*] $name
             kids[][]
             ($($sig)*) [$($p)*]
-            size[][]
+            size[][][width: None, height: None,]
+            lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
+    };
+
+    // An element with its own `width:` only (text): the box still
+    // gives it a height.
+    ($(#[$m:meta])* native_width $name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
+        element_fn!(@go [$(#[$m])*] $name
+            kids[][]
+            ($($sig)*) [$($p)*]
+            size[height=None,][height: Option<f64>,][width: None, height,]
+            lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
+    };
+
+    // An element with its own `height:` only (list_view, table).
+    ($(#[$m:meta])* native_height $name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
+        element_fn!(@go [$(#[$m])*] $name
+            kids[][]
+            ($($sig)*) [$($p)*]
+            size[width=None,][width: Option<f64>,][width, height: None,]
             lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
     };
 
@@ -791,7 +856,7 @@ macro_rules! element_fn {
         element_fn!(@go [$(#[$m])*] $name
             kids[][]
             ($($sig)*) [$($p)*]
-            size[width=0.0, height=0.0,][width: f64, height: f64,]
+            size[width=None, height=None,][width: Option<f64>, height: Option<f64>,][width, height,]
             lbl[][][a11y_label: String::new(),] $body);
     };
 
@@ -800,7 +865,7 @@ macro_rules! element_fn {
         element_fn!(@go [$(#[$m])*] $name
             kids[][]
             ($($sig)*) [$($p)*]
-            size[width=0.0, height=0.0,][width: f64, height: f64,]
+            size[width=None, height=None,][width: Option<f64>, height: Option<f64>,][width, height,]
             lbl[a11y_label=String::new(),][a11y_label: String,][a11y_label,] $body);
     };
 }
@@ -831,6 +896,15 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
         // element: `with grid(...)` inside another grid still opens
         // the grid, not the cell around it.
         Element::GridCell { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        // ...and for the sizing box and the disabling scrim, so
+        // `with column(width=260, disabled=Locks.locked):` opens the
+        // column too.
+        Element::Sized { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        Element::Disabled { children } if children.len() == 1 => {
             set_children(&mut children[0], kids)
         }
         Element::Column { children, .. }
@@ -945,7 +1019,7 @@ fn to_list_f64_2(v: Vec<Vec<f64>>) -> List<List<f64>> {
 // Element constructors.
 
 element_fn! {
-    native_size text
+    native_width text
     (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, bold=false, italic=false, mono=false, underline=false, wrap=String::new(), max_lines=0, width=0.0, background=String::new(), padding=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(),)
     [text: String, size: f64, color: String, align: String, grow: f64, bold: bool, italic: bool, mono: bool, underline: bool, wrap: String, max_lines: i64, width: f64, background: String, padding: f64, border_radius: f64, border_width: f64, border_color: String,]
     {
@@ -1363,7 +1437,7 @@ element_fn! {
 }
 
 element_fn! {
-    container native_size scroll_view
+    container native_height scroll_view
     (height=0.0,)
     [height: f64,]
     { Element::ScrollView { height, children: Vec::new() } }
@@ -1471,7 +1545,7 @@ fn py_row_builder(row: Py<PyAny>) -> Rc<dyn Fn(&World, std::ops::Range<usize>) -
 element_fn! {
     /// Virtualized rows: `row(i)` is called only for the visible range
     /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
-    native_size list_view
+    native_height list_view
     (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0,)
     [count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64,]
     {
@@ -1494,7 +1568,7 @@ element_fn! {
     /// equal). `selected` / `sort` are `-1` for none; both handlers
     /// receive an index (the clicked row's, the clicked header's), and
     /// the app re-sorts its own lists.
-    native_size table
+    native_height table
     (columns, count, row, widths=vec![], item_height=24.0, height=0.0, grow=0.0, selected=-1, on_select=None, sort=-1, descending=false, on_sort=None,)
     [columns: Vec<String>, count: usize, row: Py<PyAny>, widths: Vec<f64>, item_height: f64, height: f64, grow: f64, selected: i64, on_select: Option<Py<PyAny>>, sort: i64, descending: bool, on_sort: Option<Py<PyAny>>,]
     {
