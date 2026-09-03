@@ -11,5 +11,7 @@ view Main {
     ProgressBar { value: Job.ratio }
     Text { text: "ratio: #{Job.ratio}" }
     Button { text: "step"; onClick: Job.step() }
+    ProgressBar { value: Job.ratio; width: 220.0; height: 10.0; label: "Uploading" }
+    ProgressBar { value: Job.ratio; indeterminate: true }
   }
 }

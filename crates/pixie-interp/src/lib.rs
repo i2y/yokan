@@ -2336,7 +2336,22 @@ fn build_element_inner(
             let v = prop_of(el, "value").ok_or("ProgressBar needs `value:`")?;
             // Mirrors codegen exactly, Int widening included (§8.55).
             let value = eval_expr(v, env, scope, w)?.as_float()?;
-            Ok(Element::ProgressBar { value })
+            let (width, height) = eval_size(el, env, scope, w)?;
+            let label = match prop_of(el, "label") {
+                Some(l) => eval_text(l, env, scope, w)?,
+                None => Str::new(),
+            };
+            let indeterminate = match prop_of(el, "indeterminate") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            Ok(Element::ProgressBar {
+                value,
+                width,
+                height,
+                label,
+                indeterminate,
+            })
         }
         "Spinner" => {
             // One square axis, unlike the charts' width/height pair;

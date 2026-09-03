@@ -367,6 +367,88 @@ fn progress_demo_checks_and_emits() {
 }
 
 #[test]
+fn progress_bar_emits_width_height_label_and_indeterminate() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // All four new props, literal forms, in field order.
+    let f = dir.join("progress_props_literal.pix");
+    std::fs::write(
+        &f,
+        "view Main {\n  Column {\n    ProgressBar {\n      value: 0.5\n      width: 200.0\n      height: 8.0\n      label: \"Loading\"\n      indeterminate: true\n    }\n  }\n}\n",
+    )
+    .unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    let code = pixie_codegen::emit_program(
+        outcome.module.as_ref().unwrap(),
+        outcome.binding_items,
+        None,
+    )
+    .expect("emits");
+    for needle in [
+        "Element::ProgressBar { value: 0.5f64",
+        "width: 200f64",
+        "height: 8f64",
+        "label: Str::from(\"Loading\")",
+        "indeterminate: true",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`:\n{code}");
+    }
+
+    // An untouched bar keeps the all-defaults struct literal — the
+    // props only cost something once they are written (the dump's
+    // per-prop join rule starts here, in the emitted defaults).
+    let f = dir.join("progress_props_defaults.pix");
+    std::fs::write(&f, "view Main {\n  Column {\n    ProgressBar { value: 0.5 }\n  }\n}\n").unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    let code = pixie_codegen::emit_program(
+        outcome.module.as_ref().unwrap(),
+        outcome.binding_items,
+        None,
+    )
+    .expect("emits");
+    assert!(
+        code.contains(
+            "Element::ProgressBar { value: 0.5f64, width: 0f64, height: 0f64, label: Str::new(), indeterminate: false }"
+        ),
+        "defaults must stay explicit zero/empty/false:\n{code}"
+    );
+}
+
+#[test]
+fn progress_bar_indeterminate_rejects_a_non_bool_and_names_its_own_key() {
+    // Proves `lower_view_bool_keyed`'s generalization (it used to be
+    // reachable only through the `open`-hardcoded `lower_view_bool`
+    // wrapper): the message names `indeterminate:`, not a leftover
+    // `open:`.
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("progress_int_indeterminate.pix");
+    std::fs::write(
+        &f,
+        "store S {\n  state n : Int = 0\n}\n\nview Main {\n  Column {\n    ProgressBar {\n      value: 0.5\n      indeterminate: S.n\n    }\n  }\n}\n",
+    )
+    .unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    let err = pixie_codegen::emit_program(
+        outcome.module.as_ref().unwrap(),
+        outcome.binding_items,
+        None,
+    )
+    .expect_err("an Int `indeterminate:` must not emit");
+    assert!(
+        err.message.contains("Bool"),
+        "error should name the expected type: {}",
+        err.message
+    );
+    assert!(
+        err.message.contains("indeterminate"),
+        "error should name its OWN key, not a stale `open:`: {}",
+        err.message
+    );
+}
+
+#[test]
 fn sliders_demo_checks_and_emits() {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),

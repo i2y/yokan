@@ -969,9 +969,15 @@ fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f
     })
 }
 
-#[pyfunction]
-fn progress(value: f64) -> Reg {
-    Reg::wrap(Element::ProgressBar { value })
+#[pyfunction(signature = (value, width=0.0, height=0.0, label=String::new(), indeterminate=false))]
+fn progress(value: f64, width: f64, height: f64, label: String, indeterminate: bool) -> Reg {
+    Reg::wrap(Element::ProgressBar {
+        value,
+        width,
+        height,
+        label: Str::from(label),
+        indeterminate,
+    })
 }
 
 #[pyfunction(signature = (size=0.0))]

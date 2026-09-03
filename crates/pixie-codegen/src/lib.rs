@@ -4141,16 +4141,13 @@ fn lower_view_size(el: &Element, cx: &ViewCtx) -> Result<(String, String), EmitE
     Ok((width, height))
 }
 
-/// Lower an `open:` property (Modal) to a `bool` expression.
-/// Mirrors `lower_view_float`'s shape: a literal arm plus a Member arm
-/// that only accepts a Bool-typed property.
-fn lower_view_bool(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
-    lower_view_bool_keyed(e, cx, "open")
-}
-
-/// The keyed body behind `lower_view_bool` — `key` names the property
-/// in the errors (`lower_view_float`'s rule), so the toggles' required
-/// `checked:` does not misreport itself as Modal's `open:`.
+/// Lower a Bool property (Modal's `open:`, the toggles' `checked:`,
+/// the animation riders' `enter:`/`exit:`, ListView's `virtualized:`,
+/// ProgressBar's `indeterminate:`) to a `bool` expression. Mirrors
+/// `lower_view_float`'s shape: a literal arm plus a Member arm that
+/// only accepts a Bool-typed property. `key` names the property in
+/// the errors — `lower_view_float`'s rule — so a mistyped
+/// `virtualized:` does not misreport itself as Modal's `open:`.
 fn lower_view_bool_keyed(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
     match &e.kind {
         ExprKind::Bool(v) => Ok(format!("{v}")),
@@ -5172,10 +5169,7 @@ fn lower_anim(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitE
     let flag = |e: Option<&Expr>, key: &str| -> Result<String, EmitError> {
         match e {
             None => Ok("false".to_string()),
-            Some(x) => lower_view_bool(x, cx).map_err(|mut err| {
-                err.message = err.message.replace("`open:`", &format!("`{key}:`"));
-                err
-            }),
+            Some(x) => lower_view_bool_keyed(x, cx, key),
         }
     };
     let enter = flag(enter, "enter")?;
@@ -5474,7 +5468,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // `lower_children` walks the same member list (which
             // allowlists them for ListView alone).
             let virtualized = match element_prop(el, "virtualized") {
-                Some(v) => lower_view_bool(v, cx)?,
+                Some(v) => lower_view_bool_keyed(v, cx, "virtualized")?,
                 None => "false".into(),
             };
             let item_height = match element_prop(el, "itemHeight") {
@@ -5639,7 +5633,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // Modal (cute_ui's propless shape) renders open, and the
             // view wraps it in `if` for visibility.
             let open = match element_prop(el, "open") {
-                Some(o) => lower_view_bool(o, cx)?,
+                Some(o) => lower_view_bool_keyed(o, cx, "open")?,
                 None => "true".into(),
             };
             let children = lower_children(el, cx, ind)?;
@@ -5685,8 +5679,20 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 span: el.span,
                 message: "ProgressBar needs `value:`".into(),
             })?;
+            let (width, height) = lower_view_size(el, cx)?;
+            // `label:` takes what `text:` takes (Text's own grammar);
+            // `indeterminate:` is the Bool rider ListView's
+            // `virtualized:` and Modal's `open:` already share.
+            let label = match element_prop(el, "label") {
+                Some(l) => lower_view_text(l, cx)?,
+                None => "Str::new()".into(),
+            };
+            let indeterminate = match element_prop(el, "indeterminate") {
+                Some(v) => lower_view_bool_keyed(v, cx, "indeterminate")?,
+                None => "false".into(),
+            };
             Ok(format!(
-                "Element::ProgressBar {{ value: {} }}",
+                "Element::ProgressBar {{ value: {}, width: {width}, height: {height}, label: {label}, indeterminate: {indeterminate} }}",
                 lower_view_float(value, cx, "value")?
             ))
         }

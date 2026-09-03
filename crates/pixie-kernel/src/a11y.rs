@@ -203,6 +203,11 @@ pub fn name_of(el: &Element) -> Str {
         // user typed is its value, below.
         Element::TextField { placeholder, .. } => placeholder.clone(),
         Element::Checkbox { label, .. } | Element::Switch { label, .. } => label.clone(),
+        // Empty when unlabeled — same as every other element below,
+        // and the one place a ProgressBar's `label:` reaches a11y at
+        // all (the engine paints it as a sighted-only line above the
+        // track).
+        Element::ProgressBar { label, .. } => label.clone(),
         // A chooser derives its name from the current choice's text —
         // the one piece of it a screen reader can usefully lead with.
         // Out of range (or empty) derives nothing, honestly.
@@ -221,7 +226,12 @@ pub fn name_of(el: &Element) -> Str {
 pub fn value_of(el: &Element) -> Str {
     match el {
         Element::TextField { value, .. } => value.clone(),
-        Element::ProgressBar { value } => Str::from(format!("{value}")),
+        // An indeterminate bar has no known length — reporting a
+        // percentage would be a lie the sweep itself contradicts, so
+        // it reads out nothing (the chart rule: an honest gap beats a
+        // papered-over one).
+        Element::ProgressBar { indeterminate: true, .. } => Str::new(),
+        Element::ProgressBar { value, .. } => Str::from(format!("{value}")),
         Element::Checkbox { checked, .. } | Element::Switch { checked, .. } => {
             Str::from(format!("{checked}"))
         }
@@ -401,8 +411,40 @@ mod tests {
 
     #[test]
     fn a_progress_bar_reports_its_value() {
-        let t = tree(&column(vec![Element::ProgressBar { value: 0.25 }]));
+        let t = tree(&column(vec![Element::ProgressBar {
+            value: 0.25,
+            width: 0.0,
+            height: 0.0,
+            label: Str::new(),
+            indeterminate: false,
+        }]));
         assert_eq!(t.dump(), "group[progress =0.25]");
+    }
+
+    /// `label:` is the one new prop that reaches a11y: it becomes the
+    /// accessible name, same as a Checkbox's `label`. An indeterminate
+    /// bar drops the `=value` — announcing a percentage for a track
+    /// with no known length would be a lie the sweep itself
+    /// contradicts.
+    #[test]
+    fn a_progress_bar_s_label_names_it_and_indeterminate_drops_the_value() {
+        let t = tree(&column(vec![Element::ProgressBar {
+            value: 0.25,
+            width: 0.0,
+            height: 0.0,
+            label: Str::from("Loading"),
+            indeterminate: false,
+        }]));
+        assert_eq!(t.dump(), r#"group[progress "Loading" =0.25]"#);
+
+        let t = tree(&column(vec![Element::ProgressBar {
+            value: 0.25,
+            width: 0.0,
+            height: 0.0,
+            label: Str::from("Loading"),
+            indeterminate: true,
+        }]));
+        assert_eq!(t.dump(), r#"group[progress "Loading"]"#);
     }
 
     /// An icon has no name to derive — `label:` is the only way it

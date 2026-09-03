@@ -3973,7 +3973,20 @@ class Translator:
                 val = f"App.{pc}"
             else:
                 raise Untranslatable(v, "progress takes a float literal or float cell read")
-            return [f"{pad}ProgressBar {{ value: {val} }}"]
+            props = [f"value: {val}"]
+            for prop in ("width", "height"):
+                n = self._num(kw, prop)
+                if n is not None:
+                    props.append(f"{prop}: {n}")
+            if "label" in kw:
+                props.append(f"label: {self._text_value(kw['label'])}")
+            if "indeterminate" in kw:
+                iv = kw["indeterminate"]
+                if isinstance(iv, ast.Constant) and type(iv.value) is bool:
+                    props.append(f"indeterminate: {'true' if iv.value else 'false'}")
+                else:
+                    props.append(f"indeterminate: {typed_read(iv, 'Bool', 'indeterminate=')}")
+            return [f"{pad}ProgressBar {{ {'; '.join(props)} }}"]
 
         if self._is_ui(node.func, "spinner"):
             props = []

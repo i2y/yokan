@@ -1168,8 +1168,19 @@ pub enum Element {
     /// A horizontal track with a filled portion proportional to
     /// `value`. The engine clamps to [0,1] at paint time; cute_ui's
     /// eased fill-toward-value animation is deferred (v0 renders the
-    /// value directly — see DESIGN §11).
-    ProgressBar { value: f64 },
+    /// value directly — see DESIGN §11). `width`/`height` of `0.0`
+    /// mean "unset" (the `chart_size` rule: full width, the engine's
+    /// own default height). `label` is an optional line of dim text
+    /// drawn above the track; empty means none. `indeterminate`
+    /// ignores `value` entirely and sweeps a segment instead, for
+    /// work with no known length.
+    ProgressBar {
+        value: f64,
+        width: f64,
+        height: f64,
+        label: Str,
+        indeterminate: bool,
+    },
     /// An indeterminate busy indicator: a 120° accent arc rotating at
     /// 1 rev/sec over a full background ring, cute_ui's `SpinnerElement`.
     /// `size` of `0.0` means "unset" — the engine falls back to its
@@ -1684,7 +1695,36 @@ impl Element {
                 width,
                 height,
             } => format!("LineChart({data:?} {labels:?}{})", chart_size(*width, *height)),
-            Element::ProgressBar { value } => format!("ProgressBar({value})"),
+            Element::ProgressBar {
+                value,
+                width,
+                height,
+                label,
+                indeterminate,
+            } => {
+                // Per-prop join, the `ListView`/`box_props` rule: an
+                // all-defaults bar keeps the bare `ProgressBar(0.25)`
+                // rendering byte-identically, and each new prop enters
+                // the parentheses only once it is set, in field order.
+                if *width == 0.0 && *height == 0.0 && label.as_str().is_empty() && !*indeterminate {
+                    format!("ProgressBar({value})")
+                } else {
+                    let mut props = format!("{value}");
+                    if *width != 0.0 {
+                        props.push_str(&format!(", width={width}"));
+                    }
+                    if *height != 0.0 {
+                        props.push_str(&format!(", height={height}"));
+                    }
+                    if !label.as_str().is_empty() {
+                        props.push_str(&format!(", label={label}"));
+                    }
+                    if *indeterminate {
+                        props.push_str(", indeterminate");
+                    }
+                    format!("ProgressBar({props})")
+                }
+            }
             Element::Spinner { size } => {
                 if *size == 0.0 {
                     "Spinner".to_string()

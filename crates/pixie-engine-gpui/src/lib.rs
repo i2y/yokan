@@ -1841,22 +1841,82 @@ fn render_el<C: Component>(
                 th,
             )
         }
-        Element::ProgressBar { value } => {
-            let frac = (*value).clamp(0.0, 1.0) as f32;
+        // `width`/`height` size the track (`0.0` keeps today's full
+        // width / 8px height — the chart_box rule). `label` is a dim
+        // one-line caption stacked above the track when set.
+        // `indeterminate` ignores `value` and paints a sweeping
+        // segment instead, through the SAME clock-and-canvas shape as
+        // the Spinner arm below (post-layout bounds, its own
+        // `request_animation_frame`, reduced motion parks it rather
+        // than freezing it mid-frame).
+        Element::ProgressBar {
+            value,
+            width,
+            height,
+            label,
+            indeterminate,
+        } => {
             pass.next_id += 1;
-            with_a11y(div().id(pass.next_id), el, sem)
-                .w_full()
-                .h(px(8.))
+            let track_h = if *height > 0.0 { *height as f32 } else { 8. };
+            let mut track = with_a11y(div().id(pass.next_id), el, sem)
+                .h(px(track_h))
                 .bg(rgb(th.border))
-                .rounded_full()
-                .child(
+                .rounded_full();
+            track = if *width > 0.0 { track.w(px(*width as f32)) } else { track.w_full() };
+            track = if *indeterminate {
+                track.child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds: Bounds<Pixels>, _, window: &mut Window, cx: &mut App| {
+                            let (w, h) = (bounds.size.width.as_f32(), bounds.size.height.as_f32());
+                            if w <= 0.0 || h <= 0.0 {
+                                return;
+                            }
+                            let seg_w = (w * PROGRESS_SEGMENT_FRAC).min(w);
+                            let still = cx.reduce_motion();
+                            let x = if still {
+                                0.0
+                            } else {
+                                let t = (ANIM_CLOCK.elapsed().as_secs_f32() / PROGRESS_SWEEP_SECS)
+                                    % 1.0;
+                                t * (w - seg_w)
+                            };
+                            let origin = point(bounds.origin.x + px(x), bounds.origin.y);
+                            window.paint_quad(
+                                fill(Bounds::new(origin, size(px(seg_w), px(h))), rgb(th.accent))
+                                    .corner_radii(px(h / 2.0)),
+                            );
+                            if !still {
+                                window.request_animation_frame();
+                            }
+                        },
+                    )
+                    .size_full(),
+                )
+            } else {
+                let frac = (*value).clamp(0.0, 1.0) as f32;
+                track.child(
                     div()
                         .h_full()
                         .w(relative(frac))
                         .bg(rgb(th.accent))
                         .rounded_full(),
                 )
+            };
+            if label.as_str().is_empty() {
+                track.into_any_element()
+            } else {
+                let mut col = div().flex().flex_col().gap_1();
+                col = if *width > 0.0 { col.w(px(*width as f32)) } else { col.w_full() };
+                col.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgba(th.text_dim_rgba))
+                        .child(SharedString::from(label.as_str().to_string())),
+                )
+                .child(track)
                 .into_any_element()
+            }
         }
         // cute_ui's `SpinnerElement`: a 120° accent arc sweeping once a
         // second over a full background ring. Both are polylines
@@ -2471,6 +2531,13 @@ const SPINNER_SWEEP: f32 = TAU / 3.0;
 const SPINNER_STROKE: f32 = 2.5;
 const SPINNER_ARC_SEGMENTS: usize = 24;
 const SPINNER_RING_SEGMENTS: usize = 64;
+
+/// An indeterminate `ProgressBar`'s segment: this fraction of the
+/// track's width, sweeping from flush-left to flush-right (a
+/// sawtooth — it snaps back rather than bouncing) every
+/// `PROGRESS_SWEEP_SECS`, off the same `ANIM_CLOCK` the Spinner reads.
+const PROGRESS_SEGMENT_FRAC: f32 = 0.3;
+const PROGRESS_SWEEP_SECS: f32 = 1.2;
 
 /// One stroked arc as a polyline: `segments` chords from `from`
 /// through `sweep` radians around (`cx`, `cy`). Screen axes, so
