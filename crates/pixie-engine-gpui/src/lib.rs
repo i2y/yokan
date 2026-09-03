@@ -834,6 +834,12 @@ impl<C: Component> Render for Root<C> {
                     .flex()
                     .size_full()
                     .track_focus(&self.root_focus)
+                    .on_action(cx.listener(|root, cmd: &MenuCommand, _window, cx| {
+                        let index = cmd.index;
+                        root.apply(cx, move |w| {
+                            pixie_kernel::menu::pick_at(w, index);
+                        });
+                    }))
                     .on_key_down(cx.listener(move |root, ev: &gpui::KeyDownEvent, _window, cx| {
                         let chord = chord_of(&ev.keystroke);
                         let mods = &ev.keystroke.modifiers;
@@ -858,6 +864,43 @@ impl<C: Component> Render for Root<C> {
                     .children(pass.overlays),
             )
     }
+}
+
+/// One menu item, dispatched by the index it was declared at. gpui
+/// menu items carry an ACTION, and an action is a type — so a bar
+/// whose items are only known at run time needs one action type that
+/// carries which item it was.
+#[derive(Clone, PartialEq, Default, Debug, gpui::Action)]
+#[action(namespace = pixie_menu, no_json)]
+struct MenuCommand {
+    index: usize,
+}
+
+/// Hand the declared menu bar to the platform. Called once, after the
+/// stores exist and before the window opens.
+fn install_menus(runtime: &Runtime, cx: &mut App) {
+    let layout = runtime.with(|w: &mut World| {
+        if pixie_kernel::menu::any(w) {
+            Some(pixie_kernel::menu::layout(w))
+        } else {
+            None
+        }
+    });
+    let Some(layout) = layout else { return };
+    let menus: Vec<gpui::Menu> = layout
+        .into_iter()
+        .map(|(name, items)| gpui::Menu {
+            name: SharedString::from(name).into(),
+            items: items
+                .into_iter()
+                .map(|(label, index)| {
+                    gpui::MenuItem::action(SharedString::from(label), MenuCommand { index })
+                })
+                .collect(),
+            disabled: false,
+        })
+        .collect();
+    cx.set_menus(menus);
 }
 
 /// The chord a keystroke spells, in the order `keys::normalize`
@@ -2882,6 +2925,8 @@ pub fn run_app<C: Component>(
             bg.spawn(async move { f() }).detach();
         });
         text_input::bind_keys(cx);
+        // The declared menu bar, handed over before the window opens.
+        install_menus(&runtime, cx);
         // cute_ui's Cmd+T: flip the theme live. Every color is read
         // per paint, so one refresh restyles the whole window.
         cx.bind_keys([gpui::KeyBinding::new("cmd-t", ToggleTheme, None)]);

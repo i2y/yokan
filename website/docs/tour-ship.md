@@ -121,6 +121,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In the standard library**: reading a time back from text, file metadata (size, times) and copying or renaming, streaming or binary downloads, and nested json writing (a value inside a written dict or list is a str, int, float or bool).
+- **Desktop surface still to come**: a multi-line text field (the field is one line), file open/save dialogs, tooltips, drag and drop, and a second window. Keyboard shortcuts, the clipboard and the menu bar are in.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 

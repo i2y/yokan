@@ -100,6 +100,7 @@ fn split_steps(script: &str) -> Vec<String> {
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar — picks the option with exactly this text) ·
 /// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
+/// `menu:<item>` (pick a menu item by name) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -243,6 +244,16 @@ pub fn run<C: Component>(
             });
             if !matches!(fired, Some(true)) {
                 panic!("no shortcut or key handler for `{chord}`");
+            }
+        } else if let Some(name) = step.strip_prefix("menu:") {
+            // Pick a menu item by the name it shows. Nothing under
+            // that name is a script's typo, the way a missing button
+            // label is.
+            let picked = crate::contain("menu handler", || {
+                rt.with(|w: &mut World| crate::menu::pick(w, name))
+            });
+            if !matches!(picked, Some(true)) {
+                panic!("no menu item `{name}`");
             }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {

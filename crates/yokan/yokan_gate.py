@@ -392,6 +392,8 @@ class Translator:
         self.shortcuts = []       # (chord, fn node, call node)
         self.any_keys = []        # (fn node, call node)
         self.key_handlers = {}    # handler name -> chord, or None for every key
+        self.menu_items = []      # (menu, item, fn node, call node)
+        self.menu_handlers = {}   # handler name -> (menu, item)
         self.view = None
 
     def _scan_import(self, node):
@@ -1937,6 +1939,12 @@ class Translator:
                 and self._is_ui(node.value.func, "on_key")
             ):
                 self._take_on_key(node.value)
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and self._is_ui(node.value.func, "menu_item")
+            ):
+                self._take_menu_item(node.value)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
                 # A literal constant is a declaration: nothing runs.
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
@@ -1976,6 +1984,8 @@ class Translator:
                 self._take_shortcut(call)
             elif isinstance(call, ast.Call) and self._is_ui(call.func, "on_key"):
                 self._take_on_key(call)
+            elif isinstance(call, ast.Call) and self._is_ui(call.func, "menu_item"):
+                self._take_menu_item(call)
             elif isinstance(stmt, ast.Pass) or (
                 isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
             ):
@@ -2027,6 +2037,21 @@ class Translator:
         if len(args) != 1:
             raise Untranslatable(call, "on_key(handler) takes one function, which receives the key")
         self.any_keys.append((args[0], call))
+
+    def _take_menu_item(self, call: ast.Call):
+        """`menu_item("File", "Save", save)` at module level: the menu,
+        the name it shows, and the function it runs."""
+        kw = {k.arg: k.value for k in call.keywords if k.arg}
+        args = list(call.args)
+        menu = args[0] if args else kw.get("menu")
+        item = args[1] if len(args) > 1 else kw.get("item")
+        fn = args[2] if len(args) > 2 else kw.get("on_pick")
+        if menu is None or item is None or fn is None:
+            raise Untranslatable(call, "menu_item(menu, item, on_pick) takes the menu, the item name and the function to run")
+        for node in (menu, item):
+            if not (isinstance(node, ast.Constant) and type(node.value) is str and node.value.strip()):
+                raise Untranslatable(node, 'a menu item names its menu and itself in writing (`menu_item("File", "Save", save)`)')
+        self.menu_items.append((menu.value, item.value, fn, call))
 
     def _refuse_module_stmt(self, node, under_guard: bool):
         call = node.value if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) else None
@@ -5179,12 +5204,17 @@ class Translator:
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
-            and (self._is_ui(stmt.value.func, "shortcut") or self._is_ui(stmt.value.func, "on_key"))
+            and (
+                self._is_ui(stmt.value.func, "shortcut")
+                or self._is_ui(stmt.value.func, "on_key")
+                or self._is_ui(stmt.value.func, "menu_item")
+            )
         ):
             raise Untranslatable(
                 stmt,
-                "a key handler is declared, not bound in a handler: write "
-                '`shortcut("cmd+s", save)` or `on_key(typed)` at module level',
+                "a key handler or menu item is declared, not bound in a handler: write "
+                '`shortcut("cmd+s", save)`, `on_key(typed)` or '
+                '`menu_item("File", "Save", save)` at module level',
             )
         if (
             isinstance(stmt, ast.Expr)
@@ -7046,6 +7076,24 @@ class Translator:
             self.key_handlers[name] = None
             self.handlers.append((name, "String", [callstr]))
 
+    def _emit_menu(self):
+        """One store method per declared menu item, marked with the
+        menu and the name it shows."""
+        for i, (menu, item, fn, call) in enumerate(self.menu_items):
+            if not (
+                (isinstance(fn, ast.Name) and fn.id in self.defs)
+                or (
+                    isinstance(fn, ast.Attribute)
+                    and isinstance(fn.value, ast.Name)
+                    and fn.value.id in self.stores
+                )
+            ):
+                raise Untranslatable(fn, "menu_item() runs a module-level def or a store's bound method")
+            callstr = self.handler(fn, takes_text=False)
+            name = f"__menu{i}"
+            self.menu_handlers[name] = (menu, item)
+            self.handlers.append((name, None, [callstr]))
+
     def translate(self) -> str:
         trees = [self.tree, *self.modules.values()]
         for tree in trees:
@@ -7058,6 +7106,7 @@ class Translator:
         self.scan()
         self._emit_timers()
         self._emit_keys()
+        self._emit_menu()
         if ("width" in self.window) != ("height" in self.window):
             raise Untranslatable(self.view, "width= and height= come as a pair")
         body = self.view.body
@@ -7221,6 +7270,9 @@ class Translator:
                 if name in self.key_handlers:
                     chord = self.key_handlers[name]
                     mark = f' @key("{chord}")' if chord else " @key"
+                if name in self.menu_handlers:
+                    m, it = self.menu_handlers[name]
+                    mark = f' @menu("{m}", "{it}")'
                 if isinstance(param, list):
                     sig = f"  {kw} {name}({', '.join(f'{n}: {t}' for n, t in param)}){mark} {{"
                 else:

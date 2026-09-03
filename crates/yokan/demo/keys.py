@@ -8,7 +8,9 @@ was. The chord is spelled the way the platform spells it (`cmd+s`,
 `key:cmd+s`, so a shortcut is checked by the gate like any other
 interaction. `clipboard.set_text` / `get_text` copy and paste: a
 window exchanges the text with every other application, a headless
-run keeps it to itself.
+run keeps it to itself. `menu_item(menu, name, handler)` puts the
+same handlers in the application's menu bar, and a script picks one
+with `menu:Save`.
 """
 import os
 import sys
@@ -18,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from yokan import (  # noqa: E402
     button,
     column,
+    menu_item,
     on_key,
     row,
     run,
@@ -57,6 +60,9 @@ def copy_count():
 def paste():
     pasted.set(clipboard.get_text())
 
+
+menu_item("Count", "Save", save)
+menu_item("Count", "Clear", clear)
 
 shortcut("cmd+s", save)
 shortcut("cmd+shift+r", clear)

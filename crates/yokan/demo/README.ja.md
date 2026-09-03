@@ -103,7 +103,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 標準ライブラリ
 
-#### keys — ショートカットとキーとクリップボード。`shortcut("cmd+s", save)`、`on_key(typed)`、`clipboard.set_text` / `get_text`、スクリプトからは `key:cmd+s` で押す
+#### keys — ショートカット、キー、クリップボード、メニューバー。`shortcut("cmd+s", save)`、`on_key(typed)`、`clipboard.set_text` / `get_text`、`menu_item("Count", "Save", save)`。スクリプトからは `key:cmd+s` と `menu:Save` で動かす
 
 #### files — yokan.fs。書く、足す、ディレクトリを並べる、消す（両実行が同じ実装を呼ぶ）
 <img src="screenshots/files.png" width="360">

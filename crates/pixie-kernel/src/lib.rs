@@ -56,6 +56,7 @@ pub mod a11y;
 pub mod anim;
 pub mod clipboard;
 pub mod keys;
+pub mod menu;
 pub mod script;
 pub mod theme;
 pub mod timer;

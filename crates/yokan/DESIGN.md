@@ -706,3 +706,19 @@ it with the platform once per frame, and a headless run does neither
 machine-wide buffer, while a real window still trades text with every
 other application. `clipboard.set_text` and `get_text` are ordinary
 standard-library calls over that value.
+
+
+## The menu bar is declared too
+
+An item in the application's menu is the same kind of declaration a
+shortcut is: `fn save @menu("File", "Save")` on a store, or
+`menu_item("File", "Save", save)` in the dialect. The window hands
+the list to the platform when it opens, and a headless script picks
+one by the name it shows (`menu:Save`), reaching the same handler —
+so a menu is something the gate checks rather than something only a
+mouse can reach.
+
+gpui menu items carry an ACTION, and an action is a type, so a bar
+whose items are only known at run time needs one action type that
+carries which item it was. That is the whole of the engine side: one
+`MenuCommand { index }`, dispatched on the root.

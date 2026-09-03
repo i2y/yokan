@@ -520,6 +520,10 @@ While a text field has the caret, plain keys keep going into it and
 only chords carrying cmd or ctrl reach the app. A headless script
 presses one with `key:cmd+s`.
 
+`menu_item("File", "Save", save)` puts a handler in the application
+menu bar — declaration order is menu order, and a script picks one
+with `menu:Save`.
+
 ## The window and startup
 
 `run(view, title="OpsBoard", width=1100, height=820,
@@ -611,6 +615,9 @@ Same list as the tour's closing section; each is refused by name.
 - Standard library: reading a time back from text, file metadata
   and copy/rename, streaming or binary downloads, nested json
   writing (a value inside a written dict or list is a scalar).
+- Desktop surface: a multi-line text field, file dialogs, tooltips,
+  drag and drop, a second window. Shortcuts, the clipboard and the
+  menu bar are in.
 - At the Rust-crate boundary: payload-carrying enums and methods
   on a twin; enum- or list-typed struct fields.
 - macOS on Apple silicon is the measured platform.

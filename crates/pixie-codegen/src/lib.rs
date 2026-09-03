@@ -9663,6 +9663,32 @@ fn emit_main(
                 }
             }
         }
+        // `fn save @menu("File", "Save")` — an item in the
+        // application's menu bar, declared beside the shortcuts and
+        // registered the same way. A window hands the list to the
+        // platform; a headless `menu:<item>` step picks one.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "menu") else {
+                continue;
+            };
+            let strip = |s: &String| s.trim().trim_matches('"').to_string();
+            let (Some(menu), Some(item)) = (a.args.first().map(strip), a.args.get(1).map(strip))
+            else {
+                return err(a.span, "`@menu(\"File\", \"Save\")` takes the menu and the item name");
+            };
+            if menu.is_empty() || item.is_empty() {
+                return err(a.span, "`@menu(\"File\", \"Save\")` takes the menu and the item name");
+            }
+            if !m.params.is_empty() {
+                return err(a.span, "a menu item's method takes no parameters — it is called by the menu");
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::menu::item(&mut w, \"{menu}\", \"{item}\", std::rc::Rc::new(move |w: &mut World| {{ {var}.{}(w); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
         // Class-typed props whose default CONSTRUCTS (§8.64). The
         // slot came out of `new()` empty, because `new()` has no
         // World; here it does, so the object is built and assigned

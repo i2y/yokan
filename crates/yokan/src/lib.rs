@@ -1209,6 +1209,52 @@ fn on_key(handler: Py<PyAny>) -> PyResult<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// The menu bar: declared before `run()`, handed to the platform when
+// the window opens — and pickable by name in a headless script.
+
+thread_local! {
+    static PENDING_MENUS: RefCell<Vec<(String, String, Py<PyAny>)>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+fn install_menu_items(rt: &Runtime) {
+    for (menu, item, cb) in PENDING_MENUS.with(|m| m.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::menu::item(
+                w,
+                &menu,
+                &item,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare one item in the application's menu bar: the menu it sits
+/// in, the name it shows, and the handler it runs. Call before
+/// `run()`; declaration order is menu order.
+#[pyfunction]
+fn menu_item(menu: &str, item: &str, on_pick: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    if menu.trim().is_empty() || item.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "menu_item() needs a menu and an item name",
+        ));
+    }
+    PENDING_MENUS.with(|m| m.borrow_mut().push((menu.to_string(), item.to_string(), on_pick)));
+    Ok(())
+}
+
 /// Register a periodic callback. Call before `run()`; the callback
 /// runs on the UI thread and a rebuild follows. During a live reload
 /// the module re-executes with the app already running, and `every`
@@ -1428,6 +1474,7 @@ fn run(
         if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
             install_timers(&rt);
             install_keys(&rt);
+            install_menu_items(&rt);
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -1460,6 +1507,7 @@ fn run(
         }
         install_timers(&rt);
         install_keys(&rt);
+        install_menu_items(&rt);
         let watch_opt = if watch {
             src_path.map(|p| make_watch(p, shared.clone(), h.erase()))
         } else {
@@ -1656,6 +1704,7 @@ fn _headless(
         CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
         install_timers(&rt);
         install_keys(&rt);
+        install_menu_items(&rt);
         rt.with(drain_spawns);
         if let Some(f) = &on_start {
             // The startup hook: contained like any handler — a
@@ -2126,6 +2175,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(every, m)?)?;
     m.add_function(wrap_pyfunction!(shortcut, m)?)?;
     m.add_function(wrap_pyfunction!(on_key, m)?)?;
+    m.add_function(wrap_pyfunction!(menu_item, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(_headless, m)?)?;
     let fs = PyModule::new(m.py(), "fs")?;

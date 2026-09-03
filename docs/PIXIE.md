@@ -150,12 +150,14 @@ Early but real. Working today:
   (`await Http.get(url)` / `getBytes` → `Bytes` / `post` /
   `getWith(url, headers)` with `Map<String, String>` headers).
 - **Declarations that run themselves** — `fn tick @every(1000)` is a
-  repeating callback and `fn save @key("cmd-s")` is a shortcut, both
-  bound the moment the store exists; `fn typed(k: String) @key` sees
-  every key as the chord it was. They fire off the same clock and the
-  same dispatch a window uses, so `PIXIE_SCRIPT="advance:1000"` and
-  `PIXIE_SCRIPT="key:cmd-s"` reach exactly what a second and a
-  keystroke would.
+  repeating callback, `fn save @key("cmd-s")` is a shortcut and
+  `fn save @menu("File", "Save")` is an item in the application's
+  menu bar, all bound the moment the store exists;
+  `fn typed(k: String) @key` sees every key as the chord it was. They
+  fire off the same clock and the same dispatch a window uses, so
+  `PIXIE_SCRIPT="advance:1000"`, `PIXIE_SCRIPT="key:cmd-s"` and
+  `PIXIE_SCRIPT="menu:Save"` reach exactly what a second, a keystroke
+  and a menu pick would.
 - **Hot reload** — the running binary re-parses its own view body and
   rebuilds against the live World; `pixie watch` decides per save
   whether an in-process reload or a full rebuild is needed.

@@ -99,8 +99,8 @@ Run these from `crates/yokan/` (they also work via
 - `cargo run -q -p pixie-cli -- build examples/counter/counter.pix
   --run` opens a window; the `PIXIE_SCRIPT` env var replays it
   headless (`click[@n]:`, `input[@n]:`, `submit`, `slide`, `select`,
-  `key:<chord>`, `advance:<ms>`, `a11y`, `theme:dark|light`, `mem`,
-  `dump`). Steps
+  `key:<chord>`, `menu:<item>`, `advance:<ms>`, `a11y`,
+  `theme:dark|light`, `mem`, `dump`). Steps
   that produce output are collected into the run's returned
   transcript, so an embedder that captures the return value sees
   them; a comma inside a step's text is written `\,`.

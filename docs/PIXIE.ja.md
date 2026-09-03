@@ -144,12 +144,14 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   `getBytes` → `Bytes` / `post` / `Map<String, String>` ヘッダ付き
   `getWith`)。
 - **自分で走る宣言** — `fn tick @every(1000)` は繰り返し呼ばれる
-  コールバック、`fn save @key("cmd-s")` はショートカットで、どちらも
-  store ができた時点で結び付きます。
+  コールバック、`fn save @key("cmd-s")` はショートカット、
+  `fn save @menu("File", "Save")` はアプリケーションのメニューバーの
+  項目で、どれも store ができた時点で結び付きます。
   `fn typed(k: String) @key` はすべてのキーをコードの形で受け取ります。
   発火する時計も配送の経路もウィンドウと同じなので、
-  `PIXIE_SCRIPT="advance:1000"` と `PIXIE_SCRIPT="key:cmd-s"` は、
-  一秒とひと押しがすることにそのまま届きます。
+  `PIXIE_SCRIPT="advance:1000"`、`PIXIE_SCRIPT="key:cmd-s"`、
+  `PIXIE_SCRIPT="menu:Save"` は、一秒とひと押しとメニュー選択がする
+  ことにそのまま届きます。
 - **ホットリロード** — 実行中のバイナリが自分の view 本体を再パースし、
   生きた World に対して再構築。`pixie watch` は保存ごとに
   プロセス内リロードか完全再ビルドかを判定します。

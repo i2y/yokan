@@ -1,7 +1,9 @@
 # Keys: a chord is a DECLARATION on the store, the way a timer is.
 # The spelling is the platform's own (`cmd-s`, `shift-tab`), and a
 # headless `key:<chord>` step presses one — so a shortcut is a
-# checked interaction, not something only a human can reach.
+# checked interaction, not something only a human can reach. A menu
+# item is the same declaration wearing a name (`menu:<item>` picks
+# one), and the window hands the bar to the platform.
 
 store App {
   state count : Int = 0
@@ -13,6 +15,10 @@ store App {
   }
 
   fn save @key("cmd-s") {
+    saved = count
+  }
+
+  fn saveFromMenu @menu("Count", "Save") {
     saved = count
   }
 

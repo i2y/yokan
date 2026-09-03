@@ -297,7 +297,7 @@ fn tiers_agree_on_every_demo() {
         // rather than only under a human finger.
         (
             "examples/keys/keys.pix",
-            "click:+1,click:+1,key:cmd-s,key:x,key:cmd-shift-r",
+            "click:+1,click:+1,key:cmd-s,key:x,menu:Save,key:cmd-shift-r",
         ),
         (
             "examples/genfs/genfs.pix",
