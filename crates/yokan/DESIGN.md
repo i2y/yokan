@@ -639,3 +639,39 @@ and one for defaults, and the combinations follow from the two.
 no compiled shape yet, and a Python set iterates in an order the
 compiled side would not reproduce — the same reason a dict iterates
 by key here.
+
+## Values ride beside the statement
+
+sqlite had no parameter binding, and the ledger demo showed what that
+costs: it spelled the user's text into the SQL with an f-string, so an
+apostrophe in an item name was a syntax error and a semicolon would
+have been a second statement. Every sqlite call now takes a trailing
+list of values to bind — `sqlite.exec(db, "INSERT INTO t VALUES (?,
+?)", [name, str(n)])` — and the same spelling with and without it, so
+the reader sees one function. Values bind as text and the column's
+affinity converts, which is what Python's own driver does with a str
+parameter; one implementation serves both runs, so there is nothing
+for the two to disagree about.
+
+The read side grew the shape that binding made worth having: a row as
+a `list[str]`, a result as a `list[list[str]]`. The line a list shows
+is written in Python now instead of assembled in SQL with `||`.
+
+## The rest of the standard library's desk
+
+Four gaps closed beside it, each one a thing an app of this kind
+reaches for on its first afternoon: http POST, request headers, a
+deadline in milliseconds and a status code on its own; fs directory
+listing, append, remove, make, and `app_dir(name)` for the directory
+an app may keep its own files in; `json.dumps` for writing a value
+back out; and `time.format_local_ms`, the machine's own zone beside
+the UTC one that verification scripts want.
+
+Two of them needed a rule rather than a function. `json.dumps` has
+one name and one meaning, but the writer differs by the value's type,
+so the translator picks the static from the annotation while the
+interpreted door reads the type at run time — the two land on the
+same Rust function, which is what keeps the printed string single. A
+dict is written in key order for the same reason dict iteration is:
+a Rust HashMap has no order and a Python dict has insertion order,
+and key order is the one both can agree on.

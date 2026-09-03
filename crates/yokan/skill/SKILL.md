@@ -431,19 +431,32 @@ except Exception as e:
 random, notify`. One implementation in Rust serves both runs; the
 shipped binary needs no Python. Call it from handlers only.
 
-- **fs**: `read_text` / `write_text` / `exists` / `read_text_or`
+- **fs**: `read_text` / `write_text` / `append_text` / `exists` /
+  `read_text_or` / `list_dir` (sorted names) / `make_dir` /
+  `remove` / `app_dir(name)` (this app's own directory, created if
+  it is missing)
 - **sqlite**: `exec(path, sql) -> int` / `query_text(path, sql) ->
   list[str]` (column 0 as text; `ORDER BY` for determinism) /
-  `query_int` / `query_int_or` / `query_text_or` — wrap aggregates
-  in `COALESCE`. There is no parameter binding yet; keep user text
-  out of SQL.
-- **http**: `get_text(url)` / `get_text_or` (synchronous)
+  `query_rows` (every column, `list[list[str]]`) / `query_int` /
+  `query_int_or` / `query_text_or` / `query_rows_or` — wrap
+  aggregates in `COALESCE`. Every one takes a trailing `params`
+  list: write `?` in the statement and pass the values beside it
+  (`sqlite.exec(db, "INSERT INTO t VALUES (?, ?)", [name,
+  str(n)])`, `sqlite.query_int_or(db, sql, 0, ["food"])`). Never
+  splice user text into SQL.
+- **http**: `get_text(url[, timeout_ms])` / `get_text_or` /
+  `get_text_with(url, headers)` / `post_text(url, body[,
+  content_type])` / `post_text_or` / `status(url)` (synchronous;
+  inside `task` the compiled run awaits it)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` /
   `ceil` / `pi()`
 - **json**: `get_text` / `get_int` / `get_float` / `get_bool` /
-  `length` / `has` by dotted path (`"items.0.title"`); read-only
+  `length` / `has` by dotted path (`"items.0.title"`), and
+  `dumps(value)` for a str, int, float, bool, a list of one of
+  those, or a str-keyed dict (written in key order)
 - **time**: `now_ms()`, `format_ms(ms, "%Y-%m-%d")` (UTC; pass a
-  fixed ms in verification scripts)
+  fixed ms in verification scripts), `format_local_ms(ms, fmt)`
+  (the machine's zone), `local_offset_minutes(ms)`
 - **strings**: `to_int(s, default)` / `to_float(s, default)`
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive) / `float()`;
   seed in `on_start` or a reset handler so scripts replay
@@ -584,9 +597,9 @@ Same list as the tour's closing section; each is refused by name.
 - `tuple` and `set`: a tuple has no compiled shape, and a Python
   set iterates in an order the compiled side would not reproduce.
 - `@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals.
-- Standard library: sqlite parameter binding and multi-column rows,
-  http POST / headers / timeouts, fs directory listing, json
-  writing, local time.
+- Standard library: reading a time back from text, file metadata
+  and copy/rename, streaming or binary downloads, nested json
+  writing (a value inside a written dict or list is a scalar).
 - At the Rust-crate boundary: payload-carrying enums and methods
   on a twin; enum- or list-typed struct fields.
 - macOS on Apple silicon is the measured platform.

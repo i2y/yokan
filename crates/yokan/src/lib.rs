@@ -1630,23 +1630,100 @@ fn py_fs_exists(py: Python<'_>, path: &str) -> bool {
     py.detach(|| yokan_stdlib::fs_exists(path))
 }
 
+/// `params` is the bound form: the values ride beside the statement
+/// instead of inside it, so text a user typed can never become SQL.
 #[pyfunction]
-#[pyo3(name = "exec")]
-fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str) -> i64 {
-    py.detach(|| yokan_stdlib::sqlite_exec(path, sql))
+#[pyo3(name = "exec", signature = (path, sql, params = None))]
+fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str, params: Option<Vec<String>>) -> i64 {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_exec_with(path, sql, p),
+        None => yokan_stdlib::sqlite_exec(path, sql),
+    })
 }
 
 #[pyfunction]
-#[pyo3(name = "query_text")]
-fn py_sqlite_query_text(py: Python<'_>, path: &str, sql: &str) -> Vec<String> {
-    py.detach(|| yokan_stdlib::sqlite_query_text(path, sql))
+#[pyo3(name = "query_text", signature = (path, sql, params = None))]
+fn py_sqlite_query_text(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<String> {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_text_with(path, sql, p),
+        None => yokan_stdlib::sqlite_query_text(path, sql),
+    })
+}
+
+/// The total form: no table, no rows — no raise.
+#[pyfunction]
+#[pyo3(name = "query_rows_or", signature = (path, sql, params = None))]
+fn py_sqlite_query_rows_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<Vec<String>> {
+    py.detach(|| yokan_stdlib::sqlite_query_rows_or(path, sql, params.unwrap_or_default()))
+}
+
+/// Every column of every row, as text — the multi-column read.
+#[pyfunction]
+#[pyo3(name = "query_rows", signature = (path, sql, params = None))]
+fn py_sqlite_query_rows(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<Vec<String>> {
+    py.detach(|| yokan_stdlib::sqlite_query_rows(path, sql, params.unwrap_or_default()))
 }
 
 #[pyfunction]
-#[pyo3(name = "get_text")]
-fn py_http_get_text(py: Python<'_>, url: &str) -> PyResult<String> {
-    py.detach(|| yokan_stdlib::http_get_text_result(url))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+#[pyo3(name = "get_text", signature = (url, timeout_ms = 0))]
+fn py_http_get_text(py: Python<'_>, url: &str, timeout_ms: i64) -> PyResult<String> {
+    py.detach(|| match timeout_ms {
+        0 => yokan_stdlib::http_get_text_result(url),
+        ms => yokan_stdlib::http_get_text_timeout_result(url, ms),
+    })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+#[pyo3(name = "get_text_with")]
+fn py_http_get_text_with(
+    py: Python<'_>,
+    url: &str,
+    headers: std::collections::HashMap<String, String>,
+) -> String {
+    py.detach(|| yokan_stdlib::http_get_text_with(url, headers))
+}
+
+#[pyfunction]
+#[pyo3(name = "post_text", signature = (url, body, content_type = None))]
+fn py_http_post_text(
+    py: Python<'_>,
+    url: &str,
+    body: &str,
+    content_type: Option<&str>,
+) -> String {
+    py.detach(|| match content_type {
+        Some(ct) => yokan_stdlib::http_post_text_as(url, body, ct),
+        None => yokan_stdlib::http_post_text(url, body),
+    })
+}
+
+#[pyfunction]
+#[pyo3(name = "post_text_or")]
+fn py_http_post_text_or(py: Python<'_>, url: &str, body: &str, default: &str) -> String {
+    py.detach(|| yokan_stdlib::http_post_text_or(url, body, default))
+}
+
+/// The status code, or 0 when the request never reached a server.
+#[pyfunction]
+#[pyo3(name = "status")]
+fn py_http_status(py: Python<'_>, url: &str) -> i64 {
+    py.detach(|| yokan_stdlib::http_status(url))
 }
 
 #[pyfunction] #[pyo3(name = "sqrt")]
@@ -1706,9 +1783,17 @@ fn py_notify_send(title: &str, body: &str) {
     yokan_stdlib::notify_send(title, body)
 }
 
-#[pyfunction] #[pyo3(name = "query_int")]
-fn py_sqlite_query_int(py: Python<'_>, path: &str, sql: &str) -> PyResult<i64> {
-    py.detach(|| yokan_stdlib::sqlite_query_int_result(path, sql))
+#[pyfunction] #[pyo3(name = "query_int", signature = (path, sql, params = None))]
+fn py_sqlite_query_int(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> PyResult<i64> {
+    py.detach(|| match params {
+        Some(p) => Ok(yokan_stdlib::sqlite_query_int_with(path, sql, p)),
+        None => yokan_stdlib::sqlite_query_int_result(path, sql),
+    })
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -1722,14 +1807,31 @@ fn py_http_get_text_or(py: Python<'_>, url: &str, default: &str) -> String {
     py.detach(|| yokan_stdlib::http_get_text_or(url, default))
 }
 
-#[pyfunction] #[pyo3(name = "query_int_or")]
-fn py_sqlite_query_int_or(py: Python<'_>, path: &str, sql: &str, default: i64) -> i64 {
-    py.detach(|| yokan_stdlib::sqlite_query_int_or(path, sql, default))
+#[pyfunction] #[pyo3(name = "query_int_or", signature = (path, sql, default, params = None))]
+fn py_sqlite_query_int_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    default: i64,
+    params: Option<Vec<String>>,
+) -> i64 {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_int_or_with(path, sql, default, p),
+        None => yokan_stdlib::sqlite_query_int_or(path, sql, default),
+    })
 }
 
-#[pyfunction] #[pyo3(name = "query_text_or")]
-fn py_sqlite_query_text_or(py: Python<'_>, path: &str, sql: &str) -> Vec<String> {
-    py.detach(|| yokan_stdlib::sqlite_query_text_or(path, sql))
+#[pyfunction] #[pyo3(name = "query_text_or", signature = (path, sql, params = None))]
+fn py_sqlite_query_text_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<String> {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_text_or_with(path, sql, p),
+        None => yokan_stdlib::sqlite_query_text_or(path, sql),
+    })
 }
 
 #[pyfunction] #[pyo3(name = "seed")]
@@ -1753,6 +1855,95 @@ fn py_log(py: Python<'_>, msg: &str) -> i64 {
 #[pyfunction] #[pyo3(name = "sleep_ms")]
 fn py_time_sleep_ms(py: Python<'_>, ms: i64) -> i64 {
     py.detach(|| yokan_stdlib::time_sleep_ms(ms))
+}
+
+#[pyfunction] #[pyo3(name = "format_local_ms")]
+fn py_time_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
+    py.detach(|| yokan_stdlib::time_format_local_ms(ms, fmt))
+}
+
+#[pyfunction] #[pyo3(name = "local_offset_minutes")]
+fn py_time_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
+    py.detach(|| yokan_stdlib::time_local_offset_minutes(ms))
+}
+
+#[pyfunction] #[pyo3(name = "list_dir")]
+fn py_fs_list_dir(py: Python<'_>, path: &str) -> Vec<String> {
+    py.detach(|| yokan_stdlib::fs_list_dir(path))
+}
+
+#[pyfunction] #[pyo3(name = "append_text")]
+fn py_fs_append_text(py: Python<'_>, path: &str, text: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_append_text(path, text))
+}
+
+#[pyfunction] #[pyo3(name = "remove")]
+fn py_fs_remove(py: Python<'_>, path: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_remove(path))
+}
+
+#[pyfunction] #[pyo3(name = "make_dir")]
+fn py_fs_make_dir(py: Python<'_>, path: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_make_dir(path))
+}
+
+#[pyfunction] #[pyo3(name = "app_dir")]
+fn py_fs_app_dir(py: Python<'_>, name: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_app_dir(name))
+}
+
+/// `json.dumps(v)` — the door reads the value's type at run time, the
+/// translator reads it from the annotation; both land on the same
+/// stdlib writer, which is what makes the two runs print one string.
+/// Bools are looked at before ints because a Python bool IS an int.
+#[pyfunction] #[pyo3(name = "dumps")]
+fn py_json_dumps(v: &Bound<'_, PyAny>) -> PyResult<String> {
+    use pyo3::types::{PyBool, PyDict as PyDictT, PyList};
+    if v.is_instance_of::<PyBool>() {
+        return Ok(yokan_stdlib::json_dumps_bool(v.extract()?));
+    }
+    if let Ok(n) = v.extract::<i64>() {
+        return Ok(yokan_stdlib::json_dumps_int(n));
+    }
+    if let Ok(f) = v.extract::<f64>() {
+        return Ok(yokan_stdlib::json_dumps_float(f));
+    }
+    if let Ok(t) = v.extract::<String>() {
+        return Ok(yokan_stdlib::json_dumps_str(&t));
+    }
+    if v.is_instance_of::<PyList>() {
+        if let Ok(xs) = v.extract::<Vec<bool>>() {
+            return Ok(yokan_stdlib::json_dumps_list_bool(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<i64>>() {
+            return Ok(yokan_stdlib::json_dumps_list_int(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<f64>>() {
+            return Ok(yokan_stdlib::json_dumps_list_float(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<String>>() {
+            return Ok(yokan_stdlib::json_dumps_list_str(xs));
+        }
+    }
+    if v.is_instance_of::<PyDictT>() {
+        use std::collections::HashMap;
+        if let Ok(m) = v.extract::<HashMap<String, bool>>() {
+            return Ok(yokan_stdlib::json_dumps_map_bool(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, i64>>() {
+            return Ok(yokan_stdlib::json_dumps_map_int(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, f64>>() {
+            return Ok(yokan_stdlib::json_dumps_map_float(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, String>>() {
+            return Ok(yokan_stdlib::json_dumps_map_str(m));
+        }
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "json.dumps writes a str, int, float, bool, a list of one of those, \
+         or a dict with str keys and one of those as values",
+    ))
 }
 
 #[pymodule]
@@ -1857,6 +2048,11 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fs.add_function(wrap_pyfunction!(py_fs_write_text, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_exists, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_read_text_or, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_list_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_append_text, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_remove, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_make_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_app_dir, &fs)?)?;
     m.add_submodule(&fs)?;
     let sqlite = PyModule::new(m.py(), "sqlite")?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_exec, &sqlite)?)?;
@@ -1864,10 +2060,16 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_int, &sqlite)?)?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_int_or, &sqlite)?)?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_text_or, &sqlite)?)?;
+    sqlite.add_function(wrap_pyfunction!(py_sqlite_query_rows, &sqlite)?)?;
+    sqlite.add_function(wrap_pyfunction!(py_sqlite_query_rows_or, &sqlite)?)?;
     m.add_submodule(&sqlite)?;
     let http = PyModule::new(m.py(), "http")?;
     http.add_function(wrap_pyfunction!(py_http_get_text, &http)?)?;
     http.add_function(wrap_pyfunction!(py_http_get_text_or, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_get_text_with, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_post_text, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_post_text_or, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_status, &http)?)?;
     m.add_submodule(&http)?;
     // `from yokan import fs` works by attribute; this makes the
     // dotted forms (`import yokan.fs` etc.) resolve too.
@@ -1888,6 +2090,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jsonm.add_function(wrap_pyfunction!(py_json_get_bool, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_length, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_has, &jsonm)?)?;
+    jsonm.add_function(wrap_pyfunction!(py_json_dumps, &jsonm)?)?;
     m.add_submodule(&jsonm)?;
     let notifym = PyModule::new(m.py(), "notify")?;
     notifym.add_function(wrap_pyfunction!(py_notify_send, &notifym)?)?;
@@ -1906,6 +2109,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_sleep_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_format_local_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_local_offset_minutes, &timem)?)?;
     m.add_submodule(&timem)?;
     let sysmod = m.py().import("sys")?.getattr("modules")?;
     sysmod.set_item("yokan.fs", &fs)?;

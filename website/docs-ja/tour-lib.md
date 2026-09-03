@@ -28,15 +28,44 @@ except Exception as e:
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
-- **fs**：`read_text` / `write_text` / `exists` / `read_text_or`
-- **sqlite**：`exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or`（SQLite 同梱。集計は COALESCE で包み、ORDER BY で順序を固定する）
-- **http**：`get_text` / `get_text_or`（同期）
+- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
+- **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
+- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
 - **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
-- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）
-- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
+- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）と `dumps(value)`（str、int、float、bool、そのいずれかのリスト、str をキーとする dict を書き出す。dict はキー順）
+- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
+
+sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
+
+```python
+sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
+sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?", 0, ["food"])
+```
+
+値の位置に `?` を書き、値は文の外に並べて渡します。
+こう書けば `item` の中のアポストロフィはアポストロフィのままで、利用者が打った文字列が SQL になることはありません。
+値はテキストとしてバインドされ、列の affinity が変換します。
+INTEGER の列には数値が入ります。
+
+行はまるごと `list[str]` として返るので、結果は `list[list[str]]` です。
+
+```python
+@store
+class Ledger:
+    raw: list[list[str]] = []
+    rows: list[str] = []
+
+    def load(self) -> None:
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
+```
+
+表示する一行は、SQL で組み立てるのではなく Python 側で書きます。
 
 検証を安定させるこつは、結果を毎回同じにすることです。
 時刻は固定値を渡し、乱数は種を撒く。

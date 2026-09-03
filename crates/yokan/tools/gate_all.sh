@@ -24,10 +24,17 @@ gate links   python3 yokan_gate.py gate demo/links.py --script "click:build,clic
 gate table   python3 yokan_gate.py gate demo/table.py --script "click:refresh,dump,click:refresh"
 gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
 gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
+gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:parse,click:stamp,click:write,dump,click:write list,dump"
+gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
+gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
 # Fixture- and dependency-carrying gates.
 gate rustcrate python3 yokan_gate.py gate demo/rustcrate.py --script "click:run"
 # Fixture- and dependency-carrying gates.
 gate dbnotes python3 yokan_gate.py gate demo/dbnotes.py --fresh demo/.gate/notes.db
+# The ledger writes what the script types, so each tier starts from an
+# empty database — and the name it types carries an apostrophe, which
+# only a BOUND parameter survives.
+gate ledger  python3 yokan_gate.py gate demo/ledger.py --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
 gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy python3 yokan_gate.py gate demo/pystats.py
 gate proj     python3 yokan_gate.py gate demo/proj/app.py --script "click:run"
 # Multi-module apps.
@@ -38,6 +45,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
+    stdlib|files|webfetch|ledger) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac

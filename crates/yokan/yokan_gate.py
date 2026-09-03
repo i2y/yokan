@@ -728,6 +728,26 @@ class Translator:
     STDLIB_RET = {
         ("strings", "to_int"): "Int",
         ("strings", "to_float"): "Float",
+        ("sqlite", "query_text"): "List<String>",
+        ("sqlite", "query_text_or"): "List<String>",
+        ("sqlite", "query_rows"): "List<List<String>>",
+        ("sqlite", "query_rows_or"): "List<List<String>>",
+        ("sqlite", "query_int"): "Int",
+        ("sqlite", "query_int_or"): "Int",
+        ("sqlite", "exec"): "Int",
+        ("fs", "list_dir"): "List<String>",
+        ("fs", "append_text"): "Int",
+        ("fs", "remove"): "Int",
+        ("fs", "make_dir"): "Int",
+        ("fs", "app_dir"): "String",
+        ("http", "status"): "Int",
+        ("http", "get_text"): "String",
+        ("http", "get_text_with"): "String",
+        ("http", "post_text"): "String",
+        ("http", "post_text_or"): "String",
+        ("json", "dumps"): "String",
+        ("time", "format_local_ms"): "String",
+        ("time", "local_offset_minutes"): "Int",
     }
 
     def _anim_props(self, kw) -> list[str]:
@@ -2368,30 +2388,77 @@ class Translator:
 
     # stdlib call → its fallible native twin (`!T` binding); the
     # translator routes a call here when it sits inside try/except
+    # keyed by (module, function, argument count): the spelling with a
+    # deadline and the spelling with bound parameters are different
+    # calls, and each needs its own fallible twin
     FALLIBLE = {
-        ("http", "get_text"): "Http.tryGetText",
-        ("fs", "read_text"): "Fs.tryReadText",
-        ("sqlite", "query_int"): "Sqlite.tryQueryInt",
+        ("http", "get_text", 1): "Http.tryGetText",
+        ("http", "get_text", 2): "Http.tryGetTextTimeout",
+        ("http", "post_text", 2): "Http.tryPostText",
+        ("fs", "read_text", 1): "Fs.tryReadText",
+        ("sqlite", "query_int", 2): "Sqlite.tryQueryInt",
+        ("sqlite", "query_int", 3): "Sqlite.tryQueryIntWith",
     }
 
     STDLIB_CALLS = {
         ("fs", "read_text"): ("Fs", "readText", 1),
         ("fs", "write_text"): ("Fs", "writeText", 2),
         ("fs", "exists"): ("Fs", "exists", 1),
-        ("sqlite", "exec"): ("Sqlite", "exec", 2),
-        ("sqlite", "query_text"): ("Sqlite", "queryText", 2),
-        ("sqlite", "query_int"): ("Sqlite", "queryInt", 2),
+        # A trailing `params` list binds the values instead of
+        # spelling them into the SQL, so both arities are one function
+        # to the reader — the translator picks by how many were given.
+        ("sqlite", "exec"): [
+            ("Sqlite", "exec", 2),
+            ("Sqlite", "execWith", 3, {2: "List<String>"}),
+        ],
+        ("sqlite", "query_text"): [
+            ("Sqlite", "queryText", 2),
+            ("Sqlite", "queryTextWith", 3, {2: "List<String>"}),
+        ],
+        ("sqlite", "query_int"): [
+            ("Sqlite", "queryInt", 2),
+            ("Sqlite", "queryIntWith", 3, {2: "List<String>"}),
+        ],
+        ("sqlite", "query_rows"): [
+            ("Sqlite", "queryRows", 2),
+            ("Sqlite", "queryRowsWith", 3, {2: "List<String>"}),
+        ],
+        ("sqlite", "query_rows_or"): [
+            ("Sqlite", "queryRowsOr", 2),
+            ("Sqlite", "queryRowsOrWith", 3, {2: "List<String>"}),
+        ],
         ("strings", "to_int"): ("Strings", "toInt", 2),
         ("notify", "send"): ("Notify", "send", 2),
         ("strings", "to_float"): ("Strings", "toFloat", 2),
         ("fs", "read_text_or"): ("Fs", "readTextOr", 2),
         ("http", "get_text_or"): ("Http", "getTextOr", 2),
-        ("sqlite", "query_int_or"): ("Sqlite", "queryIntOr", 3),
-        ("sqlite", "query_text_or"): ("Sqlite", "queryTextOr", 2),
+        ("sqlite", "query_int_or"): [
+            ("Sqlite", "queryIntOr", 3),
+            ("Sqlite", "queryIntOrWith", 4, {3: "List<String>"}),
+        ],
+        ("sqlite", "query_text_or"): [
+            ("Sqlite", "queryTextOr", 2),
+            ("Sqlite", "queryTextOrWith", 3, {2: "List<String>"}),
+        ],
         ("random", "seed"): ("Random", "seed", 1),
         ("random", "int"): ("Random", "int_", 2),
         ("random", "float"): ("Random", "float_", 0),
-        ("http", "get_text"): ("Http", "getText", 1),
+        ("http", "get_text"): [
+            ("Http", "getText", 1),
+            ("Http", "getTextTimeout", 2),
+        ],
+        ("http", "get_text_with"): ("Http", "getTextWith", 2, {1: "Map<String, String>"}),
+        ("http", "post_text"): [
+            ("Http", "postText", 2),
+            ("Http", "postTextAs", 3),
+        ],
+        ("http", "post_text_or"): ("Http", "postTextOr", 3),
+        ("http", "status"): ("Http", "status", 1),
+        ("fs", "list_dir"): ("Fs", "listDir", 1),
+        ("fs", "append_text"): ("Fs", "appendText", 2),
+        ("fs", "remove"): ("Fs", "remove", 1),
+        ("fs", "make_dir"): ("Fs", "makeDir", 1),
+        ("fs", "app_dir"): ("Fs", "appDir", 1),
         ("math", "sqrt"): ("Math", "sqrt", 1),
         ("math", "sin"): ("Math", "sin", 1),
         ("math", "cos"): ("Math", "cos", 1),
@@ -2406,10 +2473,89 @@ class Translator:
         ("json", "get_bool"): ("Json", "getBool", 2),
         ("json", "length"): ("Json", "length", 2),
         ("json", "has"): ("Json", "has", 2),
+        # the writer is chosen by the value's type — see `_json_dumps`
+        ("json", "dumps"): ("Json", "dumps", 1),
         ("time", "now_ms"): ("Time", "nowMs", 0),
         ("time", "format_ms"): ("Time", "formatMs", 2),
         ("time", "sleep_ms"): ("Time", "sleepMs", 1),
+        ("time", "format_local_ms"): ("Time", "formatLocalMs", 2),
+        ("time", "local_offset_minutes"): ("Time", "localOffsetMinutes", 1),
     }
+
+    @staticmethod
+    def _stdlib_specs(spec):
+        """A standard-library entry as a list of spellings — one entry
+        holds several when the function takes an optional argument."""
+        return spec if isinstance(spec, list) else [spec]
+
+    def _stdlib_pick(self, node, mod, fn, spec):
+        """The spelling this call site named, by how many arguments it
+        gave."""
+        cands = self._stdlib_specs(spec)
+        for c in cands:
+            if len(node.args) == c[2] and not node.keywords:
+                return c
+        arities = " or ".join(str(c[2]) for c in cands)
+        raise Untranslatable(node, f"`{mod}.{fn}` takes {arities} argument(s)")
+
+    def _stdlib_arg(self, node, ty, ctx, param):
+        """One argument of a standard-library call. A declared
+        container type is what lets a literal ride in place — the list
+        of values a query binds, the headers a request sends."""
+        if ty is None:
+            return self.expr(node, ctx, param)
+        if isinstance(node, (ast.List, ast.Dict)):
+            return self._literal_of(node, ty)
+        src = self._list_source(node, ctx, param)
+        if src is None:
+            raise Untranslatable(
+                node,
+                f"this argument is a {py_ty(ty)} — a state, a field, a local, or a literal",
+            )
+        if src[1] not in (ty, "List<?>"):
+            raise Untranslatable(
+                node,
+                f"this argument is a {py_ty(ty)} — `{self._src(node)}` is {py_ty(src[1])}",
+            )
+        return src[0]
+
+    def _json_dumps(self, node, ctx, param):
+        """`json.dumps(v)` — the writer follows the value's type, one
+        static per shape. The interpreted door reads the same type at
+        run time, so the two runs print one string."""
+        arg = node.args[0]
+        if isinstance(arg, (ast.List, ast.Dict)):
+            items = arg.elts if isinstance(arg, ast.List) else arg.values
+            # an empty container writes the same text whichever writer
+            # takes it, so the str one stands in
+            el = (self._num_ty(items[0], ctx, param) or "?") if items else "String"
+            suffix = self.LIST_SUFFIX.get(el)
+            if suffix is None:
+                raise Untranslatable(arg, self._dumps_msg(el))
+            kind = "List" if isinstance(arg, ast.List) else "Map"
+            ty = f"List<{el}>" if kind == "List" else f"Map<String, {el}>"
+            return f"Json.dumps{kind}{suffix}({self._literal_of(arg, ty)})"
+        src = self._list_source(arg, ctx, param)
+        if src is not None and src[1].startswith(("List<", "Map<")):
+            ty = src[1]
+            kind = "List" if ty.startswith("List<") else "Map"
+            el = ty[5:-1] if kind == "List" else ty.split(", ", 1)[1][:-1]
+            suffix = self.LIST_SUFFIX.get(el)
+            if suffix is None or (kind == "Map" and not ty.startswith("Map<String, ")):
+                raise Untranslatable(arg, self._dumps_msg(ty))
+            return f"Json.dumps{kind}{suffix}({src[0]})"
+        el = self._num_ty(arg, ctx, param)
+        suffix = self.LIST_SUFFIX.get(el)
+        if suffix is None:
+            raise Untranslatable(arg, self._dumps_msg(el))
+        return f"Json.dumps{suffix}({self.expr(arg, ctx, param)})"
+
+    @staticmethod
+    def _dumps_msg(got):
+        return (
+            "`json.dumps(v)` writes a str, int, float, bool, a list of one of those, "
+            f"or a dict with str keys — this one is {py_ty(got)}"
+        )
 
     def _check_crate_structs(self, node, crate, entry):
         """Every struct or enum a crate call crosses needs a matching
@@ -3048,12 +3194,18 @@ class Translator:
                 raise Untranslatable(
                     node, f"`{mod}.{fn}` is not in the standard library's {mod} — it has {', '.join(f for (m, f) in self.STDLIB_CALLS if m == mod)}"
                 )
-            cls, camel, arity = spec
-            if len(node.args) != arity or node.keywords:
-                raise Untranslatable(node, f"`{mod}.{fn}` takes {arity} argument(s)")
+            pick = self._stdlib_pick(node, mod, fn, spec)
             self.uses_stdlib = True
-            args = ", ".join(self.expr(a, ctx, param) for a in node.args)
-            call = f"{cls}.{camel}({args})"
+            if (mod, fn) == ("json", "dumps"):
+                call = self._json_dumps(node, ctx, param)
+            else:
+                cls, camel = pick[0], pick[1]
+                tys = pick[3] if len(pick) > 3 else {}
+                args = ", ".join(
+                    self._stdlib_arg(a, tys.get(i), ctx, param)
+                    for i, a in enumerate(node.args)
+                )
+                call = f"{cls}.{camel}({args})"
             if self.in_async and self.pre_lines is not None:
                 # `await` is a whole right-hand side in pixie, and the
                 # await is what puts the work on the background pool —
@@ -5435,7 +5587,7 @@ class Translator:
                 e = self.crate_info.get(cc[0], {}).get("fns", {}).get(cc[1])
                 return bool(e) and not isinstance(e, str) and e[4]
             mf = self._stdlib_call(c.func)
-            return mf is not None and mf in self.FALLIBLE
+            return mf is not None and (mf[0], mf[1], len(c.args)) in self.FALLIBLE
         if isinstance(st, ast.Expr) and catchable(st.value):
             return (st.value, "bare", None)
         if (
@@ -5578,17 +5730,18 @@ class Translator:
                     match_ix = i
                     break
             mod_fn = self._stdlib_call(call.func)
-            spec = self.STDLIB_CALLS[mod_fn]
-            if len(call.args) != spec[2] or call.keywords:
-                raise Untranslatable(call, f"`{mod_fn[0]}.{mod_fn[1]}` takes {spec[2]} argument(s)")
-            args = ", ".join(self.expr(a, "store", param) for a in call.args)
+            spec = self._stdlib_pick(call, mod_fn[0], mod_fn[1], self.STDLIB_CALLS[mod_fn])
+            tys = spec[3] if len(spec) > 3 else {}
+            args = ", ".join(
+                self._stdlib_arg(a, tys.get(i), "store", param) for i, a in enumerate(call.args)
+            )
             self.uses_stdlib = True
             if match_ix is None:
                 # No clause catches it: the plain contained path, in
                 # both tiers.
                 trypath = None
             else:
-                trypath = self.FALLIBLE[mod_fn]
+                trypath = self.FALLIBLE[(mod_fn[0], mod_fn[1], len(call.args))]
             if trypath is None:
                 plain = f"{spec[0]}.{spec[1]}({args})"
                 if kind == "cell":
@@ -7719,6 +7872,11 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn writeText(path: String, text: String) Int @rust("yokan_stdlib::fs_write_text")\n'
             '  static fn exists(path: String) Bool @rust("yokan_stdlib::fs_exists")\n'
             '  static fn readTextOr(path: String, default: String) String @rust("yokan_stdlib::fs_read_text_or")\n'
+            '  static fn listDir(path: String) List<String> @rust("yokan_stdlib::fs_list_dir")\n'
+            '  static fn appendText(path: String, text: String) Int @rust("yokan_stdlib::fs_append_text")\n'
+            '  static fn remove(path: String) Int @rust("yokan_stdlib::fs_remove")\n'
+            '  static fn makeDir(path: String) Int @rust("yokan_stdlib::fs_make_dir")\n'
+            '  static fn appDir(name: String) String @rust("yokan_stdlib::fs_app_dir")\n'
             "}\n"
             "\n"
             "class Sqlite {\n"
@@ -7728,6 +7886,16 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn tryQueryInt(path: String, sql: String) !Int @rust("yokan_stdlib::sqlite_query_int_result")\n'
             '  static fn queryIntOr(path: String, sql: String, default: Int) Int @rust("yokan_stdlib::sqlite_query_int_or")\n'
             '  static fn queryTextOr(path: String, sql: String) List<String> @rust("yokan_stdlib::sqlite_query_text_or")\n'
+            '  static fn execWith(path: String, sql: String, params: List<String>) Int @rust("yokan_stdlib::sqlite_exec_with")\n'
+            '  static fn queryTextWith(path: String, sql: String, params: List<String>) List<String> @rust("yokan_stdlib::sqlite_query_text_with")\n'
+            '  static fn queryIntWith(path: String, sql: String, params: List<String>) Int @rust("yokan_stdlib::sqlite_query_int_with")\n'
+            '  static fn tryQueryIntWith(path: String, sql: String, params: List<String>) !Int @rust("yokan_stdlib::sqlite_query_int_with_result")\n'
+            '  static fn queryIntOrWith(path: String, sql: String, default: Int, params: List<String>) Int @rust("yokan_stdlib::sqlite_query_int_or_with")\n'
+            '  static fn queryTextOrWith(path: String, sql: String, params: List<String>) List<String> @rust("yokan_stdlib::sqlite_query_text_or_with")\n'
+            '  static fn queryRows(path: String, sql: String) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_all")\n'
+            '  static fn queryRowsWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows")\n'
+            '  static fn queryRowsOr(path: String, sql: String) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or_all")\n'
+            '  static fn queryRowsOrWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or")\n'
             "}\n"
             "\n"
             "class Notify {\n"
@@ -7738,6 +7906,14 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn getText(url: String) String @rust("yokan_stdlib::http_get_text")\n'
             '  static fn tryGetText(url: String) !String @rust("yokan_stdlib::http_get_text_result")\n'
             '  static fn getTextOr(url: String, default: String) String @rust("yokan_stdlib::http_get_text_or")\n'
+            '  static fn getTextTimeout(url: String, timeoutMs: Int) String @rust("yokan_stdlib::http_get_text_timeout")\n'
+            '  static fn tryGetTextTimeout(url: String, timeoutMs: Int) !String @rust("yokan_stdlib::http_get_text_timeout_result")\n'
+            '  static fn getTextWith(url: String, headers: Map<String, String>) String @rust("stdmap:yokan_stdlib::http_get_text_with")\n'
+            '  static fn postText(url: String, body: String) String @rust("yokan_stdlib::http_post_text")\n'
+            '  static fn tryPostText(url: String, body: String) !String @rust("yokan_stdlib::http_post_text_result")\n'
+            '  static fn postTextAs(url: String, body: String, contentType: String) String @rust("yokan_stdlib::http_post_text_as")\n'
+            '  static fn postTextOr(url: String, body: String, default: String) String @rust("yokan_stdlib::http_post_text_or")\n'
+            '  static fn status(url: String) Int @rust("yokan_stdlib::http_status")\n'
             "}\n"
             "\n"
             "class Math {\n"
@@ -7758,6 +7934,18 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn getBool(src: String, path: String) Bool @rust("yokan_stdlib::json_get_bool")\n'
             '  static fn length(src: String, path: String) Int @rust("yokan_stdlib::json_length")\n'
             '  static fn has(src: String, path: String) Bool @rust("yokan_stdlib::json_has")\n'
+            '  static fn dumpsStr(v: String) String @rust("yokan_stdlib::json_dumps_str")\n'
+            '  static fn dumpsInt(v: Int) String @rust("yokan_stdlib::json_dumps_int")\n'
+            '  static fn dumpsFloat(v: Float) String @rust("yokan_stdlib::json_dumps_float")\n'
+            '  static fn dumpsBool(v: Bool) String @rust("yokan_stdlib::json_dumps_bool")\n'
+            '  static fn dumpsListStr(xs: List<String>) String @rust("yokan_stdlib::json_dumps_list_str")\n'
+            '  static fn dumpsListInt(xs: List<Int>) String @rust("yokan_stdlib::json_dumps_list_int")\n'
+            '  static fn dumpsListFloat(xs: List<Float>) String @rust("yokan_stdlib::json_dumps_list_float")\n'
+            '  static fn dumpsListBool(xs: List<Bool>) String @rust("yokan_stdlib::json_dumps_list_bool")\n'
+            '  static fn dumpsMapStr(m: Map<String, String>) String @rust("stdmap:yokan_stdlib::json_dumps_map_str")\n'
+            '  static fn dumpsMapInt(m: Map<String, Int>) String @rust("stdmap:yokan_stdlib::json_dumps_map_int")\n'
+            '  static fn dumpsMapFloat(m: Map<String, Float>) String @rust("stdmap:yokan_stdlib::json_dumps_map_float")\n'
+            '  static fn dumpsMapBool(m: Map<String, Bool>) String @rust("stdmap:yokan_stdlib::json_dumps_map_bool")\n'
             "}\n"
             "\n"
             "class Strings {\n"
@@ -7775,6 +7963,8 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn nowMs() Int @rust("yokan_stdlib::time_now_ms")\n'
             '  static fn formatMs(ms: Int, fmt: String) String @rust("yokan_stdlib::time_format_ms")\n'
             '  static fn sleepMs(ms: Int) Int @rust("yokan_stdlib::time_sleep_ms")\n'
+            '  static fn formatLocalMs(ms: Int, fmt: String) String @rust("yokan_stdlib::time_format_local_ms")\n'
+            '  static fn localOffsetMinutes(ms: Int) Int @rust("yokan_stdlib::time_local_offset_minutes")\n'
             "}\n"
             "\n"
             "class Py {\n"

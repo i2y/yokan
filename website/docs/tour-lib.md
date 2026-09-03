@@ -28,15 +28,43 @@ Each one calls the same function, implemented in Rust, during development and af
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
 
-- **fs**: `read_text` / `write_text` / `exists` / `read_text_or`
-- **sqlite**: `exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or` (SQLite bundled. Wrap aggregates in COALESCE and pin the order with ORDER BY)
-- **http**: `get_text` / `get_text_or` (synchronous)
+- **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)
+- **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
+- **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
-- **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`)
-- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
+- **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`), and `dumps(value)`, which writes a str, int, float, bool, a list of one of those, or a dict with str keys — a dict in key order
+- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
+
+Every sqlite call takes one more argument, a list of values to bind:
+
+```python
+sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
+sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?", 0, ["food"])
+```
+
+Write `?` where the value goes and pass it beside the statement.
+An apostrophe in `item` is then an apostrophe, and text a user typed can never become SQL.
+Values bind as text and the column's affinity converts, so an INTEGER column stores the number.
+
+A whole row comes back as a `list[str]`, so a result is a `list[list[str]]`:
+
+```python
+@store
+class Ledger:
+    raw: list[list[str]] = []
+    rows: list[str] = []
+
+    def load(self) -> None:
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
+```
+
+The line is written in Python rather than assembled in SQL.
 
 The discipline underneath all of these is determinism.
 Pass fixed times, seed the RNG — and verification scripts replay the same result every time.

@@ -1191,3 +1191,401 @@ pub fn log_line(msg: &str) -> i64 {
 pub fn py_abort(msg: &str) -> i64 {
     panic!("{msg}");
 }
+
+
+// ---- sqlite: bound parameters and whole rows ------------------------
+// A value bound with `?` is never parsed as SQL, which is the point:
+// the text a user types cannot become a statement. Values bind as
+// TEXT and SQLite applies the column's affinity, so an INTEGER column
+// stores the number — the same thing Python's sqlite3 does with a str
+// parameter.
+
+fn open_db(path: &str, who: &str) -> rusqlite::Connection {
+    match rusqlite::Connection::open(path) {
+        Ok(c) => c,
+        Err(e) => panic!("sqlite.{who} open {path}: {e}"),
+    }
+}
+
+fn cell_text(v: rusqlite::types::Value) -> String {
+    match v {
+        rusqlite::types::Value::Integer(i) => i.to_string(),
+        rusqlite::types::Value::Real(f) => f.to_string(),
+        rusqlite::types::Value::Text(s) => s,
+        rusqlite::types::Value::Null => String::new(),
+        rusqlite::types::Value::Blob(_) => "<blob>".to_string(),
+    }
+}
+
+pub fn sqlite_exec_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
+    let conn = open_db(path, "exec");
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    match conn.execute(sql, bound.as_slice()) {
+        Ok(n) => n as i64,
+        Err(e) => panic!("sqlite.exec {path}: {e}"),
+    }
+}
+
+pub fn sqlite_query_text_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
+    let conn = open_db(path, "query_text");
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?))
+    });
+    match rows {
+        Ok(it) => it
+            .map(|r| match r {
+                Ok(s) => s,
+                Err(e) => panic!("sqlite.query_text row: {e}"),
+            })
+            .collect(),
+        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    }
+}
+
+pub fn sqlite_query_int_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
+    let conn = open_db(path, "query_int");
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    match conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0)) {
+        Ok(v) => v,
+        Err(e) => panic!("sqlite.query_int {path}: {e}"),
+    }
+}
+
+/// The fallible twin of the bound read, for a `try` that catches it.
+pub fn sqlite_query_int_with_result(
+    path: &str,
+    sql: &str,
+    params: Vec<String>,
+) -> std::io::Result<i64> {
+    let conn = rusqlite::Connection::open(path)
+        .map_err(|e| std::io::Error::other(format!("sqlite.query_int open {path}: {e}")))?;
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0))
+        .map_err(|e| std::io::Error::other(format!("sqlite.query_int {path}: {e}")))
+}
+
+/// The total read: a missing table or a bad statement answers no
+/// rows, the way the rest of the `_or` family answers a default.
+pub fn sqlite_query_rows_or(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) = conn.prepare(sql) else {
+        return Vec::new();
+    };
+    let n = stmt.column_count();
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let Ok(rows) = stmt.query_map(bound.as_slice(), |row| {
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
+        }
+        Ok(out)
+    }) else {
+        return Vec::new();
+    };
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+pub fn sqlite_query_rows_or_all(path: &str, sql: &str) -> Vec<Vec<String>> {
+    sqlite_query_rows_or(path, sql, Vec::new())
+}
+
+/// Whole rows, unbound — the two-argument spelling.
+pub fn sqlite_query_rows_all(path: &str, sql: &str) -> Vec<Vec<String>> {
+    sqlite_query_rows(path, sql, Vec::new())
+}
+
+pub fn sqlite_query_int_or_with(path: &str, sql: &str, default: i64, params: Vec<String>) -> i64 {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return default;
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0))
+        .unwrap_or(default)
+}
+
+pub fn sqlite_query_text_or_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) = conn.prepare(sql) else {
+        return Vec::new();
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let Ok(rows) = stmt.query_map(bound.as_slice(), |row| {
+        Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?))
+    }) else {
+        return Vec::new();
+    };
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+/// Every column of every row, as text — the multi-column read. A row
+/// is a `list[str]`, so a result is a `list[list[str]]`.
+pub fn sqlite_query_rows(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
+    let conn = open_db(path, "query_rows");
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
+    };
+    let n = stmt.column_count();
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
+        }
+        Ok(out)
+    });
+    match rows {
+        Ok(it) => it
+            .map(|r| match r {
+                Ok(v) => v,
+                Err(e) => panic!("sqlite.query_rows row: {e}"),
+            })
+            .collect(),
+        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
+    }
+}
+
+// ---- http: POST, headers, timeouts, status --------------------------
+
+fn agent_with(timeout_ms: i64) -> ureq::Agent {
+    let mut b = ureq::AgentBuilder::new();
+    if timeout_ms > 0 {
+        b = b.timeout(std::time::Duration::from_millis(timeout_ms as u64));
+    }
+    b.build()
+}
+
+/// GET with a deadline. `0` keeps the client's own default.
+pub fn http_get_text_timeout_result(url: &str, timeout_ms: i64) -> std::io::Result<String> {
+    match agent_with(timeout_ms).get(url).call() {
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| std::io::Error::other(format!("http.get_text {url}: {e}"))),
+        Err(e) => Err(std::io::Error::other(format!("http.get_text {url}: {e}"))),
+    }
+}
+
+pub fn http_get_text_timeout(url: &str, timeout_ms: i64) -> String {
+    match http_get_text_timeout_result(url, timeout_ms) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// GET with headers. The map is sorted before it is applied, so the
+/// request a script replays is the request the first run made.
+pub fn http_get_text_with(url: &str, headers: std::collections::HashMap<String, String>) -> String {
+    let mut req = ureq::get(url);
+    let mut keys: Vec<&String> = headers.keys().collect();
+    keys.sort();
+    for k in keys {
+        req = req.set(k, &headers[k]);
+    }
+    match req.call() {
+        Ok(resp) => match resp.into_string() {
+            Ok(s) => s,
+            Err(e) => panic!("http.get_text_with {url}: {e}"),
+        },
+        Err(e) => panic!("http.get_text_with {url}: {e}"),
+    }
+}
+
+pub fn http_post_text_as_result(
+    url: &str,
+    body: &str,
+    content_type: &str,
+) -> std::io::Result<String> {
+    let ct = if content_type.is_empty() { "text/plain" } else { content_type };
+    match ureq::post(url).set("Content-Type", ct).send_string(body) {
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| std::io::Error::other(format!("http.post_text {url}: {e}"))),
+        Err(e) => Err(std::io::Error::other(format!("http.post_text {url}: {e}"))),
+    }
+}
+
+/// POST a body as text/plain and read the answer.
+pub fn http_post_text(url: &str, body: &str) -> String {
+    http_post_text_as(url, body, "text/plain")
+}
+
+/// POST under a content type of the caller's choosing.
+pub fn http_post_text_as(url: &str, body: &str, content_type: &str) -> String {
+    match http_post_text_as_result(url, body, content_type) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+pub fn http_post_text_result(url: &str, body: &str) -> std::io::Result<String> {
+    http_post_text_as_result(url, body, "text/plain")
+}
+
+pub fn http_post_text_or(url: &str, body: &str, default: &str) -> String {
+    http_post_text_as_result(url, body, "text/plain").unwrap_or_else(|_| default.to_string())
+}
+
+/// The status code, or 0 when the request never reached a server.
+/// A 404 is an answer, not a failure, so it comes back as 404.
+pub fn http_status(url: &str) -> i64 {
+    match ureq::get(url).call() {
+        Ok(resp) => resp.status() as i64,
+        Err(ureq::Error::Status(code, _)) => code as i64,
+        Err(_) => 0,
+    }
+}
+
+// ---- fs: listing, appending, removing, the app's own directory ------
+
+/// The names in a directory, sorted — a directory has no order of its
+/// own, and a screen built from one has to be reproducible.
+pub fn fs_list_dir(path: &str) -> Vec<String> {
+    let rd = match std::fs::read_dir(path) {
+        Ok(rd) => rd,
+        Err(e) => panic!("fs.list_dir {path}: {e}"),
+    };
+    let mut out: Vec<String> = rd
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    out.sort();
+    out
+}
+
+pub fn fs_append_text(path: &str, text: &str) -> i64 {
+    use std::io::Write;
+    if let Some(dir) = std::path::Path::new(path).parent() {
+        if !dir.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+    }
+    let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        Ok(f) => f,
+        Err(e) => panic!("fs.append_text {path}: {e}"),
+    };
+    match f.write_all(text.as_bytes()) {
+        Ok(()) => text.len() as i64,
+        Err(e) => panic!("fs.append_text {path}: {e}"),
+    }
+}
+
+/// Remove a file. Missing is a failure, as it is in Python.
+pub fn fs_remove(path: &str) -> i64 {
+    match std::fs::remove_file(path) {
+        Ok(()) => 0,
+        Err(e) => panic!("fs.remove {path}: {e}"),
+    }
+}
+
+pub fn fs_make_dir(path: &str) -> i64 {
+    match std::fs::create_dir_all(path) {
+        Ok(()) => 0,
+        Err(e) => panic!("fs.make_dir {path}: {e}"),
+    }
+}
+
+/// The directory an app may keep its own files in, created on the way
+/// out: `~/Library/Application Support/<name>` on macOS.
+pub fn fs_app_dir(name: &str) -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let dir = std::path::Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join(name);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        panic!("fs.app_dir {name}: {e}");
+    }
+    dir.to_string_lossy().into_owned()
+}
+
+// ---- json: writing ---------------------------------------------------
+// Maps are written in key order. A Rust HashMap has no order and a
+// Python dict has insertion order; writing by key is the one both can
+// agree on, and it is the rule dict iteration already follows here.
+
+pub fn json_dumps_str(v: &str) -> String {
+    serde_json::Value::String(v.to_string()).to_string()
+}
+
+pub fn json_dumps_int(v: i64) -> String {
+    v.to_string()
+}
+
+pub fn json_dumps_float(v: f64) -> String {
+    serde_json::Value::from(v).to_string()
+}
+
+pub fn json_dumps_bool(v: bool) -> String {
+    if v { "true" } else { "false" }.to_string()
+}
+
+pub fn json_dumps_list_str(xs: Vec<String>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::String).collect()).to_string()
+}
+
+pub fn json_dumps_list_int(xs: Vec<i64>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+}
+
+pub fn json_dumps_list_float(xs: Vec<f64>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+}
+
+pub fn json_dumps_list_bool(xs: Vec<bool>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::Bool).collect()).to_string()
+}
+
+fn dumps_map(mut pairs: Vec<(String, serde_json::Value)>) -> String {
+    // Sorted here rather than left to the map: serde_json's `Map` is a
+    // BTreeMap only while nothing in the crate graph asks it to
+    // preserve insertion order, and key order is the answer either way.
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    serde_json::Value::Object(pairs.into_iter().collect()).to_string()
+}
+
+pub fn json_dumps_map_str(m: std::collections::HashMap<String, String>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect())
+}
+
+pub fn json_dumps_map_int(m: std::collections::HashMap<String, i64>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
+}
+
+pub fn json_dumps_map_float(m: std::collections::HashMap<String, f64>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
+}
+
+pub fn json_dumps_map_bool(m: std::collections::HashMap<String, bool>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::Bool(v))).collect())
+}
+
+// ---- time: the machine's own zone -----------------------------------
+
+/// strftime in the machine's timezone. One implementation means both
+/// runs read the same zone database and print the same string; a
+/// verification script that wants a fixed answer uses `format_ms`,
+/// which is UTC.
+pub fn time_format_local_ms(ms: i64, fmt: &str) -> String {
+    match chrono::DateTime::from_timestamp_millis(ms) {
+        Some(dt) => dt.with_timezone(&chrono::Local).format(fmt).to_string(),
+        None => panic!("time: `{ms}` is out of range"),
+    }
+}
+
+/// The machine's offset from UTC, in minutes, at that instant.
+pub fn time_local_offset_minutes(ms: i64) -> i64 {
+    use chrono::Offset;
+    match chrono::DateTime::from_timestamp_millis(ms) {
+        Some(dt) => (dt.with_timezone(&chrono::Local).offset().fix().local_minus_utc() / 60) as i64,
+        None => panic!("time: `{ms}` is out of range"),
+    }
+}

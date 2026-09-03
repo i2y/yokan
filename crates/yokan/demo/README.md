@@ -106,22 +106,22 @@ the initial state, right after launch.
 
 ## The standard library
 
-#### files — yokan.fs: write and read back (both runs call the same implementation)
+#### files — yokan.fs: write, append, list a directory, remove (both runs call the same implementation)
 <img src="screenshots/files.png" width="360">
 
 #### dbnotes — yokan.sqlite: shape rows with SQL, order with ORDER BY
 <img src="screenshots/dbnotes.png" width="360">
 
-#### ledger — a practical app: a household ledger persisted in sqlite
+#### ledger — a practical app: a household ledger in sqlite, every value a bound parameter
 <img src="screenshots/ledger.png" width="360">
 
-#### webfetch — yokan.http: the gate needs no network (an @py fixture server runs in both runs)
+#### webfetch — yokan.http: GET, headers, POST, status (an @py fixture server runs in both runs, so the gate needs no network)
 <img src="screenshots/webfetch.png" width="360">
 
 #### reader — an http + json feed reader
 <img src="screenshots/reader.png" width="360">
 
-#### stdlib — math / json / time
+#### stdlib — math / json (read and write) / time (UTC and local)
 <img src="screenshots/stdlib.png" width="360">
 
 #### dice — yokan.random: seed it and both runs draw the same sequence

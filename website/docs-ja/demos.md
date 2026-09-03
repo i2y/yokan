@@ -102,22 +102,22 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 標準ライブラリ
 
-#### files — yokan.fs。書いて読み戻す（両実行が同じ実装を呼ぶ）
+#### files — yokan.fs。書く、足す、ディレクトリを並べる、消す（両実行が同じ実装を呼ぶ）
 <img src="images/demos/files.png" width="360">
 
 #### dbnotes — yokan.sqlite。行は SQL で形作り、ORDER BY で並べる
 <img src="images/demos/dbnotes.png" width="360">
 
-#### ledger — 実用アプリの形をした家計簿。sqlite に永続化する
+#### ledger — 実用アプリの形をした家計簿。sqlite に永続化し、値はすべてバインドで渡す
 <img src="images/demos/ledger.png" width="360">
 
-#### webfetch — yokan.http。ゲートはネットワーク不要（@py のフィクスチャサーバを両実行に立てる）
+#### webfetch — yokan.http。GET、ヘッダ、POST、ステータス（@py のフィクスチャサーバを両実行に立てるので、ゲートはネットワーク不要）
 <img src="images/demos/webfetch.png" width="360">
 
 #### reader — http + json のフィードリーダー
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — math / json / time
+#### stdlib — math / json（読みと書き）/ time（UTC とローカル）
 <img src="images/demos/stdlib.png" width="360">
 
 #### dice — yokan.random。種を撒けば両実行で同じ列
