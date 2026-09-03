@@ -1,0 +1,115 @@
+# A roster in a Table: the columns are tracks the cells line up on,
+# a click on a row selects it, a click on a header sorts. The widget
+# only reports which column was clicked — the store owns the order
+# and re-sorts its own parallel lists, so the selection is tracked by
+# member (`selId`) and follows its row through a sort.
+store Roster {
+  state names : List<String> = ["ann", "bob", "cy", "dee", "eve", "fay", "gus", "hal", "ivy", "jo", "kim", "lou", "max", "nia", "oz", "pam"]
+  state ids : List<Int> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  state teams : List<String> = ["red", "blue", "green", "red", "blue", "green", "red", "blue", "green", "red", "blue", "green", "red", "blue", "green", "red"]
+  state teamIx : List<Int> = [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0]
+  state scores : List<Int> = [72, 15, 88, 41, 63, 97, 8, 55, 30, 79, 46, 91, 22, 67, 12, 84]
+  state keys : List<Int> = []
+  state sel : Int = 2
+  state selId : Int = 2
+  state sortCol : Int = -1
+  state desc : Bool = false
+
+  fn pick(i: Int) {
+    sel = i
+    selId = ids[i]
+  }
+
+  fn swap(a: Int, b: Int) {
+    let n = names[a]
+    names[a] = names[b]
+    names[b] = n
+    let d = ids[a]
+    ids[a] = ids[b]
+    ids[b] = d
+    let t = teams[a]
+    teams[a] = teams[b]
+    teams[b] = t
+    let x = teamIx[a]
+    teamIx[a] = teamIx[b]
+    teamIx[b] = x
+    let s = scores[a]
+    scores[a] = scores[b]
+    scores[b] = s
+    let k = keys[a]
+    keys[a] = keys[b]
+    keys[b] = k
+  }
+
+  # The sort key is an Int per column — the member number for the
+  # name column (the names are seeded in order), the team's index,
+  # the score — so no string is ever compared. An insertion sort
+  # swaps every parallel list in step, then the selection finds its
+  # member again.
+  fn sortBy(j: Int) {
+    if j == sortCol {
+      desc = !desc
+    } else {
+      sortCol = j
+      desc = false
+    }
+    if j == 0 {
+      keys = ids
+    } else {
+      if j == 1 {
+        keys = teamIx
+      } else {
+        keys = scores
+      }
+    }
+    var i = 1
+    while i < names.length {
+      var k = i
+      if desc {
+        while k > 0 && keys[k] > keys[k - 1] {
+          Roster.swap(k, k - 1)
+          k = k - 1
+        }
+      } else {
+        while k > 0 && keys[k] < keys[k - 1] {
+          Roster.swap(k, k - 1)
+          k = k - 1
+        }
+      }
+      i = i + 1
+    }
+    if selId >= 0 {
+      for k in 0..names.length {
+        if ids[k] == selId {
+          sel = k
+        }
+      }
+    }
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+    Text { text: "roster: click a header to sort, a row to select" }
+    Table {
+      columns: ["name", "team", "score"]
+      widths: [2.0, 1.0, 1.0]
+      height: 180.0
+      selected: Roster.sel
+      sort: Roster.sortCol
+      descending: Roster.desc
+      onSelect: Roster.pick(index)
+      onSort: Roster.sortBy(index)
+      for it, i in Roster.names {
+        Row {
+          Text { text: it }
+          Text { text: "#{Roster.teams[i]}" }
+          Text { text: "#{Roster.scores[i]}" }
+        }
+      }
+    }
+    Text { text: "selected: row #{Roster.sel}, member #{Roster.selId}" }
+  }
+}

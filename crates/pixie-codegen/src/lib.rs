@@ -4318,6 +4318,55 @@ fn lower_view_float_list(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
     }
 }
 
+/// Lower a list-of-numbers property (`widths:` on Table) to a
+/// `List<f64>`: a literal list of numbers (Ints widen, §8.55) or a
+/// bound `List<Float>` / `List<Int>` property — `lower_view_float_list`
+/// with the literal arm `options:` has, and `key` in its errors.
+fn lower_view_float_list_keyed(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
+    match &e.kind {
+        ExprKind::Array(items) => {
+            let mut out = String::from("{ let mut __lit = List::<f64>::new(); ");
+            for item in items {
+                let v = lower_view_float(item, cx, key)?;
+                write!(out, "__lit.push({v}); ").unwrap();
+            }
+            out.push_str("__lit }");
+            Ok(out)
+        }
+        ExprKind::Member { receiver, name } => {
+            let ExprKind::Ident(f) = &receiver.kind else {
+                return err(e.span, format!("`{key}:` must be a List<Float> property"));
+            };
+            let Some((class, handle)) = cx.handle_for(f) else {
+                return err(e.span, format!("`{f}` is not a view state field or global"));
+            };
+            let Some(p) = class.prop(&name.name) else {
+                return err(e.span, format!("no property `{}` on `{}`", name.name, class.name));
+            };
+            if p.ty == RustTy::List(Box::new(RustTy::Int)) {
+                return Ok(format!(
+                    "{handle}.{}(w).iter().map(|v| *v as f64).collect::<List<f64>>()",
+                    p.rust
+                ));
+            }
+            if p.ty != RustTy::List(Box::new(RustTy::Float)) {
+                return err(
+                    e.span,
+                    format!("this {key} binding must be a List<Float> or List<Int> property"),
+                );
+            }
+            Ok(format!("{handle}.{}(w)", p.rust))
+        }
+        _ => err(
+            e.span,
+            format!(
+                "`{key}:` must be a list of numbers or a List<Float> property — \
+                 bind a store prop or state cell for anything else"
+            ),
+        ),
+    }
+}
+
 /// Lower a `List<String>` property (`labels:` on the charts and
 /// TabBar, `options:` on Select / RadioGroup) to a `List<Str>`
 /// expression. The `List<String>` twin of `lower_view_float_list`;
@@ -5103,13 +5152,13 @@ fn single_repeater_of(
             None,
         ) => {
             if !body.stmts.is_empty() {
-                return err(*span, VIRTUAL_ROW_RULE);
+                return err(*span, virtual_row_rule(&el.name.name));
             }
             let Some(trailing) = &body.trailing else {
-                return err(*span, VIRTUAL_ROW_RULE);
+                return err(*span, virtual_row_rule(&el.name.name));
             };
             let ExprKind::Element(child) = &trailing.kind else {
-                return err(*span, VIRTUAL_ROW_RULE);
+                return err(*span, virtual_row_rule(&el.name.name));
             };
             Ok(Some((binding, index.as_ref(), iter, child)))
         }
@@ -5117,10 +5166,116 @@ fn single_repeater_of(
     }
 }
 
-/// Both tiers say this, word for word.
-const VIRTUAL_ROW_RULE: &str =
-    "a virtualized ListView builds one element per row, so its `for` body \
-     holds exactly one element — wrap several in a Column";
+/// Both tiers say this, word for word — for whichever element
+/// (ListView, Table) carries the repeater.
+fn virtual_row_rule(el: &str) -> String {
+    format!(
+        "a virtualized {el} builds one element per row, so its `for` body \
+         holds exactly one element — wrap several in a Column"
+    )
+}
+
+/// The `LazyRows {{ .. }}` initializer of a virtualized single-repeater
+/// body (ListView, Table): `len` computed eagerly from the list, rows
+/// built on demand for the requested range, the loop variable (and
+/// the index, when bound) in scope for the row element. Any list the
+/// view can name (§8.65), through however many objects. The closure
+/// captures only the Copy handles inside the list read and the row;
+/// its own `w` parameter shadows build()'s, so the same lowered text
+/// serves both scopes.
+fn lower_lazy_rows(
+    binding: &ast::Ident,
+    index: Option<&ast::Ident>,
+    iter: &Expr,
+    child: &Element,
+    cx: &mut ViewCtx,
+    ind: &str,
+) -> Result<String, EmitError> {
+    // Same reach as the eager repeater (§8.65): any list
+    // this view can name, through however many objects.
+    let ExprKind::Member { receiver, name } = &iter.kind else {
+        return err(
+            iter.span,
+            "`for` iterates a list PROPERTY — name the object and the \
+             property it holds",
+        );
+    };
+    let (xs_expr, elem_ty) = match &receiver.kind {
+        ExprKind::Ident(f) if cx.handle_for(f).is_some() => {
+            let (class, handle) = cx.handle_for(f).expect("guarded");
+            let Some(p) = class.prop(&name.name) else {
+                return err(
+                    iter.span,
+                    format!("no property `{}` on `{}`", name.name, class.name),
+                );
+            };
+            (format!("{handle}.{}(w)", p.rust), p.ty.clone())
+        }
+        _ => match cx.object_prop_read(receiver, &name.name) {
+            Some(pair) => pair,
+            None => {
+                return err(
+                    iter.span,
+                    format!(
+                        "`{}` is not a list this view can reach",
+                        expr_source_name(iter)
+                    ),
+                );
+            }
+        },
+    };
+    let bind_rust = camel_to_snake(&binding.name);
+    let ri = format!("__row_idx{}", cx.repeat_depth);
+    let index_bind = match index {
+        Some(i) => format!("let {} = {ri} as i64;", camel_to_snake(&i.name)),
+        None => String::new(),
+    };
+    // A repeater over a list of OBJECTS binds a handle,
+    // so the loop variable carries its class (§8.41).
+    let elem_class = match &elem_ty {
+        RustTy::List(inner) => match &**inner {
+            RustTy::Handle(c) => Some(c.clone()),
+            _ => None,
+        },
+        _ => None,
+    };
+    let row_ty = match &elem_ty {
+        RustTy::List(inner) => (**inner).clone(),
+        _ => RustTy::Unit,
+    };
+    cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
+    if let Some(i) = index {
+        cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
+    }
+    cx.repeat_depth += 1;
+    let row = lower_element(child, cx, &format!("{ind}        "));
+    cx.repeat_depth -= 1;
+    if index.is_some() {
+        cx.loop_vars.pop();
+    }
+    cx.loop_vars.pop();
+    let row = row?;
+    // The closure captures only the Copy handles inside
+    // `xs_expr` / `row`; its own `w` parameter shadows
+    // build()'s, so the same lowered text serves both
+    // scopes.
+    Ok(format!(
+        "LazyRows {{\n\
+         {ind}        len: {xs_expr}.len(),\n\
+         {ind}        build: Rc::new(move |w: &World, __range: std::ops::Range<usize>| {{\n\
+         {ind}            let __xs = {xs_expr};\n\
+         {ind}            let mut __rows: Vec<Element> = Vec::new();\n\
+         {ind}            for {ri} in __range {{\n\
+         {ind}                if {ri} >= __xs.len() {{ break; }}\n\
+         {ind}                let {bind_rust} = __xs.at({ri} as i64);\n\
+         {ind}                {index_bind}\n\
+         {ind}                __rows.push({row});\n\
+         {ind}            }}\n\
+         {ind}            __rows\n\
+         {ind}        }}),\n\
+         {ind}    }}"
+    ))
+}
 
 /// A string literal's text, when the expr is a plain literal.
 fn str_lit_of(e: &Expr) -> Option<String> {
@@ -5662,97 +5817,17 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // MUST match the interpreter's, or the tiers diverge.
             if virtualized == "true" {
                 if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
-                // Same reach as the eager repeater (§8.65): any list
-                // this view can name, through however many objects.
-                let ExprKind::Member { receiver, name } = &iter.kind else {
-                    return err(
-                        iter.span,
-                        "`for` iterates a list PROPERTY — name the object and the \
-                         property it holds",
-                    );
-                };
-                let (xs_expr, elem_ty) = match &receiver.kind {
-                    ExprKind::Ident(f) if cx.handle_for(f).is_some() => {
-                        let (class, handle) = cx.handle_for(f).expect("guarded");
-                        let Some(p) = class.prop(&name.name) else {
-                            return err(
-                                iter.span,
-                                format!("no property `{}` on `{}`", name.name, class.name),
-                            );
-                        };
-                        (format!("{handle}.{}(w)", p.rust), p.ty.clone())
-                    }
-                    _ => match cx.object_prop_read(receiver, &name.name) {
-                        Some(pair) => pair,
-                        None => {
-                            return err(
-                                iter.span,
-                                format!(
-                                    "`{}` is not a list this view can reach",
-                                    expr_source_name(iter)
-                                ),
-                            );
-                        }
-                    },
-                };
-                let bind_rust = camel_to_snake(&binding.name);
-                let ri = format!("__row_idx{}", cx.repeat_depth);
-                let index_bind = match index {
-                    Some(i) => format!("let {} = {ri} as i64;", camel_to_snake(&i.name)),
-                    None => String::new(),
-                };
-                // A repeater over a list of OBJECTS binds a handle,
-                // so the loop variable carries its class (§8.41).
-                let elem_class = match &elem_ty {
-                    RustTy::List(inner) => match &**inner {
-                        RustTy::Handle(c) => Some(c.clone()),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                let row_ty = match &elem_ty {
-                    RustTy::List(inner) => (**inner).clone(),
-                    _ => RustTy::Unit,
-                };
-                cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
-                if let Some(i) = index {
-                    cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
-                }
-                cx.repeat_depth += 1;
-                let row = lower_element(child, cx, &format!("{ind}        "));
-                cx.repeat_depth -= 1;
-                if index.is_some() {
-                    cx.loop_vars.pop();
-                }
-                cx.loop_vars.pop();
-                let row = row?;
-                // The closure captures only the Copy handles inside
-                // `xs_expr` / `row`; its own `w` parameter shadows
-                // build()'s, so the same lowered text serves both
-                // scopes.
-                return Ok(format!(
-                    "Element::ListView {{\n\
-                     {ind}    virtualized: {virtualized},\n\
-                     {ind}    item_height: {item_height},\n\
-                     {ind}    height: {height},\n\
-                     {ind}    grow: {grow},\n\
-                     {ind}    children: Vec::new(),\n\
-                     {ind}    lazy: Some(LazyRows {{\n\
-                     {ind}        len: {xs_expr}.len(),\n\
-                     {ind}        build: Rc::new(move |w: &World, __range: std::ops::Range<usize>| {{\n\
-                     {ind}            let __xs = {xs_expr};\n\
-                     {ind}            let mut __rows: Vec<Element> = Vec::new();\n\
-                     {ind}            for {ri} in __range {{\n\
-                     {ind}                if {ri} >= __xs.len() {{ break; }}\n\
-                     {ind}                let {bind_rust} = __xs.at({ri} as i64);\n\
-                     {ind}                {index_bind}\n\
-                     {ind}                __rows.push({row});\n\
-                     {ind}            }}\n\
-                     {ind}            __rows\n\
-                     {ind}        }}),\n\
-                     {ind}    }}),\n\
-                     {ind}}}"
-                ));
+                    let lazy = lower_lazy_rows(binding, index, iter, child, cx, ind)?;
+                    return Ok(format!(
+                        "Element::ListView {{\n\
+                         {ind}    virtualized: {virtualized},\n\
+                         {ind}    item_height: {item_height},\n\
+                         {ind}    height: {height},\n\
+                         {ind}    grow: {grow},\n\
+                         {ind}    children: Vec::new(),\n\
+                         {ind}    lazy: Some({lazy}),\n\
+                         {ind}}}"
+                    ));
                 }
             }
             let children = lower_children(el, cx, ind)?;
@@ -5976,13 +6051,93 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(active, cx, "active")?
             ))
         }
+        "Table" => {
+            // The header is the element's identity, so `columns:` is
+            // required; everything else has ListView's "unset" shape.
+            let columns = element_prop(el, "columns").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Table needs `columns:`".into(),
+            })?;
+            let columns = lower_view_str_list(columns, cx, "columns")?;
+            // Flex shares per column; an absent list means equal
+            // tracks (the engine's rule for a short list too).
+            let widths = match element_prop(el, "widths") {
+                Some(v) => lower_view_float_list_keyed(v, cx, "widths")?,
+                None => "List::<f64>::new()".into(),
+            };
+            let item_height = match element_prop(el, "itemHeight") {
+                Some(v) => lower_view_float(v, cx, "itemHeight")?,
+                None => "0f64".into(),
+            };
+            let height = match element_prop(el, "height") {
+                Some(v) => lower_view_float(v, cx, "height")?,
+                None => "0f64".into(),
+            };
+            let grow = match element_prop(el, "grow") {
+                Some(v) => lower_view_float(v, cx, "grow")?,
+                None => "0f64".into(),
+            };
+            // `-1` = none, for the tinted row and the sorted column
+            // alike. The app owns the order: `sort:`/`descending:`
+            // only decide the header's ▲/▼, and `onSort` hands the
+            // clicked column back for the app to re-sort by.
+            let selected = match element_prop(el, "selected") {
+                Some(v) => lower_view_int(v, cx, "selected")?,
+                None => "-1i64".into(),
+            };
+            let sort = match element_prop(el, "sort") {
+                Some(v) => lower_view_int(v, cx, "sort")?,
+                None => "-1i64".into(),
+            };
+            let descending = match element_prop(el, "descending") {
+                Some(v) => lower_view_bool_keyed(v, cx, "descending")?,
+                None => "false".into(),
+            };
+            let on_select = match element_prop(el, "onSelect") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSelect", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            let on_sort = match element_prop(el, "onSort") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSort", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            let head = format!(
+                "columns: {columns}, widths: {widths}, item_height: {item_height}, \
+                 height: {height}, grow: {grow}, selected: {selected}, sort: {sort}, \
+                 descending: {descending}, on_select: {on_select}, on_sort: {on_sort}"
+            );
+            // A body that is exactly one `for` repeater goes lazy — a
+            // table is always a viewport, so there is no `virtualized:`
+            // switch to ask for it. The predicate is ListView's, and
+            // the interpreter's, or the tiers diverge.
+            if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
+                let lazy = lower_lazy_rows(binding, index, iter, child, cx, ind)?;
+                return Ok(format!(
+                    "Element::Table {{\n\
+                     {ind}    {head},\n\
+                     {ind}    children: Vec::new(),\n\
+                     {ind}    lazy: Some({lazy}),\n\
+                     {ind}}}"
+                ));
+            }
+            let children = lower_children(el, cx, ind)?;
+            Ok(format!(
+                "Element::Table {{ {head}, children: {children}, lazy: None }}"
+            ))
+        }
         other => err(
             el.span,
             format!(
                 "element `{other}` is not in the engine vocabulary yet \
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
-                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar), and no \
+                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Table), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),
@@ -6041,6 +6196,18 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
+        "Table" => &[
+            "columns",
+            "widths",
+            "itemHeight",
+            "height",
+            "grow",
+            "selected",
+            "sort",
+            "descending",
+            "onSelect",
+            "onSort",
+        ],
         _ => &[],
     }
 }

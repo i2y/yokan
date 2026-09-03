@@ -7,7 +7,7 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar.
+//! RadioGroup / TabBar / Table.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
 //! survives rebuilds — positional state transfer, engine-side. Scroll
@@ -2675,7 +2675,303 @@ fn render_el<C: Component>(
             }
             d.into_any_element()
         }
+        // A header strip in DataTable's header style over rows laid on
+        // column tracks. The scrolling is ListView's, plumbing and all:
+        // a lazy single-repeater body renders through `uniform_list`
+        // with the path-keyed `ScrollHandle` and the thumb overlay,
+        // static rows through the clipped-viewport shape. Only the
+        // rows scroll — the header stays put above them, so `height:`
+        // (or the `grow:` share) is the rows' viewport.
+        Element::Table {
+            columns,
+            widths,
+            item_height,
+            height,
+            grow,
+            selected,
+            sort,
+            descending,
+            on_select,
+            on_sort,
+            children,
+            lazy,
+        } => {
+            let ncol = columns.len();
+            pass.next_id += 1;
+            let mut outer = with_a11y(div().id(pass.next_id), el, sem)
+                .flex()
+                .flex_col()
+                .border_1()
+                .border_color(rgb(th.border))
+                .rounded_md()
+                .overflow_hidden();
+            if *grow > 0.0 {
+                outer = outer.flex_grow(*grow as f32).min_h(px(0.));
+            }
+            // The header: one track per column, the label clickable
+            // when the table sorts (→ `onSort(j)` through `apply`),
+            // the sorted column in accent with its ▲/▼.
+            let mut header = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .flex_none()
+                .bg(rgb(th.border))
+                .border_b_2()
+                .border_color(rgb(th.surface))
+                .px_2()
+                .py_1();
+            for (j, label) in columns.iter().enumerate() {
+                let sorted_here = *sort == j as i64;
+                let mut text = label.as_str().to_string();
+                if sorted_here {
+                    text.push_str(if *descending { " ▼" } else { " ▲" });
+                }
+                pass.next_id += 1;
+                let mut cell = table_track(div().id(pass.next_id), widths, j)
+                    .text_color(if sorted_here { rgb(th.accent) } else { rgb(th.text) })
+                    .child(SharedString::from(text));
+                if let Some(f) = on_sort.clone() {
+                    cell = cell
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(rgb(th.accent)))
+                        .on_click(cx.listener(
+                            move |this: &mut Root<C>, _ev, _window, cx| {
+                                let f = f.clone();
+                                this.apply(cx, move |w| f(w, j as i64));
+                            },
+                        ));
+                }
+                header = header.child(cell);
+            }
+            let ih = *item_height;
+            if let Some(rows) = lazy.clone() {
+                // True virtualization, ListView's arm verbatim: only
+                // the range gpui asks for is built, against the live
+                // World through the Root entity.
+                pass.next_id += 1;
+                let id = pass.next_id;
+                let base_path = pass.path.clone();
+                pass.lazy_prefixes.push(base_path.clone());
+                let st = scroll_state(scrolls, pass);
+                let root = cx.entity().downgrade();
+                let widths = widths.clone();
+                let selected = *selected;
+                let on_select = on_select.clone();
+                let list = gpui::uniform_list(
+                    id,
+                    rows.len,
+                    move |range: std::ops::Range<usize>,
+                          _window: &mut Window,
+                          cx: &mut App| {
+                        if std::env::var("PIXIE_TRACE_LAZY").is_ok() {
+                            eprintln!("pixie lazy: building rows {range:?} of {}", rows.len);
+                        }
+                        let mut out: Vec<gpui::AnyElement> = Vec::new();
+                        let Some(root) = root.upgrade() else {
+                            return out;
+                        };
+                        root.update(cx, |this, cx| {
+                            let built =
+                                this.runtime.with(|w| (rows.build)(w, range.clone()));
+                            let mut row_pass = RenderPass {
+                                next_id: 0,
+                                path: base_path.clone(),
+                                seen: Vec::new(),
+                                order: Vec::new(),
+                                // Overlays inside lazy rows are dropped
+                                // (ListView's documented limit).
+                                overlays: Vec::new(),
+                                lazy_prefixes: Vec::new(),
+                            };
+                            for (k, row) in built.iter().enumerate() {
+                                let i = range.start + k;
+                                row_pass.path.push(i);
+                                let e = render_table_row(
+                                    row,
+                                    i,
+                                    &widths,
+                                    ncol,
+                                    selected,
+                                    &on_select,
+                                    ih,
+                                    &mut row_pass,
+                                    &mut this.inputs,
+                                    &mut this.scrolls,
+                                    &mut this.selects,
+                                    th,
+                                    cx,
+                                );
+                                row_pass.path.pop();
+                                let mut wrap = div().w_full().flex_none();
+                                if ih > 0.0 {
+                                    wrap = wrap.h(px(ih as f32));
+                                }
+                                out.push(wrap.child(e).into_any_element());
+                            }
+                        });
+                        out
+                    },
+                )
+                .w_full();
+                let list = if *grow > 0.0 {
+                    list.h_full()
+                } else {
+                    list.h(px(viewport_h(*height)))
+                };
+                // The same handle swap ListView performs, so the table
+                // shares the ScrollViews' thumb and across-rebuild
+                // offset (see the ListView arm for why it is legal).
+                let ulh = gpui::UniformListScrollHandle::new();
+                ulh.0.borrow_mut().base_handle = st.handle.clone();
+                let list = list.track_scroll(&ulh);
+                let mut body = div().relative();
+                if *grow > 0.0 {
+                    body = body.flex_grow(1.).min_h(px(0.));
+                }
+                return outer
+                    .child(header)
+                    .child(body.child(list).child(scrollbar(&st, false)))
+                    .into_any_element();
+            }
+            // Static rows: the clipped scroll port, ListView's
+            // static-virtualized shape (path-keyed handle, thumb).
+            let mut rows: Vec<gpui::AnyElement> = Vec::new();
+            for (i, row) in children.iter().enumerate() {
+                pass.path.push(i);
+                let e = render_table_row(
+                    row, i, widths, ncol, *selected, on_select, ih, pass, inputs, scrolls, selects, th, cx,
+                );
+                pass.path.pop();
+                rows.push(if ih > 0.0 {
+                    div().h(px(ih as f32)).flex_none().child(e).into_any_element()
+                } else {
+                    e
+                });
+            }
+            pass.next_id += 1;
+            let id = pass.next_id;
+            let st = scroll_state(scrolls, pass);
+            let port = div()
+                .id(id)
+                .flex()
+                .flex_col()
+                .overflow_y_scroll()
+                .track_scroll(&st.handle);
+            let port = if *grow > 0.0 {
+                port.h_full()
+            } else {
+                port.max_h(px(viewport_h(*height)))
+            };
+            let mut body = div().relative();
+            if *grow > 0.0 {
+                body = body.flex_grow(1.).min_h(px(0.));
+            }
+            outer
+                .child(header)
+                .child(body.child(port.children(rows)).child(scrollbar(&st, false)))
+                .into_any_element()
+        }
     }
+}
+
+/// One column track of a Table: a flex item whose share of the width
+/// is the column's entry in `widths` (`1.0` when the list is short or
+/// the share is not positive), clipped so a long cell cannot push the
+/// tracks beside it. The header and every row build their cells
+/// through this one function, which is what keeps them aligned.
+fn table_track<E: gpui::Styled>(e: E, widths: &List<f64>, j: usize) -> E {
+    let share = widths.get(j as i64).filter(|v| *v > 0.0).unwrap_or(1.0);
+    e.flex_basis(px(0.))
+        .flex_grow(share as f32)
+        .min_w(px(0.))
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .px_1()
+}
+
+/// One Table row on the column tracks: a `Row` element's cells, each
+/// in its column's track (extra cells ignored, missing ones empty);
+/// any other element spans every track. The row itself is the
+/// clickable, zebra-shaded, selection-tinted box — the `Row`'s own
+/// spacing and background are not painted, the tracks lay it out.
+/// Cells keep the path a `Row` would have given them, so a field in a
+/// cell keeps its editor across rebuilds.
+#[allow(clippy::too_many_arguments)]
+fn render_table_row<C: Component>(
+    row: &Element,
+    i: usize,
+    widths: &List<f64>,
+    ncol: usize,
+    selected: i64,
+    on_select: &Option<pixie_kernel::IntListener>,
+    ih: f64,
+    pass: &mut RenderPass,
+    inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
+    scrolls: &mut HashMap<Vec<usize>, ScrollState>,
+    selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    th: &'static Theme,
+    cx: &mut Context<Root<C>>,
+) -> gpui::AnyElement {
+    let mut cells: Vec<gpui::AnyElement> = Vec::new();
+    match row {
+        Element::Row { children, .. } => {
+            for (j, c) in children.iter().enumerate().take(ncol) {
+                pass.path.push(j);
+                let e = render_el(c, pass, inputs, scrolls, selects, Slot::Row, Sem::default(), th, cx);
+                pass.path.pop();
+                cells.push(table_track(div(), widths, j).child(e).into_any_element());
+            }
+            for j in children.len()..ncol {
+                cells.push(table_track(div(), widths, j).into_any_element());
+            }
+        }
+        other => {
+            let e = render_el(other, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx);
+            cells.push(
+                div()
+                    .flex_grow(1.)
+                    .min_w(px(0.))
+                    .overflow_hidden()
+                    .px_1()
+                    .child(e)
+                    .into_any_element(),
+            );
+        }
+    }
+    pass.next_id += 1;
+    let mut rd = div()
+        .id(pass.next_id)
+        .flex()
+        .flex_row()
+        .items_center()
+        .w_full()
+        .px_2()
+        .py_1();
+    // A pinned item height is the row's own, so the cells center in
+    // it; unpinned rows hug their content (the first one is what the
+    // uniform list measures).
+    if ih > 0.0 {
+        rd = rd.h(px(ih as f32));
+    }
+    // DataTable's zebra: odd data rows on the panel fill. The selected
+    // row sits on the accent tint over that, and a hover lifts either.
+    if i % 2 == 1 {
+        rd = rd.bg(rgb(th.panel));
+    }
+    if i as i64 == selected {
+        rd = rd.bg(rgba(th.selection_rgba));
+    }
+    if let Some(f) = on_select.clone() {
+        rd = rd
+            .cursor_pointer()
+            .hover(|s| s.bg(rgb(th.surface_hover)))
+            .on_click(cx.listener(move |this: &mut Root<C>, _ev, _window, cx| {
+                let f = f.clone();
+                this.apply(cx, move |w| f(w, i as i64));
+            }));
+    }
+    rd.children(cells).into_any_element()
 }
 
 /// The app-wide animation clock — cute_ui's `PaintCtx::elapsedMs()`.

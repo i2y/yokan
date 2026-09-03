@@ -606,6 +606,16 @@ fn tiers_agree_on_every_demo() {
             "examples/choosers/choosers.pix",
             "select:banana,select@1:cherry,select@2:Settings",
         ),
+        // The Table's two verbs: `select:<first cell>` picks a ROW
+        // (its index reaches `onSelect`), `click:<column>` runs
+        // `onSort` with the column's index. The store re-sorts its
+        // parallel lists and the selection follows its member, so the
+        // dumps' row order and `selected=` prove both wirings — and
+        // the lazy rows are materialized identically in both tiers.
+        (
+            "examples/roster/roster.pix",
+            "select:cy,dump,click:score,dump,click:score,dump,click:name,select:ann",
+        ),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);

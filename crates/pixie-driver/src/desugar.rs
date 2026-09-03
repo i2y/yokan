@@ -323,7 +323,9 @@ fn rewrite_element_member(m: &ElementMember, props: &HashSet<String>) -> Element
                 let mut scoped = props.clone();
                 scoped.remove("value");
                 rewrite_expr(value, &scoped)
-            } else if key == "onSelect" {
+            } else if key == "onSelect" || key == "onSort" {
+                // The choosers' `index`, and the Table's `onSort`
+                // carries the same implicit argument.
                 let mut scoped = props.clone();
                 scoped.remove("index");
                 rewrite_expr(value, &scoped)
