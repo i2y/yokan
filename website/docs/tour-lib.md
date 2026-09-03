@@ -23,7 +23,7 @@ except Exception as e:
 
 ## The standard library
 
-Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, notify`.
+Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
@@ -36,6 +36,7 @@ Call them from handlers (views stay pure).
 - **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
+- **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
 
 Every sqlite call takes one more argument, a list of values to bind:
@@ -174,7 +175,7 @@ def slug(t: str) -> str:
 Annotate every parameter and the return: int, float, str, bool, `list[...]` and `dict[str, ...]` of those, a value class, and `T | None`.
 Compiled extensions like numpy work inside escapes.
 
-## Heavy work and timers
+## Heavy work, timers and keys
 
 Never block a handler (the window freezes).
 `task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
@@ -202,4 +203,20 @@ every(1.0, tick)
 ```
 
 It is a declaration, not a call you make later: both runs start it when the app starts, and both fire it off the same clock — a frame in a window, an `advance:<ms>` in a headless script, so a minute of ticks is gate-checkable.
+
+Keys are declared the same way.
+`shortcut(chord, handler)` binds a chord, and `on_key(handler)` sees every key as the chord it was.
+
+```python
+def save():
+    fs.write_text(path, body())
+
+shortcut("cmd+s", save)
+on_key(lambda k: last.set(k))
+```
+
+The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `ctrl+alt+k` — and `-` reads the same as `+`.
+While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
+A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
+
 

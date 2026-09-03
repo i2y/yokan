@@ -389,6 +389,9 @@ class Translator:
         self.timers = []          # module-level every(seconds, fn) declarations
         self.in_try = False       # inside a try body: a raise would be caught there
         self.timer_handlers = {}  # handler name -> period in ms
+        self.shortcuts = []       # (chord, fn node, call node)
+        self.any_keys = []        # (fn node, call node)
+        self.key_handlers = {}    # handler name -> chord, or None for every key
         self.view = None
 
     def _scan_import(self, node):
@@ -414,7 +417,7 @@ class Translator:
             for a in node.names:
                 if a.name == "crates":
                     self.crates_name = a.asname or "crates"
-                elif a.name in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify"):
+                elif a.name in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify", "clipboard"):
                     self.stdlib_mods[a.asname or a.name] = a.name
                     if a.name == "fs":
                         self.fs_name = a.asname or "fs"
@@ -746,6 +749,8 @@ class Translator:
         ("http", "post_text"): "String",
         ("http", "post_text_or"): "String",
         ("json", "dumps"): "String",
+        ("clipboard", "set_text"): "Int",
+        ("clipboard", "get_text"): "String",
         ("time", "format_local_ms"): "String",
         ("time", "local_offset_minutes"): "Int",
     }
@@ -1918,6 +1923,20 @@ class Translator:
                 # A timer is a declaration: it says the app ticks, and
                 # both runs start it when the app starts.
                 self._take_timer(node.value)
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and self._is_ui(node.value.func, "shortcut")
+            ):
+                # A shortcut is a declaration too: the chord and the
+                # handler, bound when the app starts.
+                self._take_shortcut(node.value)
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and self._is_ui(node.value.func, "on_key")
+            ):
+                self._take_on_key(node.value)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
                 # A literal constant is a declaration: nothing runs.
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
@@ -1953,6 +1972,10 @@ class Translator:
                 self._take_run(call)
             elif isinstance(call, ast.Call) and self._is_ui(call.func, "every"):
                 self._take_timer(call)
+            elif isinstance(call, ast.Call) and self._is_ui(call.func, "shortcut"):
+                self._take_shortcut(call)
+            elif isinstance(call, ast.Call) and self._is_ui(call.func, "on_key"):
+                self._take_on_key(call)
             elif isinstance(stmt, ast.Pass) or (
                 isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
             ):
@@ -1983,6 +2006,27 @@ class Translator:
         if neg or not (isinstance(c, ast.Constant) and type(c.value) in (int, float) and type(c.value) is not bool and c.value > 0):
             raise Untranslatable(secs, "every()'s period is a positive number of seconds, written out (`every(1.0, tick)`)")
         self.timers.append((float(c.value) * 1000.0, fn, call))
+
+    def _take_shortcut(self, call: ast.Call):
+        """`shortcut("cmd+s", save)` at module level: the chord and the
+        function it runs. A declaration, like a timer — the compiled
+        app reads it and binds the chord with the app."""
+        kw = {k.arg: k.value for k in call.keywords if k.arg}
+        args = list(call.args)
+        chord = args[0] if args else kw.get("chord")
+        fn = args[1] if len(args) > 1 else kw.get("on_press")
+        if chord is None or fn is None:
+            raise Untranslatable(call, "shortcut(chord, on_press) takes the chord and the function to run")
+        if not (isinstance(chord, ast.Constant) and type(chord.value) is str and chord.value.strip()):
+            raise Untranslatable(chord, 'a shortcut\'s chord is written out (`shortcut("cmd+s", save)`)')
+        self.shortcuts.append((chord.value, fn, call))
+
+    def _take_on_key(self, call: ast.Call):
+        """`on_key(typed)` at module level: one handler, every key."""
+        args = list(call.args) or [k.value for k in call.keywords if k.arg == "handler"]
+        if len(args) != 1:
+            raise Untranslatable(call, "on_key(handler) takes one function, which receives the key")
+        self.any_keys.append((args[0], call))
 
     def _refuse_module_stmt(self, node, under_guard: bool):
         call = node.value if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) else None
@@ -2429,6 +2473,8 @@ class Translator:
         ],
         ("strings", "to_int"): ("Strings", "toInt", 2),
         ("notify", "send"): ("Notify", "send", 2),
+        ("clipboard", "set_text"): ("Clipboard", "setText", 1),
+        ("clipboard", "get_text"): ("Clipboard", "getText", 0),
         ("strings", "to_float"): ("Strings", "toFloat", 2),
         ("fs", "read_text_or"): ("Fs", "readTextOr", 2),
         ("http", "get_text_or"): ("Http", "getTextOr", 2),
@@ -2643,7 +2689,7 @@ class Translator:
             and isinstance(func.value.value, ast.Name)
             and self.ui is not None
             and func.value.value.id == self.ui
-            and func.value.attr in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify")
+            and func.value.attr in ("fs", "sqlite", "http", "math", "json", "time", "strings", "random", "notify", "clipboard")
         ):
             return (func.value.attr, func.attr)
         return None
@@ -5133,6 +5179,16 @@ class Translator:
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
+            and (self._is_ui(stmt.value.func, "shortcut") or self._is_ui(stmt.value.func, "on_key"))
+        ):
+            raise Untranslatable(
+                stmt,
+                "a key handler is declared, not bound in a handler: write "
+                '`shortcut("cmd+s", save)` or `on_key(typed)` at module level',
+            )
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
             and self._is_ui(stmt.value.func, "task")
         ):
             return self._task_stmt(stmt.value, param)
@@ -6962,6 +7018,34 @@ class Translator:
             self.timer_handlers[name] = ms
             self.handlers.append((name, None, [callstr]))
 
+    def _emit_keys(self):
+        """One store method per declared shortcut, marked with the
+        chord the engine binds it to; one more for `on_key`, which
+        takes the key it was."""
+        for i, (chord, fn, call) in enumerate(self.shortcuts):
+            if not (
+                (isinstance(fn, ast.Name) and fn.id in self.defs)
+                or (
+                    isinstance(fn, ast.Attribute)
+                    and isinstance(fn.value, ast.Name)
+                    and fn.value.id in self.stores
+                )
+            ):
+                raise Untranslatable(fn, "shortcut() runs a module-level def or a store's bound method")
+            callstr = self.handler(fn, takes_text=False)
+            name = f"__key{i}"
+            self.key_handlers[name] = chord
+            self.handlers.append((name, None, [callstr]))
+        for i, (fn, call) in enumerate(self.any_keys):
+            if not (isinstance(fn, ast.Name) and fn.id in self.defs):
+                raise Untranslatable(fn, "on_key() runs a module-level def that takes the key")
+            # the emitted method's own parameter is `t`, so that is
+            # the name the call passes on
+            callstr = self.handler(fn, takes_text=True, implicit=("t", "String"))
+            name = f"__anykey{i}"
+            self.key_handlers[name] = None
+            self.handlers.append((name, "String", [callstr]))
+
     def translate(self) -> str:
         trees = [self.tree, *self.modules.values()]
         for tree in trees:
@@ -6973,6 +7057,7 @@ class Translator:
                 inline.visit(tree)
         self.scan()
         self._emit_timers()
+        self._emit_keys()
         if ("width" in self.window) != ("height" in self.window):
             raise Untranslatable(self.view, "width= and height= come as a pair")
         body = self.view.body
@@ -7133,6 +7218,9 @@ class Translator:
                 out.append("")
                 kw = "async fn" if name in self.async_handlers else "fn"
                 mark = f" @every({self.timer_handlers[name]})" if name in self.timer_handlers else ""
+                if name in self.key_handlers:
+                    chord = self.key_handlers[name]
+                    mark = f' @key("{chord}")' if chord else " @key"
                 if isinstance(param, list):
                     sig = f"  {kw} {name}({', '.join(f'{n}: {t}' for n, t in param)}){mark} {{"
                 else:
@@ -7896,6 +7984,11 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn queryRowsWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows")\n'
             '  static fn queryRowsOr(path: String, sql: String) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or_all")\n'
             '  static fn queryRowsOrWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or")\n'
+            "}\n"
+            "\n"
+            "class Clipboard {\n"
+            '  static fn setText(text: String) Int @rust("yokan_stdlib::clipboard_set_text")\n'
+            '  static fn getText() String @rust("yokan_stdlib::clipboard_get_text")\n'
             "}\n"
             "\n"
             "class Notify {\n"

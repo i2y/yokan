@@ -1589,3 +1589,18 @@ pub fn time_local_offset_minutes(ms: i64) -> i64 {
         None => panic!("time: `{ms}` is out of range"),
     }
 }
+
+
+// ---- clipboard ------------------------------------------------------
+// One value, both runs: a window exchanges it with the platform every
+// frame, a headless run keeps it to itself — so copying and pasting is
+// something a script can check.
+
+pub fn clipboard_set_text(text: &str) -> i64 {
+    pixie_kernel::clipboard::set(text);
+    text.len() as i64
+}
+
+pub fn clipboard_get_text() -> String {
+    pixie_kernel::clipboard::get().as_str().to_string()
+}

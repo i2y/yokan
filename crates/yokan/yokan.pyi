@@ -234,6 +234,12 @@ def local(init: T) -> State[T]: ...
 # and starts with the app. Both runs fire it off the same clock: a
 # frame in a window, an `advance:<ms>` in a headless script.
 def every(seconds: float, on_tick: Callable[[], Any]) -> None: ...
+# A shortcut is declared the same way, with the chord spelled the way
+# the platform spells it ("cmd+s", "shift-tab", "ctrl+alt+k"); a
+# headless script presses one with `key:cmd+s`.
+def shortcut(chord: str, on_press: Callable[[], Any]) -> None: ...
+# One handler for every key, which receives the chord it was.
+def on_key(handler: Callable[[str], Any]) -> None: ...
 def run(
     view: Callable[..., Any],
     state: Any = None,
@@ -315,6 +321,15 @@ class strings:
 class notify:
     @staticmethod
     def send(title: str, body: str) -> None: ...
+
+class clipboard:
+    """The system clipboard. A window exchanges it with the platform,
+    a headless run keeps it to itself — so a copy and a paste are a
+    checked interaction like any other."""
+    @staticmethod
+    def set_text(text: str) -> int: ...
+    @staticmethod
+    def get_text() -> str: ...
 
 class http:
     """HTTP. The call blocks until the response arrives — the

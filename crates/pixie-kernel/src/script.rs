@@ -99,6 +99,7 @@ fn split_steps(script: &str) -> Vec<String> {
 /// the nearest step multiple counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar — picks the option with exactly this text) ·
+/// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -232,6 +233,17 @@ pub fn run<C: Component>(
             crate::contain("input handler", || {
                 rt.with(|w: &mut World| f(w, Str::from(text)))
             });
+        } else if let Some(chord) = step.strip_prefix("key:") {
+            // A keystroke, spelled the way the platform spells it
+            // (`cmd-s`, `shift-tab`); `+` reads the same. Nothing
+            // bound to it is a script's typo, so it says so — the
+            // rule `click` follows for a label no button carries.
+            let fired = crate::contain("key handler", || {
+                rt.with(|w: &mut World| crate::keys::fire(w, chord))
+            });
+            if !matches!(fired, Some(true)) {
+                panic!("no shortcut or key handler for `{chord}`");
+            }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {
                 r.parse()

@@ -34,7 +34,7 @@ Yokan のアプリは普通の Python ファイルです。
 19. [標準ライブラリ](#標準ライブラリ)
 20. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
 21. [CPython エスケープ](#cpython-エスケープ)
-22. [重い処理とタイマー](#重い処理とタイマー)
+22. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
 23. [型チェッカーとの併用](#型チェッカーとの併用)
 24. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
 25. [リリース](#リリース)
@@ -739,7 +739,7 @@ except Exception as e:
 
 ## 標準ライブラリ
 
-`from yokan import fs, sqlite, http, math, json, time, strings, random, notify` で使います。
+`from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify` で使います。
 どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
@@ -752,6 +752,7 @@ except Exception as e:
 - **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
+- **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
 
 sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
@@ -875,7 +876,7 @@ def slug(t: str) -> str:
 引数と返り値は全部注釈します（int、float、str、bool、それらの `list[...]` と `dict[str, ...]`、Value クラス、`T | None`）。
 numpy のようなコンパイル済み拡張もエスケープの中で使えます。
 
-## 重い処理とタイマー
+## 重い処理とタイマーとキー
 
 ハンドラをブロックしてはいけません（ウィンドウが固まります）。
 `task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
@@ -909,6 +910,22 @@ every(1.0, tick)
 これは後から呼ぶものではなく宣言です。
 どちらの実行もアプリの開始時にタイマーを始め、同じ時計で発火します（ウィンドウならフレーム、ヘッドレスなら `advance:<ms>`）。
 そのため一分ぶんのティックもゲートで確かめられます。
+
+キーも同じように宣言します。
+`shortcut(chord, handler)` はコードをひとつ束ね、`on_key(handler)` はすべてのキーをコードの形で受け取ります。
+
+```python
+def save():
+    fs.write_text(path, body())
+
+shortcut("cmd+s", save)
+on_key(lambda k: last.set(k))
+```
+
+コードの綴りはプラットフォームの綴りに合わせます（`cmd+s`、`shift-tab`、`ctrl+alt+k`）。
+`-` で区切っても同じものとして読みます。
+テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴うコードだけがアプリに届きます。
+ヘッドレスのスクリプトは `key:cmd+s` で押せるので、ショートカットもクリックと同じく検証される操作になります。
 
 ## 型チェッカーとの併用
 

@@ -675,3 +675,34 @@ same Rust function, which is what keeps the printed string single. A
 dict is written in key order for the same reason dict iteration is:
 a Rust HashMap has no order and a Python dict has insertion order,
 and key order is the one both can agree on.
+
+
+## A chord is a declaration
+
+Keyboard shortcuts had no place to live: the substrate had no key
+event at all, and a headless script had no way to press one. Both
+gaps closed with the shape timers already had — `fn save @key("cmd-s")`
+on a store, bound the moment the store exists, and `key:<chord>` as a
+script step that reaches the same handler a keystroke would. In the
+dialect that is `shortcut("cmd+s", save)` at module level, beside
+`every(1.0, tick)`, and `on_key(typed)` for a handler that sees every
+key as the chord it was.
+
+The chord is spelled the way the platform spells it (`cmd-s`,
+`shift-tab`), with `+` accepted for the same thing and one
+normalization on both sides, so what a script presses and what a
+window presses cannot drift apart. While a text field has the caret,
+plain keys keep going into it and only chords carrying cmd or ctrl
+reach the app — the platform's own rule, and the reason an app can
+bind `cmd-s` without stealing the letter s.
+
+
+## One clipboard, both runs
+
+Copy and paste needed a place that a script can see. The clipboard is
+one value in the kernel: an app sets and reads it, a window exchanges
+it with the platform once per frame, and a headless run does neither
+— so the two tiers of a gate agree because neither reaches a
+machine-wide buffer, while a real window still trades text with every
+other application. `clipboard.set_text` and `get_text` are ordinary
+standard-library calls over that value.

@@ -1,0 +1,36 @@
+# Keys: a chord is a DECLARATION on the store, the way a timer is.
+# The spelling is the platform's own (`cmd-s`, `shift-tab`), and a
+# headless `key:<chord>` step presses one — so a shortcut is a
+# checked interaction, not something only a human can reach.
+
+store App {
+  state count : Int = 0
+  state saved : Int = 0
+  state last : String = "-"
+
+  fn bump {
+    count += 1
+  }
+
+  fn save @key("cmd-s") {
+    saved = count
+  }
+
+  fn clear @key("cmd-shift-r") {
+    count = 0
+    saved = 0
+  }
+
+  fn typed(k: String) @key {
+    last = k
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8
+    padding: 12
+    Text { text: "count=#{App.count} saved=#{App.saved} last=#{App.last}" }
+    Button { text: "+1"; onClick: App.bump() }
+  }
+}

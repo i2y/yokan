@@ -9625,6 +9625,44 @@ fn emit_main(
             )
             .unwrap();
         }
+        // `fn save @key("cmd-s")` — a shortcut, and `fn typed(k:
+        // String) @key` — every key, as the chord it was. Bound the
+        // moment the store exists, like a timer, so a window and a
+        // headless `key:` step reach the same handler.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "key") else {
+                continue;
+            };
+            let snake = camel_to_snake(&m.name.name);
+            match a.args.first().map(|s| s.trim().trim_matches('"').to_string()) {
+                Some(chord) if !chord.is_empty() => {
+                    if !m.params.is_empty() {
+                        return err(
+                            a.span,
+                            "a shortcut's method takes no parameters — the chord is in the attribute",
+                        );
+                    }
+                    writeln!(
+                        out,
+                        "    pixie_kernel::keys::bind(&mut w, \"{chord}\", std::rc::Rc::new(move |w: &mut World| {{ {var}.{snake}(w); }}));"
+                    )
+                    .unwrap();
+                }
+                _ => {
+                    if m.params.len() != 1 {
+                        return err(
+                            a.span,
+                            "`@key` with no chord takes the key: one `String` parameter (`fn typed(k: String) @key`)",
+                        );
+                    }
+                    writeln!(
+                        out,
+                        "    pixie_kernel::keys::on_key(&mut w, std::rc::Rc::new(move |w: &mut World, k: Str| {{ {var}.{snake}(w, k); }}));"
+                    )
+                    .unwrap();
+                }
+            }
+        }
         // Class-typed props whose default CONSTRUCTS (§8.64). The
         // slot came out of `new()` empty, because `new()` has no
         // World; here it does, so the object is built and assigned

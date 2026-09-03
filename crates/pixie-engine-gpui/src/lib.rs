@@ -73,6 +73,10 @@ struct Root<C: Component> {
     /// `svg()` under the root resolves through it, so the budget is
     /// the app's whole image footprint.
     images: Entity<PixieImageCache>,
+    /// Where a keystroke lands when no field has the focus. Declared
+    /// shortcuts are dispatched from here, so an app answers `cmd-s`
+    /// without anything being focused first.
+    root_focus: gpui::FocusHandle,
 }
 
 /// A bounded, least-recently-used image cache.
@@ -796,6 +800,30 @@ impl<C: Component> Render for Root<C> {
         // It carries LAYOUT only: `ImageCacheElement` refines a style
         // for sizing but paints nothing of its own, so the background
         // stays on a real div inside it.
+        // The clipboard, exchanged with the platform once per frame:
+        // what the app copied goes out, and otherwise what another
+        // application put there comes in. A headless run does neither,
+        // which is why a script's copy-and-paste stays its own.
+        if let Some(t) = pixie_kernel::clipboard::take_pending() {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(t));
+        } else if let Some(t) = cx.read_from_clipboard().and_then(|i| i.text()) {
+            pixie_kernel::clipboard::adopt(t);
+        }
+        // A key reaches the app when nothing swallowed it first: a
+        // focused field keeps the letters it is being typed into, and
+        // a chord carrying cmd or ctrl is a shortcut either way. This
+        // is the platform's own rule, and it is what lets an app bind
+        // `cmd-s` while a text field has the caret.
+        let typing = self
+            .inputs
+            .values()
+            .any(|e| e.read(cx).focus_handle.is_focused(window));
+        // With nothing focused there is no path for a key to travel,
+        // so the root takes the focus and becomes the window's key
+        // sink. A field that gets clicked takes it back.
+        if window.focused(cx).is_none() {
+            window.focus(&self.root_focus, cx);
+        }
         gpui::image_cache(self.images.clone())
             .relative()
             .flex()
@@ -805,6 +833,17 @@ impl<C: Component> Render for Root<C> {
                     .relative()
                     .flex()
                     .size_full()
+                    .track_focus(&self.root_focus)
+                    .on_key_down(cx.listener(move |root, ev: &gpui::KeyDownEvent, _window, cx| {
+                        let chord = chord_of(&ev.keystroke);
+                        let mods = &ev.keystroke.modifiers;
+                        if typing && !mods.platform && !mods.control {
+                            return;
+                        }
+                        root.apply(cx, move |w| {
+                            pixie_kernel::keys::fire(w, &chord);
+                        });
+                    }))
                     .bg(rgb(th.window_bg))
                     .text_color(rgb(th.text))
                     .child(
@@ -819,6 +858,28 @@ impl<C: Component> Render for Root<C> {
                     .children(pass.overlays),
             )
     }
+}
+
+/// The chord a keystroke spells, in the order `keys::normalize`
+/// writes: one string on both sides of the comparison, so what a
+/// script presses and what a window presses cannot drift apart.
+fn chord_of(ks: &gpui::Keystroke) -> String {
+    let m = &ks.modifiers;
+    let mut out = String::new();
+    if m.platform {
+        out.push_str("cmd-");
+    }
+    if m.control {
+        out.push_str("ctrl-");
+    }
+    if m.alt {
+        out.push_str("alt-");
+    }
+    if m.shift {
+        out.push_str("shift-");
+    }
+    out.push_str(&ks.key);
+    out
 }
 
 /// Route a committed edit (or submit) back into the World through the
@@ -2848,7 +2909,7 @@ pub fn run_app<C: Component>(
                 },
                 move |_, cx| {
                     let images = cx.new(|_| PixieImageCache::new());
-                    cx.new(move |_| Root {
+                    cx.new(move |cx| Root {
                         runtime,
                         view,
                         tree,
@@ -2857,6 +2918,7 @@ pub fn run_app<C: Component>(
                         selects: HashMap::new(),
                         pumping: false,
                         images,
+                        root_focus: cx.focus_handle(),
                     })
                 },
             )

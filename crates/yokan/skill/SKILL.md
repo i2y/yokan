@@ -428,7 +428,7 @@ except Exception as e:
 ## The standard library
 
 `from yokan import fs, sqlite, http, math, json, time, strings,
-random, notify`. One implementation in Rust serves both runs; the
+random, clipboard, notify`. One implementation in Rust serves both runs; the
 shipped binary needs no Python. Call it from handlers only.
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` /
@@ -460,6 +460,9 @@ shipped binary needs no Python. Call it from handlers only.
 - **strings**: `to_int(s, default)` / `to_float(s, default)`
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive) / `float()`;
   seed in `on_start` or a reset handler so scripts replay
+- **clipboard**: `set_text(s)` / `get_text()` — a window shares it
+  with every other application, a headless run keeps it to itself,
+  so copy-and-paste is gate-checkable
 - **notify**: `send(title, body)` — delivered when the app runs as
   an `.app` bundle; dev and headless runs drop it quietly
 
@@ -508,6 +511,14 @@ catch a failing call with `try` / `except` around it.
 the `__main__` guard) and started with the app. Both runs fire it
 off the same clock: a frame in a window, an `advance:<ms>` in a
 headless script, so ticks are gate-checkable.
+
+`shortcut("cmd+s", save)` and `on_key(typed)` are declared the same
+way: a chord and its handler, or one handler that sees every key as
+the chord it was. The chord is spelled the way the platform spells
+it (`cmd+s`, `shift-tab`, `ctrl+alt+k`; `-` reads the same as `+`).
+While a text field has the caret, plain keys keep going into it and
+only chords carrying cmd or ctrl reach the app. A headless script
+presses one with `key:cmd+s`.
 
 ## The window and startup
 

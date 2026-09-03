@@ -105,6 +105,8 @@ the initial state, right after launch.
 
 ## The standard library
 
+#### keys — shortcuts, keys and the clipboard: `shortcut("cmd+s", save)`, `on_key(typed)`, `clipboard.set_text` / `get_text`, pressed in a script with `key:cmd+s`
+
 #### files — yokan.fs: write, append, list a directory, remove (both runs call the same implementation)
 <img src="images/demos/files.png" width="360">
 

@@ -1139,6 +1139,76 @@ fn install_timers(rt: &Runtime) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Keys: declared before `run()`, delivered by the kernel — a
+// keystroke in a window, a `key:<chord>` step in a script.
+
+thread_local! {
+    static PENDING_KEYS: RefCell<Vec<(String, Py<PyAny>)>> = const { RefCell::new(Vec::new()) };
+    static PENDING_ANY_KEY: RefCell<Vec<Py<PyAny>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn install_keys(rt: &Runtime) {
+    for (chord, cb) in PENDING_KEYS.with(|k| k.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::keys::bind(
+                w,
+                &chord,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+    for cb in PENDING_ANY_KEY.with(|k| k.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::keys::on_key(
+                w,
+                Rc::new(move |w: &mut World, key: Str| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call1(py, (key.as_str(),)) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare a shortcut: the chord, spelled the way the platform spells
+/// it (`cmd+s`, `shift-tab`), and the handler it runs. Call before
+/// `run()`.
+#[pyfunction]
+fn shortcut(chord: &str, on_press: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    if chord.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "shortcut() needs a chord, like \"cmd+s\"",
+        ));
+    }
+    PENDING_KEYS.with(|k| k.borrow_mut().push((chord.to_string(), on_press)));
+    Ok(())
+}
+
+/// Declare a handler that sees every key, as the chord it was.
+#[pyfunction]
+fn on_key(handler: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    PENDING_ANY_KEY.with(|k| k.borrow_mut().push(handler));
+    Ok(())
+}
+
 /// Register a periodic callback. Call before `run()`; the callback
 /// runs on the UI thread and a rebuild follows. During a live reload
 /// the module re-executes with the app already running, and `every`
@@ -1357,6 +1427,7 @@ fn run(
         // `advance:`'s business.
         if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
             install_timers(&rt);
+            install_keys(&rt);
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -1388,6 +1459,7 @@ fn run(
             rt.with(|w: &mut World| after_py_callback(w));
         }
         install_timers(&rt);
+        install_keys(&rt);
         let watch_opt = if watch {
             src_path.map(|p| make_watch(p, shared.clone(), h.erase()))
         } else {
@@ -1583,6 +1655,7 @@ fn _headless(
         let rt = Runtime::new(w);
         CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
         install_timers(&rt);
+        install_keys(&rt);
         rt.with(drain_spawns);
         if let Some(f) = &on_start {
             // The startup hook: contained like any handler — a
@@ -1867,6 +1940,16 @@ fn py_time_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
     py.detach(|| yokan_stdlib::time_local_offset_minutes(ms))
 }
 
+#[pyfunction] #[pyo3(name = "set_text")]
+fn py_clipboard_set_text(py: Python<'_>, text: &str) -> i64 {
+    py.detach(|| yokan_stdlib::clipboard_set_text(text))
+}
+
+#[pyfunction] #[pyo3(name = "get_text")]
+fn py_clipboard_get_text(py: Python<'_>) -> String {
+    py.detach(yokan_stdlib::clipboard_get_text)
+}
+
 #[pyfunction] #[pyo3(name = "list_dir")]
 fn py_fs_list_dir(py: Python<'_>, path: &str) -> Vec<String> {
     py.detach(|| yokan_stdlib::fs_list_dir(path))
@@ -2041,6 +2124,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(local, m)?)?;
     m.add_function(wrap_pyfunction!(task, m)?)?;
     m.add_function(wrap_pyfunction!(every, m)?)?;
+    m.add_function(wrap_pyfunction!(shortcut, m)?)?;
+    m.add_function(wrap_pyfunction!(on_key, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(_headless, m)?)?;
     let fs = PyModule::new(m.py(), "fs")?;
@@ -2105,6 +2190,10 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     randomm.add_function(wrap_pyfunction!(py_random_float, &randomm)?)?;
     m.add_submodule(&randomm)?;
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
+    let clipm = PyModule::new(m.py(), "clipboard")?;
+    clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
+    clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;
+    m.add_submodule(&clipm)?;
     let timem = PyModule::new(m.py(), "time")?;
     timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
