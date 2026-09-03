@@ -17,6 +17,7 @@ store Badges {
 # A pill is a Text with a box: padding, a radius and a background.
 # It hugs its content inside a Row, so the three below are as wide
 # as their words.
+
 style Pill {
   fontSize: 11.0
   color: "#11111b"
@@ -37,7 +38,9 @@ style Crit {
 }
 
 style PillOk = Pill + Ok
+
 style PillWarn = Pill + Warn
+
 style PillCrit = Pill + Crit
 
 view Main {
