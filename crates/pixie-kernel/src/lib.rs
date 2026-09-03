@@ -54,8 +54,14 @@ type HandleSet = std::collections::HashSet<ErasedHandle, HandleHashBuilder>;
 
 pub mod a11y;
 pub mod anim;
+pub mod clipboard;
+pub mod dialog;
+pub mod drop;
+pub mod keys;
+pub mod menu;
 pub mod script;
 pub mod theme;
+pub mod timer;
 pub use anim::Easing;
 
 pub type SignalId = u32;
@@ -927,6 +933,15 @@ pub enum Element {
         label: Str,
         children: Vec<Element>,
     },
+    /// The tooltip rider: a line of text the window shows when the
+    /// pointer rests on the element. Layout-transparent like
+    /// `Semantics` — `children` holds exactly the one wrapped
+    /// element — and a checked output, because the text is in the
+    /// dump whether or not a pointer is there to reveal it.
+    Tooltip {
+        text: Str,
+        children: Vec<Element>,
+    },
     /// The animation wrapper (§8.35). Produced by the lowerers when
     /// an element carries any of the universal riders `animate:` /
     /// `easing:` / `enter:` / `exit:`, never written directly in a
@@ -1030,6 +1045,12 @@ pub enum Element {
         placeholder: Str,
         on_change: Option<TextListener>,
         on_submit: Option<TextListener>,
+        /// A field that holds paragraphs: it wraps, `enter` writes a
+        /// newline instead of submitting, and the caret moves by
+        /// visual line. `rows` is how many lines of it are visible
+        /// (`0.0` = the default 4).
+        multiline: bool,
+        rows: f64,
     },
     /// `spacing` is the flex gap in px; `-1.0` = unset (the engine's
     /// default gap — 8 px), and `0.0` is honest zero, so a style can
@@ -1540,7 +1561,18 @@ impl Element {
                     format!("Button({label}, {})", props.join(", "))
                 }
             }
-            Element::TextField { value, .. } => format!("TextField({})", value),
+            Element::TextField {
+                value,
+                multiline,
+                rows,
+                ..
+            } => {
+                if *multiline {
+                    format!("TextField({value}, multiline, rows={rows})")
+                } else {
+                    format!("TextField({value})")
+                }
+            }
             Element::Column {
                 spacing,
                 padding,
@@ -1624,6 +1656,10 @@ impl Element {
             Element::Themed { theme, children } => {
                 let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
                 format!("Themed({theme})[{}]", inner.join(", "))
+            }
+            Element::Tooltip { text, children } => {
+                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                format!("Tooltip({text})[{}]", inner.join(", "))
             }
             Element::Semantics {
                 role,
@@ -1836,6 +1872,7 @@ impl Element {
             Element::GridCell { children, .. }
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
+            | Element::Tooltip { children, .. }
             | Element::Themed { children, .. } => match children.first() {
                 Some(c) => c.inner(),
                 None => self,
@@ -1849,6 +1886,7 @@ impl Element {
             Element::GridCell { children, .. }
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
+            | Element::Tooltip { children, .. }
             | Element::Themed { children, .. } => match children.first_mut() {
                 Some(c) => c.inner_mut(),
                 // A wrapper with no child decorates nothing; it is
@@ -1889,6 +1927,7 @@ impl Element {
             | Element::GridCell { children: cs, .. }
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
+            | Element::Tooltip { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
@@ -1947,6 +1986,7 @@ impl Element {
                 | Element::GridCell { children: cs, .. }
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
+                | Element::Tooltip { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
@@ -2031,6 +2071,7 @@ impl Element {
             | Element::GridCell { children: cs, .. }
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
+            | Element::Tooltip { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
@@ -2090,6 +2131,7 @@ impl Element {
                 | Element::GridCell { children: cs, .. }
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
+                | Element::Tooltip { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
@@ -2157,6 +2199,7 @@ impl Element {
                 | Element::GridCell { children: cs, .. }
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
+                | Element::Tooltip { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }

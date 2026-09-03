@@ -164,6 +164,10 @@ fn main() -> ExitCode {
             let mut out_dir: Option<PathBuf> = None;
             let mut run = false;
             let mut release = false;
+            // A build nobody will hot-reload — a gate's compiled tier,
+            // say — has no use for the interpreter, and leaving it out
+            // of the crate graph is most of the link.
+            let mut no_interp = false;
             // Flags start right after `build` when the entry came
             // from the manifest, after the path otherwise.
             let mut i = if manifest_entry.is_some() { 1 } else { 2 };
@@ -184,10 +188,14 @@ fn main() -> ExitCode {
                         release = true;
                         i += 1;
                     }
+                    "--no-interp" => {
+                        no_interp = true;
+                        i += 1;
+                    }
                     _ => return usage(),
                 }
             }
-            cmd_build(Path::new(file), out_dir, run, release)
+            cmd_build(Path::new(file), out_dir, run, release, no_interp)
         }
         _ => usage(),
     }
@@ -354,7 +362,12 @@ fn prepare_manifest(file: &Path) -> Result<Option<(manifest::Manifest, String)>,
     Ok(Some((m, dep_lines)))
 }
 
-fn build_file(file: &Path, out_dir: Option<PathBuf>, release: bool) -> Option<PathBuf> {
+fn build_file(
+    file: &Path,
+    out_dir: Option<PathBuf>,
+    release: bool,
+    no_interp: bool,
+) -> Option<PathBuf> {
     let mf = match prepare_manifest(file) {
         Ok(m) => m,
         Err(e) => {
@@ -376,10 +389,12 @@ fn build_file(file: &Path, out_dir: Option<PathBuf>, release: bool) -> Option<Pa
     }
     let module = outcome.module.as_ref().expect("checked module");
 
-    // §11.9: `--release` is AOT-only — no reload support, no
-    // embedded source path, no interpreter in the crate graph. D5's
-    // promise: the dev-loop machinery never ships.
-    let reload = if release {
+    // §11.9: `--release` is AOT-only — no reload support, no embedded
+    // source path, no interpreter in the crate graph. `--no-interp`
+    // asks for the same crate graph while keeping the dev profile: a
+    // gate's compiled tier is never reloaded, and the interpreter is
+    // most of what it would link.
+    let reload = if release || no_interp {
         None
     } else {
         reload_info_with(file, outcome.foreign_paths.clone())
@@ -418,7 +433,7 @@ fn build_file(file: &Path, out_dir: Option<PathBuf>, release: bool) -> Option<Pa
 
     let kernel_path = kernel_dir()?;
     let extra = mf.as_ref().map(|(_, lines)| lines.clone()).unwrap_or_default();
-    let interp = if release { None } else { interp_dir() };
+    let interp = if release || no_interp { None } else { interp_dir() };
     if let Err(e) = write_crate(
         &out,
         &stem,
@@ -453,8 +468,14 @@ fn build_file(file: &Path, out_dir: Option<PathBuf>, release: bool) -> Option<Pa
     }
 }
 
-fn cmd_build(file: &Path, out_dir: Option<PathBuf>, run: bool, release: bool) -> ExitCode {
-    let Some(bin) = build_file(file, out_dir, release) else {
+fn cmd_build(
+    file: &Path,
+    out_dir: Option<PathBuf>,
+    run: bool,
+    release: bool,
+    no_interp: bool,
+) -> ExitCode {
+    let Some(bin) = build_file(file, out_dir, release, no_interp) else {
         return ExitCode::FAILURE;
     };
     if run {
@@ -536,7 +557,7 @@ fn cmd_watch(file: &Path) -> ExitCode {
             .map(|o| o.foreign_paths)
             .unwrap_or_default();
         let baseline = reload_info_with(file, imports.clone()).map(|r| r.fingerprint);
-        match build_file(file, None, false) {
+        match build_file(file, None, false, false) {
             Some(bin) => match Command::new(&bin).spawn() {
                 Ok(c) => child = Some(c),
                 Err(e) => eprintln!("pixie: cannot launch {}: {e}", bin.display()),
@@ -700,6 +721,12 @@ fn write_crate(
          {engine_dep}{interp_dep}{extra_deps}\n\
          [profile.release]\n\
          overflow-checks = true\n\n\
+         # The dev build is for running an app, not for debugging the\n\
+         # generated Rust: full debuginfo made a 64 MB binary whose\n\
+         # LINK was most of every build (measured: 110s, 19% CPU).\n\
+         [profile.dev]\n\
+         debug = 0\n\
+         strip = \"debuginfo\"\n\n\
          [workspace]\n{patch}",
         kernel.display()
     );

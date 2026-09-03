@@ -7,6 +7,25 @@ The [tour](tour.md) continues: what handlers can do, arithmetic with CPython's m
 Handlers can be passed in three forms:
 a lambda (a tuple for multiple operations, `lambda: (a.set(x), b.set(y))`), a module-level def, and a store's bound method (`on_click=Cart.clear`).
 
+A decorator compiles too. Decoration happens at import and the compiled app never runs the module, so the wrapper is folded into the handler it decorates:
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+The decorator is a def of one argument that either returns that argument or defines a wrapper calling it once.
+A decorator that takes arguments of its own, or calls the function twice, or uses its value, is refused by name.
+
 The body of a def handler compiles with its real control flow.
 
 ```python
@@ -21,8 +40,11 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Available: `if` / `elif` / `else`, `while`, `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
-A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text.
+Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+`log("…")` writes a line to stderr from either run, and `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
+Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
+A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
+A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
 
@@ -67,6 +89,32 @@ Do fallible `/` `//` `%` `**` inside handlers and hand the view the result.
 They also work as bool values (`both.set(hot() and not cold())`).
 Using `and` / `or` as a value on non-bools is refused (Python returns **one of the operands themselves** there, which is a different thing from a truth value).
 
+## Strings
+
+Strings work as they do in Python: the methods, the length, indexing and slicing, `in`, and the conversions.
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # a code point, then a slice
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round-half-to-even, as Python does
+```
+
+As with Python's arithmetic, the two runs use different code here — CPython's own method while you develop, a Rust twin written to answer exactly the same thing once compiled, failures included, so `int("x")` stops that statement in both — and the gate is what holds them together.
+
+Format specs are Python's, in views and in handlers alike.
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # right-aligned in ten columns
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## Lists, charts, virtualized lists
 
 Append to a list by concatenating and putting it back.
@@ -78,11 +126,25 @@ items.set([])                # clear
 len(items())                 # count
 ```
 
-Indexing from the back takes a literal.
+The rest of Python's list vocabulary works in handlers: `in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` and `zip`, a stepped `range`, and joining two lists.
+A local list carries its element type in the annotation, which is what the compiled side reads.
 
 ```python
-r = names()
-tail.set(r[-1])              # last element (too short: the statement aborts)
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
+```
+
+Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.
+
+```python
+first.set(names()[0])        # a state read, indexed
+tail.set(names()[-1])        # last element (too short: the statement aborts)
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # `self.xs[i]` inside the store says the same
 ```
 
 Charts draw lists of float or int.
@@ -104,9 +166,23 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
+The row index is an int the row can use anywhere: in the text, in a condition, and in the row's own handlers.
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## Dicts
 
 Read with `.get`, write per key, count with `len`, iterate with `sorted()`.
+A key is any str the app can name — a literal, a state read, a loop variable.
 
 ```python
 prices["cherry"] = 200                 # per-key write

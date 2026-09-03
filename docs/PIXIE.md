@@ -63,7 +63,7 @@ and the interpreter are stripped from the crate graph entirely
 (13 MB vs 60 MB for the counter demo), behavior byte-identical.
 
 Every built app is scriptable headless:
-`PIXIE_SCRIPT="input:Ada,click:save"` drives it and prints the element
+`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s,drop:/tmp/x.txt"` drives it and prints the element
 tree, and `PIXIE_TIER=interp` replays the same script through the
 hot-reload interpreter — the two runs must print byte-identical trees,
 which is the project's standing divergence gate.
@@ -112,7 +112,8 @@ Early but real. Working today:
   `Slot { }` children, and per-row state at any repeater depth
   (nested `for`s and virtualized lists included). A `for` body or an
   `if` branch holds as many elements as you write, repeaters nest
-  over any list you can name, and numbers are numbers: `fontSize: 14`
+  over any list you can name and bind the row's index when asked
+  (`for row, i in xs`), and numbers are numbers: `fontSize: 14`
   and `unit * qty` need no decimal points or conversions.
 - **Animation** — declared on the element whose values move rather
   than wrapped around the update that moves them: `animate: 200.0`
@@ -148,6 +149,16 @@ Early but real. Working today:
   windowed and headless; a built-in HTTP client rides it
   (`await Http.get(url)` / `getBytes` → `Bytes` / `post` /
   `getWith(url, headers)` with `Map<String, String>` headers).
+- **Declarations that run themselves** — `fn tick @every(1000)` is a
+  repeating callback, `fn save @key("cmd-s")` is a shortcut and
+  `fn save @menu("File", "Save")` is an item in the application's
+  menu bar, all bound the moment the store exists;
+  `fn typed(k: String) @key` sees every key as the chord it was, and
+  `fn opened(p: String) @drop` takes a file dragged onto the window.
+  They fire off the same clock and the same dispatch a window uses, so
+  `PIXIE_SCRIPT="advance:1000"`, `PIXIE_SCRIPT="key:cmd-s"` and
+  `PIXIE_SCRIPT="menu:Save"` reach exactly what a second, a keystroke
+  and a menu pick would.
 - **Hot reload** — the running binary re-parses its own view body and
   rebuilds against the live World; `pixie watch` decides per save
   whether an in-process reload or a full rebuild is needed.

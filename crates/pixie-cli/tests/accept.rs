@@ -292,6 +292,13 @@ fn tiers_agree_on_every_demo() {
             "examples/greeter/greeter.pix",
             "input:Alice,submit,input@1:memo,click:greet",
         ),
+        // A chord is a declaration the way a timer is, and `key:`
+        // presses one — so the shortcut path is checked in both tiers
+        // rather than only under a human finger.
+        (
+            "examples/keys/keys.pix",
+            "click:+1,click:+1,key:cmd-s,key:x,menu:Save,key:cmd-shift-r",
+        ),
         (
             "examples/genfs/genfs.pix",
             "click:round-trip,click:weigh,click:survey,click:clean,click:who",
