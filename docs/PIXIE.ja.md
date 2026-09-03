@@ -61,7 +61,7 @@ cargo run -q -p pixie-cli -- build examples/counter/counter.pix --run
 60 MB → 13 MB)、挙動はバイト単位で同一です。
 
 ビルドしたアプリはすべてヘッドレスでスクリプト実行できます:
-`PIXIE_SCRIPT="input:Ada,click:save"` で操作を再生してエレメントツリーを
+`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s,drop:/tmp/x.txt"` で操作を再生してエレメントツリーを
 出力し、`PIXIE_TIER=interp` は同じスクリプトをホットリロード用
 インタプリタで再実行します — 両者の出力はバイト単位で一致しなければ
 ならず、これがこのプロジェクト常設の分岐ゲートです。
@@ -109,7 +109,8 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   **コンポーネント**は view そのものです。既定値付きのパラメータ、
   インスタンスごとの `state`、`Slot { }` による子要素を持ち、
   行ごとの状態はリピータの深さを問いません(ネストした `for` も
-  仮想化リストの中も含みます)。
+  仮想化リストの中も含みます)。リピータは求めれば行の位置も
+  束ねます(`for row, i in xs`)。
 - **アニメーション** — 「この更新をアニメーションさせる」という
   囲みではなく、値が動く要素そのものに宣言します。`animate: 200.0` と `easing:`、それに `enter:` / `exit:` の
   フェード。補間は描画側ではなく要素ツリー上で走るので、
@@ -142,6 +143,16 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   クライアントがその上に乗ります(`await Http.get(url)` /
   `getBytes` → `Bytes` / `post` / `Map<String, String>` ヘッダ付き
   `getWith`)。
+- **自分で走る宣言** — `fn tick @every(1000)` は繰り返し呼ばれる
+  コールバック、`fn save @key("cmd-s")` はショートカット、
+  `fn save @menu("File", "Save")` はアプリケーションのメニューバーの
+  項目で、どれも store ができた時点で結び付きます。
+  `fn typed(k: String) @key` はすべてのキーをコードの形で受け取り、
+  `fn opened(p: String) @drop` はウィンドウに落とされたファイルを受け取ります。
+  発火する時計も配送の経路もウィンドウと同じなので、
+  `PIXIE_SCRIPT="advance:1000"`、`PIXIE_SCRIPT="key:cmd-s"`、
+  `PIXIE_SCRIPT="menu:Save"` は、一秒とひと押しとメニュー選択がする
+  ことにそのまま届きます。
 - **ホットリロード** — 実行中のバイナリが自分の view 本体を再パースし、
   生きた World に対して再構築。`pixie watch` は保存ごとに
   プロセス内リロードか完全再ビルドかを判定します。

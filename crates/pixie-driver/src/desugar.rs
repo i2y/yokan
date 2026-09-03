@@ -403,11 +403,13 @@ fn rewrite_stmt(s: &Stmt, props: &HashSet<String>) -> Stmt {
         }
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
         } => Stmt::For {
             binding: binding.clone(),
+            index: index.clone(),
             iter: rewrite_expr(iter, props),
             body: rewrite_block(body, props),
             span: *span,
@@ -676,9 +678,16 @@ fn collect_stmt(s: &Stmt, out: &mut HashSet<String>) {
         Stmt::Expr(e) => collect_expr(e, out),
         Stmt::Return { value: Some(v), .. } => collect_expr(v, out),
         Stmt::For {
-            binding, iter, body, ..
+            binding,
+            index,
+            iter,
+            body,
+            ..
         } => {
             out.insert(binding.name.clone());
+            if let Some(i) = index {
+                out.insert(i.name.clone());
+            }
             collect_expr(iter, out);
             collect_block(body, out);
         }

@@ -236,6 +236,16 @@ pub fn notify_send(title: &str, body: &str) {
     pixie_kernel::notify::send(title, body);
 }
 
+/// Sleep for `ms` milliseconds and answer 0. Both doors release
+/// before they call it: the interpreted one detaches from Python, and
+/// the compiled one is awaited, which puts it on the engine's pool.
+pub fn time_sleep_ms(ms: i64) -> i64 {
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+    }
+    0
+}
+
 /// Total float parse: the value or the default, never an error.
 pub fn strings_to_float(s: &str, default: f64) -> f64 {
     s.trim().parse::<f64>().unwrap_or(default)
@@ -559,4 +569,1053 @@ pub fn py_pow_float(a: f64, b: f64) -> f64 {
         panic!("float power result too large");
     }
     if negate { -r } else { r }
+}
+
+// ---- Python's str, once, in Rust -----------------------------------
+// The compiled run calls these; the development run calls CPython's
+// own methods, so each one answers what CPython answers — including
+// the failures, which trap the statement the way a raised exception
+// ends it.
+
+/// len(s) — code points, not bytes.
+pub fn py_str_len(s: &str) -> i64 {
+    s.chars().count() as i64
+}
+
+/// s[i] — one code point, negative counting from the back; past the
+/// end raises IndexError in Python, and traps here.
+pub fn py_str_index(s: &str, i: i64) -> String {
+    let n = s.chars().count() as i64;
+    let k = if i < 0 { i + n } else { i };
+    if k < 0 || k >= n {
+        panic!("string index out of range");
+    }
+    s.chars().nth(k as usize).expect("bounds checked").to_string()
+}
+
+/// s[a:b] — Python's slice: negative counts from the back, ends
+/// clamp instead of failing, and a start past the stop answers "".
+pub fn py_str_slice(s: &str, a: i64, b: i64) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let n = cs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return String::new();
+    }
+    cs[lo..hi].iter().collect()
+}
+
+pub fn py_str_upper(s: &str) -> String {
+    s.to_uppercase()
+}
+
+pub fn py_str_lower(s: &str) -> String {
+    s.to_lowercase()
+}
+
+/// .strip() / .lstrip() / .rstrip() with no argument: Python strips
+/// whitespace, which is the set Rust's `char::is_whitespace` names.
+pub fn py_str_strip(s: &str) -> String {
+    s.trim().to_string()
+}
+
+pub fn py_str_lstrip(s: &str) -> String {
+    s.trim_start().to_string()
+}
+
+pub fn py_str_rstrip(s: &str) -> String {
+    s.trim_end().to_string()
+}
+
+/// s.split(sep) — the separator form: an empty separator raises in
+/// Python, and "a,,b".split(",") keeps the empty field.
+pub fn py_str_split(s: &str, sep: &str) -> Vec<String> {
+    if sep.is_empty() {
+        panic!("empty separator");
+    }
+    s.split(sep).map(|p| p.to_string()).collect()
+}
+
+/// s.split() with no argument: runs of whitespace, no empty fields.
+pub fn py_str_split_ws(s: &str) -> Vec<String> {
+    s.split_whitespace().map(|p| p.to_string()).collect()
+}
+
+pub fn py_str_join(sep: &str, parts: Vec<String>) -> String {
+    parts.join(sep)
+}
+
+pub fn py_str_startswith(s: &str, p: &str) -> bool {
+    s.starts_with(p)
+}
+
+pub fn py_str_endswith(s: &str, p: &str) -> bool {
+    s.ends_with(p)
+}
+
+pub fn py_str_contains(s: &str, p: &str) -> bool {
+    s.contains(p)
+}
+
+pub fn py_str_replace(s: &str, from: &str, to: &str) -> String {
+    if from.is_empty() {
+        // CPython inserts `to` between every character; the dialect
+        // has no use for that, and guessing would be worse than a
+        // named failure.
+        panic!("replace() with an empty search string");
+    }
+    s.replace(from, to)
+}
+
+/// s.find(p) — the code-point index, or -1.
+pub fn py_str_find(s: &str, p: &str) -> i64 {
+    match s.find(p) {
+        Some(byte) => s[..byte].chars().count() as i64,
+        None => -1,
+    }
+}
+
+/// s.count(p) — non-overlapping occurrences, Python's rule for the
+/// empty pattern included.
+pub fn py_str_count(s: &str, p: &str) -> i64 {
+    if p.is_empty() {
+        return s.chars().count() as i64 + 1;
+    }
+    s.matches(p).count() as i64
+}
+
+/// int(s) — Python's parse: surrounding whitespace and an optional
+/// sign; anything else raises, and traps here.
+pub fn py_int_of_str(s: &str) -> i64 {
+    match s.trim().parse::<i64>() {
+        Ok(v) => v,
+        Err(_) => panic!("invalid literal for int(): {s:?}"),
+    }
+}
+
+/// float(s) — the same shape, for floats.
+pub fn py_float_of_str(s: &str) -> f64 {
+    match s.trim().parse::<f64>() {
+        Ok(v) => v,
+        Err(_) => panic!("could not convert string to float: {s:?}"),
+    }
+}
+
+/// float(i) — the widening Python does silently.
+pub fn py_float_of_int(v: i64) -> f64 {
+    v as f64
+}
+
+/// int(f) — Python truncates toward zero, and refuses nan/inf.
+pub fn py_int_of_float(v: f64) -> i64 {
+    if v.is_nan() || v.is_infinite() {
+        panic!("cannot convert float NaN or infinity to integer");
+    }
+    v.trunc() as i64
+}
+
+/// round(f) — Python rounds half to EVEN, which is not what Rust's
+/// `f64::round` does.
+pub fn py_round(v: f64) -> i64 {
+    if v.is_nan() || v.is_infinite() {
+        panic!("cannot convert float NaN or infinity to integer");
+    }
+    let f = v.floor();
+    let diff = v - f;
+    let out = if diff > 0.5 {
+        f + 1.0
+    } else if diff < 0.5 {
+        f
+    } else if (f as i64) % 2 == 0 {
+        f
+    } else {
+        f + 1.0
+    };
+    out as i64
+}
+
+
+// ---- Python's format mini-language ---------------------------------
+// `f"{x:>10,.2f}"` in the development run is CPython's own formatter;
+// the compiled run calls these, so the same spec has to produce the
+// same text. The subset is the one the tour documents: fill and
+// align, a sign, zero padding, a width, `,` grouping, a precision,
+// and the types d / f / e / % / s.
+
+struct Spec {
+    fill: char,
+    align: Option<char>,
+    sign: char,
+    zero: bool,
+    width: usize,
+    comma: bool,
+    precision: Option<usize>,
+    ty: Option<char>,
+}
+
+fn parse_spec(spec: &str) -> Spec {
+    let cs: Vec<char> = spec.chars().collect();
+    let mut i = 0;
+    let mut out = Spec {
+        fill: ' ',
+        align: None,
+        sign: '-',
+        zero: false,
+        width: 0,
+        comma: false,
+        precision: None,
+        ty: None,
+    };
+    // [[fill]align]
+    if cs.len() >= 2 && matches!(cs[1], '<' | '>' | '^' | '=') {
+        out.fill = cs[0];
+        out.align = Some(cs[1]);
+        i = 2;
+    } else if !cs.is_empty() && matches!(cs[0], '<' | '>' | '^' | '=') {
+        out.align = Some(cs[0]);
+        i = 1;
+    }
+    if i < cs.len() && matches!(cs[i], '+' | '-' | ' ') {
+        out.sign = cs[i];
+        i += 1;
+    }
+    if i < cs.len() && cs[i] == '0' {
+        out.zero = true;
+        out.fill = '0';
+        if out.align.is_none() {
+            out.align = Some('=');
+        }
+        i += 1;
+    }
+    let start = i;
+    while i < cs.len() && cs[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i > start {
+        out.width = cs[start..i].iter().collect::<String>().parse().unwrap_or(0);
+    }
+    if i < cs.len() && cs[i] == ',' {
+        out.comma = true;
+        i += 1;
+    }
+    if i < cs.len() && cs[i] == '.' {
+        i += 1;
+        let ps = i;
+        while i < cs.len() && cs[i].is_ascii_digit() {
+            i += 1;
+        }
+        out.precision = Some(cs[ps..i].iter().collect::<String>().parse().unwrap_or(0));
+    }
+    if i < cs.len() {
+        out.ty = Some(cs[i]);
+    }
+    out
+}
+
+fn group3(digits: &str) -> String {
+    let mut out = String::new();
+    for (n, c) in digits.chars().rev().enumerate() {
+        if n > 0 && n % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out.chars().rev().collect()
+}
+
+fn sign_of(neg: bool, sign: char) -> String {
+    if neg {
+        "-".into()
+    } else if sign == '+' {
+        "+".into()
+    } else if sign == ' ' {
+        " ".into()
+    } else {
+        String::new()
+    }
+}
+
+fn pad(body: String, sign: String, sp: &Spec, numeric: bool) -> String {
+    let text = format!("{sign}{body}");
+    let len = text.chars().count();
+    if len >= sp.width {
+        return text;
+    }
+    let fill = sp.fill;
+    let n = sp.width - len;
+    match sp.align.unwrap_or(if numeric { '>' } else { '<' }) {
+        '<' => format!("{text}{}", fill.to_string().repeat(n)),
+        '^' => {
+            let left = n / 2;
+            format!(
+                "{}{text}{}",
+                fill.to_string().repeat(left),
+                fill.to_string().repeat(n - left)
+            )
+        }
+        '=' => format!("{sign}{}{body}", fill.to_string().repeat(n)),
+        _ => format!("{}{text}", fill.to_string().repeat(n)),
+    }
+}
+
+/// CPython's exponent form: at least two digits, always signed.
+fn exp_form(v: f64, precision: usize) -> (String, bool) {
+    let neg = v.is_sign_negative();
+    let a = v.abs();
+    let e = format!("{a:.*e}", precision);
+    let (mant, exp) = e.split_once('e').expect("Rust {:e} has an exponent");
+    let exp: i32 = exp.parse().unwrap_or(0);
+    (
+        format!(
+            "{mant}e{}{:02}",
+            if exp < 0 { '-' } else { '+' },
+            exp.abs()
+        ),
+        neg,
+    )
+}
+
+/// format(int, spec)
+pub fn py_format_int(v: i64, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    match sp.ty {
+        Some('f') | Some('e') | Some('%') => return py_format_float(v as f64, spec),
+        _ => {}
+    }
+    let neg = v < 0;
+    let digits = v.unsigned_abs().to_string();
+    let body = if sp.comma { group3(&digits) } else { digits };
+    pad(body, sign_of(neg, sp.sign), &sp, true)
+}
+
+/// format(float, spec)
+pub fn py_format_float(v: f64, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    let prec = sp.precision.unwrap_or(6);
+    let (body, neg) = match sp.ty {
+        Some('e') => exp_form(v, prec),
+        Some('%') => {
+            let x = v * 100.0;
+            (format!("{:.*}%", prec, x.abs()), x.is_sign_negative())
+        }
+        Some('f') => (format!("{:.*}", prec, v.abs()), v.is_sign_negative()),
+        _ => {
+            // No type: `str(v)`'s text, which is what a bare hole
+            // renders — a width or a fill may still apply.
+            let t = py_float_repr(v);
+            match t.strip_prefix('-') {
+                Some(rest) => (rest.to_string(), true),
+                None => (t, false),
+            }
+        }
+    };
+    let body = if sp.comma {
+        match body.split_once('.') {
+            Some((int, rest)) => format!("{}.{rest}", group3(int)),
+            None => group3(&body),
+        }
+    } else {
+        body
+    };
+    pad(body, sign_of(neg, sp.sign), &sp, true)
+}
+
+/// format(str, spec) — width, fill and alignment, and a precision
+/// that truncates.
+pub fn py_format_str(s: &str, spec: &str) -> String {
+    let sp = parse_spec(spec);
+    let body = match sp.precision {
+        Some(p) => s.chars().take(p).collect::<String>(),
+        None => s.to_string(),
+    };
+    pad(body, String::new(), &sp, false)
+}
+
+
+// ---- Python's list, the operations the dialect leans on -----------
+// The same arrangement the str twins use: written against CPython's
+// semantics (empty `min` raises, a slice clamps, `sorted` is stable),
+// and the gate holds the two runs together.
+
+pub fn py_list_contains_str(xs: Vec<String>, v: &str) -> bool {
+    xs.iter().any(|x| x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_str(xs: Vec<String>, a: i64, b: i64) -> Vec<String> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_str(a: Vec<String>, b: Vec<String>) -> Vec<String> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_str(xs: Vec<String>) -> Vec<String> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_int(xs: Vec<i64>, v: i64) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_int(xs: Vec<i64>, a: i64, b: i64) -> Vec<i64> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_int(a: Vec<i64>, b: Vec<i64>) -> Vec<i64> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_int(xs: Vec<i64>) -> Vec<i64> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_float(xs: Vec<f64>, v: f64) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_float(xs: Vec<f64>, a: i64, b: i64) -> Vec<f64> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_float(a: Vec<f64>, b: Vec<f64>) -> Vec<f64> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_float(xs: Vec<f64>) -> Vec<f64> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_contains_bool(xs: Vec<bool>, v: bool) -> bool {
+    xs.iter().any(|x| *x == v)
+}
+
+/// xs[a:b] — Python's clamping, on a list.
+pub fn py_list_slice_bool(xs: Vec<bool>, a: i64, b: i64) -> Vec<bool> {
+    let n = xs.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(b));
+    if lo >= hi {
+        return Vec::new();
+    }
+    xs[lo..hi].to_vec()
+}
+
+pub fn py_list_concat_bool(a: Vec<bool>, b: Vec<bool>) -> Vec<bool> {
+    let mut out = a;
+    out.extend(b);
+    out
+}
+
+pub fn py_list_reversed_bool(xs: Vec<bool>) -> Vec<bool> {
+    let mut out = xs;
+    out.reverse();
+    out
+}
+
+pub fn py_list_sorted_str(xs: Vec<String>) -> Vec<String> {
+    let mut out = xs;
+    out.sort();
+    out
+}
+
+pub fn py_list_sorted_int(xs: Vec<i64>) -> Vec<i64> {
+    let mut out = xs;
+    out.sort();
+    out
+}
+
+pub fn py_list_sorted_float(xs: Vec<f64>) -> Vec<f64> {
+    let mut out = xs;
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+/// min(xs) / max(xs) — an empty list raises in Python, and traps here.
+pub fn py_list_min_int(xs: Vec<i64>) -> i64 {
+    if xs.is_empty() {
+        panic!("min() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v < m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_max_int(xs: Vec<i64>) -> i64 {
+    if xs.is_empty() {
+        panic!("max() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v > m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_sum_int(xs: Vec<i64>) -> i64 {
+    let mut t: i64 = 0;
+    for v in xs {
+        t += v;
+    }
+    t
+}
+
+pub fn py_min2_int(a: i64, b: i64) -> i64 {
+    if b < a { b } else { a }
+}
+
+pub fn py_max2_int(a: i64, b: i64) -> i64 {
+    if b > a { b } else { a }
+}
+
+/// min(xs) / max(xs) — an empty list raises in Python, and traps here.
+pub fn py_list_min_float(xs: Vec<f64>) -> f64 {
+    if xs.is_empty() {
+        panic!("min() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v < m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_max_float(xs: Vec<f64>) -> f64 {
+    if xs.is_empty() {
+        panic!("max() arg is an empty sequence");
+    }
+    let mut m = xs[0];
+    for v in xs.iter().skip(1) {
+        if *v > m {
+            m = *v;
+        }
+    }
+    m
+}
+
+pub fn py_list_sum_float(xs: Vec<f64>) -> f64 {
+    let mut t: f64 = 0.0;
+    for v in xs {
+        t += v;
+    }
+    t
+}
+
+pub fn py_min2_float(a: f64, b: f64) -> f64 {
+    if b < a { b } else { a }
+}
+
+pub fn py_max2_float(a: f64, b: f64) -> f64 {
+    if b > a { b } else { a }
+}
+
+pub fn py_abs_int(v: i64) -> i64 {
+    if v == i64::MIN {
+        panic!("abs() of the smallest integer overflows");
+    }
+    v.abs()
+}
+
+pub fn py_abs_float(v: f64) -> f64 {
+    v.abs()
+}
+
+
+/// `log(msg)` — a line on stderr, from either run. stdout is where
+/// the headless dump lives, so a message that is not part of the
+/// screen does not go there.
+pub fn log_line(msg: &str) -> i64 {
+    eprintln!("{msg}");
+    0
+}
+
+/// `assert` and `raise`, once they have nothing left to say: end the
+/// statement the way a raised exception ends it. The runtime contains
+/// the abort, so the app keeps running.
+pub fn py_abort(msg: &str) -> i64 {
+    panic!("{msg}");
+}
+
+
+// ---- sqlite: bound parameters and whole rows ------------------------
+// A value bound with `?` is never parsed as SQL, which is the point:
+// the text a user types cannot become a statement. Values bind as
+// TEXT and SQLite applies the column's affinity, so an INTEGER column
+// stores the number — the same thing Python's sqlite3 does with a str
+// parameter.
+
+fn open_db(path: &str, who: &str) -> rusqlite::Connection {
+    match rusqlite::Connection::open(path) {
+        Ok(c) => c,
+        Err(e) => panic!("sqlite.{who} open {path}: {e}"),
+    }
+}
+
+fn cell_text(v: rusqlite::types::Value) -> String {
+    match v {
+        rusqlite::types::Value::Integer(i) => i.to_string(),
+        rusqlite::types::Value::Real(f) => f.to_string(),
+        rusqlite::types::Value::Text(s) => s,
+        rusqlite::types::Value::Null => String::new(),
+        rusqlite::types::Value::Blob(_) => "<blob>".to_string(),
+    }
+}
+
+pub fn sqlite_exec_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
+    let conn = open_db(path, "exec");
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    match conn.execute(sql, bound.as_slice()) {
+        Ok(n) => n as i64,
+        Err(e) => panic!("sqlite.exec {path}: {e}"),
+    }
+}
+
+pub fn sqlite_query_text_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
+    let conn = open_db(path, "query_text");
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?))
+    });
+    match rows {
+        Ok(it) => it
+            .map(|r| match r {
+                Ok(s) => s,
+                Err(e) => panic!("sqlite.query_text row: {e}"),
+            })
+            .collect(),
+        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    }
+}
+
+pub fn sqlite_query_int_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
+    let conn = open_db(path, "query_int");
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    match conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0)) {
+        Ok(v) => v,
+        Err(e) => panic!("sqlite.query_int {path}: {e}"),
+    }
+}
+
+/// The fallible twin of the bound read, for a `try` that catches it.
+pub fn sqlite_query_int_with_result(
+    path: &str,
+    sql: &str,
+    params: Vec<String>,
+) -> std::io::Result<i64> {
+    let conn = rusqlite::Connection::open(path)
+        .map_err(|e| std::io::Error::other(format!("sqlite.query_int open {path}: {e}")))?;
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0))
+        .map_err(|e| std::io::Error::other(format!("sqlite.query_int {path}: {e}")))
+}
+
+/// The total read: a missing table or a bad statement answers no
+/// rows, the way the rest of the `_or` family answers a default.
+pub fn sqlite_query_rows_or(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) = conn.prepare(sql) else {
+        return Vec::new();
+    };
+    let n = stmt.column_count();
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let Ok(rows) = stmt.query_map(bound.as_slice(), |row| {
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
+        }
+        Ok(out)
+    }) else {
+        return Vec::new();
+    };
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+pub fn sqlite_query_rows_or_all(path: &str, sql: &str) -> Vec<Vec<String>> {
+    sqlite_query_rows_or(path, sql, Vec::new())
+}
+
+/// Whole rows, unbound — the two-argument spelling.
+pub fn sqlite_query_rows_all(path: &str, sql: &str) -> Vec<Vec<String>> {
+    sqlite_query_rows(path, sql, Vec::new())
+}
+
+pub fn sqlite_query_int_or_with(path: &str, sql: &str, default: i64, params: Vec<String>) -> i64 {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return default;
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0))
+        .unwrap_or(default)
+}
+
+pub fn sqlite_query_text_or_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
+    let Ok(conn) = rusqlite::Connection::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) = conn.prepare(sql) else {
+        return Vec::new();
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let Ok(rows) = stmt.query_map(bound.as_slice(), |row| {
+        Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?))
+    }) else {
+        return Vec::new();
+    };
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+/// Every column of every row, as text — the multi-column read. A row
+/// is a `list[str]`, so a result is a `list[list[str]]`.
+pub fn sqlite_query_rows(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
+    let conn = open_db(path, "query_rows");
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
+    };
+    let n = stmt.column_count();
+    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
+        }
+        Ok(out)
+    });
+    match rows {
+        Ok(it) => it
+            .map(|r| match r {
+                Ok(v) => v,
+                Err(e) => panic!("sqlite.query_rows row: {e}"),
+            })
+            .collect(),
+        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
+    }
+}
+
+// ---- http: POST, headers, timeouts, status --------------------------
+
+fn agent_with(timeout_ms: i64) -> ureq::Agent {
+    let mut b = ureq::AgentBuilder::new();
+    if timeout_ms > 0 {
+        b = b.timeout(std::time::Duration::from_millis(timeout_ms as u64));
+    }
+    b.build()
+}
+
+/// GET with a deadline. `0` keeps the client's own default.
+pub fn http_get_text_timeout_result(url: &str, timeout_ms: i64) -> std::io::Result<String> {
+    match agent_with(timeout_ms).get(url).call() {
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| std::io::Error::other(format!("http.get_text {url}: {e}"))),
+        Err(e) => Err(std::io::Error::other(format!("http.get_text {url}: {e}"))),
+    }
+}
+
+pub fn http_get_text_timeout(url: &str, timeout_ms: i64) -> String {
+    match http_get_text_timeout_result(url, timeout_ms) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// GET with headers. The map is sorted before it is applied, so the
+/// request a script replays is the request the first run made.
+pub fn http_get_text_with(url: &str, headers: std::collections::HashMap<String, String>) -> String {
+    let mut req = ureq::get(url);
+    let mut keys: Vec<&String> = headers.keys().collect();
+    keys.sort();
+    for k in keys {
+        req = req.set(k, &headers[k]);
+    }
+    match req.call() {
+        Ok(resp) => match resp.into_string() {
+            Ok(s) => s,
+            Err(e) => panic!("http.get_text_with {url}: {e}"),
+        },
+        Err(e) => panic!("http.get_text_with {url}: {e}"),
+    }
+}
+
+pub fn http_post_text_as_result(
+    url: &str,
+    body: &str,
+    content_type: &str,
+) -> std::io::Result<String> {
+    let ct = if content_type.is_empty() { "text/plain" } else { content_type };
+    match ureq::post(url).set("Content-Type", ct).send_string(body) {
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| std::io::Error::other(format!("http.post_text {url}: {e}"))),
+        Err(e) => Err(std::io::Error::other(format!("http.post_text {url}: {e}"))),
+    }
+}
+
+/// POST a body as text/plain and read the answer.
+pub fn http_post_text(url: &str, body: &str) -> String {
+    http_post_text_as(url, body, "text/plain")
+}
+
+/// POST under a content type of the caller's choosing.
+pub fn http_post_text_as(url: &str, body: &str, content_type: &str) -> String {
+    match http_post_text_as_result(url, body, content_type) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+pub fn http_post_text_result(url: &str, body: &str) -> std::io::Result<String> {
+    http_post_text_as_result(url, body, "text/plain")
+}
+
+pub fn http_post_text_or(url: &str, body: &str, default: &str) -> String {
+    http_post_text_as_result(url, body, "text/plain").unwrap_or_else(|_| default.to_string())
+}
+
+/// The status code, or 0 when the request never reached a server.
+/// A 404 is an answer, not a failure, so it comes back as 404.
+pub fn http_status(url: &str) -> i64 {
+    match ureq::get(url).call() {
+        Ok(resp) => resp.status() as i64,
+        Err(ureq::Error::Status(code, _)) => code as i64,
+        Err(_) => 0,
+    }
+}
+
+// ---- fs: listing, appending, removing, the app's own directory ------
+
+/// The names in a directory, sorted — a directory has no order of its
+/// own, and a screen built from one has to be reproducible.
+pub fn fs_list_dir(path: &str) -> Vec<String> {
+    let rd = match std::fs::read_dir(path) {
+        Ok(rd) => rd,
+        Err(e) => panic!("fs.list_dir {path}: {e}"),
+    };
+    let mut out: Vec<String> = rd
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    out.sort();
+    out
+}
+
+pub fn fs_append_text(path: &str, text: &str) -> i64 {
+    use std::io::Write;
+    if let Some(dir) = std::path::Path::new(path).parent() {
+        if !dir.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+    }
+    let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        Ok(f) => f,
+        Err(e) => panic!("fs.append_text {path}: {e}"),
+    };
+    match f.write_all(text.as_bytes()) {
+        Ok(()) => text.len() as i64,
+        Err(e) => panic!("fs.append_text {path}: {e}"),
+    }
+}
+
+/// Remove a file. Missing is a failure, as it is in Python.
+pub fn fs_remove(path: &str) -> i64 {
+    match std::fs::remove_file(path) {
+        Ok(()) => 0,
+        Err(e) => panic!("fs.remove {path}: {e}"),
+    }
+}
+
+pub fn fs_make_dir(path: &str) -> i64 {
+    match std::fs::create_dir_all(path) {
+        Ok(()) => 0,
+        Err(e) => panic!("fs.make_dir {path}: {e}"),
+    }
+}
+
+/// The directory an app may keep its own files in, created on the way
+/// out: `~/Library/Application Support/<name>` on macOS.
+pub fn fs_app_dir(name: &str) -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let dir = std::path::Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join(name);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        panic!("fs.app_dir {name}: {e}");
+    }
+    dir.to_string_lossy().into_owned()
+}
+
+// ---- json: writing ---------------------------------------------------
+// Maps are written in key order. A Rust HashMap has no order and a
+// Python dict has insertion order; writing by key is the one both can
+// agree on, and it is the rule dict iteration already follows here.
+
+pub fn json_dumps_str(v: &str) -> String {
+    serde_json::Value::String(v.to_string()).to_string()
+}
+
+pub fn json_dumps_int(v: i64) -> String {
+    v.to_string()
+}
+
+pub fn json_dumps_float(v: f64) -> String {
+    serde_json::Value::from(v).to_string()
+}
+
+pub fn json_dumps_bool(v: bool) -> String {
+    if v { "true" } else { "false" }.to_string()
+}
+
+pub fn json_dumps_list_str(xs: Vec<String>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::String).collect()).to_string()
+}
+
+pub fn json_dumps_list_int(xs: Vec<i64>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+}
+
+pub fn json_dumps_list_float(xs: Vec<f64>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+}
+
+pub fn json_dumps_list_bool(xs: Vec<bool>) -> String {
+    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::Bool).collect()).to_string()
+}
+
+fn dumps_map(mut pairs: Vec<(String, serde_json::Value)>) -> String {
+    // Sorted here rather than left to the map: serde_json's `Map` is a
+    // BTreeMap only while nothing in the crate graph asks it to
+    // preserve insertion order, and key order is the answer either way.
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    serde_json::Value::Object(pairs.into_iter().collect()).to_string()
+}
+
+pub fn json_dumps_map_str(m: std::collections::HashMap<String, String>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect())
+}
+
+pub fn json_dumps_map_int(m: std::collections::HashMap<String, i64>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
+}
+
+pub fn json_dumps_map_float(m: std::collections::HashMap<String, f64>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
+}
+
+pub fn json_dumps_map_bool(m: std::collections::HashMap<String, bool>) -> String {
+    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::Bool(v))).collect())
+}
+
+// ---- time: the machine's own zone -----------------------------------
+
+/// strftime in the machine's timezone. One implementation means both
+/// runs read the same zone database and print the same string; a
+/// verification script that wants a fixed answer uses `format_ms`,
+/// which is UTC.
+pub fn time_format_local_ms(ms: i64, fmt: &str) -> String {
+    match chrono::DateTime::from_timestamp_millis(ms) {
+        Some(dt) => dt.with_timezone(&chrono::Local).format(fmt).to_string(),
+        None => panic!("time: `{ms}` is out of range"),
+    }
+}
+
+/// The machine's offset from UTC, in minutes, at that instant.
+pub fn time_local_offset_minutes(ms: i64) -> i64 {
+    use chrono::Offset;
+    match chrono::DateTime::from_timestamp_millis(ms) {
+        Some(dt) => (dt.with_timezone(&chrono::Local).offset().fix().local_minus_utc() / 60) as i64,
+        None => panic!("time: `{ms}` is out of range"),
+    }
+}
+
+
+// ---- clipboard ------------------------------------------------------
+// One value, both runs: a window exchanges it with the platform every
+// frame, a headless run keeps it to itself — so copying and pasting is
+// something a script can check.
+
+pub fn clipboard_set_text(text: &str) -> i64 {
+    pixie_kernel::clipboard::set(text);
+    text.len() as i64
+}
+
+pub fn clipboard_get_text() -> String {
+    pixie_kernel::clipboard::get().as_str().to_string()
+}
+
+
+// ---- file dialogs ---------------------------------------------------
+// A dialog waits for a person, so it belongs inside a task: the call
+// blocks while the window keeps drawing. A headless run answers from
+// the queue a script filled with `file:<path>` steps, so a flow that
+// opens a file is replayed like any other.
+
+pub fn fs_open_dialog(title: &str) -> String {
+    pixie_kernel::dialog::ask(pixie_kernel::dialog::Kind::Open, title)
+}
+
+pub fn fs_save_dialog(name: &str) -> String {
+    pixie_kernel::dialog::ask(pixie_kernel::dialog::Kind::Save, name)
 }

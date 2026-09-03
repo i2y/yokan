@@ -13,6 +13,10 @@ mypy has a known limitation: it does not apply type transformations made by clas
 Under mypy, `@store` method calls are therefore misreported as "self is not passed".
 We recommend pyright for checking.
 
+A type checker knows Python's types, not the dialect's boundary.
+`yokan check app.py` answers that half: it runs the translator over every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
+No compiler is started, so it is the check to run while editing.
+
 ## Headless runs and the gate
 
 Running without a window is where verification starts.
@@ -74,27 +78,51 @@ $ yokan build demo/opsboard/app.py --release
 ```
 
 The small examples live as a set under `demo/` (counter, todo, ledger, moods, geometry, cards, styled, tryfetch, pyops and more).
-Every one of them passes the gate.
+Every one of them passes the gate, except the two that hold state in a dict (`run(state={...})`) — those are development-only by design, and the gallery says so on each.
 
 ## What does not work yet
 
 What lies outside this range is refused by name — it does not silently change behavior.
+A refusal names the file, line and column and quotes the line:
+
+```console
+$ yokan build app.py --release
+widgets.py:5:40: not in the dialect — text() does not take `weight=`
+        return text(label, size=12, weight=2)
+                                           ^
+```
+
 What Yokan cannot do as of today, with the reason for each refusal:
 
 - **Iterating a dict in insertion order.** A Python dict iterates in insertion order; the compiled dict is ordered by key. The provided form is `sorted()` iteration (key order, the same in both).
 - **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
-- **Indexing from the back through a variable** (an `xs[i]` whose i turns negative at runtime). The literal `xs[-1]` works.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
+- **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused by name; pick another (`V2`, say).
-- **Compiling `every`.** Timers are a development-run feature and do not run headless either.
+- **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused by name. Startup work goes in a def passed as `run(view, on_start=setup)`.
+- **Starting a timer from a handler.** A timer is a declaration (`every(1.0, tick)` at module level), so what a handler changes is what the tick reads.
+- **`task`'s `on_error=`.** The failure path waits on the error union; catch a failing standard-library call with `try` / `except` around the call.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
+- **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
+- **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
+- **str methods beyond the common set**: `.title()`, `.zfill()`, `.format()`, `.encode()` and the rest. `.upper()`, `.lower()`, `.strip()` / `.lstrip()` / `.rstrip()`, `.split()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.count()`, `len(s)`, `s[i]`, `s[a:b]` and `in` are in.
+- **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
+- **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
+- **Some control flow**: nested defs (a closure has no compiled shape — define helpers at module level) and a conditional expression in a view (branch the elements with `if` there).
+- **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
+- **`tuple` and `set`.** A tuple has no compiled shape yet; a Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered. A `list` covers both today.
+- **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
+- **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
+- **In the standard library**: reading a time back from text, file metadata (size, times) and copying or renaming, streaming or binary downloads, and nested json writing (a value inside a written dict or list is a str, int, float or bool).
+- **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
+- **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 

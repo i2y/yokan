@@ -18,6 +18,9 @@ pub enum ViewItem<'a> {
     /// `for <binding> in <iter> { .. }`.
     Repeat {
         binding: &'a Ident,
+        /// `for x, i in xs` — the row's index, when the source asked
+        /// for it.
+        index: Option<&'a Ident>,
         iter: &'a Expr,
         body: &'a Block,
         span: Span,
@@ -77,11 +80,13 @@ fn item_of_stmt(s: &Stmt) -> ViewItem<'_> {
     match s {
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
         } => ViewItem::Repeat {
             binding,
+            index: index.as_ref(),
             iter,
             body,
             span: *span,

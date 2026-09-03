@@ -22,14 +22,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyModule, PyTuple};
 use std::cell::{Cell, RefCell};
 use std::ffi::CString;
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::{Context as TaskCx, Poll};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 static T0: OnceLock<Instant> = OnceLock::new();
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -540,6 +537,20 @@ impl Reg {
     fn wrap(el: Element) -> Self {
         Reg(PyElement::wrap(el))
     }
+
+    /// The same, with the universal `tooltip=` rider applied — an
+    /// empty string is no tooltip, so an element that carries none
+    /// registers exactly what it did before the rider existed.
+    fn tip(tooltip: &str, el: Element) -> Self {
+        Reg::wrap(if tooltip.is_empty() {
+            el
+        } else {
+            Element::Tooltip {
+                text: Str::from(tooltip),
+                children: vec![el],
+            }
+        })
+    }
 }
 
 impl<'py> IntoPyObject<'py> for Reg {
@@ -607,6 +618,17 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
         }
         // Same for an animation rider around a container.
         Element::Anim { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        // ...and for the tooltip rider: `with column(tooltip="…")`
+        // opens the column, not the wrapper.
+        Element::Tooltip { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        // ...and for the accessibility rider: `with row(role="…")`
+        // opens the row, not the `Semantics` wrapper `wrap_sem` put
+        // around it.
+        Element::Semantics { children, .. } if children.len() == 1 => {
             set_children(&mut children[0], kids)
         }
         Element::Column { children, .. }
@@ -708,10 +730,10 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
 // ---------------------------------------------------------------------------
 // Element constructors.
 
-#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
-fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_anim(
+fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_anim(
         wrap_sem(
             Element::Text {
                 text: Str::from(text),
@@ -730,7 +752,7 @@ fn text(text: String, size: f64, color: String, align: String, grow: f64, animat
     ))
 }
 
-#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn button(
     label: String,
@@ -755,6 +777,7 @@ fn button(
     row_span: i64,
     role: String,
     a11y_label: String,
+    tooltip: String,
 ) -> Reg {
     let listener: Listener = match on_click {
         Some(cb) => Rc::new(move |w: &mut World| {
@@ -767,7 +790,7 @@ fn button(
         }),
         None => Rc::new(|_| {}),
     };
-    Reg::wrap(wrap_span(wrap_anim(wrap_sem(Element::Button {
+    Reg::tip(&tooltip, wrap_span(wrap_anim(wrap_sem(Element::Button {
         label: Str::from(label),
         background: Str::from(background),
         hover_background: Str::from(hover_background),
@@ -839,28 +862,28 @@ fn int_listener(cb: Py<PyAny>) -> IntListener {
 // toggle to take — the stub omits `a11y_label` here on purpose, and
 // the translator refuses it too (`_a11y_props(kw, allow_label=False)`)
 // as a clearer error than this signature's own `unexpected keyword`.
-#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new()))]
-fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Checkbox {
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new(), tooltip=String::new()))]
+fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Checkbox {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
     }, &role, ""))
 }
 
-#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new()))]
-fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Switch {
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new(), tooltip=String::new()))]
+fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Switch {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
     }, &role, ""))
 }
 
-#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
-fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Slider {
+fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Slider {
         value,
         min,
         max,
@@ -873,52 +896,60 @@ fn str_list(v: Vec<String>) -> List<Str> {
     v.into_iter().map(Str::from).collect()
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new()))]
-fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Select {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Select {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new()))]
-fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::RadioGroup {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::RadioGroup {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (labels=vec![], active=0, on_change=None, role=String::new(), a11y_label=String::new()))]
-fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::TabBar {
+#[pyfunction(signature = (labels=vec![], active=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::TabBar {
         labels: str_list(labels),
         active,
         on_select: on_change.map(int_listener),
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn text_field(
     value: String,
     placeholder: String,
     on_change: Option<Py<PyAny>>,
     on_submit: Option<Py<PyAny>>,
+    multiline: bool,
+    rows: f64,
     role: String,
     a11y_label: String,
+    tooltip: String,
 ) -> Reg {
-    Reg::wrap(wrap_sem(Element::TextField {
+    Reg::tip(&tooltip, wrap_sem(Element::TextField {
         value: Str::from(value),
         placeholder: Str::from(placeholder),
         on_change: on_change.map(text_listener),
         on_submit: on_submit.map(text_listener),
+        multiline,
+        rows,
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn column(
     children: &Bound<'_, PyTuple>,
@@ -936,6 +967,7 @@ fn column(
     exit: bool,
     role: String,
     a11y_label: String,
+    tooltip: String,
 ) -> PyResult<Reg> {
     let el = Element::Column {
         spacing,
@@ -959,10 +991,10 @@ fn column(
         // resolution runs in the shared kernel.
         Element::Themed { theme: Str::from(theme), children: vec![el] }
     };
-    Ok(Reg::wrap(wrap_anim(el, animate, &easing, enter, exit)))
+    Ok(Reg::tip(&tooltip, wrap_anim(el, animate, &easing, enter, exit)))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn row(
     children: &Bound<'_, PyTuple>,
@@ -975,8 +1007,9 @@ fn row(
     border_color: String,
     role: String,
     a11y_label: String,
+    tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::Row {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Row {
         spacing,
         padding,
         background: Str::from(background),
@@ -988,9 +1021,10 @@ fn row(
     }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
-fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::BarChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::BarChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -998,9 +1032,10 @@ fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f6
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
-fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::LineChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::LineChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -1013,47 +1048,47 @@ fn progress(value: f64, role: String, a11y_label: String) -> Reg {
     Reg::wrap(wrap_sem(Element::ProgressBar { value }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (size=0.0, role=String::new(), a11y_label=String::new()))]
-fn spinner(size: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Spinner { size }, &role, &a11y_label))
+#[pyfunction(signature = (size=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn spinner(size: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Spinner { size }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
-fn image(source: String, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Image { source: Str::from(source), width, height }, &role, &a11y_label))
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn image(source: String, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Image { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
-fn svg(source: String, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::Svg { source: Str::from(source), width, height }, &role, &a11y_label))
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn svg(source: String, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Svg { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, height=0.0, role=String::new(), a11y_label=String::new()))]
-fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::ScrollView { height, children: take_children(children)? }, &role, &a11y_label)))
+#[pyfunction(signature = (*children, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::ScrollView { height, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
-fn h_scroll_view(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::HScrollView(take_children(children)?), &role, &a11y_label)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn h_scroll_view(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::HScrollView(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
-fn data_table(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::DataTable(take_children(children)?), &role, &a11y_label)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn data_table(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::DataTable(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, open=true, role=String::new(), a11y_label=String::new()))]
-fn modal(children: &Bound<'_, PyTuple>, open: bool, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::Modal { open, children: take_children(children)? }, &role, &a11y_label)))
+#[pyfunction(signature = (*children, open=true, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn modal(children: &Bound<'_, PyTuple>, open: bool, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Modal { open, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
-fn stack(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::Stack(take_children(children)?), &role, &a11y_label)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn stack(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Stack(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn grid(
     children: &Bound<'_, PyTuple>,
@@ -1068,8 +1103,9 @@ fn grid(
     border_color: String,
     role: String,
     a11y_label: String,
+    tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::Grid {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Grid {
         columns,
         rows,
         spacing,
@@ -1083,9 +1119,10 @@ fn grid(
     }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (child, col_span=1, row_span=1, role=String::new(), a11y_label=String::new()))]
-fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, role: String, a11y_label: String) -> PyResult<Reg> {
-    Ok(Reg::wrap(wrap_sem(Element::GridCell {
+#[pyfunction(signature = (child, col_span=1, row_span=1, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::GridCell {
         col_span,
         row_span,
         children: vec![take_el(child)?],
@@ -1094,9 +1131,9 @@ fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, role: Strin
 
 /// Virtualized rows: `row(i)` is called only for the visible range
 /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
-#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, role=String::new(), a11y_label=String::new()))]
+#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
-fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, role: String, a11y_label: String) -> Reg {
+fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
     let build: Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>> =
         Rc::new(move |_w, range| {
             Python::attach(|py| {
@@ -1131,7 +1168,7 @@ fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtua
                     .collect()
             })
         });
-    Reg::wrap(wrap_sem(Element::ListView {
+    Reg::tip(&tooltip, wrap_sem(Element::ListView {
         virtualized,
         item_height,
         height,
@@ -1152,39 +1189,189 @@ fn task(work: Py<PyAny>, on_done: Option<Py<PyAny>>, on_error: Option<Py<PyAny>>
 }
 
 // ---------------------------------------------------------------------------
-// Timers: a never-completing future polled by the engine's 16 ms pump.
+// Timers: declared before `run()`, fired by the kernel off the
+// animation clock — a frame in a window, an `advance:<ms>` in a
+// script, so both runs tick the same number of times.
 
 thread_local! {
     static PENDING_TIMERS: RefCell<Vec<(f64, Py<PyAny>)>> = const { RefCell::new(Vec::new()) };
 }
 
-struct Every {
-    ctx: AsyncCtx,
-    hv: ErasedHandle,
-    period: Duration,
-    next: Instant,
-    cb: Py<PyAny>,
+/// Move the queued `every` registrations into the kernel's timer
+/// store. The kernel fires them off the animation clock — a frame in
+/// a window, an `advance:<ms>` in a script — which is what lets the
+/// compiled run and this one tick the same number of times.
+fn install_timers(rt: &Runtime) {
+    for (secs, cb) in PENDING_TIMERS.with(|t| t.take()) {
+        let ms = secs * 1000.0;
+        rt.with(move |w: &mut World| {
+            pixie_kernel::timer::every(
+                w,
+                ms,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
 }
 
-impl Future for Every {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, _cx: &mut TaskCx) -> Poll<()> {
-        let this = self.get_mut();
-        let now = Instant::now();
-        if now >= this.next {
-            Python::attach(|py| {
-                if let Err(e) = this.cb.call0(py) {
-                    e.print(py);
-                }
-            });
-            let _hv = this.hv;
-            this.ctx.with(after_py_callback);
-            while this.next <= now {
-                this.next += this.period;
-            }
-        }
-        Poll::Pending
+// ---------------------------------------------------------------------------
+// Keys: declared before `run()`, delivered by the kernel — a
+// keystroke in a window, a `key:<chord>` step in a script.
+
+thread_local! {
+    static PENDING_KEYS: RefCell<Vec<(String, Py<PyAny>)>> = const { RefCell::new(Vec::new()) };
+    static PENDING_ANY_KEY: RefCell<Vec<Py<PyAny>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn install_keys(rt: &Runtime) {
+    for (chord, cb) in PENDING_KEYS.with(|k| k.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::keys::bind(
+                w,
+                &chord,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
     }
+    for cb in PENDING_ANY_KEY.with(|k| k.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::keys::on_key(
+                w,
+                Rc::new(move |w: &mut World, key: Str| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call1(py, (key.as_str(),)) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare a shortcut: the chord, spelled the way the platform spells
+/// it (`cmd+s`, `shift-tab`), and the handler it runs. Call before
+/// `run()`.
+#[pyfunction]
+fn shortcut(chord: &str, on_press: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    if chord.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "shortcut() needs a chord, like \"cmd+s\"",
+        ));
+    }
+    PENDING_KEYS.with(|k| k.borrow_mut().push((chord.to_string(), on_press)));
+    Ok(())
+}
+
+/// Declare a handler that sees every key, as the chord it was.
+#[pyfunction]
+fn on_key(handler: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    PENDING_ANY_KEY.with(|k| k.borrow_mut().push(handler));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// The menu bar: declared before `run()`, handed to the platform when
+// the window opens — and pickable by name in a headless script.
+
+thread_local! {
+    static PENDING_MENUS: RefCell<Vec<(String, String, Py<PyAny>)>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+fn install_menu_items(rt: &Runtime) {
+    for (menu, item, cb) in PENDING_MENUS.with(|m| m.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::menu::item(
+                w,
+                &menu,
+                &item,
+                Rc::new(move |w: &mut World| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call0(py) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare one item in the application's menu bar: the menu it sits
+/// in, the name it shows, and the handler it runs. Call before
+/// `run()`; declaration order is menu order.
+#[pyfunction]
+fn menu_item(menu: &str, item: &str, on_pick: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    if menu.trim().is_empty() || item.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "menu_item() needs a menu and an item name",
+        ));
+    }
+    PENDING_MENUS.with(|m| m.borrow_mut().push((menu.to_string(), item.to_string(), on_pick)));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Files dropped on the window: declared before `run()`, delivered by
+// the platform's drag — or by a script's `drop:<path>` step.
+
+thread_local! {
+    static PENDING_DROPS: RefCell<Vec<Py<PyAny>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn install_drops(rt: &Runtime) {
+    for cb in PENDING_DROPS.with(|d| d.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::drop::on_file(
+                w,
+                Rc::new(move |w: &mut World, path: Str| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call1(py, (path.as_str(),)) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare what happens to a file dragged onto the window: the
+/// handler receives its path. Call before `run()`.
+#[pyfunction]
+fn on_file_drop(handler: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    PENDING_DROPS.with(|d| d.borrow_mut().push(handler));
+    Ok(())
 }
 
 /// Register a periodic callback. Call before `run()`; the callback
@@ -1404,7 +1591,11 @@ fn run(
         // task would spin the settle loop; scripted time is
         // `advance:`'s business.
         if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
-            let _ = PENDING_TIMERS.with(|t| t.take());
+            install_timers(&rt);
+            install_keys(&rt);
+            install_menu_items(&rt);
+        install_drops(&rt);
+            install_drops(&rt);
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -1435,15 +1626,10 @@ fn run(
             });
             rt.with(|w: &mut World| after_py_callback(w));
         }
-        for (secs, cb) in PENDING_TIMERS.with(|t| t.take()) {
-            rt.spawn(Every {
-                ctx: rt.ctx(),
-                hv: h.erase(),
-                period: Duration::from_secs_f64(secs),
-                next: Instant::now() + Duration::from_secs_f64(secs),
-                cb,
-            });
-        }
+        install_timers(&rt);
+        install_keys(&rt);
+        install_menu_items(&rt);
+        install_drops(&rt);
         let watch_opt = if watch {
             src_path.map(|p| make_watch(p, shared.clone(), h.erase()))
         } else {
@@ -1638,6 +1824,10 @@ fn _headless(
         CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
         let rt = Runtime::new(w);
         CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
+        install_timers(&rt);
+        install_keys(&rt);
+        install_menu_items(&rt);
+        install_drops(&rt);
         rt.with(drain_spawns);
         if let Some(f) = &on_start {
             // The startup hook: contained like any handler — a
@@ -1685,23 +1875,100 @@ fn py_fs_exists(py: Python<'_>, path: &str) -> bool {
     py.detach(|| yokan_stdlib::fs_exists(path))
 }
 
+/// `params` is the bound form: the values ride beside the statement
+/// instead of inside it, so text a user typed can never become SQL.
 #[pyfunction]
-#[pyo3(name = "exec")]
-fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str) -> i64 {
-    py.detach(|| yokan_stdlib::sqlite_exec(path, sql))
+#[pyo3(name = "exec", signature = (path, sql, params = None))]
+fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str, params: Option<Vec<String>>) -> i64 {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_exec_with(path, sql, p),
+        None => yokan_stdlib::sqlite_exec(path, sql),
+    })
 }
 
 #[pyfunction]
-#[pyo3(name = "query_text")]
-fn py_sqlite_query_text(py: Python<'_>, path: &str, sql: &str) -> Vec<String> {
-    py.detach(|| yokan_stdlib::sqlite_query_text(path, sql))
+#[pyo3(name = "query_text", signature = (path, sql, params = None))]
+fn py_sqlite_query_text(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<String> {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_text_with(path, sql, p),
+        None => yokan_stdlib::sqlite_query_text(path, sql),
+    })
+}
+
+/// The total form: no table, no rows — no raise.
+#[pyfunction]
+#[pyo3(name = "query_rows_or", signature = (path, sql, params = None))]
+fn py_sqlite_query_rows_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<Vec<String>> {
+    py.detach(|| yokan_stdlib::sqlite_query_rows_or(path, sql, params.unwrap_or_default()))
+}
+
+/// Every column of every row, as text — the multi-column read.
+#[pyfunction]
+#[pyo3(name = "query_rows", signature = (path, sql, params = None))]
+fn py_sqlite_query_rows(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<Vec<String>> {
+    py.detach(|| yokan_stdlib::sqlite_query_rows(path, sql, params.unwrap_or_default()))
 }
 
 #[pyfunction]
-#[pyo3(name = "get_text")]
-fn py_http_get_text(py: Python<'_>, url: &str) -> PyResult<String> {
-    py.detach(|| yokan_stdlib::http_get_text_result(url))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+#[pyo3(name = "get_text", signature = (url, timeout_ms = 0))]
+fn py_http_get_text(py: Python<'_>, url: &str, timeout_ms: i64) -> PyResult<String> {
+    py.detach(|| match timeout_ms {
+        0 => yokan_stdlib::http_get_text_result(url),
+        ms => yokan_stdlib::http_get_text_timeout_result(url, ms),
+    })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+#[pyo3(name = "get_text_with")]
+fn py_http_get_text_with(
+    py: Python<'_>,
+    url: &str,
+    headers: std::collections::HashMap<String, String>,
+) -> String {
+    py.detach(|| yokan_stdlib::http_get_text_with(url, headers))
+}
+
+#[pyfunction]
+#[pyo3(name = "post_text", signature = (url, body, content_type = None))]
+fn py_http_post_text(
+    py: Python<'_>,
+    url: &str,
+    body: &str,
+    content_type: Option<&str>,
+) -> String {
+    py.detach(|| match content_type {
+        Some(ct) => yokan_stdlib::http_post_text_as(url, body, ct),
+        None => yokan_stdlib::http_post_text(url, body),
+    })
+}
+
+#[pyfunction]
+#[pyo3(name = "post_text_or")]
+fn py_http_post_text_or(py: Python<'_>, url: &str, body: &str, default: &str) -> String {
+    py.detach(|| yokan_stdlib::http_post_text_or(url, body, default))
+}
+
+/// The status code, or 0 when the request never reached a server.
+#[pyfunction]
+#[pyo3(name = "status")]
+fn py_http_status(py: Python<'_>, url: &str) -> i64 {
+    py.detach(|| yokan_stdlib::http_status(url))
 }
 
 #[pyfunction] #[pyo3(name = "sqrt")]
@@ -1761,9 +2028,17 @@ fn py_notify_send(title: &str, body: &str) {
     yokan_stdlib::notify_send(title, body)
 }
 
-#[pyfunction] #[pyo3(name = "query_int")]
-fn py_sqlite_query_int(py: Python<'_>, path: &str, sql: &str) -> PyResult<i64> {
-    py.detach(|| yokan_stdlib::sqlite_query_int_result(path, sql))
+#[pyfunction] #[pyo3(name = "query_int", signature = (path, sql, params = None))]
+fn py_sqlite_query_int(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> PyResult<i64> {
+    py.detach(|| match params {
+        Some(p) => Ok(yokan_stdlib::sqlite_query_int_with(path, sql, p)),
+        None => yokan_stdlib::sqlite_query_int_result(path, sql),
+    })
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -1777,14 +2052,31 @@ fn py_http_get_text_or(py: Python<'_>, url: &str, default: &str) -> String {
     py.detach(|| yokan_stdlib::http_get_text_or(url, default))
 }
 
-#[pyfunction] #[pyo3(name = "query_int_or")]
-fn py_sqlite_query_int_or(py: Python<'_>, path: &str, sql: &str, default: i64) -> i64 {
-    py.detach(|| yokan_stdlib::sqlite_query_int_or(path, sql, default))
+#[pyfunction] #[pyo3(name = "query_int_or", signature = (path, sql, default, params = None))]
+fn py_sqlite_query_int_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    default: i64,
+    params: Option<Vec<String>>,
+) -> i64 {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_int_or_with(path, sql, default, p),
+        None => yokan_stdlib::sqlite_query_int_or(path, sql, default),
+    })
 }
 
-#[pyfunction] #[pyo3(name = "query_text_or")]
-fn py_sqlite_query_text_or(py: Python<'_>, path: &str, sql: &str) -> Vec<String> {
-    py.detach(|| yokan_stdlib::sqlite_query_text_or(path, sql))
+#[pyfunction] #[pyo3(name = "query_text_or", signature = (path, sql, params = None))]
+fn py_sqlite_query_text_or(
+    py: Python<'_>,
+    path: &str,
+    sql: &str,
+    params: Option<Vec<String>>,
+) -> Vec<String> {
+    py.detach(|| match params {
+        Some(p) => yokan_stdlib::sqlite_query_text_or_with(path, sql, p),
+        None => yokan_stdlib::sqlite_query_text_or(path, sql),
+    })
 }
 
 #[pyfunction] #[pyo3(name = "seed")]
@@ -1799,6 +2091,126 @@ fn py_time_now_ms() -> i64 { yokan_stdlib::time_now_ms() }
 #[pyfunction] #[pyo3(name = "format_ms")]
 fn py_time_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
     py.detach(|| yokan_stdlib::time_format_ms(ms, fmt))
+}
+#[pyfunction] #[pyo3(name = "log")]
+fn py_log(py: Python<'_>, msg: &str) -> i64 {
+    py.detach(|| yokan_stdlib::log_line(msg))
+}
+
+#[pyfunction] #[pyo3(name = "sleep_ms")]
+fn py_time_sleep_ms(py: Python<'_>, ms: i64) -> i64 {
+    py.detach(|| yokan_stdlib::time_sleep_ms(ms))
+}
+
+#[pyfunction] #[pyo3(name = "format_local_ms")]
+fn py_time_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
+    py.detach(|| yokan_stdlib::time_format_local_ms(ms, fmt))
+}
+
+#[pyfunction] #[pyo3(name = "local_offset_minutes")]
+fn py_time_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
+    py.detach(|| yokan_stdlib::time_local_offset_minutes(ms))
+}
+
+#[pyfunction] #[pyo3(name = "set_text")]
+fn py_clipboard_set_text(py: Python<'_>, text: &str) -> i64 {
+    py.detach(|| yokan_stdlib::clipboard_set_text(text))
+}
+
+#[pyfunction] #[pyo3(name = "get_text")]
+fn py_clipboard_get_text(py: Python<'_>) -> String {
+    py.detach(yokan_stdlib::clipboard_get_text)
+}
+
+#[pyfunction] #[pyo3(name = "list_dir")]
+fn py_fs_list_dir(py: Python<'_>, path: &str) -> Vec<String> {
+    py.detach(|| yokan_stdlib::fs_list_dir(path))
+}
+
+#[pyfunction] #[pyo3(name = "append_text")]
+fn py_fs_append_text(py: Python<'_>, path: &str, text: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_append_text(path, text))
+}
+
+#[pyfunction] #[pyo3(name = "remove")]
+fn py_fs_remove(py: Python<'_>, path: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_remove(path))
+}
+
+#[pyfunction] #[pyo3(name = "make_dir")]
+fn py_fs_make_dir(py: Python<'_>, path: &str) -> i64 {
+    py.detach(|| yokan_stdlib::fs_make_dir(path))
+}
+
+/// Both doors release Python while they wait: a dialog is a person's
+/// decision, and the interpreted run's UI thread has to keep going.
+#[pyfunction] #[pyo3(name = "open_dialog", signature = (title = ""))]
+fn py_fs_open_dialog(py: Python<'_>, title: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_open_dialog(title))
+}
+
+#[pyfunction] #[pyo3(name = "save_dialog", signature = (name = ""))]
+fn py_fs_save_dialog(py: Python<'_>, name: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_save_dialog(name))
+}
+
+#[pyfunction] #[pyo3(name = "app_dir")]
+fn py_fs_app_dir(py: Python<'_>, name: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_app_dir(name))
+}
+
+/// `json.dumps(v)` — the door reads the value's type at run time, the
+/// translator reads it from the annotation; both land on the same
+/// stdlib writer, which is what makes the two runs print one string.
+/// Bools are looked at before ints because a Python bool IS an int.
+#[pyfunction] #[pyo3(name = "dumps")]
+fn py_json_dumps(v: &Bound<'_, PyAny>) -> PyResult<String> {
+    use pyo3::types::{PyBool, PyDict as PyDictT, PyList};
+    if v.is_instance_of::<PyBool>() {
+        return Ok(yokan_stdlib::json_dumps_bool(v.extract()?));
+    }
+    if let Ok(n) = v.extract::<i64>() {
+        return Ok(yokan_stdlib::json_dumps_int(n));
+    }
+    if let Ok(f) = v.extract::<f64>() {
+        return Ok(yokan_stdlib::json_dumps_float(f));
+    }
+    if let Ok(t) = v.extract::<String>() {
+        return Ok(yokan_stdlib::json_dumps_str(&t));
+    }
+    if v.is_instance_of::<PyList>() {
+        if let Ok(xs) = v.extract::<Vec<bool>>() {
+            return Ok(yokan_stdlib::json_dumps_list_bool(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<i64>>() {
+            return Ok(yokan_stdlib::json_dumps_list_int(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<f64>>() {
+            return Ok(yokan_stdlib::json_dumps_list_float(xs));
+        }
+        if let Ok(xs) = v.extract::<Vec<String>>() {
+            return Ok(yokan_stdlib::json_dumps_list_str(xs));
+        }
+    }
+    if v.is_instance_of::<PyDictT>() {
+        use std::collections::HashMap;
+        if let Ok(m) = v.extract::<HashMap<String, bool>>() {
+            return Ok(yokan_stdlib::json_dumps_map_bool(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, i64>>() {
+            return Ok(yokan_stdlib::json_dumps_map_int(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, f64>>() {
+            return Ok(yokan_stdlib::json_dumps_map_float(m));
+        }
+        if let Ok(m) = v.extract::<HashMap<String, String>>() {
+            return Ok(yokan_stdlib::json_dumps_map_str(m));
+        }
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "json.dumps writes a str, int, float, bool, a list of one of those, \
+         or a dict with str keys and one of those as values",
+    ))
 }
 
 #[pymodule]
@@ -1896,6 +2308,10 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(local, m)?)?;
     m.add_function(wrap_pyfunction!(task, m)?)?;
     m.add_function(wrap_pyfunction!(every, m)?)?;
+    m.add_function(wrap_pyfunction!(shortcut, m)?)?;
+    m.add_function(wrap_pyfunction!(on_key, m)?)?;
+    m.add_function(wrap_pyfunction!(menu_item, m)?)?;
+    m.add_function(wrap_pyfunction!(on_file_drop, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(_headless, m)?)?;
     let fs = PyModule::new(m.py(), "fs")?;
@@ -1903,6 +2319,13 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fs.add_function(wrap_pyfunction!(py_fs_write_text, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_exists, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_read_text_or, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_list_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_append_text, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_remove, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_make_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_app_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_open_dialog, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_save_dialog, &fs)?)?;
     m.add_submodule(&fs)?;
     let sqlite = PyModule::new(m.py(), "sqlite")?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_exec, &sqlite)?)?;
@@ -1910,10 +2333,16 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_int, &sqlite)?)?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_int_or, &sqlite)?)?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_query_text_or, &sqlite)?)?;
+    sqlite.add_function(wrap_pyfunction!(py_sqlite_query_rows, &sqlite)?)?;
+    sqlite.add_function(wrap_pyfunction!(py_sqlite_query_rows_or, &sqlite)?)?;
     m.add_submodule(&sqlite)?;
     let http = PyModule::new(m.py(), "http")?;
     http.add_function(wrap_pyfunction!(py_http_get_text, &http)?)?;
     http.add_function(wrap_pyfunction!(py_http_get_text_or, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_get_text_with, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_post_text, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_post_text_or, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_status, &http)?)?;
     m.add_submodule(&http)?;
     // `from yokan import fs` works by attribute; this makes the
     // dotted forms (`import yokan.fs` etc.) resolve too.
@@ -1934,6 +2363,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jsonm.add_function(wrap_pyfunction!(py_json_get_bool, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_length, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_has, &jsonm)?)?;
+    jsonm.add_function(wrap_pyfunction!(py_json_dumps, &jsonm)?)?;
     m.add_submodule(&jsonm)?;
     let notifym = PyModule::new(m.py(), "notify")?;
     notifym.add_function(wrap_pyfunction!(py_notify_send, &notifym)?)?;
@@ -1947,9 +2377,17 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     randomm.add_function(wrap_pyfunction!(py_random_int, &randomm)?)?;
     randomm.add_function(wrap_pyfunction!(py_random_float, &randomm)?)?;
     m.add_submodule(&randomm)?;
+    m.add_function(wrap_pyfunction!(py_log, m)?)?;
+    let clipm = PyModule::new(m.py(), "clipboard")?;
+    clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
+    clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;
+    m.add_submodule(&clipm)?;
     let timem = PyModule::new(m.py(), "time")?;
     timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
     timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_sleep_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_format_local_ms, &timem)?)?;
+    timem.add_function(wrap_pyfunction!(py_time_local_offset_minutes, &timem)?)?;
     m.add_submodule(&timem)?;
     let sysmod = m.py().import("sys")?.getattr("modules")?;
     sysmod.set_item("yokan.fs", &fs)?;

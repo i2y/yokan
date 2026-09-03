@@ -117,6 +117,17 @@ match health():
 
 case の抜けはコンパイル時に指摘されます。
 バリアントのフィールドにデフォルトは書けず、一つのバリアントは一つの直和型にだけ属します。
+腕にはガードと `|` の並記が書け、ガードが外れたときは Python と同じく下の腕に落ちます。
+
+```python
+match health():
+    case Degraded(services) if services > 3:
+        text("badly degraded")
+    case Healthy() | Degraded(_):
+        text("fine enough")
+    case _:
+        text("down")
+```
 
 ## Optional と Enum
 
@@ -124,6 +135,7 @@ Optional は状態にもフィールドにも書けます（`last: int | None = 
 絞り込みは walrus の節で見たとおりです。
 
 Enum は普通の `class Mood(Enum)` がそのままコンパイルされます。
+`.name` と `.value` は Python と同じ値を返し（`auto()` は 1 から数えます）、`for m in Mood:` は宣言順にメンバーを回ります。
 `match` の case は `Mood.MEMBER` か `_` で、抜けは指摘されます。
 テキストに入れると Python と同じ `Mood.HAPPY` の形で描画されます。
 

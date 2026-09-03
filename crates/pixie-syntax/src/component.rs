@@ -386,6 +386,7 @@ impl Expander {
         Ok(match s {
             Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 span,
@@ -397,6 +398,7 @@ impl Expander {
                 self.repeater_depth -= 1;
                 Stmt::For {
                     binding: binding.clone(),
+                    index: index.clone(),
                     iter: iter.clone(),
                     body: body?,
                     span: *span,
@@ -1072,6 +1074,7 @@ fn subst_stmt(s: &Stmt, map: &HashMap<String, Expr>, comp: &str) -> Result<Stmt,
         },
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
@@ -1079,6 +1082,7 @@ fn subst_stmt(s: &Stmt, map: &HashMap<String, Expr>, comp: &str) -> Result<Stmt,
             check_binder(binding, map, comp)?;
             Stmt::For {
                 binding: binding.clone(),
+                index: index.clone(),
                 iter: subst_expr(iter, map, comp)?,
                 body: subst_block(body, map, comp)?,
                 span: *span,

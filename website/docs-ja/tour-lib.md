@@ -23,20 +23,51 @@ except Exception as e:
 
 ## 標準ライブラリ
 
-`from yokan import fs, sqlite, http, math, json, time, strings, random, notify` で使います。
+`from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify` で使います。
 どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
-- **fs**：`read_text` / `write_text` / `exists` / `read_text_or`
-- **sqlite**：`exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or`（SQLite 同梱。集計は COALESCE で包み、ORDER BY で順序を固定する）
-- **http**：`get_text` / `get_text_or`（同期）
+- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
+  それと、プラットフォーム自身のパネルである `open_dialog(title)` と `save_dialog(name)`。返るのはパスで、取り消されたときは `""` です。ダイアログは人を待つので `task(...)` の中で呼びます。検証スクリプトは `file:<path>` で答えます。
+- **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
+- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
 - **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
-- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）
-- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）
+- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）と `dumps(value)`（str、int、float、bool、そのいずれかのリスト、str をキーとする dict を書き出す。dict はキー順）
+- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
+- **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
+
+sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
+
+```python
+sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
+sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?", 0, ["food"])
+```
+
+値の位置に `?` を書き、値は文の外に並べて渡します。
+こう書けば `item` の中のアポストロフィはアポストロフィのままで、利用者が打った文字列が SQL になることはありません。
+値はテキストとしてバインドされ、列の affinity が変換します。
+INTEGER の列には数値が入ります。
+
+行はまるごと `list[str]` として返るので、結果は `list[list[str]]` です。
+
+```python
+@store
+class Ledger:
+    raw: list[list[str]] = []
+    rows: list[str] = []
+
+    def load(self) -> None:
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
+```
+
+表示する一行は、SQL で組み立てるのではなく Python 側で書きます。
 
 検証を安定させるこつは、結果を毎回同じにすることです。
 時刻は固定値を渡し、乱数は種を撒く。
@@ -127,10 +158,10 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-引数と返り値は全部注釈します（int / float / str / bool / list[...]）。
+引数と返り値は全部注釈します（int、float、str、bool、それらの `list[...]` と `dict[str, ...]`、Value クラス、`T | None`）。
 numpy のようなコンパイル済み拡張もエスケープの中で使えます。
 
-## 重い処理とタイマー
+## 重い処理とタイマーとキー
 
 ハンドラをブロックしてはいけません（ウィンドウが固まります）。
 `task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
@@ -138,15 +169,59 @@ numpy のようなコンパイル済み拡張もエスケープの中で使え�
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-渡す関数は UI 要素を作らず、値を返すだけにします。
-ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+`on_error=` は開発実行だけの形です。
+標準ライブラリ呼び出しの失敗は、その呼び出しを `try` / `except` で囲んで受けます。
 
-`every(seconds, cb)` は秒間隔のタイマーです。
-`run` より前に呼びます。
-タイマーは開発実行の機能で、コンパイル対象ではありません（[今できないこと](tour-ship.md#今できないこと)参照）。
+渡す関数は UI 要素を作らず、値を返すだけにします。
+`task` はそのハンドラの最後の文にします（Python では task の後の文が仕事の完了より先に走るためです）。
+ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+どちらの実行も同じことをします。
+開発実行では Python のスレッドが、コンパイル済みの実行では中の標準ライブラリ呼び出しの `await` が、その仕事を UI スレッドの外に出します。
+task の中の純粋な計算は書いた場所で走ります。
+外に出るのは `fs`、`sqlite`、`http`、`time.sleep_ms` の呼び出しです。
+
+`every(seconds, cb)` は秒間隔のタイマーで、モジュールレベル（または `__main__` ガードの中）に書いて、アプリと一緒に始まります。
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+これは後から呼ぶものではなく宣言です。
+どちらの実行もアプリの開始時にタイマーを始め、同じ時計で発火します（ウィンドウならフレーム、ヘッドレスなら `advance:<ms>`）。
+そのため一分ぶんのティックもゲートで確かめられます。
+
+キーも同じように宣言します。
+`shortcut(chord, handler)` はコードをひとつ束ね、`on_key(handler)` はすべてのキーをコードの形で受け取ります。
+
+```python
+def save():
+    fs.write_text(path, body())
+
+shortcut("cmd+s", save)
+on_key(lambda k: last.set(k))
+```
+
+コードの綴りはプラットフォームの綴りに合わせます（`cmd+s`、`shift-tab`、`ctrl+alt+k`）。
+`-` で区切っても同じものとして読みます。
+テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴うコードだけがアプリに届きます。
+ヘッドレスのスクリプトは `key:cmd+s` で押せるので、ショートカットもクリックと同じく検証される操作になります。
+
+`menu_item(menu, name, handler)` は、同じハンドラをアプリケーションのメニューバーに置きます。
+
+```python
+menu_item("File", "Save", save)
+menu_item("File", "Clear", clear)
+```
+
+宣言した順がメニューの順で、ウィンドウはこのバーをプラットフォームに渡します。
+スクリプトからは `menu:Save` のように名前で選びます。
+
+ウィンドウに落とされたファイルも同じ形で宣言します。
+`on_file_drop(handler)` のハンドラがパスを受け取り、スクリプトは `drop:<path>` で落とします。
 

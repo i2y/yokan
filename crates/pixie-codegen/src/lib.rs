@@ -2932,11 +2932,15 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
         // clone out (values or Copy handles — the §3.2 economy).
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             ..
         } => {
             let rb = camel_to_snake(&binding.name);
+            if index.is_some() {
+                writeln!(out, "{ind}let mut __turn{} = 0i64;", cx.loop_depth).unwrap();
+            }
             let range_form = matches!(&iter.kind, ExprKind::Range { .. });
             if let ExprKind::Range {
                 start,
@@ -2968,6 +2972,13 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
                 _ => None,
             };
             cx.locals.push((binding.name.clone(), elem_class, false, None));
+            if let Some(i) = index {
+                // `for x, i in xs` — the row's position, counted as
+                // the loop runs so a list and a range say the same.
+                let iv = camel_to_snake(&i.name);
+                writeln!(out, "{ind}    let {iv} = __turn{}; __turn{} += 1;", cx.loop_depth, cx.loop_depth).unwrap();
+                cx.locals.push((i.name.clone(), None, false, None));
+            }
             cx.loop_depth += 1;
             let inner = format!("{ind}    ");
             lower_scope(&body.stmts, body.trailing.as_deref(), true, cx, out, &inner)?;
@@ -3398,6 +3409,51 @@ fn emit_async_stmt(
                 cx.locals.pop();
                 Ok(())
             }
+            // An `if` whose branches await: the condition is evaluated in
+            // its own re-entry and the branches keep the async lowering,
+            // so `await` reads the same inside a branch as outside one.
+            // (Without this the branch went through the sync lowering,
+            // where an `await` cannot appear at all — a shape an author
+            // writes the moment a dialog's answer decides what happens
+            // next.)
+            ExprKind::If { .. } if stmt_awaits(s) => {
+                let ExprKind::If {
+                    cond,
+                    then_b,
+                    else_b,
+                    let_binding,
+                } = &e.kind
+                else {
+                    unreachable!("guarded above")
+                };
+                if let_binding.is_some() {
+                    return err(e.span, "`if let` survived the desugar (§8.69) — this is a pixie bug");
+                }
+                let c = lower_method_expr(cond, cx)?;
+                let n = *await_n;
+                *await_n += 1;
+                writeln!(
+                    out,
+                    "{ind}let __ac{n} = __ctx.with(|w: &mut World| {{ {c} }});"
+                )
+                .unwrap();
+                writeln!(out, "{ind}if __ac{n} {{").unwrap();
+                let inner = format!("{ind}    ");
+                let depth = cx.locals.len();
+                for st in &then_b.stmts {
+                    emit_async_stmt(st, cx, out, &inner, await_n)?;
+                }
+                cx.locals.truncate(depth);
+                if let Some(eb) = else_b {
+                    writeln!(out, "{ind}}} else {{").unwrap();
+                    for st in &eb.stmts {
+                        emit_async_stmt(st, cx, out, &inner, await_n)?;
+                    }
+                    cx.locals.truncate(depth);
+                }
+                writeln!(out, "{ind}}}").unwrap();
+                Ok(())
+            }
             _ => {
                 writeln!(out, "{ind}__ctx.with(|w: &mut World| {{").unwrap();
                 lower_method_stmt(s, cx, out, &format!("{ind}    "))?;
@@ -3409,12 +3465,46 @@ fn emit_async_stmt(
             *span,
             "`return` in async fns is not lowerable yet (M2); async fns run to completion",
         ),
+
         _ => {
             writeln!(out, "{ind}__ctx.with(|w: &mut World| {{").unwrap();
             lower_method_stmt(s, cx, out, &format!("{ind}    "))?;
             writeln!(out, "{ind}}});").unwrap();
             Ok(())
         }
+    }
+}
+
+/// Does this statement contain an `await` anywhere inside it? The
+/// async lowering asks before it takes a nested block: a branch with
+/// no await keeps the cheaper sync path (one re-entry for the whole
+/// block), and one with an await is lowered statement by statement.
+fn stmt_awaits(s: &Stmt) -> bool {
+    fn expr_awaits(e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Await(_) => true,
+            ExprKind::If {
+                cond,
+                then_b,
+                else_b,
+                ..
+            } => {
+                expr_awaits(cond)
+                    || then_b.stmts.iter().any(stmt_awaits)
+                    || then_b.trailing.as_deref().is_some_and(expr_awaits)
+                    || else_b.as_ref().is_some_and(|b| {
+                        b.stmts.iter().any(stmt_awaits)
+                            || b.trailing.as_deref().is_some_and(expr_awaits)
+                    })
+            }
+            _ => false,
+        }
+    }
+    match s {
+        Stmt::Let { value, .. } | Stmt::Var { value, .. } => expr_awaits(value),
+        Stmt::Assign { value, .. } => expr_awaits(value),
+        Stmt::Expr(e) => expr_awaits(e),
+        _ => false,
     }
 }
 
@@ -4080,7 +4170,16 @@ fn lower_view_float(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitErr
                 _ => err(e.span, format!("this {key} binding must be a numeric property")),
             }
         }
-        _ => err(e.span, format!("`{key}:` must be a number or a numeric property")),
+        // `fontSize: unit * qty` — arithmetic over numbers and numeric
+        // reads. The interpreting tier evaluates the property with the
+        // ordinary expression evaluator, so the compiled one lowers it
+        // too; anything else stays a named error.
+        ExprKind::Binary { op, lhs, rhs } => {
+            let l = lower_view_float(lhs, cx, key)?;
+            let r = lower_view_float(rhs, cx, key)?;
+            Ok(format!("({l} {} {r})", bin_op(op, e.span)?))
+        }
+        _ => err(e.span, format!("`{key}:` must be a number, a numeric property, or arithmetic over them")),
     }
 }
 
@@ -4123,7 +4222,12 @@ fn lower_view_int(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError
             }
             Ok(format!("{handle}.{}(w)", p.rust))
         }
-        _ => err(e.span, format!("`{key}:` must be an int literal or an Int property")),
+        ExprKind::Binary { op, lhs, rhs } => {
+            let l = lower_view_int(lhs, cx, key)?;
+            let r = lower_view_int(rhs, cx, key)?;
+            Ok(format!("({l} {} {r})", bin_op(op, e.span)?))
+        }
+        _ => err(e.span, format!("`{key}:` must be an int literal, an Int property, or arithmetic over them")),
     }
 }
 
@@ -4237,11 +4341,23 @@ fn lower_view_str_list(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, Emit
             }
             Ok(format!("{handle}.{}(w)", p.rust))
         }
+        // A literal list of strings: `options: ["a", "b"]`. A view
+        // rebuild evaluates it again, which is exactly what a literal
+        // in the source says.
+        ExprKind::Array(items) => {
+            let mut out = String::from("{ let mut __lit = List::<Str>::new(); ");
+            for item in items {
+                let v = lower_view_text(item, cx)?;
+                write!(out, "__lit.push({v}); ").unwrap();
+            }
+            out.push_str("__lit }");
+            Ok(out)
+        }
         _ => err(
             e.span,
             format!(
-                "`{key}:` must be a List<String> property (list literals are not \
-                 lowerable in views yet — bind a store prop or state cell)"
+                "`{key}:` must be a List<String> property or a list of string \
+                 literals — bind a store prop or state cell for anything else"
             ),
         ),
     }
@@ -4766,11 +4882,15 @@ fn lower_action_stmt(
         // with no reason anyone had written down.
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
         } => {
             let rb = camel_to_snake(&binding.name);
+            if index.is_some() {
+                writeln!(out, "{ind}let mut __turn = 0i64;").unwrap();
+            }
             match &iter.kind {
                 ExprKind::Range {
                     start,
@@ -4788,8 +4908,14 @@ fn lower_action_stmt(
                     writeln!(out, "{ind}    let {rb} = __it.clone();").unwrap();
                 }
             }
+            if let Some(i) = index {
+                writeln!(out, "{ind}    let {} = __turn; __turn += 1;", camel_to_snake(&i.name)).unwrap();
+            }
             let depth = cx.locals.len();
             cx.locals.push(binding.name.clone());
+            if let Some(i) = index {
+                cx.locals.push(i.name.clone());
+            }
             let inner = format!("{ind}    ");
             lower_action_block(body, cx, out, &inner)?;
             cx.locals.truncate(depth);
@@ -4888,7 +5014,11 @@ fn lower_view_action_with(
         write!(sig, ", {}: {t}", camel_to_snake(n)).unwrap();
     }
     sig.push('|');
-    let implicit: Vec<String> = params.iter().map(|(n, _)| n.to_string()).collect();
+    // The handler's own parameters, plus the repeater bindings in
+    // scope: a row's action is built inside the loop, so the row and
+    // its index are ordinary captures of the closure.
+    let mut implicit: Vec<String> = params.iter().map(|(n, _)| n.to_string()).collect();
+    implicit.extend(cx.loop_vars.iter().map(|(n, _, _)| n.clone()));
     match &e.kind {
         ExprKind::MethodCall {
             receiver,
@@ -4956,7 +5086,7 @@ fn element_prop<'e>(el: &'e Element, key: &str) -> Option<&'e Expr> {
 /// is what virtualization means rather than a lowering limit.
 fn single_repeater_of(
     el: &Element,
-) -> Result<Option<(&ast::Ident, &Expr, &Element)>, EmitError> {
+) -> Result<Option<(&ast::Ident, Option<&ast::Ident>, &Expr, &Element)>, EmitError> {
     let mut non_props = el
         .members
         .iter()
@@ -4965,6 +5095,7 @@ fn single_repeater_of(
         (
             Some(ElementMember::Stmt(Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 span,
@@ -4980,7 +5111,7 @@ fn single_repeater_of(
             let ExprKind::Element(child) = &trailing.kind else {
                 return err(*span, VIRTUAL_ROW_RULE);
             };
-            Ok(Some((binding, iter, child)))
+            Ok(Some((binding, index.as_ref(), iter, child)))
         }
         _ => Ok(None),
     }
@@ -5022,6 +5153,9 @@ fn lower_element(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, Em
     // ELEMENT, and the accessibility walk reads the role off whatever
     // `Semantics` wraps directly.
     let inner = lower_semantics(el, inner, cx)?;
+    // The tooltip sits just outside the semantics wrapper: it belongs
+    // to the element, and what it says is not the element's own name.
+    let inner = lower_tooltip(el, inner, cx)?;
     // Outside the semantics wrapper, inside the animation one: the
     // scope has to CONTAIN the element whose tokens it re-resolves.
     let inner = lower_themed(el, inner, cx)?;
@@ -5072,6 +5206,19 @@ fn lower_themed(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, Emi
     };
     Ok(format!(
         "Element::Themed {{ theme: {name}, children: vec![{inner}] }}"
+    ))
+}
+
+/// Wrap `inner` in an `Element::Tooltip` when the element carries the
+/// universal `tooltip:` rider — a line the window shows when the
+/// pointer rests on it, and a dumped output either way.
+fn lower_tooltip(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
+    let Some(t) = element_prop(el, "tooltip") else {
+        return Ok(inner);
+    };
+    let text = lower_view_text(t, cx)?;
+    Ok(format!(
+        "Element::Tooltip {{ text: {text}, children: vec![{inner}] }}"
     ))
 }
 
@@ -5393,8 +5540,18 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 ),
                 None => "None".into(),
             };
+            // A field that holds paragraphs. `rows` is how many lines
+            // are visible; `0` means the default.
+            let multiline = match element_prop(el, "multiline") {
+                Some(v) => lower_view_bool_keyed(v, cx, "multiline")?,
+                None => "false".into(),
+            };
+            let rows = match element_prop(el, "rows") {
+                Some(v) => lower_view_float(v, cx, "rows")?,
+                None => "0f64".into(),
+            };
             Ok(format!(
-                "Element::TextField {{ value: {value}, placeholder: {placeholder}, on_change: {on_change}, on_submit: {on_submit} }}"
+                "Element::TextField {{ value: {value}, placeholder: {placeholder}, on_change: {on_change}, on_submit: {on_submit}, multiline: {multiline}, rows: {rows} }}"
             ))
         }
         "Column" | "Row" => {
@@ -5504,7 +5661,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // tier gate never saw it — §8.24). The detection predicate
             // MUST match the interpreter's, or the tiers diverge.
             if virtualized == "true" {
-                if let Some((binding, iter, child)) = single_repeater_of(el)? {
+                if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                 // Same reach as the eager repeater (§8.65): any list
                 // this view can name, through however many objects.
                 let ExprKind::Member { receiver, name } = &iter.kind else {
@@ -5540,6 +5697,10 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 };
                 let bind_rust = camel_to_snake(&binding.name);
                 let ri = format!("__row_idx{}", cx.repeat_depth);
+                let index_bind = match index {
+                    Some(i) => format!("let {} = {ri} as i64;", camel_to_snake(&i.name)),
+                    None => String::new(),
+                };
                 // A repeater over a list of OBJECTS binds a handle,
                 // so the loop variable carries its class (§8.41).
                 let elem_class = match &elem_ty {
@@ -5554,9 +5715,15 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                     _ => RustTy::Unit,
                 };
                 cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
+                if let Some(i) = index {
+                    cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
+                }
                 cx.repeat_depth += 1;
                 let row = lower_element(child, cx, &format!("{ind}        "));
                 cx.repeat_depth -= 1;
+                if index.is_some() {
+                    cx.loop_vars.pop();
+                }
                 cx.loop_vars.pop();
                 let row = row?;
                 // The closure captures only the Copy handles inside
@@ -5578,6 +5745,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                      {ind}            for {ri} in __range {{\n\
                      {ind}                if {ri} >= __xs.len() {{ break; }}\n\
                      {ind}                let {bind_rust} = __xs.at({ri} as i64);\n\
+                     {ind}                {index_bind}\n\
                      {ind}                __rows.push({row});\n\
                      {ind}            }}\n\
                      {ind}            __rows\n\
@@ -5900,6 +6068,12 @@ pub fn semantic_prop_keys() -> &'static [&'static str] {
     &["role", "label"]
 }
 
+/// The tooltip rider — the sixth universal table, same contract and
+/// same cross-tier equality test as the others.
+pub fn tooltip_prop_keys() -> &'static [&'static str] {
+    &["tooltip"]
+}
+
 /// The theme-scope rider (§8.37) — the fifth universal table.
 pub fn theme_prop_keys() -> &'static [&'static str] {
     &["theme"]
@@ -5986,6 +6160,7 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
                 && !anim_prop_keys().contains(&key.as_str())
                 && !semantic_prop_keys().contains(&key.as_str())
                 && !theme_prop_keys().contains(&key.as_str())
+                && !tooltip_prop_keys().contains(&key.as_str())
                 && !container_prop_keys(&el.name.name).contains(&key.as_str())
             {
                 return err(
@@ -6034,6 +6209,7 @@ fn lower_items(
             }
             ViewItem::Repeat {
                 binding,
+                index,
                 iter,
                 body,
                 span,
@@ -6091,6 +6267,9 @@ fn lower_items(
                     "{ind}for ({ri}, {bind_rust}) in {xs}.iter().enumerate() {{"
                 )
                 .unwrap();
+                if let Some(i) = index {
+                    writeln!(out, "{ind}    let {} = {ri} as i64;", camel_to_snake(&i.name)).unwrap();
+                }
                 // A repeater over a list of OBJECTS binds a handle,
                 // so the loop variable carries its class (§8.41).
                 let elem_class = match &elem_ty {
@@ -6105,6 +6284,9 @@ fn lower_items(
                     _ => RustTy::Unit,
                 };
                 cx.loop_vars.push((binding.name.clone(), elem_class, row_ty));
+                if let Some(i) = index {
+                    cx.loop_vars.push((i.name.clone(), None, RustTy::Int));
+                }
                 cx.repeat_depth += 1;
                 let r = lower_items(
                     &items_of_block(body),
@@ -6114,6 +6296,9 @@ fn lower_items(
                     out,
                 );
                 cx.repeat_depth -= 1;
+                if index.is_some() {
+                    cx.loop_vars.pop();
+                }
                 cx.loop_vars.pop();
                 r?;
                 writeln!(out, "{ind}}}").unwrap();
@@ -9528,6 +9713,113 @@ fn emit_main(
         // A store is a ROOT: nothing ever releases it, so its count
         // never reaches zero and neither does anything it holds.
         writeln!(out, "    w.root({var}.erase());").unwrap();
+        // `fn tick @every(1000)` — a repeating callback, declared on
+        // the store and registered the moment the store exists. The
+        // clock is the animation clock, so a headless `advance:` fires
+        // exactly the ticks a window would have.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "every") else {
+                continue;
+            };
+            let ms: f64 = match a.args.first().map(|s| s.trim().parse::<f64>()) {
+                Some(Ok(v)) if v > 0.0 => v,
+                _ => {
+                    return err(a.span, "`@every(ms)` takes the period in milliseconds, a positive number");
+                }
+            };
+            if !m.params.is_empty() {
+                return err(a.span, "a timer's method takes no parameters — it is called by the clock");
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::timer::every(&mut w, {ms}f64, std::rc::Rc::new(move |w: &mut World| {{ {var}.{}(w); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
+        // `fn save @key("cmd-s")` — a shortcut, and `fn typed(k:
+        // String) @key` — every key, as the chord it was. Bound the
+        // moment the store exists, like a timer, so a window and a
+        // headless `key:` step reach the same handler.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "key") else {
+                continue;
+            };
+            let snake = camel_to_snake(&m.name.name);
+            match a.args.first().map(|s| s.trim().trim_matches('"').to_string()) {
+                Some(chord) if !chord.is_empty() => {
+                    if !m.params.is_empty() {
+                        return err(
+                            a.span,
+                            "a shortcut's method takes no parameters — the chord is in the attribute",
+                        );
+                    }
+                    writeln!(
+                        out,
+                        "    pixie_kernel::keys::bind(&mut w, \"{chord}\", std::rc::Rc::new(move |w: &mut World| {{ {var}.{snake}(w); }}));"
+                    )
+                    .unwrap();
+                }
+                _ => {
+                    if m.params.len() != 1 {
+                        return err(
+                            a.span,
+                            "`@key` with no chord takes the key: one `String` parameter (`fn typed(k: String) @key`)",
+                        );
+                    }
+                    writeln!(
+                        out,
+                        "    pixie_kernel::keys::on_key(&mut w, std::rc::Rc::new(move |w: &mut World, k: Str| {{ {var}.{snake}(w, k); }}));"
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        // `fn save @menu("File", "Save")` — an item in the
+        // application's menu bar, declared beside the shortcuts and
+        // registered the same way. A window hands the list to the
+        // platform; a headless `menu:<item>` step picks one.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "menu") else {
+                continue;
+            };
+            let strip = |s: &String| s.trim().trim_matches('"').to_string();
+            let (Some(menu), Some(item)) = (a.args.first().map(strip), a.args.get(1).map(strip))
+            else {
+                return err(a.span, "`@menu(\"File\", \"Save\")` takes the menu and the item name");
+            };
+            if menu.is_empty() || item.is_empty() {
+                return err(a.span, "`@menu(\"File\", \"Save\")` takes the menu and the item name");
+            }
+            if !m.params.is_empty() {
+                return err(a.span, "a menu item's method takes no parameters — it is called by the menu");
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::menu::item(&mut w, \"{menu}\", \"{item}\", std::rc::Rc::new(move |w: &mut World| {{ {var}.{}(w); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
+        // `fn opened(path: String) @drop` — what happens to a file
+        // dragged onto the window, declared like a shortcut.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "drop") else {
+                continue;
+            };
+            if m.params.len() != 1 {
+                return err(
+                    a.span,
+                    "`@drop` takes the path: one `String` parameter (`fn opened(p: String) @drop`)",
+                );
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::drop::on_file(&mut w, std::rc::Rc::new(move |w: &mut World, p: Str| {{ {var}.{}(w, p); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
         // Class-typed props whose default CONSTRUCTS (§8.64). The
         // slot came out of `new()` empty, because `new()` has no
         // World; here it does, so the object is built and assigned
