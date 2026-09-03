@@ -6,6 +6,10 @@ once — a named store with methods over sqlite, dict/list fields, a
 chart, styles, typed text input (`strings.to_int` is total: bad
 input becomes the default, identically in both tiers) — and it
 ships as one file.
+
+Every value reaches the database as a bound parameter: a `?` in the
+statement and the value beside it, so an apostrophe in an item name
+is an apostrophe and never a piece of SQL.
 """
 import os
 import sys
@@ -46,26 +50,28 @@ class Ledger:
     totals: dict[str, int] = {}
     chart: list[float] = []
     rows: list[str] = []
+    raw: list[list[str]] = []
 
     def reset(self) -> None:
-        sqlite.exec("demo/.gate/ledger.db", "CREATE TABLE IF NOT EXISTS expenses(name TEXT, amount INTEGER, cat TEXT)")
-        sqlite.exec("demo/.gate/ledger.db", "DELETE FROM expenses")
+        sqlite.exec(DB, "CREATE TABLE IF NOT EXISTS expenses(name TEXT, amount INTEGER, cat TEXT)")
+        sqlite.exec(DB, "DELETE FROM expenses")
         self.load()
 
     def add(self, item: str, yen: int, cat: str) -> None:
         if yen > 0:
-            sqlite.exec("demo/.gate/ledger.db", f"INSERT INTO expenses VALUES ('{item}', {yen}, '{cat}')")
+            sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
             self.load()
 
     def load(self) -> None:
         # the *_or family: a missing table reads as clean zeros —
         # return-value defaults are the ergonomic default; try/except
         # is for when the failure REASON matters (see tryfetch).
-        self.count = sqlite.query_int_or("demo/.gate/ledger.db", "SELECT COUNT(*) FROM expenses", 0)
-        self.grand = sqlite.query_int_or("demo/.gate/ledger.db", "SELECT COALESCE(SUM(amount),0) FROM expenses", 0)
-        f = sqlite.query_int_or("demo/.gate/ledger.db", "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat='food'", 0)
-        t = sqlite.query_int_or("demo/.gate/ledger.db", "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat='transit'", 0)
-        n = sqlite.query_int_or("demo/.gate/ledger.db", "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat='fun'", 0)
+        self.count = sqlite.query_int_or(DB, "SELECT COUNT(*) FROM expenses", 0)
+        self.grand = sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses", 0)
+        by_cat = "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?"
+        f = sqlite.query_int_or(DB, by_cat, 0, ["food"])
+        t = sqlite.query_int_or(DB, by_cat, 0, ["transit"])
+        n = sqlite.query_int_or(DB, by_cat, 0, ["fun"])
         self.food = f
         self.transit = t
         self.fun = n
@@ -77,7 +83,12 @@ class Ledger:
         self.chart = self.chart + [1.0 * f]
         self.chart = self.chart + [1.0 * t]
         self.chart = self.chart + [1.0 * n]
-        self.rows = sqlite.query_text_or("demo/.gate/ledger.db", "SELECT name || '  ¥' || amount || '  (' || cat || ')' FROM expenses ORDER BY rowid")
+        # whole rows, every column as text — the line is written here
+        # rather than assembled in SQL
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
 
 
 def entry_row(i):
