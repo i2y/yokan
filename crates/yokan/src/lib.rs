@@ -889,6 +889,19 @@ fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, toolt
     })
 }
 
+/// A line of text that opens `url` in the browser when clicked. No
+/// handler: opening a URL is not app state, so there is nothing for
+/// `on_click` to call back into — a headless run's `click:` on a
+/// Link is accepted and does nothing (the `notify.send` shape).
+#[pyfunction(signature = (label, url, size=0.0, tooltip=String::new()))]
+fn link(label: String, url: String, size: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Link {
+        label: Str::from(label),
+        url: Str::from(url),
+        font_size: size,
+    })
+}
+
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
 fn text_field(
     value: String,
@@ -2188,6 +2201,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(radio_group, m)?)?;
     m.add_function(wrap_pyfunction!(tab_bar, m)?)?;
+    m.add_function(wrap_pyfunction!(link, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

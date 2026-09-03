@@ -1208,6 +1208,28 @@ fn choosers_demo_checks_and_emits() {
 }
 
 #[test]
+fn link_demo_checks_and_emits() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/link/link.pix");
+    let outcome = pixie_driver::check_file(Path::new(path)).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        // `text:`/`url:` reuse Text's own string lowering (a literal
+        // here); `fontSize:` is a Float prop like Text's.
+        r#"Element::Link { label: Str::from("Docs"), url: Str::from("https://example.com"), font_size: 16f64 }"#,
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+#[test]
 fn choosers_require_their_props() {
     let dir = std::env::temp_dir().join("pixie-m0-gate");
     std::fs::create_dir_all(&dir).unwrap();
@@ -1303,6 +1325,42 @@ fn choosers_require_their_props() {
     assert!(
         err.contains("String"),
         "error should point at the property binding: {err}"
+    );
+}
+
+#[test]
+fn link_requires_text_and_url() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let emit_err = |name: &str, src: &str| -> String {
+        let f = dir.join(name);
+        std::fs::write(&f, src).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .expect_err("this link must not emit")
+        .message
+    };
+
+    let err = emit_err(
+        "link_no_text.pix",
+        "view Main {\n  Column {\n    Link { }\n  }\n}\n",
+    );
+    assert!(
+        err.contains("Link needs `text:`"),
+        "error should name the missing prop: {err}"
+    );
+    let err = emit_err(
+        "link_no_url.pix",
+        "view Main {\n  Column {\n    Link { text: \"Docs\" }\n  }\n}\n",
+    );
+    assert!(
+        err.contains("Link needs `url:`"),
+        "error should name the missing prop: {err}"
     );
 }
 

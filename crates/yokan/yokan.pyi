@@ -200,6 +200,9 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
     tooltip: str = "",
 ) -> Element: ...
+def link(label: str, url: str, size: float = 0.0, tooltip: str = "") -> Element:
+    """Text that opens `url` in the browser when clicked; a headless
+    run records the click and opens nothing."""
 def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
 # The work runs off the UI thread in both runs — a Python thread
 # during development, the engine's pool for the standard-library

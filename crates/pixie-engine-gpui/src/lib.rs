@@ -7,7 +7,7 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar.
+//! RadioGroup / TabBar / Link.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
 //! survives rebuilds — positional state transfer, engine-side. Scroll
@@ -1064,6 +1064,7 @@ fn accesskit_role(r: pixie_kernel::a11y::Role) -> gpui::Role {
         R::ComboBox => gpui::Role::ComboBox,
         R::RadioGroup => gpui::Role::RadioGroup,
         R::TabList => gpui::Role::TabList,
+        R::Link => gpui::Role::Link,
     }
 }
 
@@ -2674,6 +2675,34 @@ fn render_el<C: Component>(
                 d = d.child(tab);
             }
             d.into_any_element()
+        }
+        // Accent-colored, underlined text with a pointer cursor — a
+        // link reads as a link. The click hands the URL straight to
+        // gpui's own "open in the platform browser" call
+        // (`App::open_url`, reached through `Context<Root<C>>`'s
+        // `Deref` to `App`); no kernel `Listener` is involved, since
+        // `Element::Link` carries none — the World never changes.
+        Element::Link {
+            label,
+            url,
+            font_size,
+        } => {
+            pass.next_id += 1;
+            let mut d = with_a11y(div().id(pass.next_id), el, sem)
+                .text_color(rgb(th.accent))
+                .underline()
+                .cursor_pointer();
+            if *font_size > 0.0 {
+                d = d.text_size(px(*font_size as f32));
+            }
+            let u = url.as_str().to_string();
+            d.child(SharedString::from(label.as_str().to_string()))
+                .on_click(cx.listener(
+                    move |_this: &mut Root<C>, _ev, _window, cx| {
+                        cx.open_url(&u);
+                    },
+                ))
+                .into_any_element()
         }
     }
 }

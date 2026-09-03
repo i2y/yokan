@@ -1261,6 +1261,20 @@ pub enum Element {
         active: i64,
         on_select: Option<IntListener>,
     },
+    /// A line of text that opens `url` in the platform's browser when
+    /// clicked. No `Listener` rides here — opening a URL is not app
+    /// state, so there is nothing for a headless script to apply to
+    /// the World. `find_button`/`find_button_nth` match a Link by
+    /// label alongside Button (the `click[@n]:<label>` contract) and
+    /// hand back a no-op listener: the click is accepted and does
+    /// nothing (the same "accepted, dropped" shape as `notify.send`
+    /// in a headless run). `font_size` `0.0` = unset (the engine
+    /// default), the same convention `Text` uses.
+    Link {
+        label: Str,
+        url: Str,
+        font_size: f64,
+    },
 }
 
 /// Clamp `v` into `[min, max]`, then snap it to the nearest `step`
@@ -1776,6 +1790,21 @@ impl Element {
                     labels.iter().map(|l| l.as_str().to_string()).collect();
                 format!("TabBar(active={active})[{}]", inner.join(", "))
             }
+            // Mirrors Text's dump exactly (copy of its `font_size`
+            // join-when-set rule): the label and url are the widget's
+            // whole meaning, so they always print.
+            Element::Link {
+                label,
+                url,
+                font_size,
+            } => {
+                let mut s = format!("Link({label}, {url}");
+                if *font_size != 0.0 {
+                    s.push_str(&format!(", fontSize={font_size}"));
+                }
+                s.push(')');
+                s
+            }
         }
     }
 
@@ -1834,6 +1863,20 @@ impl Element {
             Element::Button { label: l, on_click, .. } if l.as_str() == label => {
                 if *skip == 0 {
                     Some(on_click.clone())
+                } else {
+                    *skip -= 1;
+                    None
+                }
+            }
+            // A Link counts alongside Button in the SAME `click[@n]:`
+            // family (tree order, one shared index) but carries no
+            // listener of its own — opening a URL is not app state —
+            // so a match hands back a no-op: `click:` on a Link is
+            // accepted and does nothing, headless.
+            Element::Link { label: l, .. } if l.as_str() == label => {
+                if *skip == 0 {
+                    let noop: Listener = Rc::new(|_: &mut World| {});
+                    Some(noop)
                 } else {
                     *skip -= 1;
                     None

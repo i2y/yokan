@@ -2483,6 +2483,19 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        "Link" => {
+            let t = prop_of(el, "text").ok_or("Link needs `text:`")?;
+            let u = prop_of(el, "url").ok_or("Link needs `url:`")?;
+            let font_size = match prop_of(el, "fontSize") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            Ok(Element::Link {
+                label: eval_text(t, env, scope, w)?,
+                url: eval_text(u, env, scope, w)?,
+                font_size,
+            })
+        }
         other => Err(format!("element `{other}` is not in the engine vocabulary")),
     }
 }
