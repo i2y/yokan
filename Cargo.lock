@@ -3976,6 +3976,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "pixie-kernel",
+ "stacker",
  "tempfile",
  "unicode-segmentation",
 ]

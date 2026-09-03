@@ -135,6 +135,11 @@ pub struct Node {
     /// The current value a screen reader reads out — a text field's
     /// contents, a progress bar's fraction. Empty when there is none.
     pub value: Str,
+    /// Under a `Disabled` rider: the control takes no input, and a
+    /// screen reader says so. AccessKit's `Disabled` flag ("a control
+    /// or group of controls that disallows input"), per node, since a
+    /// node here has nowhere else to carry it.
+    pub disabled: bool,
     pub children: Vec<Node>,
 }
 
@@ -146,6 +151,9 @@ impl Node {
         }
         if !self.value.as_str().is_empty() {
             out.push_str(&format!(" ={}", self.value));
+        }
+        if self.disabled {
+            out.push_str(" disabled");
         }
         if !self.children.is_empty() {
             let inner: Vec<String> = self.children.iter().map(|c| c.dump()).collect();
@@ -286,6 +294,17 @@ fn authored(el: &Element) -> Option<(&Str, &Str, &Vec<Element>)> {
 /// its own contributes its children directly, so the tree stays as
 /// shallow as the app's meaning actually is.
 pub fn nodes(el: &Element) -> Vec<Node> {
+    nodes_in(el, false)
+}
+
+/// `nodes`, with the `Disabled` riders above `el` folded in: every
+/// node under one reports the flag. The rider itself is a wrapper
+/// like the layout containers — it announces nothing of its own, and
+/// the controls inside rise to the nearest reported ancestor, marked.
+fn nodes_in(el: &Element, disabled: bool) -> Vec<Node> {
+    if let Element::Disabled { .. } = el {
+        return child_nodes(el, true);
+    }
     if let Some((role, label, children)) = authored(el) {
         let Some(inner) = children.first() else {
             return Vec::new();
@@ -312,14 +331,16 @@ pub fn nodes(el: &Element) -> Vec<Node> {
                 role: Role::Group,
                 name,
                 value: Str::new(),
-                children: child_nodes(inner),
+                disabled,
+                children: child_nodes(inner, disabled),
             }];
         };
         return vec![Node {
             role,
             name,
             value: value_of(inner),
-            children: child_nodes(inner),
+            disabled,
+            children: child_nodes(inner, disabled),
         }];
     }
     match role_of(el) {
@@ -327,17 +348,18 @@ pub fn nodes(el: &Element) -> Vec<Node> {
             role,
             name: name_of(el),
             value: value_of(el),
-            children: child_nodes(el),
+            disabled,
+            children: child_nodes(el, disabled),
         }],
-        None => child_nodes(el),
+        None => child_nodes(el, disabled),
     }
 }
 
 /// The reported nodes UNDER an element, skipping the element itself.
-fn child_nodes(el: &Element) -> Vec<Node> {
+fn child_nodes(el: &Element, disabled: bool) -> Vec<Node> {
     let mut out = Vec::new();
     for c in children_of(el) {
-        out.extend(nodes(c));
+        out.extend(nodes_in(c, disabled));
     }
     out
 }
@@ -348,6 +370,7 @@ pub fn tree(el: &Element) -> Node {
         role: Role::Group,
         name: Str::new(),
         value: Str::new(),
+        disabled: false,
         children: nodes(el),
     }
 }
@@ -366,6 +389,8 @@ fn children_of(el: &Element) -> &[Element] {
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
         | Element::Tooltip { children, .. }
+        | Element::Disabled { children }
+        | Element::Sized { children, .. }
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
@@ -507,6 +532,38 @@ mod tests {
             column(vec![button("cut")]),
         )]));
         assert_eq!(t.dump(), r#"group[group "toolbar"[button "cut"]]"#);
+    }
+
+    /// A `Disabled` rider marks every node under it — the button it
+    /// wraps, each control of a wrapped group, an authored group and
+    /// its members — and changes nothing else: layout wrappers still
+    /// vanish and names still derive. A sibling outside it is
+    /// untouched.
+    #[test]
+    fn a_disabled_rider_marks_the_nodes_under_it() {
+        let t = tree(&column(vec![
+            Element::Disabled {
+                children: vec![button("save")],
+            },
+            button("cancel"),
+        ]));
+        assert_eq!(t.dump(), r#"group[button "save" disabled, button "cancel"]"#);
+
+        let t = tree(&column(vec![Element::Disabled {
+            children: vec![column(vec![button("cut"), text("hint")])],
+        }]));
+        assert_eq!(
+            t.dump(),
+            r#"group[button "cut" disabled, label "hint" disabled]"#
+        );
+
+        let t = tree(&column(vec![Element::Disabled {
+            children: vec![semantics("", "toolbar", column(vec![button("cut")]))],
+        }]));
+        assert_eq!(
+            t.dump(),
+            r#"group[group "toolbar" disabled[button "cut" disabled]]"#
+        );
     }
 
     /// A closed Modal is absent, not hidden.

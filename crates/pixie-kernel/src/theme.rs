@@ -248,6 +248,9 @@ fn children_of(el: &mut Element) -> Option<&mut Vec<Element>> {
         | Element::GridCell { children, .. }
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
+        | Element::Tooltip { children, .. }
+        | Element::Disabled { children }
+        | Element::Sized { children, .. }
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }

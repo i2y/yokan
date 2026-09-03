@@ -1884,10 +1884,13 @@ fn build_element(
     let col = prop_of(el, "colSpan");
     let row = prop_of(el, "rowSpan");
     let inner = build_element_inner(el, env, scope, w)?;
-    // Same nesting as codegen: semantics innermost (they describe the
-    // element), then the animation wrapper, then the grid cell.
+    // Same nesting as codegen, innermost first: element, Semantics
+    // (they describe the element), Tooltip, Disabled, Sized, Themed,
+    // Anim, then the grid cell.
     let inner = build_semantics(el, inner, env, scope, w)?;
     let inner = build_tooltip(el, inner, env, scope, w)?;
+    let inner = build_disabled(el, inner, env, scope, w)?;
+    let inner = build_sized(el, inner, env, scope, w)?;
     let inner = build_themed(el, inner, env, scope, w)?;
     let inner = build_anim(el, inner, env, scope, w)?;
     if col.is_none() && row.is_none() {
@@ -1950,6 +1953,67 @@ fn build_tooltip(
     };
     Ok(Element::Tooltip {
         text: eval_text(t, env, scope, w)?,
+        children: vec![inner],
+    })
+}
+
+/// `pixie_codegen::lower_disabled`'s mirror: the wrapper exists only
+/// while the flag reads true, so an enabled element dumps as it
+/// always did.
+fn build_disabled(
+    el: &ast::Element,
+    inner: Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<Element, String> {
+    let Some(d) = prop_of(el, "disabled") else {
+        return Ok(inner);
+    };
+    if eval_expr(d, env, scope, w)?.as_bool()? {
+        Ok(Element::Disabled {
+            children: vec![inner],
+        })
+    } else {
+        Ok(inner)
+    }
+}
+
+/// `pixie_codegen::lower_sized`'s mirror, down to the table of sides
+/// an element keeps for itself.
+fn build_sized(
+    el: &ast::Element,
+    inner: Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<Element, String> {
+    let native = native_size_keys(&el.name.name);
+    let side = |key: &str| {
+        if native.contains(&key) {
+            None
+        } else {
+            prop_of(el, key)
+        }
+    };
+    let width = side("width");
+    let height = side("height");
+    let min_width = prop_of(el, "minWidth");
+    let max_width = prop_of(el, "maxWidth");
+    if width.is_none() && height.is_none() && min_width.is_none() && max_width.is_none() {
+        return Ok(inner);
+    }
+    let num = |e: Option<&Expr>| -> Result<f64, String> {
+        match e {
+            Some(v) => eval_expr(v, env, scope, w)?.as_float(),
+            None => Ok(0.0),
+        }
+    };
+    Ok(Element::Sized {
+        width: num(width)?,
+        height: num(height)?,
+        min_width: num(min_width)?,
+        max_width: num(max_width)?,
         children: vec![inner],
     })
 }
@@ -2916,6 +2980,30 @@ pub fn theme_prop_keys() -> &'static [&'static str] {
     &["theme"]
 }
 
+/// The mirror of `pixie_codegen::disabled_prop_keys`.
+pub fn disabled_prop_keys() -> &'static [&'static str] {
+    &["disabled"]
+}
+
+/// The mirror of `pixie_codegen::sized_prop_keys`.
+pub fn sized_prop_keys() -> &'static [&'static str] {
+    &["width", "height", "minWidth", "maxWidth"]
+}
+
+/// The mirror of `pixie_codegen::native_size_keys`: the sides an
+/// element reads into its own fields, which the `Sized` rider leaves
+/// to it.
+pub fn native_size_keys(element: &str) -> &'static [&'static str] {
+    match element {
+        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" => {
+            &["width", "height"]
+        }
+        "Text" => &["width"],
+        "ListView" | "ScrollView" | "Table" => &["height"],
+        _ => &[],
+    }
+}
+
 /// `when some(..)` — the present half of a `T?` match (§8.69).
 fn is_some_pattern(p: &ast::Pattern) -> bool {
     matches!(p, ast::Pattern::Ctor { name, .. } if name.name == "some")
@@ -2937,6 +3025,8 @@ fn build_children(
                 && !semantic_prop_keys().contains(&key.as_str())
                 && !theme_prop_keys().contains(&key.as_str())
                 && !tooltip_prop_keys().contains(&key.as_str())
+                && !disabled_prop_keys().contains(&key.as_str())
+                && !sized_prop_keys().contains(&key.as_str())
                 && !container_prop_keys(&el.name.name).contains(&key.as_str())
             {
                 return Err(format!(

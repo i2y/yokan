@@ -224,17 +224,18 @@ fn scroll_view_takes_a_float_height() {
     let tree = build_view(&lv, &e, &tb, &w).expect("an Int height widens");
     assert_eq!(tree.dump(&w), "Column[ScrollView(height=7)[Text(hi)]]");
 
-    // And it is the vertical twin's prop alone.
+    // And it is the vertical twin's prop alone: on HScrollView, which
+    // clips on width, `height:` is the universal sizing rider — a
+    // `Sized` box around the scroller, as on any element without a
+    // height of its own.
     let lv = view_of(
         "view Main {\n  Column {\n    HScrollView {\n      height: 240.0\n      Text { text: \"hi\" }\n    }\n  }\n}\n",
     );
-    match build_view(&lv, &e, &tb, &w) {
-        Ok(_) => panic!("`height:` on HScrollView must error"),
-        Err(err) => assert!(
-            err.contains("`height`") && err.contains("`HScrollView`"),
-            "error should name the key and the element: {err}"
-        ),
-    }
+    let tree = build_view(&lv, &e, &tb, &w).expect("`height:` on HScrollView boxes it");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Sized(height=240)[HScrollView[Text(hi)]]]"
+    );
 }
 
 #[test]
@@ -1526,5 +1527,100 @@ fn segmented_requires_its_props() {
             ),
         }
     }
+}
+
+#[test]
+fn disabled_rider_wraps_only_while_true() {
+    // A literal `true` wraps; `false` leaves the element bare (no
+    // wrapper, so an enabled element's dump never moves); a bound
+    // Bool decides per build. Mirrors codegen's `lower_disabled`.
+    let mut w = World::new();
+    let c = w.insert(Counter { count: 0 });
+    let f = w.insert(Flag { on: true });
+    let e = FieldEnv {
+        fields: vec![
+            ("counter".into(), "Counter".into(), c.erase()),
+            ("flag".into(), "Flag".into(), f.erase()),
+        ],
+    };
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  Column {\n    Button { text: \"go\"; onClick: counter.increment(); disabled: true }\n    TextField { text: \"\"; disabled: false }\n    Button { text: \"x\"; onClick: counter.increment(); disabled: flag.on }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Disabled[Button(go)], TextField(), Disabled[Button(x)]]"
+    );
+    w.get_mut(f).on = false;
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Disabled[Button(go)], TextField(), Button(x)]"
+    );
+
+    // Anything but a Bool is a named error, as in codegen.
+    let lv = view_of(
+        "view Main {\n  Column {\n    Button { text: \"go\"; onClick: counter.increment(); disabled: 1 }\n  }\n}\n",
+    );
+    match build_view(&lv, &e, &tb, &w) {
+        Ok(_) => panic!("an Int `disabled:` must error"),
+        Err(err) => assert!(err.contains("Bool"), "error should name the type: {err}"),
+    }
+}
+
+#[test]
+fn sized_rider_boxes_only_what_has_no_field_of_its_own() {
+    // A Column has no `width:` of its own, so the box takes it (and
+    // `minWidth:` always rides in the box); a TextField the same,
+    // widening an Int literal like every Float prop; a Button keeps
+    // its `width:` — its dump does not move — while `maxWidth:` still
+    // boxes it; a ListView keeps `height:` and gives up `width:`.
+    let mut w = World::new();
+    let c = w.insert(Counter { count: 0 });
+    let t = w.insert(Todo { items: List::new() });
+    let e = env(c.erase(), t.erase());
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  Column {\n    width: 200.0\n    minWidth: 120.0\n    TextField { text: \"\"; width: 180 }\n    Button { text: \"go\"; onClick: counter.increment(); width: 90.0 }\n    Button { text: \"m\"; onClick: counter.increment(); maxWidth: 300.0 }\n    ListView {\n      height: 100.0\n      width: 50.0\n      Text { text: \"r\" }\n    }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Sized(width=200, minWidth=120)[Column[Sized(width=180)[TextField()], Button(go, width=90), Sized(maxWidth=300)[Button(m)], Sized(width=50)[ListView(virtualized=false, itemHeight=0, height=100)[Text(r)]]]]"
+    );
+
+    // No sizing props, no wrapper — every pre-rider demo dumps as it
+    // did.
+    let lv = view_of("view Main {\n  Column {\n    Text { text: \"a\" }\n  }\n}\n");
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Text(a)]");
+
+    // A side that is not a number is a named error.
+    let lv = view_of(
+        "view Main {\n  Column {\n    width: \"wide\"\n    Text { text: \"a\" }\n  }\n}\n",
+    );
+    match build_view(&lv, &e, &tb, &w) {
+        Ok(_) => panic!("a String `width:` must error"),
+        Err(err) => assert!(err.contains("Float"), "error should name the type: {err}"),
+    }
+}
+
+#[test]
+fn riders_nest_in_the_shared_order() {
+    // Innermost first: element, Semantics, Tooltip, Disabled, Sized,
+    // Themed, Anim — the same order codegen emits, which is what the
+    // tier gate compares.
+    let w = World::new();
+    let e = FieldEnv { fields: vec![] };
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  Column {\n    Text { text: \"x\"; role: \"heading\"; tooltip: \"t\"; disabled: true; maxWidth: 240.0; theme: \"dark\"; animate: 200.0 }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Anim(200ms, out)[Themed(dark)[Sized(maxWidth=240)[Disabled[Tooltip(t)[Semantics(role=heading)[Text(x)]]]]]]]"
+    );
 }
 

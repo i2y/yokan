@@ -891,7 +891,10 @@ fn container_properties_are_allowlisted_per_element() {
     );
 
     // ScrollView's `height:` widens the same way, and belongs to the
-    // vertical twin alone — HScrollView clips on width.
+    // vertical twin alone — HScrollView clips on width, so a `height:`
+    // on it is not a viewport prop but the universal sizing rider: a
+    // `Sized` box around the scroller, the way any element without a
+    // height of its own takes one.
     let f = dir.join("scrollview_int_height.pix");
     std::fs::write(
         &f,
@@ -914,13 +917,14 @@ fn container_properties_are_allowlisted_per_element() {
     )
     .unwrap();
     let outcome = pixie_driver::check_file(&f).expect("driver runs");
-    let err =
+    let code =
         pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
-            .expect_err("`height:` on HScrollView must not emit");
+            .expect("`height:` on HScrollView boxes it");
     assert!(
-        err.message.contains("`height`") && err.message.contains("`HScrollView`"),
-        "error should name the key and the element: {}",
-        err.message
+        code.contains(
+            "Element::Sized { width: 0f64, height: 240f64, min_width: 0f64, max_width: 0f64, children: vec![Element::HScrollView("
+        ),
+        "`height:` on HScrollView should be the sizing rider's box: {code}"
     );
 }
 
@@ -4435,6 +4439,112 @@ fn segmented_requires_its_props() {
     assert!(
         err.contains("Segmented needs `selected:`"),
         "error should name the missing prop: {err}"
+    );
+}
+
+#[test]
+fn disabled_and_sized_riders_emit_their_wrappers() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = "store S {\n  state off : Bool = true\n  state q : String = \"\"\n  state wide : Float = 120.0\n\n  fn go {\n    off = false\n  }\n}\n\n";
+    let emit = |name: &str, body: &str| -> Result<String, String> {
+        let f = dir.join(name);
+        std::fs::write(
+            &f,
+            format!("{store}view Main {{\n  Column {{\n{body}  }}\n}}\n"),
+        )
+        .unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .map_err(|e| e.message)
+    };
+
+    // `disabled: true` on a Button and on a TextField: the wrapper
+    // lands outside the element it dims.
+    let code = emit(
+        "riders_disabled_literal.pix",
+        "    Button { text: \"go\"; onClick: S.go(); disabled: true }\n    TextField { text: S.q; disabled: true }\n",
+    )
+    .expect("emits");
+    for needle in [
+        "Element::Disabled { children: vec![Element::Button { label: Str::from(\"go\")",
+        "Element::Disabled { children: vec![Element::TextField {",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`:\n{code}");
+    }
+
+    // A bound Bool decides at build time — and a literal `false`
+    // emits no wrapper at all, so an enabled element's code (and
+    // dump) is untouched.
+    let code = emit(
+        "riders_disabled_bound.pix",
+        "    Button { text: \"go\"; onClick: S.go(); disabled: S.off }\n",
+    )
+    .expect("emits");
+    assert!(
+        code.contains(
+            "if w.singleton_ref::<S>().off(w) { Element::Disabled { children: vec![__el] } } else { __el }"
+        ),
+        "a bound `disabled:` should branch at build time:\n{code}"
+    );
+    let code = emit(
+        "riders_disabled_false.pix",
+        "    Button { text: \"go\"; onClick: S.go(); disabled: false }\n",
+    )
+    .expect("emits");
+    assert!(
+        !code.contains("Element::Disabled"),
+        "`disabled: false` must emit no wrapper:\n{code}"
+    );
+
+    // Anything but a Bool is a named error.
+    let err = emit(
+        "riders_disabled_int.pix",
+        "    Button { text: \"go\"; onClick: S.go(); disabled: 1 }\n",
+    )
+    .expect_err("an Int `disabled:` must not emit");
+    assert!(err.contains("Bool"), "error should name the type: {err}");
+
+    // `Sized` boxes a Column (no `width:` field of its own) and a
+    // TextField, each side lowered like any Float prop; a Button's
+    // `width:` stays the Button's, so its dump does not move, while
+    // `maxWidth:` always rides in the box.
+    let code = emit(
+        "riders_sized.pix",
+        "    Column {\n      width: 200.0\n      minWidth: 120.0\n      Text { text: \"a\" }\n    }\n    TextField { text: S.q; width: S.wide }\n    Button { text: \"go\"; onClick: S.go(); width: 90.0 }\n    Button { text: \"m\"; onClick: S.go(); width: 90.0; maxWidth: 300.0 }\n",
+    )
+    .expect("emits");
+    for needle in [
+        "Element::Sized { width: 200f64, height: 0f64, min_width: 120f64, max_width: 0f64, children: vec![Element::Column {",
+        "Element::Sized { width: w.singleton_ref::<S>().wide(w), height: 0f64, min_width: 0f64, max_width: 0f64, children: vec![Element::TextField {",
+        "Element::Sized { width: 0f64, height: 0f64, min_width: 0f64, max_width: 300f64, children: vec![Element::Button { label: Str::from(\"m\")",
+        // The Button keeps its own `width:` in both cases.
+        "Element::Button { label: Str::from(\"go\"), background: Str::new(), hover_background: Str::new(), active_background: Str::new(), width: 90f64",
+        "Element::Button { label: Str::from(\"m\"), background: Str::new(), hover_background: Str::new(), active_background: Str::new(), width: 90f64",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`:\n{code}");
+    }
+    assert_eq!(
+        code.matches("Element::Sized {").count(),
+        3,
+        "exactly the three boxes — `width:` on a Button must not wrap it:\n{code}"
+    );
+
+    // Every rider at once, in the one order both lowerers share:
+    // element, Semantics, Tooltip, Disabled, Sized, Themed, Anim.
+    let code = emit(
+        "riders_all.pix",
+        "    Text { text: \"x\"; role: \"heading\"; tooltip: \"t\"; disabled: true; maxWidth: 240.0; theme: \"dark\"; animate: 200.0 }\n",
+    )
+    .expect("emits");
+    let needle = "Element::Anim { duration: 200f64, easing: pixie_kernel::Easing::Out, enter: false, exit: false, opacity: 1f64, children: vec![Element::Themed { theme: Str::from(\"dark\"), children: vec![Element::Sized { width: 0f64, height: 0f64, min_width: 0f64, max_width: 240f64, children: vec![Element::Disabled { children: vec![Element::Tooltip { text: Str::from(\"t\"), children: vec![Element::Semantics { role: Str::from(\"heading\"), label: Str::new(), children: vec![Element::Text {";
+    assert!(
+        code.contains(needle),
+        "the riders should nest in the shared order:\n{code}"
     );
 }
 

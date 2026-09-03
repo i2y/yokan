@@ -14,6 +14,12 @@ pixie-kernel.workspace = true
 # physical vendor + carried patches replace this git pin next.
 gpui = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48", features = ["font-kit"] }
+# `render_el` recurses once per element AND once per rider around it,
+# and an unoptimized build gives that one giant function a frame near a
+# megabyte — a tree nine wrappers deep overran the main thread's 8 MiB.
+# stacker (already in the tree under gpui's own `stacksafe`) moves the
+# recursion onto heap-allocated stack segments when the red zone is hit.
+stacker = "0.1"
 unicode-segmentation = "1"
 
 [dev-dependencies]
