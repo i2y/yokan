@@ -46,19 +46,21 @@ class State(Generic[T]):
 # Each one is a wrapper around the element, not a property of it, so
 # the same spelling works on a text, a button or a whole column — and
 # the two runs build the same tree, which is what the build checks.
-class OwnLabelRiders(TypedDict, total=False):
-    """Every rider except `a11y_label` — the set for an element whose
-    own `label` is already its accessible name (checkbox, switch,
-    progress)."""
+class CommonRiders(TypedDict, total=False):
+    """The riders EVERY element takes. The four families below add
+    back the `width` / `height` / `a11y_label` an element does not
+    already own under those names."""
 
-    # TODO(riders): the sizing riders and `disabled` join the table
-    # once the substrate carries them:
-    # width: float
-    # height: float
-    # min_width: float
-    # max_width: float
-    # disabled: bool
-
+    # A box around the element: `min_width` and `max_width` always
+    # ride, `width` and `height` ride on every element that has no
+    # prop of its own by that name.
+    min_width: float
+    max_width: float
+    # Paint this element's subtree dimmed, swallow its clicks and mark
+    # it disabled in the accessibility tree — a script step aimed at a
+    # control inside is accepted and does nothing, as a person's click
+    # would be. Takes True/False or a bool state/field read.
+    disabled: bool
     # The palette this element's subtree resolves its color tokens in:
     # "light", "dark", or a str state/field read, so a view can offer a
     # theme switcher.
@@ -88,7 +90,36 @@ class OwnLabelRiders(TypedDict, total=False):
     # and a dumped property either way.
     tooltip: str
 
-class Riders(OwnLabelRiders, total=False):
+# The four narrower families, one per thing an element already owns.
+# Which sides an element sizes for itself is the same table on both
+# sides of the build, so a `width=` lands on the same prop either way.
+class RidersOwnLabel(CommonRiders, total=False):
+    """checkbox / switch: their visible `label` is already their
+    accessible name, so there is no `a11y_label` to give them."""
+
+    width: float
+    height: float
+
+class RidersOwnSize(CommonRiders, total=False):
+    """button / image / svg / bar_chart / line_chart: `width` and
+    `height` are their own props, not the sizing rider."""
+
+    a11y_label: str
+
+class RidersOwnWidth(CommonRiders, total=False):
+    """text: `width` is its own prop; the box still gives it a
+    height."""
+
+    height: float
+    a11y_label: str
+
+class RidersOwnHeight(CommonRiders, total=False):
+    """list_view / scroll_view / table: `height` is their own prop."""
+
+    width: float
+    a11y_label: str
+
+class Riders(RidersOwnLabel, total=False):
     """Every rider an element takes."""
 
     # The name assistive technology reads instead of the one the
@@ -122,7 +153,7 @@ def text(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnWidth],
 ) -> Element: ...
 def button(
     label: str,
@@ -139,7 +170,7 @@ def button(
     border_width: float = 0.0,
     border_color: str = "",
     basis: float = 0.0,
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnSize],
 ) -> Element: ...
 def text_field(
     value: str,
@@ -199,10 +230,10 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnHeight],
 ) -> Element: ...
 def scroll_view(
-    *children: Element, height: float = 0.0, **riders: Unpack[Riders]
+    *children: Element, height: float = 0.0, **riders: Unpack[RidersOwnHeight]
 ) -> Element: ...
 def h_scroll_view(*children: Element, **riders: Unpack[Riders]) -> Element: ...
 def data_table(*children: Element, **riders: Unpack[Riders]) -> Element:
@@ -216,13 +247,13 @@ def image(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnSize],
 ) -> Element: ...
 def svg(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnSize],
 ) -> Element: ...
 # min/max pin the range (0/0 = from the data, which may be negative —
 # the zero line is the baseline); `axis` draws tick labels and
@@ -239,7 +270,7 @@ def bar_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnSize],
 ) -> Element: ...
 def line_chart(
     data: Sequence[float] = (),
@@ -252,7 +283,7 @@ def line_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnSize],
 ) -> Element: ...
 def progress(
     value: float,
@@ -262,7 +293,7 @@ def progress(
     # accessible name — so `a11y_label` is deliberately absent here.
     label: str = "",
     indeterminate: bool = False,
-    **riders: Unpack[OwnLabelRiders],
+    **riders: Unpack[CommonRiders],
 ) -> Element:
     """A track filled to `value` (0..1); `indeterminate=True` sweeps
     instead, for work with no known length."""
@@ -273,13 +304,13 @@ def checkbox(
     # `label` is ALREADY this toggle's accessible name (pixie derives
     # it from the same visible text) — the dialect has no way to give
     # it a different one, so a11y_label is deliberately absent here.
-    **riders: Unpack[OwnLabelRiders],
+    **riders: Unpack[RidersOwnLabel],
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
-    **riders: Unpack[OwnLabelRiders],
+    **riders: Unpack[RidersOwnLabel],
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -324,7 +355,7 @@ def table(
     sort: int = -1,
     descending: bool = False,
     on_sort: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **riders: Unpack[RidersOwnHeight],
 ) -> Element:
     """A virtualized table: `row(i)` builds row i as a `row` of one
     cell per column, laid on tracks whose shares are `widths`.
