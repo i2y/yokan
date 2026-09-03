@@ -1041,3 +1041,62 @@ emitter now seeds the new crate with this tree's own `Cargo.lock`,
 next to the toolchain pin it already copied. Seeded, not overwritten
 — cargo adjusts it from there, and an app that has resolved is left
 alone.
+
+## The standard library, in two layers
+
+`import math`, `import random` and `import statistics` are in the
+dialect now, written as Python writes them. During development the
+app imports CPython's module and CPython runs it; the shipped binary
+calls a twin written against CPython's semantics; the gate holds the
+two runs together, and a table of answers CPython printed holds the
+twin to CPython — every function, and every error, including the
+message. This is the arrangement `str` and the arithmetic already
+had, extended from builtins to modules.
+
+A module enters this layer when CPython's behavior is a specification
+rather than an accident of the machine: `math` over IEEE doubles, the
+Mersenne Twister and the algorithms `random` builds on it, the exact
+rational sums `statistics` is defined by. What a platform's C library
+decides is marked as such in the table and compared within an ulp;
+what CPython computes for itself is compared to the bit, which is why
+`hypot` here is CPython's vector norm rather than a call to the
+platform's. Three things the first tables caught: `sqrt` of a
+negative answered a quiet NaN, `pow` answered infinity where Python
+overflows, and a square root of a fraction was an ulp low without the
+round-to-odd step CPython uses to make its one rounding land right.
+
+What Yokan adds of its own — `fs`, `sqlite`, `http`, `json`, `time`,
+`strings`, `clipboard`, `notify` — keeps the other shape: one
+implementation both runs call, deliberately flat for a typed subset.
+The two layers are told apart by their names, so Yokan's own modules
+never reuse a Python module's, and `from yokan import math` and
+`random` went. What could not follow Python is refused by name with
+its reason: `frexp` and `modf` answer tuples; `prod` and `statistics`
+over a list of ints answer an int or a float depending on the values,
+which a static type cannot say; `random.shuffle` reorders a list in
+place, and a list lives in a `State` here.
+
+Rejected: growing the bespoke API (names that look like Python and
+mean something else — the old `random.int` was a different generator
+under a familiar name), leaving it all to `@py` (ships a CPython, and
+the gate sees nothing), and routing the interpreted run through doors
+under Python's names (an import taken over for the app is taken over
+for every package in the process).
+
+## A view may call what cannot change
+
+A view stays pure, which used to mean it could call no
+standard-library function at all. Purity is a property of the
+function, though, not of the library: `math.sqrt` has no more effect
+on the world than `.upper()` does, and `.upper()` has been legal in a
+view since the day it landed. The manifest carries the column, so the
+rule reads off the row — `math` and `statistics` in a view, `random`
+and the clock and the filesystem in a handler, each refused by name
+with what the module does offer there.
+
+Two things had to be true first. A view that fails had to fail the
+same way in both runs, which it now does. And the interpreted run had
+to survive one: a twin that stops its statement arrives there as
+pyo3's `PanicException`, and printing one resumes the panic — which
+is exactly how a failing handler reaches its containment, and exactly
+what took the process down when a view had none of its own.

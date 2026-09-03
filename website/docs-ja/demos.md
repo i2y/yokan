@@ -153,10 +153,10 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### reader — http + json のフィードリーダー
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — math / json（読みと書き）/ time（UTC とローカル）
+#### stdlib — Python の `math`、`random`、`statistics` と、Yokan の json、time
 <img src="images/demos/stdlib.png" width="360">
 
-#### dice — yokan.random。種を撒けば両実行で同じ列
+#### dice — Python の `random`。種を撒けば両実行で同じ列
 <img src="images/demos/dice.png" width="360">
 
 #### postcard — 画像とベクタアイコン、そして `notify.send`（`.app` バンドルとして動かすと通知センターに届く）

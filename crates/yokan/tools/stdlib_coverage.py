@@ -30,10 +30,18 @@ from yokan_gate import Translator  # noqa: E402
 
 def members(mod):
     """The public surface of a CPython module: what it offers and
-    whether the offer is a call or a value."""
+    whether the offer is a call or a value.
+
+    A module's own surface, not what it happens to import. `statistics`
+    pulls in `sin`, `Fraction` and `math` itself to do its work, and
+    counting those against the dialect would be counting the wrong
+    thing."""
     out = {}
     for name, val in inspect.getmembers(mod):
-        if name.startswith("_"):
+        if name.startswith("_") or inspect.ismodule(val):
+            continue
+        owner = getattr(val, "__module__", None)
+        if owner is not None and owner != mod.__name__:
             continue
         out[name] = "call" if callable(val) else "value"
     return out
@@ -41,11 +49,11 @@ def members(mod):
 
 def report(names) -> str:
     have = {}
-    for _cls, mod, rows in Translator.STDLIB:
+    for _cls, mod, _layer, rows in Translator.STDLIB:
         if mod is None:
             continue
         have[mod] = {
-            py: ("call", "cpython" in flags)
+            py: ("value" if "const" in flags else "call", "cpython" in flags)
             for py, _fn, _params, _r, _ru, *flags in rows
             if py
         }
@@ -118,7 +126,7 @@ def main() -> int:
     ap.add_argument("modules", nargs="*", help="modules to report on (default: all)")
     ap.add_argument("-o", "--out", help="write here instead of stdout")
     args = ap.parse_args()
-    known = [m for _c, m, _r in Translator.STDLIB if m]
+    known = [m for _c, m, _l, _r in Translator.STDLIB if m]
     names = args.modules or known
     for n in names:
         if n not in known:

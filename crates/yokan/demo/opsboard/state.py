@@ -4,10 +4,11 @@
 """OpsBoard state: the whole data model compiles — sum-typed fleet
 health, two stores, seeded mock generation. No CPython at runtime.
 """
+import random
 from dataclasses import dataclass
 
 from yokan import State, store  # noqa: E402
-from yokan import random, time
+from yokan import time
 
 BASE_MS = 1767225600000  # 2026-01-01 00:00 UTC — the mock clock's epoch
 
@@ -76,13 +77,13 @@ class Metrics:
     def tick(self) -> None:
         self.ticks += 1
         self.clock = time.format_ms(1767225600000 + self.ticks * 60000, "%H:%M")
-        self.api_r = 900 + random.int(0, 300)
-        self.web_r = 600 + random.int(0, 250)
-        self.worker_r = 200 + random.int(0, 120)
-        self.cache_r = 1500 + random.int(0, 400)
+        self.api_r = 900 + random.randint(0, 300)
+        self.web_r = 600 + random.randint(0, 250)
+        self.worker_r = 200 + random.randint(0, 120)
+        self.cache_r = 1500 + random.randint(0, 400)
         self.rps = self.api_r + self.web_r + self.worker_r + self.cache_r
-        self.err_pct = 0.1 * random.int(1, 28)
-        self.p95 = 80 + random.int(0, 220)
+        self.err_pct = 0.1 * random.randint(1, 28)
+        self.p95 = 80 + random.randint(0, 220)
         self.rps_trend = self.rps_trend + [1.0 * self.rps]
         self.p95_trend = self.p95_trend + [1.0 * self.p95]
         self.svc_reqs = []
@@ -125,7 +126,7 @@ class Alerts:
 
     def emit_tick(self, tick_no: int) -> None:
         stamp = time.format_ms(1767225600000 + tick_no * 60000, "%H:%M")
-        roll = random.int(0, 9)
+        roll = random.randint(0, 9)
         if roll < 2:
             self.crit_rows = self.crit_rows + ["🔴 " + stamp + "  p95 breach on api — circuit breaker armed"]
             self.crit_n += 1

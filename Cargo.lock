@@ -7101,6 +7101,9 @@ name = "yokan-stdlib"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "num-bigint",
+ "num-rational",
+ "num-traits",
  "pixie-kernel",
  "rusqlite",
  "serde_json",

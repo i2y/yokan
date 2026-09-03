@@ -449,9 +449,19 @@ except Exception as e:
 
 ## The standard library
 
-`from yokan import fs, sqlite, http, math, json, time, strings,
-random, clipboard, notify`. One implementation in Rust serves both runs; the
-shipped binary needs no Python. Call it from handlers only.
+Two layers, told apart by where the name comes from.
+
+**Python's own**: `import math`, `import random`, `import
+statistics`, written as Python writes them. Development imports
+CPython's module; the shipped binary calls a twin held to CPython by
+a table CPython printed, error messages included. `math` and
+`statistics` are pure, so a view may call them; `random` moves a
+generator on, so it stays in a handler. Seed it and the two runs walk
+one sequence.
+
+**Yokan's own**: `from yokan import fs, sqlite, http, json, time,
+strings, clipboard, notify`. One implementation in Rust serves both
+runs; the shipped binary needs no Python. Call it from handlers only.
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` /
   `read_text_or` / `list_dir` (sorted names) / `make_dir` /
@@ -470,8 +480,6 @@ shipped binary needs no Python. Call it from handlers only.
   `get_text_with(url, headers)` / `post_text(url, body[,
   content_type])` / `post_text_or` / `status(url)` (synchronous;
   inside `task` the compiled run awaits it)
-- **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` /
-  `ceil` / `pi()`
 - **json**: `get_text` / `get_int` / `get_float` / `get_bool` /
   `length` / `has` by dotted path (`"items.0.title"`), and
   `dumps(value)` for a str, int, float, bool, a list of one of
@@ -480,16 +488,24 @@ shipped binary needs no Python. Call it from handlers only.
   fixed ms in verification scripts), `format_local_ms(ms, fmt)`
   (the machine's zone), `local_offset_minutes(ms)`
 - **strings**: `to_int(s, default)` / `to_float(s, default)`
-- **random**: `seed(n)` / `int(lo, hi)` (inclusive) / `float()`;
-  seed in `on_start` or a reset handler so scripts replay
 - **clipboard**: `set_text(s)` / `get_text()` — a window shares it
   with every other application, a headless run keeps it to itself,
   so copy-and-paste is gate-checkable
 - **notify**: `send(title, body)` — delivered when the app runs as
   an `.app` bundle; dev and headless runs drop it quietly
 
-Determinism is the rule underneath: fixed times, seeded randomness,
-and `--fresh path/to/file.db` on the gate for apps that persist.
+From Python's side: all of `math` but eight members (`frexp`,
+`modf`, `prod`, `sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each
+refused by name with its reason); `random`'s `seed`, `random`,
+`randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`,
+`sample` (no `shuffle` — it reorders in place, and a list lives in a
+`State`); `statistics`' `mean`, `fmean`, `median`, `mode`,
+`variance`, `pvariance`, `stdev`, `pstdev` over `list[float]`.
+
+Determinism is the rule underneath: fixed times, seeded randomness
+(`random.seed(n)` in `on_start` or a reset handler so scripts
+replay), and `--fresh path/to/file.db` on the gate for apps that
+persist.
 
 ## Rust crates
 

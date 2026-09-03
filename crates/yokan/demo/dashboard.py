@@ -10,6 +10,7 @@ come from the seeded RNG both runs share, and the history is a
 fixed ring the tick writes by index.
 """
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -20,7 +21,6 @@ from yokan import (  # noqa: E402
     every,
     line_chart,
     progress,
-    random,
     row,
     run,
     spinner,
@@ -40,7 +40,7 @@ def setup():
 
 
 def tick():
-    step = random.float() * 0.4 - 0.2
+    step = random.random() * 0.4 - 0.2
     v = cur() + step
     if v < 0.0:
         v = 0.0

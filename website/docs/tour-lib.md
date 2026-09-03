@@ -23,7 +23,30 @@ except Exception as e:
 
 ## The standard library
 
-Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify`.
+It comes in two halves, told apart by where the name comes from.
+
+**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`.
+During development the app imports CPython's module and CPython runs it.
+The shipped binary calls a twin written against CPython's semantics, and a table of answers CPython itself printed holds the twin to it, function by function and error by error.
+`math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs.
+
+```python
+import math, random, statistics
+
+def measure():
+    hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
+    spread.set(statistics.stdev([1.5, 2.5, 4.75]))
+    random.seed(42)
+    roll.set(random.randint(1, 6))
+
+def view():
+    text(f"circumference: {math.tau * r():.3f}")   # pure, so a view may ask
+```
+
+`math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
+An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
+
+**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, json, time, strings, clipboard, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
@@ -32,13 +55,15 @@ Call them from handlers (views stay pure).
   — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
 - **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
-- **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
 - **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`), and `dumps(value)`, which writes a str, int, float, bool, a list of one of those, or a dict with str keys — a dict in key order
 - **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
-- **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
+
+How far the Python half reaches: all of `math` except eight members, each refused by name with its reason (`frexp` and `modf` answer tuples; `prod` and `sumprod` answer an int or a float depending on the list; `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform).
+From `random`: `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
+From `statistics`: `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]` — CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so a list of ints has no one type here and is refused.
 
 Every sqlite call takes one more argument, a list of values to bind:
 

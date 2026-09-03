@@ -9,3 +9,11 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 ureq = "2"
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+# `statistics` is exact where CPython is exact: its mean and its
+# variance add the data as rationals and round once at the end,
+# which is why `mean([0.1, 0.2, 0.3])` is 0.2 there and
+# 0.20000000000000004 under a naive sum. That needs arbitrary
+# precision, and only there.
+num-bigint = "0.4"
+num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std"] }
+num-traits = "0.2"

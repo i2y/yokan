@@ -1,24 +1,33 @@
 # /// script
 # requires-python = ">=3.14"
 # ///
-"""The standard library: math, json, time. Not "Python's stdlib
-reimplemented": the interpreted and the compiled app call the SAME
-implementation, so there is no fidelity gap to chase — yokan.math
-is yokan.math everywhere, and the gate arbitrates.
+"""The standard library, in its two halves.
 
-json reads a path out of a document and writes a value back;
+`math`, `random` and `statistics` are Python's own, written the way
+Python writes them. During development the app imports CPython's
+module; the shipped binary calls a twin written against it, and a
+table of answers CPython printed holds the twin to CPython. Seed the
+generator and the two runs walk the same sequence.
+
+`json` and `time` are Yokan's own: one Rust implementation both runs
+call. json reads a path out of a document and writes a value back;
 `time.format_ms` is UTC and `time.format_local_ms` is the machine's
 own zone, from the same zone database in both runs.
 """
+import math
 import os
+import random
+import statistics
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from yokan import button, column, row, run, State, text  # noqa: E402
-from yokan import json, math, time  # noqa: E402
+from yokan import json, time  # noqa: E402
 
 hyp: State[float] = State(0.0)
+spread: State[str] = State("-")
+rolls: State[str] = State("-")
 who: State[str] = State("-")
 score: State[int] = State(0)
 day: State[str] = State("-")
@@ -29,6 +38,22 @@ scores: State[list[int]] = State([3, 5, 8])
 
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))
+
+
+def summarize():
+    xs: list[float] = [0.1, 0.2, 0.3]
+    # An exact mean, as CPython computes it: 0.2, not the
+    # 0.20000000000000004 a plain sum would give.
+    spread.set(f"{statistics.mean(xs)} sd={statistics.stdev([1.5, 2.5, 4.75]):.4f}")
+
+
+def roll():
+    # Seeded, so both runs walk the same sequence.
+    random.seed(20260904)
+    out = ""
+    for _i in range(5):
+        out = out + f"{random.randint(1, 6)}"
+    rolls.set(f"{out} u={random.uniform(0.0, 1.0):.4f}")
 
 
 def parse():
@@ -54,9 +79,15 @@ def view():
     with column(spacing=8, padding=12):
         text(f"hyp={hyp():.1f} who={who()} score={score()} day={day()}")
         text(f"local={here()}")
+        text(f"exact={spread()}")
+        text(f"rolls={rolls()}")
+        text(f"tau={math.tau:.5f} floor={math.floor(hyp())}")
         text(f"doc={doc()}")
         with row(spacing=6):
             button("measure", on_click=measure)
+            button("stats", on_click=summarize)
+            button("roll", on_click=roll)
+        with row(spacing=6):
             button("parse", on_click=parse)
             button("stamp", on_click=stamp)
             button("write", on_click=write)

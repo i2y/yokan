@@ -928,8 +928,28 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
 /// the single element left in the frame the call opened.
 fn invoke_view(py: Python<'_>, f: &Bound<'_, PyAny>, args: Bound<'_, PyTuple>) -> Element {
     BUILD_FRAMES.with(|fr| fr.borrow_mut().push(Vec::new()));
-    let res = f.call1(args);
-    let frame = BUILD_FRAMES.with(|fr| fr.borrow_mut().pop()).unwrap_or_default();
+    let depth = BUILD_FRAMES.with(|fr| fr.borrow().len());
+    // Contained the way the compiled run contains its own view build
+    // (`pixie_kernel::contain_view`). A twin that stopped its
+    // statement arrives here as pyo3's PanicException, and pyo3
+    // RESUMES the panic while fetching it — which is how a failing
+    // HANDLER reaches the containment at its call site. A view needs
+    // one of its own, or `math.sqrt(-1.0)` in a hole takes the
+    // process down on this side while the compiled side draws the
+    // error and keeps going.
+    let res = pixie_kernel::contain("view", || f.call1(args));
+    // Back to our own depth whatever happened inside: an unwind
+    // through a `with column(...)` leaves its frame behind.
+    let frame = BUILD_FRAMES
+        .with(|fr| {
+            let mut b = fr.borrow_mut();
+            b.truncate(depth);
+            b.pop()
+        })
+        .unwrap_or_default();
+    let Some(res) = res else {
+        return pixie_kernel::view_error_element();
+    };
     match res {
         Ok(v) if !v.is_none() => match v.downcast::<PyElement>() {
             Ok(pe) => {
@@ -957,6 +977,7 @@ fn invoke_view(py: Python<'_>, f: &Bound<'_, PyAny>, args: Bound<'_, PyTuple>) -
             // element (`pixie_kernel::contain_view`), so a view that
             // fails is something the gate compares rather than a
             // divergence — the detail goes to the terminal in both.
+            //
             e.print(py);
             pixie_kernel::view_error_element()
         }
@@ -2387,22 +2408,11 @@ fn py_http_status(py: Python<'_>, url: &str) -> i64 {
     py.detach(|| yokan_stdlib::http_status(url))
 }
 
-#[pyfunction] #[pyo3(name = "sqrt")]
-fn py_math_sqrt(v: f64) -> f64 { yokan_stdlib::math_sqrt(v) }
-#[pyfunction] #[pyo3(name = "sin")]
-fn py_math_sin(v: f64) -> f64 { yokan_stdlib::math_sin(v) }
-#[pyfunction] #[pyo3(name = "cos")]
-fn py_math_cos(v: f64) -> f64 { yokan_stdlib::math_cos(v) }
-#[pyfunction] #[pyo3(name = "pow")]
-fn py_math_pow(a: f64, b: f64) -> f64 { yokan_stdlib::math_pow(a, b) }
-#[pyfunction] #[pyo3(name = "fabs")]
-fn py_math_fabs(v: f64) -> f64 { yokan_stdlib::math_fabs(v) }
-#[pyfunction] #[pyo3(name = "floor")]
-fn py_math_floor(v: f64) -> i64 { yokan_stdlib::math_floor(v) }
-#[pyfunction] #[pyo3(name = "ceil")]
-fn py_math_ceil(v: f64) -> i64 { yokan_stdlib::math_ceil(v) }
-#[pyfunction] #[pyo3(name = "pi")]
-fn py_math_pi() -> f64 { yokan_stdlib::math_pi() }
+// `math`, `random` and `statistics` have no door here: an app
+// writes `import math`, and the interpreted run IS CPython, so
+// the module it imports is Python's own. The compiled run calls
+// the twins in yokan-stdlib, which `tests/expected/` holds to
+// the same answers.
 
 #[pyfunction] #[pyo3(name = "get_text")]
 fn py_json_get_text(py: Python<'_>, src: &str, path: &str) -> String {
@@ -2495,12 +2505,6 @@ fn py_sqlite_query_text_or(
     })
 }
 
-#[pyfunction] #[pyo3(name = "seed")]
-fn py_random_seed(n: i64) { yokan_stdlib::random_seed(n) }
-#[pyfunction] #[pyo3(name = "int")]
-fn py_random_int(lo: i64, hi: i64) -> i64 { yokan_stdlib::random_int(lo, hi) }
-#[pyfunction] #[pyo3(name = "float")]
-fn py_random_float() -> f64 { yokan_stdlib::random_float() }
 
 #[pyfunction] #[pyo3(name = "now_ms")]
 fn py_time_now_ms() -> i64 { yokan_stdlib::time_now_ms() }
@@ -2769,16 +2773,6 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_submodule(&http)?;
     // `from yokan import fs` works by attribute; this makes the
     // dotted forms (`import yokan.fs` etc.) resolve too.
-    let mathm = PyModule::new(m.py(), "math")?;
-    mathm.add_function(wrap_pyfunction!(py_math_sqrt, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_sin, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_cos, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_pow, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_fabs, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_floor, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_ceil, &mathm)?)?;
-    mathm.add_function(wrap_pyfunction!(py_math_pi, &mathm)?)?;
-    m.add_submodule(&mathm)?;
     let jsonm = PyModule::new(m.py(), "json")?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_text, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_int, &jsonm)?)?;
@@ -2795,11 +2789,6 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stringsm.add_function(wrap_pyfunction!(py_strings_to_int, &stringsm)?)?;
     stringsm.add_function(wrap_pyfunction!(py_strings_to_float, &stringsm)?)?;
     m.add_submodule(&stringsm)?;
-    let randomm = PyModule::new(m.py(), "random")?;
-    randomm.add_function(wrap_pyfunction!(py_random_seed, &randomm)?)?;
-    randomm.add_function(wrap_pyfunction!(py_random_int, &randomm)?)?;
-    randomm.add_function(wrap_pyfunction!(py_random_float, &randomm)?)?;
-    m.add_submodule(&randomm)?;
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
     let clipm = PyModule::new(m.py(), "clipboard")?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
@@ -2816,10 +2805,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sysmod.set_item("yokan.fs", &fs)?;
     sysmod.set_item("yokan.sqlite", &sqlite)?;
     sysmod.set_item("yokan.http", &http)?;
-    sysmod.set_item("yokan.math", &mathm)?;
     sysmod.set_item("yokan.json", &jsonm)?;
     sysmod.set_item("yokan.time", &timem)?;
     sysmod.set_item("yokan.strings", &stringsm)?;
-    sysmod.set_item("yokan.random", &randomm)?;
     Ok(())
 }

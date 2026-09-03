@@ -156,10 +156,10 @@ the initial state, right after launch.
 #### reader — an http + json feed reader
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — math / json (read and write) / time (UTC and local)
+#### stdlib — Python's `math`, `random` and `statistics`, and Yokan's json and time
 <img src="images/demos/stdlib.png" width="360">
 
-#### dice — yokan.random: seed it and both runs draw the same sequence
+#### dice — Python's `random`: seed it and both runs draw the same sequence
 <img src="images/demos/dice.png" width="360">
 
 #### postcard — an image, a vector icon, and `notify.send` (delivered through Notification Center when the app runs as an `.app` bundle)

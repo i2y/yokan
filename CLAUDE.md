@@ -91,6 +91,10 @@ Run these from `crates/yokan/` (they also work via
   the signature in pixie's types and the Rust function; the `.rpi`
   door, the arity and type checks, the type a call reads as and the
   fallible twin are derived from it, so a new function is one line.
+  A group's layer column says whether it is reached with
+  `import math` or `from yokan import fs`; the row columns are `try`,
+  `pure`, `cpython`, `const` (a value in Python) and `pick` (the twin
+  follows the list's element type).
   `uv run tools/gen_expected.py` prints CPython's answers into
   `crates/yokan-stdlib/tests/expected/` (`--check` fails when a
   table is stale); `uv run tools/stdlib_coverage.py` reports how far
@@ -171,14 +175,28 @@ Run these from `crates/yokan/` (they also work via
   live once, in Rust; the interpreted run calls the same code the
   compiled run links. This is what makes the gate meaningful.
   Blocking stdlib pyfunctions must `py.detach` around the wait.
+- **Two layers, told apart by the name.** Python's own modules
+  (`import math`, `random`, `statistics`) are a twin arrangement: the
+  interpreted run is CPython's module, the compiled run a twin
+  written against it. Yokan's own (`fs`, `sqlite`, `http`, `json`,
+  `time`, `strings`, `clipboard`, `notify`) keep "one implementation,
+  both runs", and never reuse a Python module's name.
 - **Where the name is Python's, CPython is the specification.** The
   gate proves the two runs agree, never that they agree with Python
   — a function wrong the same way in both passes it. A function
   carrying a Python name is held to a table CPython printed
   (`crates/yokan-stdlib/tests/expected/`, read by `tests/expected.rs`,
   written by `tools/gen_expected.py`), and the manifest's `cpython`
-  column says which rows make that claim. Regenerate the tables when
-  CPython moves, and read the diff.
+  column says which rows make that claim. A row marked `~>` allows an
+  ulp because the platform's libm decides it; anything CPython
+  computes for itself is compared to the bit. Regenerate the tables
+  when CPython moves, and read the diff.
+- **A view calls what cannot change.** Purity is the manifest's
+  `pure` column, not a blanket rule about the library: `math` and
+  `statistics` are legal in a hole the way `.upper()` is, and
+  anything reading a clock, a file or a generator is refused there by
+  name. A view that fails collapses to one shared element in both
+  runs, so it is a difference the gate compares.
 - **Generated code is the compiler's responsibility** (the ledger
   calls this D10): the emitter produces only closed, borrow-clean
   stereotypes. A rustc error inside generated code is a compiler
