@@ -3332,6 +3332,7 @@ fn walk_stmt(s: &Stmt, declared: &mut HashSet<String>, scope: &mut FnScope) {
         }
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             ..
@@ -3341,6 +3342,9 @@ fn walk_stmt(s: &Stmt, declared: &mut HashSet<String>, scope: &mut FnScope) {
             // body, so use a fresh declared-set scoped to the loop.
             let mut sub = declared.clone();
             sub.insert(binding.name.clone());
+            if let Some(i) = index {
+                sub.insert(i.name.clone());
+            }
             walk_block(body, &mut sub, scope);
         }
         Stmt::While { cond, body, .. } => {

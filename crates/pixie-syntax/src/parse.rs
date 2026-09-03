@@ -1280,6 +1280,7 @@ impl<'src> Parser<'src> {
         let start = self.peek_span();
         self.bump(); // `for`
         let binding = self.ident()?;
+        let index = self.for_index()?;
         match self.peek() {
             TokenKind::Ident(s) if s == "in" => {
                 self.bump();
@@ -1298,6 +1299,7 @@ impl<'src> Parser<'src> {
         let end = body.span;
         Ok(ElementMember::Stmt(Stmt::For {
             binding,
+            index,
             iter,
             body,
             span: start.join(end),
@@ -3288,6 +3290,7 @@ impl<'src> Parser<'src> {
         let start = self.peek_span();
         self.bump(); // `for`
         let binding = self.ident()?;
+        let index = self.for_index()?;
         // `in` is contextual (unreserved at the lexer); recognize the
         // string form of the next ident.
         match self.peek() {
@@ -3309,10 +3312,22 @@ impl<'src> Parser<'src> {
         let end = body.span;
         Ok(Stmt::For {
             binding,
+            index,
             iter,
             body,
             span: start.join(end),
         })
+    }
+
+    /// `for x, i in xs` — the optional second binding, the row's
+    /// index. Written after the row so the one-binding form reads the
+    /// same in both.
+    fn for_index(&mut self) -> Result<Option<Ident>, ParseError> {
+        if matches!(self.peek(), TokenKind::Comma) {
+            self.bump();
+            return Ok(Some(self.ident()?));
+        }
+        Ok(None)
     }
 
     fn let_or_var(&mut self) -> Result<Stmt, ParseError> {

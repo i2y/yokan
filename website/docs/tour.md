@@ -52,6 +52,8 @@ There are three tools for holding state, chosen like this:
 - A **coherent area** (a cart, settings, one screen's state): a **store** (`@store`). Fields alone are fine; operations become methods.
 - **Objects you create many of and want the screen to react to**: a **model** (`@model`).
 
+A value that never changes is not state at all: a module-level literal (`LIMIT = 10`, `NAMES = ["a", "b"]`) is a declaration, and handlers and views read it by name.
+
 ### State
 
 App state is declared at module level with `State` (`from yokan import State`).
@@ -95,7 +97,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 Fields take the same types as State.
 Method bodies are written the same way as handlers, and stores can call each other's methods.
-Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums.
+Method parameters can be int, float, str, bool, `list[...]` of those, value classes, and Enums, and they take keyword arguments and defaults as Python does.
+A method annotated with a return type ends with `return <expression>`, and a handler reads what comes back (`Cart.count()`).
+A view reads state rather than calling methods, so the read-only form is a `@property`: a name for a formula over the fields, usable wherever a field is.
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+A `@staticmethod` is a plain function that happens to live in the class; views may call it, like any pure helper.
 
 ### Models
 
@@ -172,6 +188,7 @@ def view():
 
 The element catalog: `text`, `button`, `text_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `column`, `row`, `grid`, `stack`, `list_view`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
 `grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
+`data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
 The samples import elements bare — `from yokan import button, column, run, …`.
 If you prefer a namespace, `import yokan as ui` works identically (`button`, `run`); the two spellings compile the same.
 
@@ -235,6 +252,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
 - **select / radio_group / tab_bar**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`.
+- **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
+
+Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 

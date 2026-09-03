@@ -7,6 +7,27 @@
 ハンドラは三つの形で渡せます。
 lambda（複数の操作はタプル `lambda: (a.set(x), b.set(y))`）、モジュールレベルの def、そしてストアのメソッド参照（`on_click=Cart.clear`）です。
 
+デコレータもコンパイルできます。
+デコレートはインポート時に起きるもので、コンパイル済みのアプリはモジュールを実行しません。
+そこでラッパは、デコレートされたハンドラの本体に畳み込まれます。
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+デコレータは引数ひとつの def で、その引数をそのまま返すか、その引数を一度だけ呼ぶラッパを定義して返します。
+自分が引数を取るデコレータ、関数を二度呼ぶラッパ、値として使うラッパは名指しで断られます。
+
 def ハンドラの中身は、if や for などの制御フローごとコンパイルされます。
 
 ```python
@@ -21,8 +42,12 @@ def tally():
         total.set(total() + double(i))
 ```
 
-`if` / `elif` / `else`、`while`、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`log("…")` はどちらの実行でも stderr に一行書き、`assert` と `raise` は Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
+条件には bool をそのまま書け（`if on:`）、比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）も、`:=` での束縛も使えます。
+条件式（`a if c else b`）はハンドラの中で、int、float、str、bool について書けます。
 純粋ヘルパ（引数と返り値を注釈し、`return 式` で終わる関数）はハンドラからもビューのテキストからも呼べます。
+分岐の途中で `return` してよく、自分自身を呼べ、`list[...]` の引数と既定引数を取り、Value クラスやリストを返せます。
 
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
 
@@ -67,6 +92,35 @@ p.set(2 ** 10)        # 1024
 bool の値としても使えます（`both.set(hot() and not cold())`）。
 bool 以外に対する値としての `and` / `or` は断られます（Python では結果がどちらかの**オペランドそのもの**で、真偽値とは別物のため）。
 
+## 文字列
+
+文字列は Python と同じように扱えます。
+メソッド、長さ、添字とスライス、`in`、型変換が使えます。
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # コードポイントとスライス
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round は Python と同じ偶数丸め
+```
+
+算術と同じく、ここは二つの実行が別のコードを使う場所です。
+開発中は CPython のメソッド、コンパイル後は同じ答えを返すように書いた Rust の双子で、失敗の仕方まで同じです（`int("x")` はどちらでもその文を中断します）。
+その二つを突き合わせるのがゲートです。
+
+書式指定も Python のもので、ビューでもハンドラでも同じように書けます。
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # 10 桁で右寄せ
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## リスト、チャート、仮想化リスト
 
 リストへの追加は「連結して置き直す」形で書きます。
@@ -78,11 +132,27 @@ items.set([])                # クリア
 len(items())                 # 件数
 ```
 
-後ろからの添字はリテラルで書けます。
+Python のリスト操作はハンドラの中でそのまま使えます。
+`in`、スライス、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` と `zip`、step 付きの `range`、二つのリストの連結です。
+ローカルのリストは注釈で要素の型を書きます（コンパイル側がそれを読みます）。
 
 ```python
-r = names()
-tail.set(r[-1])              # 最後の要素（短すぎればその文が中断）
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
+```
+
+添字は Python と同じ意味で読めます。
+負の添字は後ろから数え、範囲外はその文をどちらの実行でも中断します。
+
+```python
+first.set(names()[0])        # 状態を読んで添字を引く
+tail.set(names()[-1])        # 最後の要素（短すぎればその文が中断）
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # ストアの中なら `self.xs[i]` も同じ
 ```
 
 チャートは float か int のリストを描きます。
@@ -104,9 +174,24 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
+行番号は int としてそのまま使えます。
+テキストの中でも、条件でも、その行のハンドラの中でも読めます。
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## 辞書
 
 読みは `.get`、書きはキー単位、数えるのは `len`、回すのは `sorted()` です。
+キーには str なら何でも書けます（リテラル、状態の読み、ループ変数）。
 
 ```python
 prices["cherry"] = 200                 # キー単位の書き込み

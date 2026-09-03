@@ -19,26 +19,27 @@ Yokan のアプリは普通の Python ファイルです。
 4. [フォーム部品](#フォーム部品)
 5. [ハンドラと制御フロー](#ハンドラと制御フロー)
 6. [算術](#算術)
-7. [リスト、チャート、仮想化リスト](#リストチャート仮想化リスト)
-8. [辞書](#辞書)
-9. [Value クラスとインターフェース](#value-クラスとインターフェース)
-10. [メモリ管理](#メモリ管理)
-11. [直和型と match](#直和型と-match)
-12. [Optional と Enum](#optional-と-enum)
-13. [コンポーネント](#コンポーネント)
-14. [スタイルとテーマ](#スタイルとテーマ)
-15. [アニメーション](#アニメーション)
-16. [ウィンドウ](#ウィンドウ)
-17. [エラー処理](#エラー処理)
-18. [標準ライブラリ](#標準ライブラリ)
-19. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
-20. [CPython エスケープ](#cpython-エスケープ)
-21. [重い処理とタイマー](#重い処理とタイマー)
-22. [型チェッカーとの併用](#型チェッカーとの併用)
-23. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
-24. [リリース](#リリース)
-25. [本格アプリの例](#本格アプリの例)
-26. [今できないこと](#今できないこと)
+7. [文字列](#文字列)
+8. [リスト、チャート、仮想化リスト](#リストチャート仮想化リスト)
+9. [辞書](#辞書)
+10. [Value クラスとインターフェース](#value-クラスとインターフェース)
+11. [メモリ管理](#メモリ管理)
+12. [直和型と match](#直和型と-match)
+13. [Optional と Enum](#optional-と-enum)
+14. [コンポーネント](#コンポーネント)
+15. [スタイルとテーマ](#スタイルとテーマ)
+16. [アニメーション](#アニメーション)
+17. [ウィンドウ](#ウィンドウ)
+18. [エラー処理](#エラー処理)
+19. [標準ライブラリ](#標準ライブラリ)
+20. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
+21. [CPython エスケープ](#cpython-エスケープ)
+22. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
+23. [型チェッカーとの併用](#型チェッカーとの併用)
+24. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
+25. [リリース](#リリース)
+26. [本格アプリの例](#本格アプリの例)
+27. [今できないこと](#今できないこと)
 
 ## 最小のアプリ
 
@@ -79,6 +80,9 @@ $ yokan build app.py --release                    # リリース: ネイティ�
 - **一つの値**なら `State[T]`。
 - **アプリ全体で共有するひとまとまりの状態**（カート、設定、画面ごとの状態）なら**ストア**（`@store`）。フィールドだけでもよく、操作はメソッドになります。
 - **何個も作れて、変更に画面が追随してほしいオブジェクト**なら**モデル**（`@model`）。
+
+変わらない値は状態ではありません。
+モジュールレベルに書いたリテラル（`LIMIT = 10`、`NAMES = ["a", "b"]`）は宣言で、ハンドラからもビューからも名前で読めます。
 
 ### State
 
@@ -123,7 +127,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 フィールドは State と同じ型が使えます。
 メソッドの中身はハンドラと同じ書き方で、ストア同士の呼び合いもできます。
-メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れます。
+メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れ、キーワード引数と既定値も Python と同じように書けます。
+返り値の型を書いたメソッドは `return <式>` で終わり、ハンドラはその値を受け取れます（`Cart.count()`）。
+ビューは状態を読む場所なのでメソッドは呼べません。読み取り専用の形が `@property` で、式に名前を付けたものとして、フィールドと同じ場所で使えます。
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+ストアの `@staticmethod` はクラスの中に置いた普通の関数で、純粋ヘルパと同じくビューからも呼べます。
 
 ### モデル
 
@@ -199,6 +217,8 @@ def view():
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
+`data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
+列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
@@ -263,6 +283,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
 - **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
+
+どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 
@@ -270,6 +293,27 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 
 ハンドラは三つの形で渡せます。
 lambda（複数の操作はタプル `lambda: (a.set(x), b.set(y))`）、モジュールレベルの def、そしてストアのメソッド参照（`on_click=Cart.clear`）です。
+
+デコレータもコンパイルできます。
+デコレートはインポート時に起きるもので、コンパイル済みのアプリはモジュールを実行しません。
+そこでラッパは、デコレートされたハンドラの本体に畳み込まれます。
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+デコレータは引数ひとつの def で、その引数をそのまま返すか、その引数を一度だけ呼ぶラッパを定義して返します。
+自分が引数を取るデコレータ、関数を二度呼ぶラッパ、値として使うラッパは名指しで断られます。
 
 def ハンドラの中身は、if や for などの制御フローごとコンパイルされます。
 
@@ -285,8 +329,12 @@ def tally():
         total.set(total() + double(i))
 ```
 
-`if` / `elif` / `else`、`while`、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`log("…")` はどちらの実行でも stderr に一行書き、`assert` と `raise` は Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
+条件には bool をそのまま書け（`if on:`）、比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）も、`:=` での束縛も使えます。
+条件式（`a if c else b`）はハンドラの中で、int、float、str、bool について書けます。
 純粋ヘルパ（引数と返り値を注釈し、`return 式` で終わる関数）はハンドラからもビューのテキストからも呼べます。
+分岐の途中で `return` してよく、自分自身を呼べ、`list[...]` の引数と既定引数を取り、Value クラスやリストを返せます。
 
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
 
@@ -331,6 +379,35 @@ p.set(2 ** 10)        # 1024
 bool の値としても使えます（`both.set(hot() and not cold())`）。
 bool 以外に対する値としての `and` / `or` は断られます（Python では結果がどちらかの**オペランドそのもの**で、真偽値とは別物のため）。
 
+## 文字列
+
+文字列は Python と同じように扱えます。
+メソッド、長さ、添字とスライス、`in`、型変換が使えます。
+
+```python
+name.set(raw().strip().upper())
+parts.set(raw().split(","))
+name.set(", ".join(parts()))
+first.set(raw()[0] + raw()[1:4])          # コードポイントとスライス
+n.set(len(raw()) + raw().find("a"))
+if "ada" in raw().lower():
+    tag.set("found")
+n.set(int("42") + int(2.5) + round(2.5))  # round は Python と同じ偶数丸め
+```
+
+算術と同じく、ここは二つの実行が別のコードを使う場所です。
+開発中は CPython のメソッド、コンパイル後は同じ答えを返すように書いた Rust の双子で、失敗の仕方まで同じです（`int("x")` はどちらでもその文を中断します）。
+その二つを突き合わせるのがゲートです。
+
+書式指定も Python のもので、ビューでもハンドラでも同じように書けます。
+
+```python
+text(f"{total():,}")            # 1,234,567
+text(f"{ratio():.1%}")          # 12.5%
+text(f"{name():>10}")           # 10 桁で右寄せ
+text(f"{value():.2e}")          # 1.50e+00
+```
+
 ## リスト、チャート、仮想化リスト
 
 リストへの追加は「連結して置き直す」形で書きます。
@@ -342,11 +419,27 @@ items.set([])                # クリア
 len(items())                 # 件数
 ```
 
-後ろからの添字はリテラルで書けます。
+Python のリスト操作はハンドラの中でそのまま使えます。
+`in`、スライス、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` と `zip`、step 付きの `range`、二つのリストの連結です。
+ローカルのリストは注釈で要素の型を書きます（コンパイル側がそれを読みます）。
 
 ```python
-r = names()
-tail.set(r[-1])              # 最後の要素（短すぎればその文が中断）
+out: list[str] = []
+for i, s in enumerate(items()):
+    if s != "":
+        out = out + [f"{i}: {s}"]
+items.set(sorted(out))
+best.set(max(scores()))
+```
+
+添字は Python と同じ意味で読めます。
+負の添字は後ろから数え、範囲外はその文をどちらの実行でも中断します。
+
+```python
+first.set(names()[0])        # 状態を読んで添字を引く
+tail.set(names()[-1])        # 最後の要素（短すぎればその文が中断）
+for i in range(len(Cart.items)):
+    Cart.items[i] = "-"      # ストアの中なら `self.xs[i]` も同じ
 ```
 
 チャートは float か int のリストを描きます。
@@ -368,9 +461,24 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
+行番号は int としてそのまま使えます。
+テキストの中でも、条件でも、その行のハンドラの中でも読めます。
+
+```python
+def line(i):
+    with row(spacing=6):
+        text(f"{i + 1}. {items()[i]}")
+        if i == Sel.idx:
+            text("*")
+        button("delete", on_click=lambda: Sel.drop(i))
+
+list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
 ## 辞書
 
 読みは `.get`、書きはキー単位、数えるのは `len`、回すのは `sorted()` です。
+キーには str なら何でも書けます（リテラル、状態の読み、ループ変数）。
 
 ```python
 prices["cherry"] = 200                 # キー単位の書き込み
@@ -502,6 +610,17 @@ match health():
 
 case の抜けはコンパイル時に指摘されます。
 バリアントのフィールドにデフォルトは書けず、一つのバリアントは一つの直和型にだけ属します。
+腕にはガードと `|` の並記が書け、ガードが外れたときは Python と同じく下の腕に落ちます。
+
+```python
+match health():
+    case Degraded(services) if services > 3:
+        text("badly degraded")
+    case Healthy() | Degraded(_):
+        text("fine enough")
+    case _:
+        text("down")
+```
 
 ## Optional と Enum
 
@@ -509,6 +628,7 @@ Optional は状態にもフィールドにも書けます（`last: int | None = 
 絞り込みは walrus の節で見たとおりです。
 
 Enum は普通の `class Mood(Enum)` がそのままコンパイルされます。
+`.name` と `.value` は Python と同じ値を返し（`auto()` は 1 から数えます）、`for m in Mood:` は宣言順にメンバーを回ります。
 `match` の case は `Mood.MEMBER` か `_` で、抜けは指摘されます。
 テキストに入れると Python と同じ `Mood.HAPPY` の形で描画されます。
 
@@ -541,6 +661,22 @@ with card("counters"):
     counter("b", 10)
 ```
 
+コンポーネントはコールバックや `State` のセルも受け取れます。
+子から親に返す手段がこれです。
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+ハンドラもセルも呼び出し側のものなので、それを受け取るコンポーネントは呼び出し箇所ごとのビューになります（同じものを渡す二か所は一つを共有します）。
+
 `local` は呼び出し位置で見分けられています。
 呼び出しの並びを入れ替えると、状態の対応も入れ替わります。
 
@@ -559,6 +695,9 @@ text(f"n={n()}", **chip)
 
 色は 16 進のリテラルのほかに**テーマトークン**が書けます。
 `windowBg`、`panel`、`surface`、`surfaceHover`、`border`、`text`、`textDim`、`accent` などが、その場のテーマに応じた色に解決されます。
+
+スタイルの値はリテラルだけでなく状態からも取れます（`size=zoom()`、`color=Look.tone`、`padding=Look.pad * 2`）。
+ビューは表示する他のものと同じく、イベントのたびに読み直します。
 
 テーマは `theme=` で、その要素から下にまとめて当てます。
 値はリテラルでも状態の読みでもよいので、アプリが自分のパレットを状態として持てます。
@@ -599,6 +738,9 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 `width` / `height` は論理ピクセルで、対で指定します（省略時はエンジンの既定値）。
 この宣言はリリース版のバイナリにもそのまま引き継がれます。
 `on_start` はマウント直後に一度だけ走るハンドラで、失敗しても表示して続行します（起動データの読み込みや、乱数の種まきに使います）。
+起動時の処理を書く場所は `on_start` だけです。
+モジュールのトップレベルに置けるのは宣言だけで、そこに書いた文（`count.set(5)` や `fs.write_text(...)`）は名指しで断られます。
+コンパイル済みのアプリはモジュールを読むだけで、実行はしないためです。
 
 ## エラー処理
 
@@ -621,20 +763,51 @@ except Exception as e:
 
 ## 標準ライブラリ
 
-`from yokan import fs, sqlite, http, math, json, time, strings, random, notify` で使います。
+`from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify` で使います。
 どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
-- **fs**：`read_text` / `write_text` / `exists` / `read_text_or`
-- **sqlite**：`exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or`（SQLite 同梱。集計は COALESCE で包み、ORDER BY で順序を固定する）
-- **http**：`get_text` / `get_text_or`（同期）
+- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
+  それと、プラットフォーム自身のパネルである `open_dialog(title)` と `save_dialog(name)`。返るのはパスで、取り消されたときは `""` です。ダイアログは人を待つので `task(...)` の中で呼びます。検証スクリプトは `file:<path>` で答えます。
+- **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
+- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
 - **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
-- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）
-- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）
+- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）と `dumps(value)`（str、int、float、bool、そのいずれかのリスト、str をキーとする dict を書き出す。dict はキー順）
+- **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **random**：`seed(n)` / `int(lo, hi)`（両端含む）/ `float()`（種を撒けば毎回同じ列）
+- **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
+
+sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
+
+```python
+sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
+sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?", 0, ["food"])
+```
+
+値の位置に `?` を書き、値は文の外に並べて渡します。
+こう書けば `item` の中のアポストロフィはアポストロフィのままで、利用者が打った文字列が SQL になることはありません。
+値はテキストとしてバインドされ、列の affinity が変換します。
+INTEGER の列には数値が入ります。
+
+行はまるごと `list[str]` として返るので、結果は `list[list[str]]` です。
+
+```python
+@store
+class Ledger:
+    raw: list[list[str]] = []
+    rows: list[str] = []
+
+    def load(self) -> None:
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
+```
+
+表示する一行は、SQL で組み立てるのではなく Python 側で書きます。
 
 検証を安定させるこつは、結果を毎回同じにすることです。
 時刻は固定値を渡し、乱数は種を撒く。
@@ -725,10 +898,10 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-引数と返り値は全部注釈します（int / float / str / bool / list[...]）。
+引数と返り値は全部注釈します（int、float、str、bool、それらの `list[...]` と `dict[str, ...]`、Value クラス、`T | None`）。
 numpy のようなコンパイル済み拡張もエスケープの中で使えます。
 
-## 重い処理とタイマー
+## 重い処理とタイマーとキー
 
 ハンドラをブロックしてはいけません（ウィンドウが固まります）。
 `task` がワーカースレッドで仕事をして、終わったら UI スレッドで続きを実行します。
@@ -736,17 +909,61 @@ numpy のようなコンパイル済み拡張もエスケープの中で使え�
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-渡す関数は UI 要素を作らず、値を返すだけにします。
-ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+`on_error=` は開発実行だけの形です。
+標準ライブラリ呼び出しの失敗は、その呼び出しを `try` / `except` で囲んで受けます。
 
-`every(seconds, cb)` は秒間隔のタイマーです。
-`run` より前に呼びます。
-タイマーは開発実行の機能で、コンパイル対象ではありません（[今できないこと](#今できないこと)参照）。
+渡す関数は UI 要素を作らず、値を返すだけにします。
+`task` はそのハンドラの最後の文にします（Python では task の後の文が仕事の完了より先に走るためです）。
+ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
+どちらの実行も同じことをします。
+開発実行では Python のスレッドが、コンパイル済みの実行では中の標準ライブラリ呼び出しの `await` が、その仕事を UI スレッドの外に出します。
+task の中の純粋な計算は書いた場所で走ります。
+外に出るのは `fs`、`sqlite`、`http`、`time.sleep_ms` の呼び出しです。
+
+`every(seconds, cb)` は秒間隔のタイマーで、モジュールレベル（または `__main__` ガードの中）に書いて、アプリと一緒に始まります。
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+これは後から呼ぶものではなく宣言です。
+どちらの実行もアプリの開始時にタイマーを始め、同じ時計で発火します（ウィンドウならフレーム、ヘッドレスなら `advance:<ms>`）。
+そのため一分ぶんのティックもゲートで確かめられます。
+
+キーも同じように宣言します。
+`shortcut(chord, handler)` はコードをひとつ束ね、`on_key(handler)` はすべてのキーをコードの形で受け取ります。
+
+```python
+def save():
+    fs.write_text(path, body())
+
+shortcut("cmd+s", save)
+on_key(lambda k: last.set(k))
+```
+
+コードの綴りはプラットフォームの綴りに合わせます（`cmd+s`、`shift-tab`、`ctrl+alt+k`）。
+`-` で区切っても同じものとして読みます。
+テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴うコードだけがアプリに届きます。
+ヘッドレスのスクリプトは `key:cmd+s` で押せるので、ショートカットもクリックと同じく検証される操作になります。
+
+`menu_item(menu, name, handler)` は、同じハンドラをアプリケーションのメニューバーに置きます。
+
+```python
+menu_item("File", "Save", save)
+menu_item("File", "Clear", clear)
+```
+
+宣言した順がメニューの順で、ウィンドウはこのバーをプラットフォームに渡します。
+スクリプトからは `menu:Save` のように名前で選びます。
+
+ウィンドウに落とされたファイルも同じ形で宣言します。
+`on_file_drop(handler)` のハンドラがパスを受け取り、スクリプトは `drop:<path>` で落とします。
 
 ## 型チェッカーとの併用
 
@@ -758,6 +975,11 @@ yokan は型スタブを同梱しているので、pyright（VS Code の Pylance
 mypy には、クラスデコレータによる型の変換を適用しないという既知の制限があります。
 このため mypy では `@store` のメソッド呼び出しが「self が渡されていない」と誤検出されます。
 チェックには pyright を推奨します。
+
+型チェッカーが見るのは Python の型で、方言の境界ではありません。
+そちらは `yokan check app.py` が受け持ちます。
+アプリが import するモジュールをすべて翻訳器に通し、最初の拒否を `ファイル:行:列` の形で示し、方言の内側なら何も言いません。
+コンパイラを起動しないので、編集しながら何度でも回せます。
 
 ## ヘッドレス実行とゲート
 
@@ -820,27 +1042,52 @@ $ yokan build demo/opsboard/app.py --release
 ```
 
 小さな例は `demo/` にひとそろいあります（counter、todo、ledger、moods、geometry、cards、styled、tryfetch、pyops など）。
-どれもゲートを通っています。
+辞書で状態を持つ 2 本（`run(state={...})`）を除いて、どれもゲートを通っています。
+その 2 本は設計上の開発専用で、ギャラリーにもそう書いてあります。
 
 ## 今できないこと
 
 この範囲の外にあるものは、黙って挙動を変えるのではなく、名指しで断られます。
+断りの文はファイル名と行と列を挙げ、該当行を引用します。
+
+```console
+$ yokan build app.py --release
+widgets.py:5:40: not in the dialect — text() does not take `weight=`
+        return text(label, size=12, weight=2)
+                                           ^
+```
+
 今日の時点でできないことと、その理由です。
 
 - **辞書を挿入順で回すこと**。Python の辞書は挿入順、コンパイル後の辞書はキー順で並ぶためです。`sorted()` で回す形（キー順、両方で同じ）が用意されています。
 - **素の `d[k]` 読み**。無いキーの扱いを呼び出し側が決める `.get(key, default)` が読みの形です。
-- **変数での後ろから添字**（`xs[i]` の i が実行時に負になる形）。リテラルの `xs[-1]` は使えます。
 - **片方の分岐でしか代入していないローカルを後で読むこと**。実行されなかったとき Python なら NameError になる形です。if / else 両方で代入すれば読めます。
 - **`int ** int` の負の指数**。結果の型が実行時に変わるためで、どちらかを float にすれば書けます。
 - **辞書 state（`run(state={...})`）のコンパイル**。開発中は動きますが、コンパイルできる形は型付きの `State` です。
 - **Protocol 束縛のヘルパをビューから呼ぶこと**（ハンドラからは呼べます）。
 - **Value クラスのメソッドをビューから呼ぶこと**（ハンドラからは呼べます。ビューはフィールドを読みます）。
+- **ストアとモデルのメソッドをビューから呼ぶこと**。画面を組み立てる側は状態を読むだけで、メソッドは書き込みうるためです。読み取り専用の形は `@property` で、ビューはフィールドと同じように読めます。
 - **モデルのリストをビューで直接繰り返すこと**。今日は、表示したい文字列にストア側で組み立ててから `list_view` に渡します。
 - **ストアのフィールドを `Weak` にすること**。ストアは所有する側なので、所有しない参照はモデル側（逆向きのポインタ）に置きます。
 - **`Vec` などネイティブ側が既に使っている型名**。名指しで断られるので、別名（`V2` など）を選びます。
-- **`every` のコンパイル**。タイマーは開発実行の機能で、ヘッドレス実行でも走りません。
+- **モジュールのトップレベルに置いた文**。コンパイル済みのアプリはモジュールの宣言（import、`State`、クラス、def、`style()`、型 alias、リテラル定数、`every(...)` のタイマー、`__main__` ガード）を読むだけで実行はしないため、関数の外に書いた `count.set(5)` や `fs.write_text(...)` は名指しで断られます。起動時の処理は def に書き、`run(view, on_start=setup)` で渡します。
+- **ハンドラからタイマーを開始すること**。タイマーは宣言です（モジュールレベルの `every(1.0, tick)`）。ハンドラが変えるのは、ティックが読む状態のほうです。
+- **`task` の `on_error=`**。失敗の経路は誤差ユニット待ちです。標準ライブラリ呼び出しの失敗は、その呼び出しを `try` / `except` で囲んで受けます。
 - コンポーネントの `local` は**呼び出し位置で識別**されます。並べ替えは状態の付け替えです。
 - 同じ要素オブジェクトを**二回置くこと**。一度置いた要素は使い切りで、二か所には置けません。
+- **`T | None` を返すメソッド**。ストアとモデルのメソッドはスカラー、リスト、Value クラス、Enum を返せますが、Optional の返り値はまだありません。
+- **ローカルの辞書**と、注釈のないローカルのリスト（`out: list[str] = []` と書けば、コンパイル側が要素の型を読めます）。
+- **よく使う分を超えた str のメソッド**（`.title()`、`.zfill()`、`.format()`、`.encode()` など）。`.upper()`、`.lower()`、`.strip()` / `.lstrip()` / `.rstrip()`、`.split()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.count()`、`len(s)`、`s[i]`、`s[a:b]`、`in` は使えます。
+- **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
+- **辞書の `.values()` / `.items()` の反復**。Python は挿入順、コンパイル後はキー順に回るためです。`sorted(d())` を回して `d().get(k, default)` で読みます。
+- **一部の制御構文**：入れ子の def（クロージャにはコンパイル後の形がありません。ヘルパはモジュールレベルに書きます）と、ビューの中の条件式（ビューでは要素を `if` で分けます）。
+- **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
+- **`tuple` と `set`**。tuple にはまだコンパイル後の形がなく、Python の set の反復順はコンパイル側で再現できないため、並べ替えずに断ります。今日は `list` がどちらも代わりになります。
+- **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
+- **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
+- **標準ライブラリでは**：文字列から時刻を読み戻すこと、ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード、入れ子の json の書き出し（書き出す dict やリストの中の値は str、int、float、bool のいずれか）。
+- **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
+- **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。
 - **Rust crate の境界で、ペイロード付き enum と、双子へのメソッドは、まだ越えられない。** スカラ、String、List、Optional、str キーの辞書、構造体（入れ子・幅付きフィールド込み）、enum、Result（複合型の返りも）までは越えます。残る二つの前提: ペイロード enum は rpi-gen 自体の残件、メソッドは rpi 宣言済み struct への実装接合。構造体のフィールドに enum やリストを置く形もまだで、どれも呼ぶと理由を名指しして断られます。
 - 実測値はすべて macOS/arm64 のものです。ほかのプラットフォームはまだ測っていません。
 

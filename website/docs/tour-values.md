@@ -117,6 +117,17 @@ match health():
 
 Missing arms are reported at compile time.
 Variant fields cannot take defaults, and a variant belongs to exactly one sum type.
+Arms take guards and `|` alternatives, and a guard that fails falls through to the arms below it, as Python's does.
+
+```python
+match health():
+    case Degraded(services) if services > 3:
+        text("badly degraded")
+    case Healthy() | Degraded(_):
+        text("fine enough")
+    case _:
+        text("down")
+```
 
 ## Optional and Enum
 
@@ -126,4 +137,17 @@ Narrowing is as shown in the walrus sections.
 Enums are ordinary `class Mood(Enum)` and compile as-is.
 `match` arms are `Mood.MEMBER` or `_`, and missing arms are reported.
 In text they render exactly as Python does: `Mood.HAPPY`.
+`.name` and `.value` read what Python reads (`auto()` counts from 1), and `for m in Mood:` walks the members in declaration order.
+
+`match` also takes int, float, str and bool values, with `|` alternatives and guards:
+
+```python
+match code():
+    case 0 | 1:
+        note.set("early")
+    case n if n > 100:
+        note.set("far")
+    case _:
+        note.set("middle")
+```
 

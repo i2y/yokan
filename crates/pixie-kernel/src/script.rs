@@ -99,6 +99,10 @@ fn split_steps(script: &str) -> Vec<String> {
 /// the nearest step multiple counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar / Segmented — picks the option with exactly this text) ·
+/// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
+/// `menu:<item>` (pick a menu item by name) ·
+/// `file:<path>` (the answer the next file dialog gets) ·
+/// `drop:<path>` (a file dragged onto the window) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -163,7 +167,15 @@ pub fn run<C: Component>(
             let ms: f64 = ms
                 .parse()
                 .unwrap_or_else(|_| panic!("bad advance step `{step}`"));
-            rt.with(|w: &mut World| anim::advance(w, ms));
+            rt.with(|w: &mut World| {
+                anim::advance(w, ms);
+                // The clock moved, so the timers that were due in that
+                // span run — a script's `advance:` is how a headless
+                // run says "a second passed".
+                crate::timer::fire_due(w);
+            });
+            flush(rt, view, tree);
+            settle(rt, view, tree);
             *tree = rt.with(|w| build_prepared(w, view));
             timed = true;
         } else if let Some(rest) = step.strip_prefix("click") {
@@ -224,6 +236,41 @@ pub fn run<C: Component>(
             crate::contain("input handler", || {
                 rt.with(|w: &mut World| f(w, Str::from(text)))
             });
+        } else if let Some(chord) = step.strip_prefix("key:") {
+            // A keystroke, spelled the way the platform spells it
+            // (`cmd-s`, `shift-tab`); `+` reads the same. Nothing
+            // bound to it is a script's typo, so it says so — the
+            // rule `click` follows for a label no button carries.
+            let fired = crate::contain("key handler", || {
+                rt.with(|w: &mut World| crate::keys::fire(w, chord))
+            });
+            if !matches!(fired, Some(true)) {
+                panic!("no shortcut or key handler for `{chord}`");
+            }
+        } else if let Some(path) = step.strip_prefix("drop:") {
+            // A file dragged onto the window. The drag is the
+            // platform's; what the app does with the path is the
+            // app's, and that is the part a script checks.
+            let took = crate::contain("drop handler", || {
+                rt.with(|w: &mut World| crate::drop::fire(w, path))
+            });
+            if !matches!(took, Some(true)) {
+                panic!("nothing takes a dropped file (`on_file_drop`)");
+            }
+        } else if let Some(path) = step.strip_prefix("file:") {
+            // The answer the next file dialog gets. A headless run has
+            // no person to pick a file, so the script is the person.
+            crate::dialog::push_answer(path);
+        } else if let Some(name) = step.strip_prefix("menu:") {
+            // Pick a menu item by the name it shows. Nothing under
+            // that name is a script's typo, the way a missing button
+            // label is.
+            let picked = crate::contain("menu handler", || {
+                rt.with(|w: &mut World| crate::menu::pick(w, name))
+            });
+            if !matches!(picked, Some(true)) {
+                panic!("no menu item `{name}`");
+            }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {
                 r.parse()
