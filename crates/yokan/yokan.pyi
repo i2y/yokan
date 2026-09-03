@@ -132,17 +132,34 @@ def data_table(*children: Element) -> Element: ...
 def modal(*children: Element, open: bool = True) -> Element: ...
 def image(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
 def svg(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
+
+# min/max pin the range (0/0 = from the data, which may be negative —
+# the zero line is the baseline); `axis` draws tick labels and
+# gridlines; `series` draws several lines/bar groups, `colors` one
+# color per series.
 def bar_chart(
-    data: Sequence[float],
+    data: Sequence[float] = (),
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    min: float = 0.0,
+    max: float = 0.0,
+    axis: bool = False,
+    color: str = "",
+    series: Sequence[Sequence[float]] = (),
+    colors: Sequence[str] = (),
 ) -> Element: ...
 def line_chart(
-    data: Sequence[float],
+    data: Sequence[float] = (),
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    min: float = 0.0,
+    max: float = 0.0,
+    axis: bool = False,
+    color: str = "",
+    series: Sequence[Sequence[float]] = (),
+    colors: Sequence[str] = (),
 ) -> Element: ...
 def progress(value: float) -> Element: ...
 def checkbox(

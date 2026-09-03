@@ -933,18 +933,80 @@ fn charts_demo_checks_and_emits() {
         // `lower_view_float_list`'s Member arm: a List<Float> state
         // cell read through the store's singleton handle, plus
         // `lower_view_str_list`'s on the same element — and the demo's
-        // explicit sizing, lowered by `lower_view_size`.
+        // explicit sizing, lowered by `lower_view_size`. Everything
+        // the demo left unsaid lowers to the engine's "unset".
         "Element::BarChart { data: w.singleton_ref::<Charts>().values(w), \
-         labels: w.singleton_ref::<Charts>().names(w), width: 260f64, height: 110f64 }",
+         labels: w.singleton_ref::<Charts>().names(w), width: 260f64, height: 110f64, \
+         min: 0f64, max: 0f64, axis: false, color: Str::new(), series: List::new(), \
+         colors: List::new() }",
         // The unsized twin: both axes fall back to `0f64`, which the
-        // engine reads as "full width, default plot height".
+        // engine reads as "full width, default plot height" — and a
+        // single-series `color:` reaches it as a plain Str.
         "Element::LineChart { data: w.singleton_ref::<Charts>().values(w), \
-         labels: w.singleton_ref::<Charts>().names(w), width: 0f64, height: 0f64 }",
+         labels: w.singleton_ref::<Charts>().names(w), width: 0f64, height: 0f64, \
+         min: 0f64, max: 0f64, axis: false, color: Str::from(\"#f9e2af\"), \
+         series: List::new(), colors: List::new() }",
+        // The negative-valued chart asks for an axis: `axis:` is a
+        // plain bool, and the range stays at the data's own.
+        "Element::BarChart { data: w.singleton_ref::<Charts>().pnl(w), labels: List::new(), \
+         width: 0f64, height: 130f64, min: 0f64, max: 0f64, axis: true, color: Str::new(), \
+         series: List::new(), colors: List::new() }",
+        // The multi-series chart: `series:` is a List<List<Float>>
+        // read (`lower_view_float_list2`), `colors:` a literal list
+        // built in place, and the pinned range carries its sign.
+        "Element::LineChart { data: List::new(), labels: List::new(), width: 0f64, \
+         height: 130f64, min: (-2f64), max: 12f64, axis: true, color: Str::new(), \
+         series: w.singleton_ref::<Charts>().pairs(w), colors: { let mut __c = List::new(); \
+         __c.push(Str::from(\"accent\")); __c.push(Str::from(\"#f38ba8\")); __c } }",
         // Spinner's single square axis.
         "Element::Spinner { size: 32f64 }",
     ] {
         assert!(code.contains(needle), "generated code lacks `{needle}`");
     }
+}
+
+#[test]
+fn a_chart_takes_data_or_series_and_refuses_a_nested_literal() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = "store S {\n  state xs : List<Float> = []\n  \
+                 state ss : List<List<Float>> = []\n}\n\n";
+    let emit = |name: &str, body: &str| -> Result<String, String> {
+        let f = dir.join(name);
+        std::fs::write(
+            &f,
+            format!("{store}view Main {{\n  Column {{\n    {body}\n  }}\n}}\n"),
+        )
+        .unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .map_err(|e| e.message)
+    };
+
+    // `series:` alone is a whole chart, and `data:` empties out.
+    let code = emit("chart_series_only.pix", "BarChart { series: S.ss }").expect("emits");
+    assert!(
+        code.contains("data: List::new()") && code.contains("series: w.singleton_ref::<S>().ss(w)"),
+        "a series-only chart binds the series and empties the data: {code}"
+    );
+
+    // A nested list literal has no lowering in a view — the refusal
+    // names the field to declare instead of hinting at nothing.
+    let err = emit("chart_series_literal.pix", "BarChart { series: [] }")
+        .expect_err("a nested literal must not emit");
+    assert!(
+        err.contains("List<List<Float>>") && err.contains("store"),
+        "error should name the shape and where to put it: {err}"
+    );
+
+    // A flat list in the series slot is a type error, not a silent
+    // one-series chart.
+    let err = emit("chart_series_flat.pix", "BarChart { series: S.xs }")
+        .expect_err("a flat list is not a series list");
+    assert!(
+        err.contains("List<List<Float>>"),
+        "error should name the expected type: {err}"
+    );
 }
 
 #[test]

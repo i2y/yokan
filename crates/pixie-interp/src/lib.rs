@@ -1612,6 +1612,33 @@ fn eval_float_list(
     Ok(out)
 }
 
+/// Evaluate a chart's `series:` to a kernel `List<List<f64>>`.
+/// `eval_float_list` one level out, mirroring codegen's
+/// `lower_view_float_list2` (Int widening included).
+fn eval_float_list2(
+    e: &Expr,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<List<List<f64>>, String> {
+    let v = eval_expr(e, env, scope, w)?;
+    let Value::List(rows) = v else {
+        return Err(format!("expected List<List<Float>>, got {}", v.type_name()));
+    };
+    let mut out: List<List<f64>> = List::new();
+    for r in &rows {
+        let Value::List(xs) = r else {
+            return Err(format!("expected List<Float>, got {}", r.type_name()));
+        };
+        let mut inner: List<f64> = List::new();
+        for x in xs {
+            inner.push(x.as_float()?);
+        }
+        out.push(inner);
+    }
+    Ok(out)
+}
+
 /// The `List<String>` twin of `eval_float_list`, for `labels:`.
 fn eval_str_list(
     e: &Expr,
@@ -2305,32 +2332,71 @@ fn build_element_inner(
         }
         // Both charts build the same kernel Lists the emitter does, so
         // the tier gate's dump comparison is parity by construction.
-        // `data:` is required; `labels:` defaults to empty.
-        "BarChart" => {
-            let d = prop_of(el, "data").ok_or("BarChart needs `data:`")?;
+        // One of `data:` / `series:` is required; everything else
+        // defaults to the emitter's "unset".
+        "BarChart" | "LineChart" => {
+            let name = el.name.name.as_str();
+            let series = match prop_of(el, "series") {
+                Some(s) => eval_float_list2(s, env, scope, w)?,
+                None => List::new(),
+            };
+            let data = match prop_of(el, "data") {
+                Some(d) => eval_float_list(d, env, scope, w)?,
+                None if prop_of(el, "series").is_some() => List::new(),
+                None => return Err(format!("{name} needs `data:` or `series:`")),
+            };
+            let labels = match prop_of(el, "labels") {
+                Some(l) => eval_str_list(l, env, scope, w)?,
+                None => List::new(),
+            };
             let (width, height) = eval_size(el, env, scope, w)?;
-            Ok(Element::BarChart {
-                data: eval_float_list(d, env, scope, w)?,
-                labels: match prop_of(el, "labels") {
-                    Some(l) => eval_str_list(l, env, scope, w)?,
-                    None => List::new(),
-                },
-                width,
-                height,
-            })
-        }
-        "LineChart" => {
-            let d = prop_of(el, "data").ok_or("LineChart needs `data:`")?;
-            let (width, height) = eval_size(el, env, scope, w)?;
-            Ok(Element::LineChart {
-                data: eval_float_list(d, env, scope, w)?,
-                labels: match prop_of(el, "labels") {
-                    Some(l) => eval_str_list(l, env, scope, w)?,
-                    None => List::new(),
-                },
-                width,
-                height,
-            })
+            let min = match prop_of(el, "min") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let max = match prop_of(el, "max") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let axis = match prop_of(el, "axis") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            let color = match prop_of(el, "color") {
+                Some(v) => eval_text(v, env, scope, w)?,
+                None => Str::new(),
+            };
+            let colors = match prop_of(el, "colors") {
+                Some(v) => eval_str_list(v, env, scope, w)?,
+                None => List::new(),
+            };
+            if name == "BarChart" {
+                Ok(Element::BarChart {
+                    data,
+                    labels,
+                    width,
+                    height,
+                    min,
+                    max,
+                    axis,
+                    color,
+                    series,
+                    colors,
+                })
+            } else {
+                Ok(Element::LineChart {
+                    data,
+                    labels,
+                    width,
+                    height,
+                    min,
+                    max,
+                    axis,
+                    color,
+                    series,
+                    colors,
+                })
+            }
         }
         "ProgressBar" => {
             let v = prop_of(el, "value").ok_or("ProgressBar needs `value:`")?;

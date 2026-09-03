@@ -389,9 +389,33 @@ fn slots(el: &mut Element) -> Vec<(&'static str, Slot<'_>)> {
         Element::Image { width, height, .. } | Element::Svg { width, height, .. } => {
             vec![("width", Slot::Num(width)), ("height", Slot::Num(height))]
         }
-        Element::BarChart { width, height, .. } | Element::LineChart { width, height, .. } => {
-            vec![("width", Slot::Num(width)), ("height", Slot::Num(height))]
+        // The charts' range ends tween like any other number, so a
+        // chart that grows its scale slides into it. `colors` is the
+        // one color the theme resolves that animation cannot follow:
+        // a slot is one name to one value, and a series list is not
+        // that shape (deferred with the data-swap tween).
+        Element::BarChart {
+            width,
+            height,
+            min,
+            max,
+            color,
+            ..
         }
+        | Element::LineChart {
+            width,
+            height,
+            min,
+            max,
+            color,
+            ..
+        } => vec![
+            ("width", Slot::Num(width)),
+            ("height", Slot::Num(height)),
+            ("min", Slot::Num(min)),
+            ("max", Slot::Num(max)),
+            ("color", Slot::Color(color)),
+        ],
         // cute_ui's eased fill-toward-value, finally: a ProgressBar
         // under `animate:` sweeps to its new value instead of jumping.
         Element::ProgressBar { value } => vec![("value", Slot::Num(value))],

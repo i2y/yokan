@@ -719,6 +719,14 @@ impl<T: Clone> List<T> {
     pub fn push(&mut self, v: T) {
         Rc::make_mut(&mut self.0).push(v);
     }
+    /// In-place access to every element — the COW copy happens once,
+    /// here, rather than per element. The theme walk needs it: a
+    /// `List<Str>` of series colors is a color SLOT like any other,
+    /// and resolving tokens in place is what keeps the resolved hex
+    /// in the tree for the tier gate to compare.
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        Rc::make_mut(&mut self.0).iter_mut()
+    }
     /// `xs[i]` — the trapping index. Clones out (elements are values
     /// or Copy handles) and takes the language's OWN integer type: a
     /// `usize` parameter forced every emitted index through a cast
@@ -1144,26 +1152,53 @@ pub enum Element {
     /// (DESIGN §11). Clicks on the dim area are swallowed, never
     /// auto-closing — cute_ui's `ModalElement::dispatchClick` rule.
     Modal { open: bool, children: Vec<Element> },
-    /// A bar chart over `data`, normalized by the largest value, with
-    /// `labels` printed under the bars (a short `labels` just labels
-    /// the leading bars). `width`/`height` of `0.0` mean "unset": the
-    /// engine then spans the available width and gives the plot its
-    /// default height. cute_ui's eased-on-data-swap tween is
-    /// deferred — v0 paints the data directly (see DESIGN §11).
+    /// A bar chart over `data`, with `labels` printed under the bars
+    /// (a short `labels` just labels the leading bars). `width`/
+    /// `height` of `0.0` mean "unset": the engine then spans the
+    /// available width and gives the plot its default height.
+    ///
+    /// `min`/`max` pin the value range; `0.0`/`0.0` means "from the
+    /// data", which is `min(0, smallest) .. max(0, largest)` — so a
+    /// negative value is a bar hanging BELOW the zero line rather
+    /// than a clamp to nothing. `axis` adds the tick labels for that
+    /// range (its ends, plus zero when zero is inside) and a faint
+    /// gridline across the plot at each of them.
+    ///
+    /// `series` is the multi-series form: when it is non-empty `data`
+    /// is ignored and each inner list is one series (bars grouped per
+    /// slot). A series takes its color from `colors` at its index,
+    /// falling back to `color` for a single-series chart and to the
+    /// engine's four-hue palette for a multi-series one.
+    ///
+    /// cute_ui's eased-on-data-swap tween is deferred — v0 paints the
+    /// data directly (see DESIGN §11).
     BarChart {
         data: List<f64>,
         labels: List<Str>,
         width: f64,
         height: f64,
+        min: f64,
+        max: f64,
+        axis: bool,
+        color: Str,
+        series: List<List<f64>>,
+        colors: List<Str>,
     },
-    /// The polyline twin of `BarChart`: same normalization, same
-    /// `labels` rule, same `width`/`height` sizing, points joined by a
-    /// stroked path.
+    /// The polyline twin of `BarChart`: same range and `labels` rules,
+    /// same `width`/`height` sizing, same `series`/`colors` contract,
+    /// points joined by a stroked path that crosses the zero line
+    /// instead of stopping at it.
     LineChart {
         data: List<f64>,
         labels: List<Str>,
         width: f64,
         height: f64,
+        min: f64,
+        max: f64,
+        axis: bool,
+        color: Str,
+        series: List<List<f64>>,
+        colors: List<Str>,
     },
     /// A horizontal track with a filled portion proportional to
     /// `value`. The engine clamps to [0,1] at paint time; cute_ui's
@@ -1278,6 +1313,53 @@ fn chart_size(width: f64, height: f64) -> String {
     }
     if height != 0.0 {
         out.push_str(&format!(" h={height}"));
+    }
+    out
+}
+
+/// One float as chart TEXT — a dumped range end, an axis tick label.
+/// Rust's `Debug` for `f64` is the shortest round-trip rendering that
+/// keeps `.0` on an integral value, which is what Python's `str()`
+/// prints and what `{data:?}` already prints for every element of a
+/// chart's data. One function so the dump and the painted tick agree
+/// digit for digit.
+pub fn float_text(v: f64) -> String {
+    format!("{v:?}")
+}
+
+/// The `dump()` tail the charts' value props add, each joining only
+/// when set (the per-prop rule): an untouched chart keeps the bare
+/// `BarChart(data labels)` rendering it shipped with, so existing
+/// demo dumps stay byte-identical.
+#[allow(clippy::too_many_arguments)]
+fn chart_props(
+    width: f64,
+    height: f64,
+    min: f64,
+    max: f64,
+    axis: bool,
+    color: &Str,
+    series: &List<List<f64>>,
+    colors: &List<Str>,
+) -> String {
+    let mut out = chart_size(width, height);
+    if min != 0.0 {
+        out.push_str(&format!(" min={}", float_text(min)));
+    }
+    if max != 0.0 {
+        out.push_str(&format!(" max={}", float_text(max)));
+    }
+    if axis {
+        out.push_str(" axis");
+    }
+    if !color.as_str().is_empty() {
+        out.push_str(&format!(" color={color}"));
+    }
+    if !series.is_empty() {
+        out.push_str(&format!(" series={series:?}"));
+    }
+    if !colors.is_empty() {
+        out.push_str(&format!(" colors={colors:?}"));
     }
     out
 }
@@ -1669,21 +1751,40 @@ impl Element {
                 format!("Modal({open})[{}]", inner.join(", "))
             }
             // The data drives every painted bar/point, so the dump
-            // carries both lists verbatim (`List` is Debug). Sizing
-            // joins only once it is set — an untouched chart keeps the
-            // bare `BarChart(data labels)` rendering (ListView's rule).
+            // carries both lists verbatim (`List` is Debug). Sizing,
+            // the range, the axis and the colors join only once they
+            // are set — an untouched chart keeps the bare
+            // `BarChart(data labels)` rendering (ListView's rule).
             Element::BarChart {
                 data,
                 labels,
                 width,
                 height,
-            } => format!("BarChart({data:?} {labels:?}{})", chart_size(*width, *height)),
+                min,
+                max,
+                axis,
+                color,
+                series,
+                colors,
+            } => format!(
+                "BarChart({data:?} {labels:?}{})",
+                chart_props(*width, *height, *min, *max, *axis, color, series, colors)
+            ),
             Element::LineChart {
                 data,
                 labels,
                 width,
                 height,
-            } => format!("LineChart({data:?} {labels:?}{})", chart_size(*width, *height)),
+                min,
+                max,
+                axis,
+                color,
+                series,
+                colors,
+            } => format!(
+                "LineChart({data:?} {labels:?}{})",
+                chart_props(*width, *height, *min, *max, *axis, color, series, colors)
+            ),
             Element::ProgressBar { value } => format!("ProgressBar({value})"),
             Element::Spinner { size } => {
                 if *size == 0.0 {

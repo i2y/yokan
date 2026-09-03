@@ -4062,6 +4062,15 @@ fn lower_view_float(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitErr
         // it, so the view layer widens with it (§8.55). Writing the
         // `.0` is not something a size property should demand.
         ExprKind::Int(v) => Ok(format!("{v}f64")),
+        // `min: -40.0` — a sign is part of the literal a reader
+        // wrote, not an expression (`lower_default`'s rule). The
+        // charts' range is the property that needs it.
+        ExprKind::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } if matches!(expr.kind, ExprKind::Float(_) | ExprKind::Int(_)) => {
+            Ok(format!("(-{})", lower_view_float(expr, cx, key)?))
+        }
         // `value: name.prop` — a Float prop / state-cell read.
         ExprKind::Member { receiver, name } => {
             let ExprKind::Ident(f) = &receiver.kind else {
@@ -4214,6 +4223,51 @@ fn lower_view_float_list(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
     }
 }
 
+/// Lower a `series:` property (BarChart / LineChart) to a
+/// `List<List<f64>>` expression — `lower_view_float_list` one level
+/// out, and with the same restriction for the same reason: a nested
+/// list literal in a view body has no lowering, so several series
+/// come from one bound `List<List<Float>>` field.
+fn lower_view_float_list2(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
+    match &e.kind {
+        // `series: name.prop` — a List<List<Float>> prop / state cell.
+        ExprKind::Member { receiver, name } => {
+            let ExprKind::Ident(f) = &receiver.kind else {
+                return err(e.span, "`series:` must be a List<List<Float>> property");
+            };
+            let Some((class, handle)) = cx.handle_for(f) else {
+                return err(e.span, format!("`{f}` is not a view state field or global"));
+            };
+            let Some(p) = class.prop(&name.name) else {
+                return err(e.span, format!("no property `{}` on `{}`", name.name, class.name));
+            };
+            // Int widens element by element, the `data:` rule one
+            // level deeper — the interp tier's `as_float` takes it,
+            // so refusing here would be a tier disagreement.
+            if p.ty == RustTy::List(Box::new(RustTy::List(Box::new(RustTy::Int)))) {
+                return Ok(format!(
+                    "{handle}.{}(w).iter().map(|s| s.iter().map(|v| *v as f64)\
+                     .collect::<List<f64>>()).collect::<List<List<f64>>>()",
+                    p.rust
+                ));
+            }
+            if p.ty != RustTy::List(Box::new(RustTy::List(Box::new(RustTy::Float)))) {
+                return err(
+                    e.span,
+                    "this series binding must be a List<List<Float>> or List<List<Int>> property",
+                );
+            }
+            Ok(format!("{handle}.{}(w)", p.rust))
+        }
+        _ => err(
+            e.span,
+            "`series:` must be a List<List<Float>> property (a nested list literal \
+             is not lowerable in a view — declare `state series : List<List<Float>>` \
+             on a store and bind that)",
+        ),
+    }
+}
+
 /// Lower a `List<String>` property (`labels:` on the charts and
 /// TabBar, `options:` on Select / RadioGroup) to a `List<Str>`
 /// expression. The `List<String>` twin of `lower_view_float_list`;
@@ -4245,6 +4299,35 @@ fn lower_view_str_list(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, Emit
             ),
         ),
     }
+}
+
+/// Lower a `colors:` property (the charts) to a `List<Str>`. A series
+/// palette is written where it is read, so this takes a LITERAL list
+/// of strings as well as `lower_view_str_list`'s bound read — the
+/// interpreted tier evaluates the same literal through `eval_expr`,
+/// which is why accepting it here closes a tier gap rather than
+/// opening one.
+fn lower_view_color_list(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
+    let ExprKind::Array(items) = &e.kind else {
+        return lower_view_str_list(e, cx, "colors");
+    };
+    if items.is_empty() {
+        return Ok("List::new()".into());
+    }
+    let mut out = String::from("{ let mut __c = List::new(); ");
+    for it in items {
+        let ExprKind::Str(parts) = &it.kind else {
+            return err(
+                it.span,
+                "`colors:` holds color strings — a hex like \"#f38ba8\" or a theme \
+                 token like \"accent\"",
+            );
+        };
+        let v = lower_interp(parts, &mut |inner| lower_view_display(inner, cx))?;
+        write!(out, "__c.push({v}); ").unwrap();
+    }
+    out.push_str("__c }");
+    Ok(out)
 }
 
 /// Statement context inside an action closure (`onClick: { ... }`).
@@ -5647,37 +5730,56 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 "Element::Modal {{ open: {open}, children: {children} }}"
             ))
         }
-        "BarChart" => {
-            // `data:` is the widget — an empty chart is a bound empty
-            // list, never a missing binding. `labels:` is optional, and
-            // so is sizing (`0f64` = "unset", the Image rule).
-            let data = element_prop(el, "data").ok_or_else(|| EmitError {
-                span: el.span,
-                message: "BarChart needs `data:`".into(),
-            })?;
+        "BarChart" | "LineChart" => {
+            // The data is the widget — an empty chart is a bound empty
+            // list, never a missing binding — so one of `data:` and
+            // `series:` is required. `labels:`, the range, the axis and
+            // the colors are all optional (`0f64` = "unset", the Image
+            // rule).
+            let name = el.name.name.as_str();
+            let series = match element_prop(el, "series") {
+                Some(s) => lower_view_float_list2(s, cx)?,
+                None => "List::new()".into(),
+            };
+            let data = match element_prop(el, "data") {
+                Some(d) => lower_view_float_list(d, cx)?,
+                None if element_prop(el, "series").is_some() => "List::new()".into(),
+                None => {
+                    return Err(EmitError {
+                        span: el.span,
+                        message: format!("{name} needs `data:` or `series:`"),
+                    });
+                }
+            };
             let labels = match element_prop(el, "labels") {
                 Some(l) => lower_view_str_list(l, cx, "labels")?,
                 None => "List::new()".into(),
             };
             let (width, height) = lower_view_size(el, cx)?;
-            Ok(format!(
-                "Element::BarChart {{ data: {}, labels: {labels}, width: {width}, height: {height} }}",
-                lower_view_float_list(data, cx)?
-            ))
-        }
-        "LineChart" => {
-            let data = element_prop(el, "data").ok_or_else(|| EmitError {
-                span: el.span,
-                message: "LineChart needs `data:`".into(),
-            })?;
-            let labels = match element_prop(el, "labels") {
-                Some(l) => lower_view_str_list(l, cx, "labels")?,
+            let min = match element_prop(el, "min") {
+                Some(v) => lower_view_float(v, cx, "min")?,
+                None => "0f64".into(),
+            };
+            let max = match element_prop(el, "max") {
+                Some(v) => lower_view_float(v, cx, "max")?,
+                None => "0f64".into(),
+            };
+            let axis = match element_prop(el, "axis") {
+                Some(v) => lower_view_bool_keyed(v, cx, "axis")?,
+                None => "false".into(),
+            };
+            let color = match element_prop(el, "color") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let colors = match element_prop(el, "colors") {
+                Some(v) => lower_view_color_list(v, cx)?,
                 None => "List::new()".into(),
             };
-            let (width, height) = lower_view_size(el, cx)?;
             Ok(format!(
-                "Element::LineChart {{ data: {}, labels: {labels}, width: {width}, height: {height} }}",
-                lower_view_float_list(data, cx)?
+                "Element::{name} {{ data: {data}, labels: {labels}, width: {width}, \
+                 height: {height}, min: {min}, max: {max}, axis: {axis}, color: {color}, \
+                 series: {series}, colors: {colors} }}"
             ))
         }
         "ProgressBar" => {

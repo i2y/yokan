@@ -254,6 +254,9 @@ class Translator:
                 if inner is None:
                     raise Untranslatable(ann, f"list[{sl.slice.id}] is not in the dialect yet")
                 field = (f"List<{inner}>", self._list_literal(call.args[0], inner))
+            elif self._list_of_lists_ty(sl) is not None:
+                lty = self._list_of_lists_ty(sl)
+                field = (lty, self._list_literal(call.args[0], lty[5:-1]))
             elif (
                 isinstance(sl, ast.Subscript)
                 and isinstance(sl.value, ast.Name)
@@ -636,6 +639,9 @@ class Translator:
             if inner is None:
                 raise Untranslatable(ann, f"list[{ann.slice.id}] is not in the dialect")
             return f"List<{inner}>", self._list_literal(default, inner)
+        nested = self._list_of_lists_ty(ann)
+        if nested is not None:
+            return nested, self._list_literal(default, nested[5:-1])
         if (
             isinstance(ann, ast.Subscript)
             and isinstance(ann.value, ast.Name)
@@ -1140,7 +1146,28 @@ class Translator:
             if inner is None:
                 raise Untranslatable(ann, f"list[{ann.slice.id}] is not in the dialect")
             return f"List<{inner}>", self._list_literal(default, inner)
+        nested = self._list_of_lists_ty(ann)
+        if nested is not None:
+            return nested, self._list_literal(default, nested[5:-1])
         raise Untranslatable(ann, "field annotations are int/str/bool/float/list[...]")
+
+    @staticmethod
+    def _list_of_lists_ty(ann):
+        """`list[list[float]]` → `List<List<Float>>`, else None. One
+        level of nesting is what the charts' `series=` reads; deeper
+        shapes wait for a use that asks for them."""
+        if not (
+            isinstance(ann, ast.Subscript)
+            and isinstance(ann.value, ast.Name)
+            and ann.value.id == "list"
+            and isinstance(ann.slice, ast.Subscript)
+            and isinstance(ann.slice.value, ast.Name)
+            and ann.slice.value.id == "list"
+            and isinstance(ann.slice.slice, ast.Name)
+        ):
+            return None
+        inner = {"str": "String", "int": "Int", "float": "Float"}.get(ann.slice.slice.id)
+        return None if inner is None else f"List<List<{inner}>>"
 
     # ---- discovery ------------------------------------------------
 
@@ -1427,20 +1454,33 @@ class Translator:
     def _list_literal(self, node, inner) -> str:
         if not isinstance(node, ast.List):
             raise Untranslatable(node, "list cells start from a list literal")
+        # A nested list (chart `series` data) is the same literal one
+        # level in, so the reader recurses instead of growing a table.
+        if inner.startswith("List<"):
+            rows = []
+            for e in node.elts:
+                rows.append(self._list_literal(e, inner[5:-1]))
+            return "[" + ", ".join(rows) + "]"
         parts = []
-        for e in node.elts:
+        for item in node.elts:
+            # `-8.0` is a literal a reader wrote, not an expression:
+            # the minus is unparsed as a UnaryOp, and a chart of
+            # profit and loss is mostly what asks for it.
+            neg = isinstance(item, ast.UnaryOp) and isinstance(item.op, ast.USub)
+            e = item.operand if neg else item
             if not isinstance(e, ast.Constant):
-                raise Untranslatable(e, "list literal items must be constants")
+                raise Untranslatable(item, "list literal items must be constants")
             if inner == "String":
-                if not isinstance(e.value, str):
-                    raise Untranslatable(e, "expected a str item")
+                if neg or not isinstance(e.value, str):
+                    raise Untranslatable(item, "expected a str item")
                 parts.append(f'"{esc(e.value)}"')
             else:
                 if not isinstance(e.value, (int, float)) or isinstance(e.value, bool):
-                    raise Untranslatable(e, "expected a number item")
+                    raise Untranslatable(item, "expected a number item")
+                val = -e.value if neg else e.value
                 if type(e.value) is int:
-                    self._check_i64(e.value, e, False)
-                parts.append(self._pix_num(e.value, inner))
+                    self._check_i64(val, item, False)
+                parts.append(self._pix_num(val, inner))
         return "[" + ", ".join(parts) + "]"
 
     def _dict_literal(self, node, inner) -> str:
@@ -3901,24 +3941,30 @@ class Translator:
 
         for fname, tag in (("bar_chart", "BarChart"), ("line_chart", "LineChart")):
             if self._is_ui(node.func, fname):
-                if not node.args:
-                    raise Untranslatable(node, f"{fname}() needs its data")
-                c = self._cell_read(node.args[0])
-                a0 = node.args[0]
-                if (
-                    c is None
-                    and isinstance(a0, ast.Attribute)
-                    and isinstance(a0.value, ast.Name)
-                    and a0.value.id in self.stores
-                    and self.stores[a0.value.id]["field_tys"].get(a0.attr) in ("List<Float>", "List<Int>")
-                ):
-                    props = [f"data: {a0.value.id}.{a0.attr}"]
-                elif c is None or self.cells.get(c) not in ("List<Float>", "List<Int>"):
-                    raise Untranslatable(
-                        node.args[0], f"{fname} data must be a list[float]/list[int] cell or store-field read"
-                    )
-                else:
-                    props = [f"data: App.{c}"]
+                props = []
+                # `series=` wins over the data argument, so a
+                # multi-series chart does not have to invent a `data`.
+                if "series" in kw:
+                    props.append(f"series: {self._list_of_lists_read(kw['series'], fname)}")
+                elif not node.args:
+                    raise Untranslatable(node, f"{fname}() needs its data (or series=)")
+                if node.args:
+                    c = self._cell_read(node.args[0])
+                    a0 = node.args[0]
+                    if (
+                        c is None
+                        and isinstance(a0, ast.Attribute)
+                        and isinstance(a0.value, ast.Name)
+                        and a0.value.id in self.stores
+                        and self.stores[a0.value.id]["field_tys"].get(a0.attr) in ("List<Float>", "List<Int>")
+                    ):
+                        props.insert(0, f"data: {a0.value.id}.{a0.attr}")
+                    elif c is None or self.cells.get(c) not in ("List<Float>", "List<Int>"):
+                        raise Untranslatable(
+                            node.args[0], f"{fname} data must be a list[float]/list[int] cell or store-field read"
+                        )
+                    else:
+                        props.insert(0, f"data: App.{c}")
                 if "labels" in kw:
                     la = kw["labels"]
                     lc = self._cell_read(la)
@@ -3934,10 +3980,22 @@ class Translator:
                         raise Untranslatable(la, "labels must be a list[str] cell or store-field read")
                     else:
                         props.append(f"labels: App.{lc}")
-                for prop, pix in (("width", "width"), ("height", "height")):
+                for prop, pix in (("width", "width"), ("height", "height"), ("min", "min"), ("max", "max")):
                     val = self._num(kw, prop)
                     if val is not None:
                         props.append(f"{pix}: {val}")
+                if "axis" in kw:
+                    av = kw["axis"]
+                    if isinstance(av, ast.Constant) and type(av.value) is bool:
+                        if av.value:
+                            props.append("axis: true")
+                    else:
+                        props.append(f"axis: {typed_read(av, 'Bool', 'axis=')}")
+                col = self._strlit(kw, "color")
+                if col is not None:
+                    props.append(f'color: "{esc(col)}"')
+                if "colors" in kw:
+                    props.append(f"colors: {self._color_list(kw['colors'])}")
                 return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
 
         if self._is_ui(node.func, "grid"):
@@ -4030,6 +4088,59 @@ class Translator:
         if not (isinstance(v, ast.Constant) and isinstance(v.value, str)):
             raise Untranslatable(v, f"{name} must be a string literal")
         return v.value
+
+    def _list_of_lists_read(self, node, fname):
+        """`series=` on a chart: ONE bound list[list[float]]. A list
+        written at the call site cannot reflect state across rebuilds
+        (the `data` rule), and a nested list literal has no lowering
+        in a view either, so the refusal names the field to declare."""
+        want = ("List<List<Float>>", "List<List<Int>>")
+        c = self._cell_read(node)
+        if c is not None and self._ty(c) in want:
+            return f"App.{c}"
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.stores
+            and self.stores[node.value.id]["field_tys"].get(node.attr) in want
+        ):
+            return f"{node.value.id}.{node.attr}"
+        raise Untranslatable(
+            node,
+            f"{fname} series= is one list[list[float]] read: a store field or a "
+            "State cell annotated list[list[float]] — declare the series there "
+            "and pass the field",
+        )
+
+    def _color_list(self, node):
+        """`colors=` on a chart: the colors written where they are
+        read (a list of string literals), or a list[str] state /
+        store-field read — `labels=`'s rule plus the literal, since a
+        series palette is not app state."""
+        if isinstance(node, ast.List):
+            out = []
+            for e in node.elts:
+                if not (isinstance(e, ast.Constant) and isinstance(e.value, str)):
+                    raise Untranslatable(
+                        e,
+                        'colors= holds color strings — a hex like "#f38ba8" or a '
+                        'theme token like "accent"',
+                    )
+                out.append(f'"{esc(e.value)}"')
+            return "[" + ", ".join(out) + "]"
+        c = self._cell_read(node)
+        if c is not None and self._ty(c) == "List<String>":
+            return f"App.{c}"
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.stores
+            and self.stores[node.value.id]["field_tys"].get(node.attr) == "List<String>"
+        ):
+            return f"{node.value.id}.{node.attr}"
+        raise Untranslatable(
+            node, "colors= is a list of color strings or a list[str] state or store-field read"
+        )
 
     def _container_props(self, kw, pad) -> list[str]:
         lines = []

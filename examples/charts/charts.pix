@@ -1,6 +1,8 @@
 store Charts {
   state values : List<Float> = []
   state names : List<String> = []
+  state pnl : List<Float> = [12.0, -8.0, 4.0, -3.0]
+  state pairs : List<List<Float>> = [[4.0, 9.0, 6.0, 11.0], [1.0, 3.0, 2.0, 5.0]]
 
   fn load {
     values.push(0.3)
@@ -14,6 +16,10 @@ store Charts {
   fn spike {
     values.push(1.0)
     names.push("d")
+    pnl.push(-11.0)
+    pairs = []
+    pairs.push([4.0, 9.0, 6.0, 11.0, 7.0])
+    pairs.push([1.0, 3.0, 2.0, 5.0, 8.0])
   }
 }
 
@@ -21,7 +27,16 @@ view Main {
   Column {
     Text { text: "points: #{Charts.values.length}" }
     BarChart { data: Charts.values; labels: Charts.names; width: 260.0; height: 110.0 }
-    LineChart { data: Charts.values; labels: Charts.names }
+    LineChart { data: Charts.values; labels: Charts.names; color: "#f9e2af" }
+    BarChart { data: Charts.pnl; axis: true; height: 130.0 }
+    LineChart {
+      series: Charts.pairs
+      colors: ["accent", "#f38ba8"]
+      axis: true
+      min: -2.0
+      max: 12.0
+      height: 130.0
+    }
     Spinner { size: 32.0 }
     Row {
       Button { text: "load"; onClick: Charts.load() }

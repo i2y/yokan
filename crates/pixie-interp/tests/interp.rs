@@ -130,6 +130,16 @@ fn tables() -> Rc<Tables> {
                 .collect(),
         )
     });
+    // A List<List<Float>> read — the shape a chart's `series:` binds.
+    t.getter("Series", "pairs", |w, h| {
+        Value::List(
+            h.typed::<Series>()
+                .pairs(w)
+                .iter()
+                .map(|r| Value::List(r.iter().map(|x| Value::Float(*x)).collect()))
+                .collect(),
+        )
+    });
     Rc::new(t)
 }
 
@@ -863,6 +873,58 @@ fn chart_and_spinner_sizing_joins_the_dump_only_when_set() {
 }
 
 #[test]
+fn chart_range_axis_and_series_join_the_dump_only_when_set() {
+    // The same per-prop rule as sizing, over the props that decide
+    // what a chart PAINTS: the range ends, the axis flag, the single
+    // color and the multi-series pair. `colors:` takes a literal list
+    // here as well as a bound read — a palette is written where it is
+    // read — and codegen lowers the same literal, so the tiers agree.
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view(
+            "BarChart { data: series.values; min: -4.0; max: 8.0; axis: true }\n    \
+             LineChart { data: series.values; color: \"#f38ba8\" }\n    \
+             BarChart { series: series.pairs; colors: [\"accent\", \"#f38ba8\"] }",
+        ),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[BarChart([0.5, 1.5] [] min=-4.0 max=8.0 axis), \
+         LineChart([0.5, 1.5] [] color=#f38ba8), \
+         BarChart([] [] series=[[1.0, 2.0], [-3.0, 4.0]] colors=[\"accent\", \"#f38ba8\"])]"
+    );
+}
+
+#[test]
+fn a_chart_needs_data_or_series() {
+    // `series:` alone is a whole chart — `data:` is what it replaces,
+    // so requiring both would be asking for a list nobody plots.
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view("LineChart { series: series.pairs }"),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[LineChart([] [] series=[[1.0, 2.0], [-3.0, 4.0]])]"
+    );
+    match build_view(&chart_view("LineChart { series: series.values }"), &e, &tables(), &w) {
+        Ok(_) => panic!("a flat List<Float> is not a series list"),
+        Err(err) => assert!(
+            err.contains("List<Float>"),
+            "error should name the expected type: {err}"
+        ),
+    }
+}
+
+#[test]
 fn chart_and_spinner_sizing_widens_int_literals() {
     // Mirrors codegen's `lower_view_size` / `lower_view_float`:
     // an Int widens into the Float slot (§8.55).
@@ -951,7 +1013,16 @@ fn charts_world() -> (World, FieldEnv) {
     let mut values: List<f64> = List::new();
     values.push(0.5);
     values.push(1.5);
-    let s = w.insert(Series { values });
+    let mut pairs: List<List<f64>> = List::new();
+    let mut a: List<f64> = List::new();
+    a.push(1.0);
+    a.push(2.0);
+    let mut b: List<f64> = List::new();
+    b.push(-3.0);
+    b.push(4.0);
+    pairs.push(a);
+    pairs.push(b);
+    let s = w.insert(Series { values, pairs });
     let mut items: List<Str> = List::new();
     items.push(Str::from("a"));
     items.push(Str::from("b"));
@@ -973,14 +1044,19 @@ fn chart_view(body: &str) -> LiveView {
 
 struct Series {
     values: List<f64>,
+    pairs: List<List<f64>>,
 }
 
 trait SeriesRef: Copy {
     fn values(self, w: &World) -> List<f64>;
+    fn pairs(self, w: &World) -> List<List<f64>>;
 }
 impl SeriesRef for Handle<Series> {
     fn values(self, w: &World) -> List<f64> {
         w.get(self).values.clone()
+    }
+    fn pairs(self, w: &World) -> List<List<f64>> {
+        w.get(self).pairs.clone()
     }
 }
 
