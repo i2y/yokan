@@ -165,3 +165,629 @@ encodes them. `just publish <version>` bumps, builds, smokes, asks
 once, then uploads, commits, tags and writes the release; the smoke
 step is a hard gate, and the upload is the only irreversible move,
 so it is the only one that asks.
+
+## Module level is declarations
+
+The translator used to accept a module-level statement — an
+`every(1.0, tick)`, a `count.set(5)`, a `fs.write_text(...)`, a
+store call — and emit an app without it. That was the one hole in
+"refused by name, never silently changed": the gate could see the
+difference only when a script happened to exercise it, and a timer
+never fires headless, so the gate could not see that one at all.
+Module level now takes declarations only — imports, `State`,
+classes, defs, `style()`, type aliases, model instances, literal
+constants and the `__main__` guard, which holds `run(...)` alone —
+and every other statement is refused with what to write instead: a
+def passed as `run(view, on_start=setup)`, which both runs call
+once after mount. `every` gets its own message, because a compiled
+timer is a design still to be made rather than a constraint.
+
+The reason is timing, not the emitter's convenience. The three ways
+an app runs execute module level differently: `python app.py` runs
+it once at import and again on every live reload; the gate's
+interpreted run imports the module without `__main__`, so the
+guard's body does not run there at all; the compiled app never
+runs it. A statement whose effect depends on which of those
+happened cannot be verified, so it is not a dialect statement.
+Binding a literal is not a statement in this sense — nothing runs —
+which is why `DB = "x.db"` stays a declaration; `sys.path.insert`
+is import plumbing with no effect on the app and passes for the
+same reason.
+
+Rejected: compiling module-level statements into the store's
+initializer. It would give startup work a second mechanism with a
+different moment (before mount rather than after) and would still
+not match a live reload, which re-executes the module with the app
+running. Rejected: keeping the drop and printing a warning — a
+warning is not a refusal, and the timer case shows the gate cannot
+back it up. Compiling `every` (a kernel clock that headless scripts
+advance) is future work; the refusal is what makes it safe to add
+later, because nothing now depends on the drop.
+
+## `task` is refused by name until it compiles
+
+`task(work, on_done, on_error)` has always been a development-run
+feature: the translator has no lowering for it, and it refused the
+call with the generic handler-statement message, so a reader learned
+that something was wrong, not that worker threads were the thing.
+The refusal now names `task` and says what the compiled app does
+instead — a compiled handler runs to the end, so an `http` fetch
+there holds the window until the reply — and the tour's closing
+list carries the same sentence. Compiling `task` onto the
+substrate's async functions, with the continuation on the UI thread
+and the headless run waiting for completion as the interpreted run
+already does, is future work; naming the gap is what keeps the
+closing list honest until then.
+
+## The agent guide follows the tour
+
+`skill/SKILL.md` is the guide an agent reads before writing an app.
+It had grown by appending a paragraph per feature, so it opened with
+dict state (which does not compile), said both that a bare float
+renders and that it needs `.Nf`, and both that an enum must be
+matched to a string and that it renders as Python prints it. A
+guide that contradicts itself teaches trial and error, which is the
+thing the refusals exist to prevent. The guide is now a condensed
+tour: the tour's order, the tour's vocabulary ("interpreted and
+compiled", "State", "store", "model"), the same code shapes, and the
+same closing list. When the two disagree, the tour is right, and the
+guide says so at its top. The tour stays the single specification;
+the guide is derived from it and is updated in the same change as
+the tour, like the website copies.
+
+## A refusal names its file, line and column
+
+A multi-module app is flattened into one program before
+translation, and a refusal reported only a line number — so a
+mistake in `widgets.py` came back as "line 9" of `app.py`, with no
+column and no quote of the offending line. Every parsed module now
+stamps its nodes with their file, and a refusal reads
+`widgets.py:5:40: not in the dialect — text() does not take
+`weight=``, followed by the source line and a caret under the
+construct. The shape is the one editors and terminals already parse
+(`file:line:col:`), so a build error is a click away from the code
+it names; the excerpt is there because the message talks about a
+construct, and the reader should not have to open the file to see
+which one. A refusal that has no node to point at — a missing
+`run(...)` under the guard — names the file alone. Lambda bodies
+used to report "line ?" because the synthesized statement carried
+no position; they now carry the lambda's own. Rejected: a Python
+traceback (it points into the translator, not the app) and the
+entry file's name for every refusal (wrong for imported modules,
+which is where the report mattered most).
+
+## Refusals speak the user's language
+
+A refusal is the one piece of prose most users read, and the
+translator's had been written from the inside: "cells" for what
+the tour calls State, "tiers" and "native" for the two runs,
+`List<String>` and `Map<String, Int>` for `list[str]` and
+`dict[str, int]`, `ui.State` and `@ui.store` when the documented
+spelling is bare, and a catch-all that printed an AST dump. Every
+message now uses the tour's words, quotes the construct it refused
+in the user's own source, and says what to write instead when
+there is something to write: `count.set(5)` at module level points
+at `run(view, on_start=setup)`, a str method at `strings.to_int`,
+an in-place `append` at `items.set(items() + [x])`, a store field
+written from outside at a method. The catch-alls for expressions,
+statements and conditions inspect the shape they were handed —
+a comprehension, a conditional expression, a walrus, `print`, a
+tuple assignment, `while True`, a chained comparison, an Enum's
+`.value` — and name it, so "not in the dialect" is never the whole
+message.
+
+The second rule is about time. "For now" and "yet" had been
+attached to most refusals, including ones the ledger had decided
+would never change, so a reader could not tell a constraint from a
+gap. Now a refusal that records a decision states the reason and
+stops — a bare `d[k]` raises in Python where a default would be
+answered, truthiness is not a comparison, an index that turns
+negative counts from the back — and only a refusal for something
+planned or undecided says "yet". The word is a promise, and the
+tour's closing list is where the promises are kept.
+
+## The closing list is the whole boundary
+
+The tour's closing list — what does not work yet, with a reason for
+each — carried a dozen items while the translator refused a few
+hundred shapes, so a reader who wrote inside the documented dialect
+still met refusals the documentation had not mentioned: a module
+constant read in a handler, a str method, a slice, a store method
+returning a value, a style value taken from state, the row index of
+a `list_view` used in a handler. An audit of the boundary (one
+probe app per construct, run through `translate`) produced the
+missing items, and the list now carries all of them, grouped by
+what a reader was trying to do, each with the form to write
+instead. The rule going forward: a refusal that is not a decision
+appears in the list until the construct lands, and leaves the list
+in the same change that lands it; the guide's list is the same
+list. The design refusals stay at the top, worded as decisions.
+
+## The table element says what it draws
+
+`data_table` sat in the element catalog with nothing behind it: no
+demo used it, no sentence said what it does, and the landing page's
+"tables" pointed at it. It is not a bare container — the engine
+draws the frame, shades the first `row` child as a header and
+alternates the shading of the data rows below it — so the fix was
+to write that contract into the tour, the guide and the stub, and
+to add `demo/table.py`, which lines its columns up by giving the
+cells of one column the same `grow` share and setting the numeric
+column with `align="right"`. An element the catalog names but
+nothing demonstrates is a claim without a witness; every element in
+the catalog should have one.
+
+The same change made the gallery's own claim exact. "Every one of
+them passes the gate" was written when the sweep gated every demo,
+and it stayed after four dict-state demos became development-only
+by design. The sentence now names the exception and points at the
+gallery, where each of the four already says so.
+
+## The checker is the translator
+
+Everything the compiled run refuses is decided by the translator, on
+the ast alone, before any compiler is started — but the only way to
+ask it was `translate` (which prints a `.pix` nobody wanted to read)
+or a build. `yokan check app.py` asks that question directly: it
+translates every module the app imports, prints the first refusal in
+the `file:line:col` shape with the line and a caret, and says
+nothing at all when the app is inside the dialect. Silence is the
+answer a checker should give, and a checker that needs no compiler
+is one an editor can run on save.
+
+It reports the first refusal, not all of them. Enumerating one per
+def would mean treating a refused def as opaque at its call sites
+and continuing the pass, which is a translator change, not a CLI
+one; the cheap version is honest about stopping where it stops.
+
+A refusal also stopped saying "not in the dialect" twice. The
+rendered head names the location and the category, and most messages
+name the category themselves ("`print(...)` is not in the dialect
+yet — …"), so the head now adds its prefix only to the messages that
+do not.
+
+## A module constant is a declaration, and the read is its value
+
+`LIMIT = 10` at module level was already a declaration — the compiled
+app reads the module rather than running it — but reading the name
+inside a handler was refused, so apps wrote the literal in six
+places. A constant is now resolved before the scan and written where
+it is read: the name and the value are interchangeable, because
+CPython evaluates the binding once at import and the compiled app has
+no import step at all. Locals, parameters and loop variables shadow
+it exactly as they do in Python.
+
+The collector is deliberately wider than the scan's own test for a
+constant: anything it takes that the scan does not count as a
+declaration is refused at the binding, as a module-level statement,
+so guessing wide cannot change what an app does.
+
+## A method may answer; a view may not ask
+
+A store or model method can now be annotated with a return type and
+end with `return <expression>`, and handlers read what comes back.
+Views cannot call it, and that is not a gap: building a view reads
+the world and a method may write to it, so the substrate refuses the
+call outright. The read-only form is `@property` — a single
+`return <expression>` over the store's fields, which the translator
+writes where it is read. A property is a name for a formula, so a
+view can use it wherever a field goes, and nothing about the view's
+purity changes.
+
+`@staticmethod` completes the set: a plain function that happens to
+live in the class, emitted as the same static a module-level helper
+becomes, and callable from views for the same reason.
+
+## One index, Python's meaning
+
+`items()[0]` worked only through a local, `self.xs[i]` not at all,
+`len(self.xs)` was refused where `len(Cart.xs)` was accepted, and a
+variable index was refused everywhere because it might turn negative.
+The four spellings are one story now: a list read, a store or model
+field written either way, or a local, indexed by a literal or an
+expression. A negative index counts from the back — the index is
+bound to a local and folded when it is negative — and an index past
+the end stops that statement in both runs, which is the containment
+the tour already promised for the literal case.
+
+The loop variable of `for i in range(n)` needed a fix underneath:
+the substrate bound it to the error type so the body would soft-pass,
+and the list-index rule then rejected it by name. A range now binds
+Int and a list binds its element type, which is what the syntax says.
+
+## The call site is Python's
+
+Keyword arguments, default arguments, model constructor arguments
+(`Acc(v=3)`) and the `Optional[T]` spelling were each refused for
+their own reason, and each refusal was arbitrary: the information
+needed to accept them was already in the signature. Arguments are
+now put back into the signature's order at the call site, defaults
+are filled from the def (literals only, so the value written is the
+value Python would have bound), a constructor with arguments builds
+the model and writes the fields the way a synthesized `__init__`
+does, and `Optional[T]` is rewritten to `T | None` before anything
+reads it.
+
+## Conditions, chains and the conditional expression
+
+A bool is a condition: `if on:` over a bool state, field, local or
+parameter asks nothing about truthiness, so it needed no comparison —
+and `while True:` is the same rule. `0 < n < 10` chains, with the
+middle read once (a plain read is written twice, anything else is
+bound to a local first), and `:=` binds outside a None test.
+`a if c else b` lowers in a handler to a local and an if/else, each
+branch keeping its own preparatory lines so an expression is still
+evaluated only on the path that uses it; a view has nowhere to put
+those lines, so there it stays refused with the shape to write
+instead.
+
+The mechanism under all of this is a statement prelude: an
+expression may ask for lines before the statement it appears in.
+Binding a model's receiver, wrapping a negative index and lowering a
+conditional expression all use it.
+
+## A helper is an ordinary function
+
+Helpers took the four scalars, no defaults, and a single trailing
+`return`. They now take and return what a method parameter does —
+lists, value classes, enums — return early from a branch, call
+themselves, and fill in default arguments at the call site. What is
+still refused is refused for its own reason: an Optional return has
+no lowering yet, and joining two lists is a list operation the
+dialect does not have, not a fact about helpers.
+
+## A literal reads best where a literal was written
+
+`text(Cart.label)` asked for an f-string wrapper, and
+`select(options=["a", "b"])` asked for a state cell to hold two
+constants. Both now take what the reader would write: a str-typed
+expression becomes the text (through the same interpolation the
+hole would have produced, so a literal inside a concatenation never
+has to survive as a quote inside a quote), and a list of string
+literals is lowered for `options:` / `labels:` directly by the
+engine.
+
+## `match` over values, and an Enum that answers questions
+
+pixie's `case` matches enum members and sum-type variants, so the
+dialect's `match` took only those. A `match` over int, float, str or
+bool is the if/elif chain it always was: the subject is read once
+into a local, each arm compares against it, `|` alternatives become
+`||`, and a guard that fails falls through to the next arm — which
+is exactly Python's rule.
+
+An Enum's `.name` and `.value` are answered where they are known: a
+member written out (`Mood.SAD.value`) is a constant, and a value that
+only arrives at runtime goes through a static synthesized for that
+enum, beside the one that renders `Mood.SAD` in text. `auto()` counts
+from 1 and an explicit value is taken as written, so the number the
+compiled app reads is the number CPython read. `for m in Mood:` walks
+the members in declaration order, which is the order Python walks
+them.
+
+## A style value is a value
+
+`size=`, `color=`, `padding=` and the rest took a literal, so an app
+that wanted a size to follow state had to duplicate the element under
+an `if`. They now take what a view can read: a state, a field, or
+arithmetic over them, re-read on every rebuild like anything else the
+view shows. The interpreting side always did this — it is Python
+calling a function — so this was a tier disagreement rather than a
+rule, and the fix landed in both halves: the translator stopped
+demanding a literal, and the engine's numeric property lowering
+learned the arithmetic its own documentation already promised
+(`fontSize: unit * qty`).
+
+## The row index is part of the row
+
+A `list_view` row builder takes an index, and the index was usable
+only to look the row up (`items()[i]`). Everything a list actually
+does with its position — numbering, marking the selected row, a
+delete button for that row — was outside the dialect. The repeater
+underneath binds the row's value; it now binds the row's index too
+(`for row, i in xs` in the substrate), so the index reads like any
+other local: in the text, in a condition, and in the row's handlers.
+A handler that reads it becomes a store function that TAKES it, with
+the repeater passing it at the call site — the element itself comes
+back from the index (`items[i]`), so one parameter carries the row.
+
+## A dict key is a str, not an identifier
+
+Keys had to be string literals shaped like identifiers, which is a
+rule about the emitter's quoting, not about dictionaries. A key is
+now any str the app can name — a literal with spaces, a state read, a
+loop variable — for writing, for `.get`, and for `in`. What stays
+refused is `.values()` / `.items()`, and for a reason that will not
+change: Python walks them in insertion order and the compiled dict is
+ordered by key, so the honest form is `sorted(d())` with
+`.get(k, default)`.
+
+## Python's str, as a twin rather than a port
+
+`.upper()`, `len(s)`, `s[i]`, `s[a:b]`, `in`, `int()`, `round()` —
+the everyday half of Python's strings and conversions — were refused
+because the compiled side had no implementation. It has one now: a
+set of statics in the standard library, each written to answer what
+CPython answers, including the failures (`int("x")` stops that
+statement, as the raise does).
+
+This is the arithmetic pattern, not the standard library's. `fs` and
+`sqlite` are one implementation both runs call; a str method cannot
+be, because the development run is Python calling Python's own
+method. So the compiled side gets a twin written against CPython's
+semantics and the gate holds the two together — `round` rounding
+half to even is exactly the kind of detail that arrangement exists
+to catch.
+
+The same reasoning covers format specs. `f"{x:.2f}"` was the only
+one the dialect took, because the engine implements that one; fill,
+align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`
+now go through a formatter written against CPython's mini-language,
+in views and handlers alike.
+
+## `task` is an async handler
+
+A `task` was refused because the compiled app had no worker to give
+it. The substrate had one all along — an `async fn` whose awaited
+binding calls run on the engine's pool — so a handler containing a
+task becomes async, and the standard-library calls inside the work
+are awaited. That is what moves the fetch off the UI thread; pure
+computation inside a task stays where it is written, and the docs
+say so rather than implying a thread that is not there.
+
+A task is the last statement of its handler. In Python the
+statements after it run BEFORE the work finishes, and a lowering
+that ran them after would be a silent reordering — so the dialect
+asks for them above the task instead. `on_error=` waits for the
+error union; the failing call is caught with `try` / `except` today.
+
+## A timer is a declaration
+
+`every(1.0, tick)` at module level now compiles, and the way it
+compiles is the point: a timer is not a call an app makes, it is a
+fact about the app, so it lives with the other declarations and both
+runs start it when the app starts. Underneath, the kernel grew a
+timer store on the animation clock — the same clock a headless
+script steps — so a window fires ticks on frames and `advance:<ms>`
+fires exactly the ticks that span would have. Timers became
+gate-checkable in the same change that made them compile, which is
+the only reason to have them at all.
+
+A tick that is late by more than one period does not repeat. The
+clock jumped (a slow frame, a script advancing a minute at once) and
+running a minute of ticks is nobody's intent.
+
+## A component takes what a component is given
+
+Component parameters carried values, so a component could not take a
+callback or a `State` cell — the two things a reusable fragment needs
+to talk back to its caller. Both now work, and neither crosses as a
+parameter: a component that takes one becomes a view per call site,
+with the handler and the cell written into the body where the
+parameter was named. Two call sites that pass the same thing share
+one view. A component's own parameter is readable in its handlers
+too, by passing it to the synthesized store function — the same
+mechanism a `list_view` row uses for its index.
+
+## The escape hatch takes the app's own shapes
+
+`@py` signatures took scalars and lists. They take str-keyed dicts
+(as std's `HashMap`, the marker the crate boundary already had), a
+value class (the generated crate declares the struct, the escape
+module gets a dataclass of the same shape, and the app's `@value`
+twin serves the interpreted run), and `T | None` — with the
+narrowing that goes with it: an optional local reads as its own
+name inside `if v is not None:`, which is what Python means there.
+
+## The list vocabulary, and where each piece comes from
+
+`in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`,
+comprehensions, `enumerate` / `zip`, a stepped `range` and joining
+two lists were all refused, and each was refused for a different
+missing piece rather than for a rule. They arrive from three places,
+which is worth writing down because the shape repeats:
+
+- What CPython answers and the engine has no opinion about — sorting,
+  the aggregates, membership, slicing, joining — is a static in the
+  standard library, per element type, written against Python's
+  semantics (an empty `min` raises there and traps here).
+- What is a loop wearing another name — a comprehension, `enumerate`,
+  `zip`, a stepped range — is lowered to the loop, with the
+  repeater's own index carrying `enumerate`.
+- What only needed a type — a local list — asks for the annotation
+  that says its element type, exactly as a state does.
+
+`out = out + [x]` is still the append the compiled app performs in
+place, whether `out` is a state or a local.
+
+## `print` writes where the screen does not
+
+A compiled `print` would write to stdout, and stdout is where a
+headless run's screen dump goes — the one channel the gate compares.
+So `print` keeps a refusal that names `log("…")`, which writes the
+same line to stderr from both runs: one implementation, no channel
+to share with the dump. `assert` and `raise` end the statement the
+way Python's exception does, contained by the runtime, and both are
+refused inside a `try` where the two runs would disagree about what
+the `except` catches.
+
+## A store field is written like any other field
+
+`Cart.total = 5` from outside the store was refused with "write it
+through a method", which is a style rule the language was enforcing:
+Python allows the write and so does the compiled side. It is allowed
+now, and the guidance stays guidance — a method is where an update
+with an invariant belongs. Models already worked this way, so the
+two agree.
+
+Names the compiled side reads as syntax (`flags`, `state`, `case`
+and the rest) are refused with a reason instead of reaching the
+emitter, where they became a parse error inside generated code —
+the compiler's bug to prevent, by D10.
+
+## One reader for types, one for defaults
+
+Every declaration had its own narrow table: a state's annotation
+knew `list[str]` but not `list[Point]`, a store field knew
+`dict[str, int]` but not `dict[str, list[str]]`, a model field knew
+scalars only. The substrate takes all of them — nested lists,
+dicts keyed by str or int, optionals of any of it, value classes
+inside containers — so the tables became one reader for annotations
+and one for defaults, and the combinations follow from the two.
+
+`tuple` and `set` stay out, and not for want of a table: a tuple has
+no compiled shape yet, and a Python set iterates in an order the
+compiled side would not reproduce — the same reason a dict iterates
+by key here.
+
+## Values ride beside the statement
+
+sqlite had no parameter binding, and the ledger demo showed what that
+costs: it spelled the user's text into the SQL with an f-string, so an
+apostrophe in an item name was a syntax error and a semicolon would
+have been a second statement. Every sqlite call now takes a trailing
+list of values to bind — `sqlite.exec(db, "INSERT INTO t VALUES (?,
+?)", [name, str(n)])` — and the same spelling with and without it, so
+the reader sees one function. Values bind as text and the column's
+affinity converts, which is what Python's own driver does with a str
+parameter; one implementation serves both runs, so there is nothing
+for the two to disagree about.
+
+The read side grew the shape that binding made worth having: a row as
+a `list[str]`, a result as a `list[list[str]]`. The line a list shows
+is written in Python now instead of assembled in SQL with `||`.
+
+## The rest of the standard library's desk
+
+Four gaps closed beside it, each one a thing an app of this kind
+reaches for on its first afternoon: http POST, request headers, a
+deadline in milliseconds and a status code on its own; fs directory
+listing, append, remove, make, and `app_dir(name)` for the directory
+an app may keep its own files in; `json.dumps` for writing a value
+back out; and `time.format_local_ms`, the machine's own zone beside
+the UTC one that verification scripts want.
+
+Two of them needed a rule rather than a function. `json.dumps` has
+one name and one meaning, but the writer differs by the value's type,
+so the translator picks the static from the annotation while the
+interpreted door reads the type at run time — the two land on the
+same Rust function, which is what keeps the printed string single. A
+dict is written in key order for the same reason dict iteration is:
+a Rust HashMap has no order and a Python dict has insertion order,
+and key order is the one both can agree on.
+
+
+## A chord is a declaration
+
+Keyboard shortcuts had no place to live: the substrate had no key
+event at all, and a headless script had no way to press one. Both
+gaps closed with the shape timers already had — `fn save @key("cmd-s")`
+on a store, bound the moment the store exists, and `key:<chord>` as a
+script step that reaches the same handler a keystroke would. In the
+dialect that is `shortcut("cmd+s", save)` at module level, beside
+`every(1.0, tick)`, and `on_key(typed)` for a handler that sees every
+key as the chord it was.
+
+The chord is spelled the way the platform spells it (`cmd-s`,
+`shift-tab`), with `+` accepted for the same thing and one
+normalization on both sides, so what a script presses and what a
+window presses cannot drift apart. While a text field has the caret,
+plain keys keep going into it and only chords carrying cmd or ctrl
+reach the app — the platform's own rule, and the reason an app can
+bind `cmd-s` without stealing the letter s.
+
+
+## One clipboard, both runs
+
+Copy and paste needed a place that a script can see. The clipboard is
+one value in the kernel: an app sets and reads it, a window exchanges
+it with the platform once per frame, and a headless run does neither
+— so the two tiers of a gate agree because neither reaches a
+machine-wide buffer, while a real window still trades text with every
+other application. `clipboard.set_text` and `get_text` are ordinary
+standard-library calls over that value.
+
+
+## The menu bar is declared too
+
+An item in the application's menu is the same kind of declaration a
+shortcut is: `fn save @menu("File", "Save")` on a store, or
+`menu_item("File", "Save", save)` in the dialect. The window hands
+the list to the platform when it opens, and a headless script picks
+one by the name it shows (`menu:Save`), reaching the same handler —
+so a menu is something the gate checks rather than something only a
+mouse can reach.
+
+gpui menu items carry an ACTION, and an action is a type, so a bar
+whose items are only known at run time needs one action type that
+carries which item it was. That is the whole of the engine side: one
+`MenuCommand { index }`, dispatched on the root.
+
+
+## A decorator is folded in, not ignored
+
+A user decorator used to pass through the translator unread: the
+compiled app ran the bare function while the development app ran the
+wrapper, and only the gate would have caught it. Refusing it by name
+was the small fix; compiling it is the right one. Decoration happens
+at import, and the compiled app never executes the module, so the
+wrapper is inlined around the body it decorates and both runs do the
+same thing.
+
+The shape that folds is a def of one argument that returns that
+argument, or defines a wrapper calling it once and returns the
+wrapper. A decorator taking arguments of its own, a wrapper calling
+the function twice (the compiled side cannot declare the same local
+twice) or using its value are each refused with the reason.
+
+## A field that holds paragraphs
+
+`multiline=True` turns a text field into one: it shapes wrapped
+instead of on one line, `enter` writes a newline rather than
+submitting, `home` / `end` walk the line the caret is on, the arrows
+move by visual line, and `rows=` says how many lines are visible.
+The flag is in the dump, so a script sees which kind of field it is
+looking at.
+
+## Tooltips, dialogs and dropped files
+
+Three more riders on the same idea that carried the shortcuts. A
+`tooltip:` is a universal rider like `role:` — the sixth table both
+lowerers share — and it is dumped whether or not a pointer is there
+to reveal it. A file dialog is a wait for a person, so it runs inside
+a `task`: the call blocks on the worker while the window opens the
+panel on its own thread, and a headless run answers from the queue a
+script filled with `file:<path>`. A dropped file is a declaration
+like a shortcut (`on_file_drop`), delivered by the platform's drag or
+by a script's `drop:<path>`.
+
+Async lowering grew one thing to make the dialog usable: an `await`
+inside an `if` inside an `async fn`. The branch used to go through
+the sync lowering, where an await cannot appear at all — and "what
+happens next depends on the answer" is the first thing anyone writes
+after opening a dialog.
+
+
+## The gate got its afternoon back
+
+A gate ran in 110 seconds and used 19% of the machine, so the wait
+was not compute. Two causes, both structural.
+
+The generated app crate shared one target directory with the dev
+tree while resolving the same dependencies under a different
+configuration, so every switch between "build the compiler" and
+"build an app" rebuilt gpui. Giving generated apps their own dev
+profile (`debug = 0` — a gate never debugs the binary it compares)
+made the two sets of artifacts distinct, and they stopped evicting
+each other.
+
+The second is what the compiled tier links: a gate's binary is never
+hot-reloaded, so `pixie build --no-interp` leaves the interpreter and
+the reload wiring out of the crate graph. The binary went from 62 MB
+to 51 MB.
+
+Measured on the demo sweep: 110 s per app build became 8 s when
+nothing changed and 25 s when everything had to be rebuilt, and the
+44-demo sweep went from over an hour to 19 minutes. Nothing about
+what the gate CHECKS changed — the same two runs, the same
+byte comparison.

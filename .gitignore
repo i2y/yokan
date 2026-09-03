@@ -21,3 +21,6 @@ dist/
 # private working ledger — never tracked
 crates/yokan/DESIGN.local.md
 docs/WIDGET_PLAYBOOK.local.md
+docs/WIDGET_GAPS.local.md
+crates/yokan/BACKLOG.local.md
+crates/yokan/tools/probe_dialect.local.py

@@ -262,11 +262,13 @@ fn desugar_stmt(s: &Stmt, env: &StyleEnv) -> Result<Stmt, StyleError> {
         Stmt::Expr(e) => Stmt::Expr(desugar_expr(e, env)?),
         Stmt::For {
             binding,
+            index,
             iter,
             body,
             span,
         } => Stmt::For {
             binding: binding.clone(),
+            index: index.clone(),
             iter: iter.clone(),
             body: desugar_block(body, env)?,
             span: *span,

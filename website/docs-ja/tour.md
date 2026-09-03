@@ -51,6 +51,9 @@ $ yokan build app.py --release                    # リリース: ネイティ�
 - **アプリ全体で共有するひとまとまりの状態**（カート、設定、画面ごとの状態）なら**ストア**（`@store`）。フィールドだけでもよく、操作はメソッドになります。
 - **何個も作れて、変更に画面が追随してほしいオブジェクト**なら**モデル**（`@model`）。
 
+変わらない値は状態ではありません。
+モジュールレベルに書いたリテラル（`LIMIT = 10`、`NAMES = ["a", "b"]`）は宣言で、ハンドラからもビューからも名前で読めます。
+
 ### State
 
 アプリの状態は、モジュールレベルに `State` で宣言します（`from yokan import State`）。
@@ -94,7 +97,21 @@ text(f"n={len(Cart.items)} total={Cart.total}")
 
 フィールドは State と同じ型が使えます。
 メソッドの中身はハンドラと同じ書き方で、ストア同士の呼び合いもできます。
-メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れます。
+メソッドの引数は int、float、str、bool、それらの `list[...]`、Value クラス、Enum が取れ、キーワード引数と既定値も Python と同じように書けます。
+返り値の型を書いたメソッドは `return <式>` で終わり、ハンドラはその値を受け取れます（`Cart.count()`）。
+ビューは状態を読む場所なのでメソッドは呼べません。読み取り専用の形が `@property` で、式に名前を付けたものとして、フィールドと同じ場所で使えます。
+
+```python
+    @property
+    def label(self) -> str:
+        return f"{len(Cart.items)} items"
+
+    @staticmethod
+    def yen(n: int) -> str:
+        return f"¥{n}"
+```
+
+ストアの `@staticmethod` はクラスの中に置いた普通の関数で、純粋ヘルパと同じくビューからも呼べます。
 
 ### モデル
 
@@ -170,6 +187,8 @@ def view():
 
 要素カタログ：`text`、`button`、`text_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`column`、`row`、`grid`、`stack`、`list_view`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
 `grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
+`data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
+列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
 名前空間で呼びたい場合は `import yokan as ui`（`button`、`run`）もそのまま使え、どちらの綴りも同じにコンパイルされます。
 
@@ -234,6 +253,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
 - **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
+
+どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 

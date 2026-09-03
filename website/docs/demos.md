@@ -10,8 +10,8 @@ $ ./tools/gate_all.sh               # gate-check every demo at once
 ```
 
 The three numpy demos (pystats / csv_viewer / app) run with
-`uv run --with numpy`. Four demos — `app` `csv_viewer` `dashboard`
-`tasks` — use dict state and are development-only by design (see the
+`uv run --with numpy`. Two demos — `app` and `csv_viewer` —
+use dict state and are development-only by design (see the
 [What does not work yet](tour-ship.md#what-does-not-work-yet) section); they are listed here, not gated. All screenshots show
 the initial state, right after launch.
 
@@ -88,6 +88,9 @@ the initial state, right after launch.
 #### todo — the classic todo list
 <img src="images/demos/todo.png" width="360">
 
+#### table — data_table: the first `row` is the header, later `row`s are data rows shaded in alternation, and the frame comes with the element
+<img src="images/demos/table.png" width="360">
+
 #### dialog — the modal: existing IS being open, so wrap it in `if`
 <img src="images/demos/dialog.png" width="360">
 
@@ -102,22 +105,28 @@ the initial state, right after launch.
 
 ## The standard library
 
-#### files — yokan.fs: write and read back (both runs call the same implementation)
+#### picker — file dialogs and dropped files: `fs.open_dialog` / `save_dialog` inside a `task`, `on_file_drop`; a script answers with `file:<path>` and drops with `drop:<path>`
+<img src="images/demos/picker.png" width="360">
+
+#### keys — shortcuts, keys, the clipboard and the menu bar: `shortcut("cmd+s", save)`, `on_key(typed)`, `clipboard.set_text` / `get_text`, `menu_item("Count", "Save", save)` — driven in a script with `key:cmd+s` and `menu:Save`
+<img src="images/demos/keys.png" width="360">
+
+#### files — yokan.fs: write, append, list a directory, remove (both runs call the same implementation)
 <img src="images/demos/files.png" width="360">
 
 #### dbnotes — yokan.sqlite: shape rows with SQL, order with ORDER BY
 <img src="images/demos/dbnotes.png" width="360">
 
-#### ledger — a practical app: a household ledger persisted in sqlite
+#### ledger — a practical app: a household ledger in sqlite, every value a bound parameter
 <img src="images/demos/ledger.png" width="360">
 
-#### webfetch — yokan.http: the gate needs no network (an @py fixture server runs in both runs)
+#### webfetch — yokan.http: GET, headers, POST, status (an @py fixture server runs in both runs, so the gate needs no network)
 <img src="images/demos/webfetch.png" width="360">
 
 #### reader — an http + json feed reader
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — math / json / time
+#### stdlib — math / json (read and write) / time (UTC and local)
 <img src="images/demos/stdlib.png" width="360">
 
 #### dice — yokan.random: seed it and both runs draw the same sequence
@@ -131,6 +140,12 @@ the initial state, right after launch.
 #### rustcrate — Rust crates, added with `yokan add`: a local path crate and a crates.io version crate side by side, called by their own snake_case names. The pyproject spelling of the same declaration is `demo/proj/`
 <img src="images/demos/rustcrate.png" width="360">
 
+#### dashboard — every(): a timer declared at module level, ticking in both runs (the gate steps it with `advance:`)
+<img src="images/demos/dashboard.png" width="360">
+
+#### tasks — task(): slow work off the UI thread, in both runs
+<img src="images/demos/tasks.png" width="360">
+
 ## Escapes and development-only
 
 #### pystats — @py + numpy: escaped functions ship with CPython embedded in the release binary
@@ -139,14 +154,9 @@ the initial state, right after launch.
 #### multi — a multi-module app (state.py and widgets.py; helpers become components)
 <img src="images/demos/multi.png" width="360">
 
-#### dashboard — a load-average display driven by every() (development-only: dict state)
-<img src="images/demos/dashboard.png" width="360">
-
 #### app — a dashboard with numpy (development-only: dict state)
 <img src="images/demos/app.png" width="360">
 
 #### csv_viewer — a 100k-row virtualized table + numpy (development-only: dict state)
 <img src="images/demos/csv_viewer.png" width="360">
 
-#### tasks — worker threads via task() (development-only: dict state)
-<img src="images/demos/tasks.png" width="360">

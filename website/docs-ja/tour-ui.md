@@ -31,6 +31,22 @@ with card("counters"):
     counter("b", 10)
 ```
 
+コンポーネントはコールバックや `State` のセルも受け取れます。
+子から親に返す手段がこれです。
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+ハンドラもセルも呼び出し側のものなので、それを受け取るコンポーネントは呼び出し箇所ごとのビューになります（同じものを渡す二か所は一つを共有します）。
+
 `local` は呼び出し位置で見分けられています。
 呼び出しの並びを入れ替えると、状態の対応も入れ替わります。
 
@@ -49,6 +65,9 @@ text(f"n={n()}", **chip)
 
 色は 16 進のリテラルのほかに**テーマトークン**が書けます。
 `windowBg`、`panel`、`surface`、`surfaceHover`、`border`、`text`、`textDim`、`accent` などが、その場のテーマに応じた色に解決されます。
+
+スタイルの値はリテラルだけでなく状態からも取れます（`size=zoom()`、`color=Look.tone`、`padding=Look.pad * 2`）。
+ビューは表示する他のものと同じく、イベントのたびに読み直します。
 
 テーマは `theme=` で、その要素から下にまとめて当てます。
 値はリテラルでも状態の読みでもよいので、アプリが自分のパレットを状態として持てます。
@@ -89,4 +108,7 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 `width` / `height` は論理ピクセルで、対で指定します（省略時はエンジンの既定値）。
 この宣言はリリース版のバイナリにもそのまま引き継がれます。
 `on_start` はマウント直後に一度だけ走るハンドラで、失敗しても表示して続行します（起動データの読み込みや、乱数の種まきに使います）。
+起動時の処理を書く場所は `on_start` だけです。
+モジュールのトップレベルに置けるのは宣言だけで、そこに書いた文（`count.set(5)` や `fs.write_text(...)`）は名指しで断られます。
+コンパイル済みのアプリはモジュールを読むだけで、実行はしないためです。
 
