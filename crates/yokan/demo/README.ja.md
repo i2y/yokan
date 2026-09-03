@@ -128,6 +128,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### labels — アクセシビリティのライダー `role=` と `a11y_label=`。スクリプトの `a11y` ステップが印字する
 <img src="screenshots/labels.png" width="360">
 
+#### riders — 以前は付けられなかった要素へのライダー一式。theme 付きの spacer、animate 付きの segmented、grid の 2 トラックにまたがるフィールド、role 付きの link、tooltip 付きの divider、disabled のボタンとフィールド、幅を指定した列
+<img src="screenshots/riders.png" width="360">
+
 ## 標準ライブラリ
 
 #### picker — ファイルダイアログと落とされたファイル。`task` の中の `fs.open_dialog` / `save_dialog`、`on_file_drop`。スクリプトは `file:<path>` で答え、`drop:<path>` で落とす

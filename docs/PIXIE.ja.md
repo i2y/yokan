@@ -124,6 +124,13 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   「グループ、グループ、グループ」と読み上げさせるより黙ります。
   ツリーは検証済みの出力です。`PIXIE_SCRIPT="a11y"` で出力でき、
   ウィンドウ側も同じ導出から AccessKit に渡します。
+- **ライダー** — 横断的なプロパティは、書いたエレメントをコンパイラが包む形で
+  付きます。ウィジェットごとにフィールドを繰り返すことはしません。
+  `tooltip:`、`role:` / `label:`、`disabled:`(薄くなり、ウィンドウでも
+  スクリプトでも無効、AccessKit にも状態が渡る)、`width:` / `height:` /
+  `minWidth:` / `maxWidth:`(自前の寸法を持たないエレメントに)、`theme:`、
+  アニメーションのライダー、`colSpan:` / `rowSpan:` が、両方の tier で
+  同じ決まった順序で入れ子になります。
 - **スタイルとテーマ** — 名前付きプロパティ集合(`style Key {
   background: "#313244" }`)。`+` でマージし、任意のエレメントに
   `style: Key` で適用、コンパイル時に完全インライン。`pub style` で

@@ -131,6 +131,9 @@ the initial state, right after launch.
 #### labels — the accessibility riders `role=` and `a11y_label=`, printed by a script's `a11y` step
 <img src="screenshots/labels.png" width="360">
 
+#### riders — every rider on an element that could not take it before: a themed spacer, an animated segmented, a field spanning two grid tracks, a link with a role, a divider with a tooltip, a disabled button and field, a sized column
+<img src="screenshots/riders.png" width="360">
+
 ## The standard library
 
 #### picker — file dialogs and dropped files: `fs.open_dialog` / `save_dialog` inside a `task`, `on_file_drop`; a script answers with `file:<path>` and drops with `drop:<path>`

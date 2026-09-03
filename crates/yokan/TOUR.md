@@ -303,8 +303,12 @@ number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.se
 - **number_field / int_field**: a typed number. Typing reports nothing; `enter`, an arrow key or leaving the field commits — the text is parsed with Python's `float()` / `int()` rules, clamped into `min=` / `max=` (both 0 = no range), snapped to `step=`, and the handler runs only when the value changed. Text that is not a number is dropped, and the field shows the app's value again. In scripts, `input:<text>` commits in one step.
 - **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
 
-Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
-Two more riders reach assistive technology: `role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on) and `a11y_label=` is the name it is read by; the `a11y` step of a headless script prints that tree (`demo/labels.py`).
+Every element also takes the same set of **riders**, cross-cutting properties the compiler wraps around whatever element they are written on.
+`tooltip="…"` shows a line when the pointer rests there, and it is in the dump either way, so a verification script sees it.
+`role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on) and `a11y_label=` is the name it is read by; the `a11y` step of a headless script prints that tree (`demo/labels.py`). A checkbox, a switch and a progress bar are named by their own label, so they take no `a11y_label=`.
+`disabled=True` dims an element and makes it inert: the window does not press it, a script step aimed at it is accepted and does nothing, and the dump shows the state.
+`width=`, `height=`, `min_width=` and `max_width=` size any element; an element that has its own `width=` / `height=` (button, image, svg, text, the charts, progress) keeps them.
+`theme=`, `animate=` / `easing=` / `enter=` / `exit=`, and `col_span=` / `row_span=` likewise go on any element, not only the ones the earlier sections showed them on (`demo/riders.py` puts one of each where it could not go before).
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 

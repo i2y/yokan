@@ -255,8 +255,13 @@ and `sort=` / `descending=` / `on_sort` hand indices back and the app
 re-sorts its own lists. Charts take `min=` / `max=`, `axis=True`,
 `series=` (a `list[list[float]]` field) with `colors=`; negatives hang
 below the zero line. `progress(value)` takes `width=` / `height=`,
-`label=` and `indeterminate=True`. Every element takes `tooltip=`,
-`role=` and `a11y_label=`.
+`label=` and `indeterminate=True`. Every element takes the same
+riders: `tooltip=`, `role=` / `a11y_label=` (not on checkbox, switch
+or progress, which are named by their own label), `disabled=` (dimmed
+and inert, in the window and in scripts), `width=` / `height=` /
+`min_width=` / `max_width=` (an element with its own `width=` /
+`height=` keeps them), `theme=`, `animate=` / `easing=` / `enter=` /
+`exit=`, and `col_span=` / `row_span=`.
 
 **Text holes** are f-strings. int, str, float, bool and Enum
 values render exactly as Python's `str()` (`2.0`, `True`,

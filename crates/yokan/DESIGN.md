@@ -914,3 +914,44 @@ when set.
 and eased out in the compiled one. The dump carries the duration but
 not the curve, so the gate could not see the disagreement; the
 runtime now defaults to `out` like both lowerers.
+
+## A cross-cutting property is a rider
+
+`disabled` and the four sizing props joined the substrate as wrappers
+— `Element::Disabled` and `Element::Sized` — rather than as fields on
+thirty variants, the shape `tooltip:`, `role:`, `theme:`, `animate:`
+and `colSpan:` already had. Both lowerers strip them in one fixed
+order, element → Semantics → Tooltip → Disabled → Sized → Themed →
+Anim → GridCell, pinned by a test that dumps a text wearing every
+rider. A false `disabled:` produces no wrapper and an element with
+native sides (button, image, svg, text, the charts, progress; the
+list, scroll view and table for height) keeps its own props, so no
+existing dump changed. A disabled control is dimmed under a mouse
+shield in the window, inert but still counted for `@n` in a headless
+script, and marked in both accessibility trees — a person cannot
+press it and neither can a script, and the dump says so. The one
+surprise was mechanical: a tree nine wrappers deep overran the render
+walk's megabyte stack frame, now guarded with a heap-allocated
+segment. Rejected: per-variant fields (the merge cost of wave 1, in
+which every branch collided on the same signatures), and `occlude`
+for the shield (a disabled scroller should still scroll to be read).
+
+## One rider table per layer
+
+On the Yokan side each rider had been hand-wired into some
+constructors, some translator arms and some stub signatures, which is
+why `theme=` reached two containers, the animation riders three
+elements and the grid spans one. There is now one table in each of
+the three places and one mechanism reading it: a `Riders` struct
+applied in the lowerers' nesting order, a macro that writes the same
+rider tail onto every element function so no signature can drift,
+one translator function that strips the rider kwargs before any
+element emitter runs, and a `Riders` TypedDict every element unpacks
+in the stub. Every element takes every rider, and the next one is a
+line per table. Two exceptions are spelled out rather than special-
+cased: an element with its own `width` / `height` keeps them as its
+props, and checkbox, switch and progress refuse `a11y_label=` because
+their own label already is their accessible name — a refusal that
+also closed a disagreement the two runs had, since the compiled run
+dropped that label on a progress bar while the interpreted run built
+a node for it.

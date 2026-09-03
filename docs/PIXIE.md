@@ -129,6 +129,13 @@ Early but real. Working today:
   announcing "group, group, group". The tree is a checked output:
   `PIXIE_SCRIPT="a11y"` prints it, and the window feeds AccessKit
   from the same derivation.
+- **Riders** — cross-cutting properties are wrappers the compiler puts
+  around whatever element they are written on, never fields repeated
+  per widget: `tooltip:`, `role:` / `label:`, `disabled:` (dimmed,
+  inert in the window and in a script, marked for AccessKit),
+  `width:` / `height:` / `minWidth:` / `maxWidth:` (on elements
+  without native sides), `theme:`, the animation riders and
+  `colSpan:` / `rowSpan:`, nested in one fixed order in both tiers.
 - **Styles and themes** — named property bags (`style Key {
   background: "#313244" }`), merged with `+`, applied as `style: Key`
   on any element and inlined at compile time; `pub style` shares them
