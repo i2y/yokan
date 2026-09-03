@@ -107,8 +107,10 @@ the initial state, right after launch.
 ## The standard library
 
 #### picker — file dialogs and dropped files: `fs.open_dialog` / `save_dialog` inside a `task`, `on_file_drop`; a script answers with `file:<path>` and drops with `drop:<path>`
+<img src="screenshots/picker.png" width="360">
 
 #### keys — shortcuts, keys, the clipboard and the menu bar: `shortcut("cmd+s", save)`, `on_key(typed)`, `clipboard.set_text` / `get_text`, `menu_item("Count", "Save", save)` — driven in a script with `key:cmd+s` and `menu:Save`
+<img src="screenshots/keys.png" width="360">
 
 #### files — yokan.fs: write, append, list a directory, remove (both runs call the same implementation)
 <img src="screenshots/files.png" width="360">
