@@ -3,10 +3,9 @@
 # ///
 """segmented replaces a row of if/else-styled buttons with one bound
 chooser: the accent-filled segment IS the current filter, and
-picking another segment reruns `on_change` with its 0-based index —
-the shape opsboard's alert filter needs three buttons and an
-if/else per button for (`demo/opsboard/app.py`, the `Alerts.filter`
-row).
+picking another segment reruns `on_change` with its 0-based index.
+Compare `demo/opsboard/app.py`'s `Alerts.filter` row, which needs
+three buttons and an if/else per button to do the same job.
 
 Develop:  uv run demo/filter.py
 Ship:     python3 yokan_gate.py gate demo/filter.py --script "select:crit,dump,select:all"
