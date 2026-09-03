@@ -39,15 +39,17 @@ def view():
         with row(spacing=6, role="group", a11y_label="toolbar"):
             svg("demo/assets/yokan.svg", width=20, height=20, a11y_label="Yokan")
             svg("demo/assets/search.svg", width=20, height=20, a11y_label="Search")
-            # The one element carrying role=, a11y_label= AND animate=
-            # together — proving the wrapper nesting (Semantics inside
-            # Anim) matches pixie's own codegen byte for byte.
+            # The one element carrying tooltip=, role=, a11y_label=
+            # AND animate= together — proving the wrapper nesting
+            # (Semantics, then Tooltip, then Anim) matches pixie's
+            # own codegen byte for byte.
             button(
                 "save",
                 on_click=save,
                 animate=150,
                 role="button",
                 a11y_label="Save the report",
+                tooltip="Save this report",
             )
         text_field(query(), placeholder="search", on_change=find, a11y_label="search")
         text("1 of 4 saved", role=summary_role())
