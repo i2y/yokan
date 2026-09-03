@@ -784,6 +784,8 @@ class Translator:
         "bold", "italic", "mono", "underline", "wrap", "max_lines",
         "width", "background", "padding",
         "border_radius", "border_width", "border_color",
+    )
+
     # `crates/pixie-kernel/src/a11y.rs`'s `Role::ALL`, spelled here the
     # same way `pixie_codegen::a11y_roles()` spells it for the native
     # dialect — this crate has no Rust dependency to read it from.
@@ -6644,6 +6646,7 @@ class Translator:
             size = num("size")
             if size is not None:
                 props.append(f"fontSize: {size}")
+            props += self._a11y_props(kw)
             for k in kw:
                 if k not in ("size",):
                     raise Untranslatable(kw[k], f"link() does not take `{k}=`")
@@ -6812,6 +6815,8 @@ class Translator:
                 raise Untranslatable(v, f"{what} is a list of number literals, or a list[float] state or store-field read")
 
             lines = [f"{pad}Table {{"]
+            for p in self._a11y_props(kw):
+                lines.append(f"{pad}  {p}")
             lines.append(f"{pad}  columns: {list_read(spec['columns'], 'columns=')}")
             if "widths" in kw:
                 lines.append(f"{pad}  widths: {float_list_read(kw['widths'], 'widths=')}")
@@ -6915,6 +6920,7 @@ class Translator:
             if ph is not None:
                 props.append(f"placeholder: {pixstr(ph)}")
             handler = kw.get("on_change")
+            props += self._a11y_props(kw)
             for k2 in kw:
                 if k2 not in ("min", "max", "step", "placeholder", "on_change"):
                     raise Untranslatable(kw[k2], f"{fname}() does not take `{k2}=`")
@@ -7068,6 +7074,7 @@ class Translator:
             g = self._num(kw, "grow")
             if g is not None:
                 props.append(f"grow: {g}")
+            props += self._a11y_props(kw)
             for k in kw:
                 if k != "grow":
                     raise Untranslatable(kw[k], f"spacer() does not take `{k}=`")
@@ -7082,6 +7089,7 @@ class Translator:
             t = self._num(kw, "thickness")
             if t is not None:
                 props.append(f"thickness: {t}")
+            props += self._a11y_props(kw)
             for k in kw:
                 if k not in ("color", "thickness"):
                     raise Untranslatable(kw[k], f"divider() does not take `{k}=`")

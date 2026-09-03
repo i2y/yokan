@@ -995,26 +995,26 @@ fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, role:
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (grow=0.0, tooltip=String::new()))]
-fn spacer(grow: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Spacer { grow })
+#[pyfunction(signature = (grow=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn spacer(grow: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Spacer { grow }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (color=String::new(), thickness=0.0, tooltip=String::new()))]
-fn divider(color: String, thickness: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Divider { color: Str::from(color), thickness })
+#[pyfunction(signature = (color=String::new(), thickness=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn divider(color: String, thickness: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Divider { color: Str::from(color), thickness }, &role, &a11y_label))
 }
 /// A line of text that opens `url` in the browser when clicked. No
 /// handler: opening a URL is not app state, so there is nothing for
 /// `on_click` to call back into — a headless run's `click:` on a
 /// Link is accepted and does nothing (the `notify.send` shape).
-#[pyfunction(signature = (label, url, size=0.0, tooltip=String::new()))]
-fn link(label: String, url: String, size: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Link {
+#[pyfunction(signature = (label, url, size=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn link(label: String, url: String, size: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Link {
         label: Str::from(label),
         url: Str::from(url),
         font_size: size,
-    })
+    }, &role, &a11y_label))
 }
 
 /// The typed number fields: the value comes in from state, and the
@@ -1022,7 +1022,7 @@ fn link(label: String, url: String, size: f64, tooltip: String) -> Reg {
 /// field, not every keystroke. `min`/`max` both 0 means unbounded;
 /// `step` snaps (0 = free for the float field, and 0 or 1 mean every
 /// integer for the int one).
-#[pyfunction(signature = (value, min=0.0, max=0.0, step=0.0, placeholder=String::new(), on_change=None, tooltip=String::new()))]
+#[pyfunction(signature = (value, min=0.0, max=0.0, step=0.0, placeholder=String::new(), on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn number_field(
     value: f64,
@@ -1031,19 +1031,21 @@ fn number_field(
     step: f64,
     placeholder: String,
     on_change: Option<Py<PyAny>>,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, Element::NumberField {
+    Reg::tip(&tooltip, wrap_sem(Element::NumberField {
         value,
         min,
         max,
         step,
         placeholder: Str::from(placeholder),
         on_change: on_change.map(float_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (value, min=0, max=0, step=1, placeholder=String::new(), on_change=None, tooltip=String::new()))]
+#[pyfunction(signature = (value, min=0, max=0, step=1, placeholder=String::new(), on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn int_field(
     value: i64,
@@ -1052,27 +1054,29 @@ fn int_field(
     step: i64,
     placeholder: String,
     on_change: Option<Py<PyAny>>,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, Element::IntField {
+    Reg::tip(&tooltip, wrap_sem(Element::IntField {
         value,
         min,
         max,
         step,
         placeholder: Str::from(placeholder),
         on_change: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
 /// The fourth chooser: same `options`/`selected` contract as
 /// `select`/`radio_group`, painted as one joined pill group.
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
-fn segmented(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Segmented {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn segmented(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Segmented {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
@@ -1382,7 +1386,7 @@ fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtua
 /// equal). `selected` / `sort` are `-1` for none; both handlers
 /// receive an index (the clicked row's, the clicked header's), and
 /// the app re-sorts its own lists.
-#[pyfunction(signature = (columns, count, row, widths=vec![], item_height=24.0, height=0.0, grow=0.0, selected=-1, on_select=None, sort=-1, descending=false, on_sort=None, tooltip=String::new()))]
+#[pyfunction(signature = (columns, count, row, widths=vec![], item_height=24.0, height=0.0, grow=0.0, selected=-1, on_select=None, sort=-1, descending=false, on_sort=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn table(
     columns: Vec<String>,
@@ -1397,10 +1401,12 @@ fn table(
     sort: i64,
     descending: bool,
     on_sort: Option<Py<PyAny>>,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
     let build = py_row_builder(row);
-    Reg::tip(&tooltip, Element::Table {
+    Reg::tip(&tooltip, wrap_sem(Element::Table {
         columns: str_list(columns),
         widths: to_list_f64(widths),
         item_height,
@@ -1413,7 +1419,7 @@ fn table(
         on_sort: on_sort.map(int_listener),
         children: Vec::new(),
         lazy: Some(LazyRows { len: count, build }),
-    })
+    }, &role, &a11y_label))
 }
 
 /// Run `work()` on a background worker thread, then `on_done(result)`

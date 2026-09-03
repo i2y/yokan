@@ -304,7 +304,7 @@ def tab_bar(
     tooltip: str = "",
 ) -> Element: ...
 def spinner(size: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element: ...
-def link(label: str, url: str, size: float = 0.0, tooltip: str = "") -> Element:
+def link(label: str, url: str, size: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
     """Text that opens `url` in the browser when clicked; a headless
     run records the click and opens nothing."""
 def table(
@@ -320,6 +320,8 @@ def table(
     sort: int = -1,
     descending: bool = False,
     on_sort: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
     tooltip: str = "",
 ) -> Element:
     """A virtualized table: `row(i)` builds row i as a `row` of one
@@ -343,6 +345,8 @@ def number_field(
     step: float = 0.0,
     placeholder: str = "",
     on_change: Optional[Callable[[float], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
     tooltip: str = "",
 ) -> Element: ...
 def int_field(
@@ -352,21 +356,25 @@ def int_field(
     step: int = 1,
     placeholder: str = "",
     on_change: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
     tooltip: str = "",
 ) -> Element: ...
 def segmented(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
     tooltip: str = "",
 ) -> Element:
     """A row of joined toggle buttons; the handler receives the
     chosen index."""
 
-def spacer(grow: float = 0.0, tooltip: str = "") -> Element:
+def spacer(grow: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""
 
-def divider(color: str = "", thickness: float = 0.0, tooltip: str = "") -> Element:
+def divider(color: str = "", thickness: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
     """A rule across the parent: horizontal in a column, vertical in a row."""
 
 # The work runs off the UI thread in both runs — a Python thread
