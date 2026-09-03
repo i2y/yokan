@@ -168,7 +168,12 @@ pub fn root(w: &World) -> &'static Theme {
 /// animation cannot tween would be a silent inconsistency.
 fn color_slots(el: &mut Element) -> Vec<&mut Str> {
     match el {
-        Element::Text { color, .. } => vec![color],
+        Element::Text {
+            color,
+            background,
+            border_color,
+            ..
+        } => vec![color, background, border_color],
         Element::Button {
             background,
             hover_background,
@@ -251,13 +256,11 @@ mod tests {
     use super::*;
 
     fn text(color: &str) -> Element {
-        Element::Text {
-            text: Str::from("x"),
-            font_size: 0.0,
-            color: Str::from(color),
-            align: Str::new(),
-            grow: 0.0,
+        let mut el = Element::text("x");
+        if let Element::Text { color: c, .. } = &mut el {
+            *c = Str::from(color);
         }
+        el
     }
 
     fn themed(name: &str, children: Vec<Element>) -> Element {

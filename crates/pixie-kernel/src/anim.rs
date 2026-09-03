@@ -311,10 +311,24 @@ enum Slot<'a> {
 fn slots(el: &mut Element) -> Vec<(&'static str, Slot<'_>)> {
     match el {
         Element::Text {
-            font_size, color, ..
+            font_size,
+            color,
+            width,
+            background,
+            padding,
+            border_radius,
+            border_width,
+            border_color,
+            ..
         } => vec![
             ("fontSize", Slot::Num(font_size)),
             ("color", Slot::Color(color)),
+            ("width", Slot::Num(width)),
+            ("background", Slot::Color(background)),
+            ("padding", Slot::Num(padding)),
+            ("borderRadius", Slot::Num(border_radius)),
+            ("borderWidth", Slot::Num(border_width)),
+            ("borderColor", Slot::Color(border_color)),
         ],
         Element::Button {
             background,

@@ -2100,12 +2100,55 @@ fn build_element_inner(
                 Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
                 None => 0.0,
             };
+            // The typography flags, the wrapping pair and the text's
+            // own box — the mirror of codegen's Text arm, same keys,
+            // same defaults.
+            let mut flags = [false; 4];
+            for (i, key) in ["bold", "italic", "mono", "underline"].iter().enumerate() {
+                flags[i] = match prop_of(el, key) {
+                    Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                    None => false,
+                };
+            }
+            let wrap = match prop_of(el, "wrap") {
+                Some(v) => eval_text(v, env, scope, w)?,
+                None => Str::new(),
+            };
+            let max_lines = match prop_of(el, "maxLines") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => 0,
+            };
+            let width = match prop_of(el, "width") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let background = match prop_of(el, "background") {
+                Some(v) => eval_text(v, env, scope, w)?,
+                None => Str::new(),
+            };
+            let padding = match prop_of(el, "padding") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let (border_radius, border_width, border_color) = box_props_of(el, env, scope, w)?;
             Ok(Element::Text {
                 text: eval_text(t, env, scope, w)?,
                 font_size,
                 color,
                 align,
                 grow,
+                bold: flags[0],
+                italic: flags[1],
+                mono: flags[2],
+                underline: flags[3],
+                wrap,
+                max_lines,
+                width,
+                background,
+                padding,
+                border_radius,
+                border_width,
+                border_color,
             })
         }
         "Button" => {

@@ -1,0 +1,92 @@
+store Badges {
+  state hot : Bool = false
+  state tint : String = "#45475a"
+
+  # The pill's background is a value like any other, so one state
+  # flip re-colors it — no second element under an `if`.
+  fn flip {
+    hot = !hot
+    if hot {
+      tint = "#f38ba8"
+    } else {
+      tint = "#45475a"
+    }
+  }
+}
+
+# A pill is a Text with a box: padding, a radius and a background.
+# It hugs its content inside a Row, so the three below are as wide
+# as their words.
+
+style Pill {
+  fontSize: 11.0
+  color: "#11111b"
+  padding: 4.0
+  borderRadius: 10.0
+}
+
+style Ok {
+  background: "#2fa84f"
+}
+
+style Warn {
+  background: "#fab387"
+}
+
+style Crit {
+  background: "#f38ba8"
+}
+
+style PillOk = Pill + Ok
+
+style PillWarn = Pill + Warn
+
+style PillCrit = Pill + Crit
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text { text: "Badges"; fontSize: 20.0; bold: true }
+
+    Row {
+      spacing: 6.0
+      Text { style: PillOk; text: "● OK" }
+      Text { style: PillWarn; text: "● WARN" }
+      Text { style: PillCrit; text: "● CRIT" }
+      Text {
+        text: "● BUILD"
+        fontSize: 11.0
+        color: "#cdd6f4"
+        background: Badges.tint
+        padding: 4.0
+        borderRadius: 10.0
+        borderWidth: 1.0
+        borderColor: "#585b70"
+      }
+    }
+
+    Button { text: "flip"; onClick: Badges.flip() }
+
+    Text { text: "commit 9f2c1ab8e04d"; mono: true; fontSize: 12.0 }
+    Text { text: "an underlined note"; underline: true }
+    Text { text: "in italics, for contrast"; italic: true }
+
+    # Bounded width is what gives the ellipsis something to clip
+    # against; without it there is no overflow to hide.
+    Text {
+      text: "a single line far too long for the box it was given, so it ends in an ellipsis"
+      wrap: "ellipsis"
+      width: 260.0
+    }
+
+    # And the clamp is the other half: this one wraps, then stops
+    # after two lines.
+    Text {
+      text: "a paragraph that wraps at the window's width and then stops after two lines, because a clamped label is what a card summary wants — the rest of this sentence never paints"
+      maxLines: 2
+      width: 260.0
+    }
+  }
+}

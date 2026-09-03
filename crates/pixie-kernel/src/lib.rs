@@ -979,6 +979,33 @@ pub enum Element {
         /// Flex growth along the parent's main axis (0 = content
         /// height) — a grown readout absorbs spare column space.
         grow: f64,
+        /// Typography. Four independent flags rather than a `weight`
+        /// number and a family name: these are the four a label
+        /// actually asks for, and each is one gpui text-style call.
+        bold: bool,
+        italic: bool,
+        /// A monospace family, for hashes, ids and columns of digits.
+        mono: bool,
+        underline: bool,
+        /// "" = wrap at the parent's width (the old and only
+        /// behavior); "nowrap" = one line, overflowing; "ellipsis" =
+        /// one line clipped with a trailing "…". An ellipsis needs a
+        /// bounded width to mean anything — `width` here, or a sized
+        /// parent.
+        wrap: Str,
+        /// Clamp to this many wrapped lines (0 = unset).
+        max_lines: i64,
+        /// A fixed width in px (0 = unset — the text hugs or fills as
+        /// its parent decides).
+        width: f64,
+        /// The box behind the text: a background, padding and the
+        /// shared box decoration below. A padded background with no
+        /// width hugs its content in a row — that is the pill.
+        background: Str,
+        padding: f64,
+        border_radius: f64,
+        border_width: f64,
+        border_color: Str,
     },
     /// `background` empty = unset (theme accent surface). A custom
     /// background derives its own hover/press tints in the engine;
@@ -1364,6 +1391,18 @@ impl Element {
             color: Str::from(""),
             align: Str::from(""),
             grow: 0.0,
+            bold: false,
+            italic: false,
+            mono: false,
+            underline: false,
+            wrap: Str::from(""),
+            max_lines: 0,
+            width: 0.0,
+            background: Str::from(""),
+            padding: 0.0,
+            border_radius: 0.0,
+            border_width: 0.0,
+            border_color: Str::from(""),
         }
     }
 
@@ -1441,6 +1480,18 @@ impl Element {
                 color,
                 align,
                 grow,
+                bold,
+                italic,
+                mono,
+                underline,
+                wrap,
+                max_lines,
+                width,
+                background,
+                padding,
+                border_radius,
+                border_width,
+                border_color,
             } => {
                 let mut s = format!("Text({text}");
                 if *font_size != 0.0 {
@@ -1454,6 +1505,37 @@ impl Element {
                 }
                 if *grow != 0.0 {
                     s.push_str(&format!(", grow={grow}"));
+                }
+                // A flag dumps as its bare name — it is either on or
+                // absent, and `bold=true` would read as a value with
+                // an alternative.
+                for (on, name) in [
+                    (*bold, "bold"),
+                    (*italic, "italic"),
+                    (*mono, "mono"),
+                    (*underline, "underline"),
+                ] {
+                    if on {
+                        s.push_str(&format!(", {name}"));
+                    }
+                }
+                if !wrap.as_str().is_empty() {
+                    s.push_str(&format!(", wrap={wrap}"));
+                }
+                if *max_lines != 0 {
+                    s.push_str(&format!(", maxLines={max_lines}"));
+                }
+                if *width != 0.0 {
+                    s.push_str(&format!(", width={width}"));
+                }
+                if !background.as_str().is_empty() {
+                    s.push_str(&format!(", bg={background}"));
+                }
+                if *padding != 0.0 {
+                    s.push_str(&format!(", padding={padding}"));
+                }
+                for p in box_props(*border_radius, *border_width, border_color) {
+                    s.push_str(&format!(", {p}"));
                 }
                 s.push(')');
                 s
