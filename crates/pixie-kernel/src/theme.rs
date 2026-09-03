@@ -203,6 +203,12 @@ fn color_slots(el: &mut Element) -> Vec<&mut Str> {
             border_color,
             ..
         } => vec![background, border_color],
+        // A chart's series colors are color slots like any other, so
+        // `color: "accent"` and `colors: ["accent", …]` follow a
+        // `theme:` scope and land in the dump as hex.
+        Element::BarChart { color, colors, .. } | Element::LineChart { color, colors, .. } => {
+            std::iter::once(color).chain(colors.iter_mut()).collect()
+        }
         _ => Vec::new(),
     }
 }

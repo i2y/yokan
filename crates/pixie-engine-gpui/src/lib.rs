@@ -28,8 +28,12 @@
 //! string it carries.
 //! The charts paint themselves through a `canvas` element (quads for
 //! BarChart, a stroked `PathBuilder` polyline for LineChart) inside
-//! cute_ui's plot chrome; the Spinner is a stroked 120° arc rotating
-//! over a background ring, driven by `request_animation_frame`.
+//! cute_ui's plot chrome, over a value range that includes zero — so
+//! a negative value hangs below the baseline rather than clamping to
+//! it — with the gridlines an `axis:` chart asks for painted in the
+//! same canvas and its tick labels sitting in a text gutter beside
+//! the plot; the Spinner is a stroked 120° arc rotating over a
+//! background ring, driven by `request_animation_frame`.
 
 mod text_input;
 
@@ -2023,35 +2027,67 @@ fn render_el<C: Component>(
             labels,
             width,
             height,
+            min,
+            max,
+            axis,
+            color,
+            series,
+            colors,
         } => {
-            let values: Vec<f32> = data.iter().map(|v| *v as f32).collect();
-            let n = values.len();
+            let sets = chart_series(data, series);
+            let n = sets.iter().map(Vec::len).max().unwrap_or(0);
+            let hues = chart_colors(series, color, colors, sets.len(), th);
+            let range = chart_range(&sets, *min, *max);
+            let (grid, want_axis) = (rgb(th.border), *axis);
             let plot = canvas(
                 |_, _, _| (),
                 move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
-                    let Some(max) = chart_max(&values) else {
+                    let Some((lo, hi)) = range else {
                         return;
                     };
                     let (x0, y0) = (bounds.origin.x.as_f32(), bounds.origin.y.as_f32());
                     let (w, h) = (bounds.size.width.as_f32(), bounds.size.height.as_f32());
-                    let slot = w / values.len() as f32;
-                    // 2px between bars; a bar never collapses below 1px.
-                    let bar_w = (slot - 2.0).max(1.0);
-                    for (i, v) in values.iter().enumerate() {
-                        let bar_h = (v / max).clamp(0.0, 1.0) * h;
-                        // Baseline at the bottom: bars grow upward.
-                        let origin = point(px(x0 + slot * i as f32), px(y0 + h - bar_h));
-                        // cute_ui rounds bar tops by 3px; a short or
-                        // narrow bar clamps so the radius never eats
-                        // the quad.
-                        let r = 3.0f32.min(bar_w / 2.0).min(bar_h / 2.0);
-                        window.paint_quad(
-                            fill(
-                                Bounds::new(origin, size(px(bar_w), px(bar_h))),
-                                rgb(th.accent),
-                            )
-                            .corner_radii(px(r)),
-                        );
+                    // Fraction of the box below the top for `v`, so a
+                    // value at `hi` sits at the top edge and one at
+                    // `lo` at the bottom. The baseline is where 0
+                    // lands, clamped in when the range excludes it.
+                    let y_of = |v: f32| y0 + h * (1.0 - ((v - lo) / (hi - lo)).clamp(0.0, 1.0));
+                    if want_axis {
+                        for v in chart_ticks(lo, hi) {
+                            window.paint_quad(fill(
+                                Bounds::new(point(px(x0), px(y_of(v))), size(px(w), px(1.))),
+                                grid,
+                            ));
+                        }
+                    }
+                    if n == 0 {
+                        return;
+                    }
+                    let base = y_of(0.0);
+                    let slot = w / n as f32;
+                    // 2px between slots, then the slot is shared by the
+                    // series; a bar never collapses below 1px. One
+                    // series reproduces the original `slot - 2` bar.
+                    let bar_w = ((slot - 2.0) / sets.len() as f32).max(1.0);
+                    for (s, values) in sets.iter().enumerate() {
+                        for (i, v) in values.iter().enumerate() {
+                            let top = y_of(*v);
+                            // A bar spans zero to its value, so a
+                            // negative one hangs below the baseline.
+                            let (y, bar_h) = (top.min(base), (top - base).abs());
+                            let x = x0 + slot * i as f32 + bar_w * s as f32;
+                            // cute_ui rounds bar tops by 3px; a short or
+                            // narrow bar clamps so the radius never eats
+                            // the quad.
+                            let r = 3.0f32.min(bar_w / 2.0).min(bar_h / 2.0);
+                            window.paint_quad(
+                                fill(
+                                    Bounds::new(point(px(x), px(y)), size(px(bar_w), px(bar_h))),
+                                    hues[s],
+                                )
+                                .corner_radii(px(r)),
+                            );
+                        }
                     }
                 },
             );
@@ -2062,6 +2098,7 @@ fn render_el<C: Component>(
                 *width,
                 *height,
                 LabelAnchor::Slots,
+                if *axis { range } else { None },
                 th,
             )
         }
@@ -2070,54 +2107,73 @@ fn render_el<C: Component>(
             labels,
             width,
             height,
+            min,
+            max,
+            axis,
+            color,
+            series,
+            colors,
         } => {
-            let values: Vec<f32> = data.iter().map(|v| *v as f32).collect();
-            let n_samples = values.len();
+            let sets = chart_series(data, series);
+            let n_samples = sets.iter().map(Vec::len).max().unwrap_or(0);
+            let hues = chart_colors(series, color, colors, sets.len(), th);
+            let range = chart_range(&sets, *min, *max);
+            let (grid, want_axis) = (rgb(th.border), *axis);
             let plot = canvas(
                 |_, _, _| (),
                 move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
-                    let Some(max) = chart_max(&values) else {
+                    let Some((lo, hi)) = range else {
                         return;
                     };
                     let (x0, y0) = (bounds.origin.x.as_f32(), bounds.origin.y.as_f32());
                     let (w, h) = (bounds.size.width.as_f32(), bounds.size.height.as_f32());
-                    let n = values.len();
-                    // A lone sample sits in the middle; otherwise the
-                    // samples span the full width, first to last.
-                    let at = |i: usize| {
-                        let x = if n == 1 {
-                            x0 + w / 2.0
-                        } else {
-                            x0 + w * i as f32 / (n - 1) as f32
-                        };
-                        let y = y0 + h - (values[i] / max).clamp(0.0, 1.0) * h;
-                        point(px(x), px(y))
-                    };
-                    if n >= 2 {
-                        let mut pb = PathBuilder::stroke(px(2.));
-                        pb.move_to(at(0));
-                        for i in 1..n {
-                            pb.line_to(at(i));
-                        }
-                        // A degenerate path (every sample identical, so
-                        // the stroke tessellates to nothing) is dropped
-                        // rather than panicking the frame.
-                        if let Ok(path) = pb.build() {
-                            window.paint_path(path, rgb(th.accent));
+                    let y_of = |v: f32| y0 + h * (1.0 - ((v - lo) / (hi - lo)).clamp(0.0, 1.0));
+                    if want_axis {
+                        for v in chart_ticks(lo, hi) {
+                            window.paint_quad(fill(
+                                Bounds::new(point(px(x0), px(y_of(v))), size(px(w), px(1.))),
+                                grid,
+                            ));
                         }
                     }
-                    // Dots mark every sample — and are the whole chart
-                    // when there is only one.
-                    for i in 0..n {
-                        let c = at(i);
-                        let origin = point(c.x - px(2.5), c.y - px(2.5));
-                        window.paint_quad(
-                            fill(
-                                Bounds::new(origin, size(px(5.), px(5.))),
-                                rgb(th.accent),
-                            )
-                            .corner_radii(px(2.5)),
-                        );
+                    for (s, values) in sets.iter().enumerate() {
+                        let n = values.len();
+                        // A lone sample sits in the middle; otherwise the
+                        // samples span the full width, first to last.
+                        let at = |i: usize| {
+                            let x = if n == 1 {
+                                x0 + w / 2.0
+                            } else {
+                                x0 + w * i as f32 / (n - 1) as f32
+                            };
+                            point(px(x), px(y_of(values[i])))
+                        };
+                        if n >= 2 {
+                            let mut pb = PathBuilder::stroke(px(2.));
+                            pb.move_to(at(0));
+                            for i in 1..n {
+                                pb.line_to(at(i));
+                            }
+                            // A degenerate path (every sample identical, so
+                            // the stroke tessellates to nothing) is dropped
+                            // rather than panicking the frame.
+                            if let Ok(path) = pb.build() {
+                                window.paint_path(path, hues[s]);
+                            }
+                        }
+                        // Dots mark every sample — and are the whole chart
+                        // when there is only one.
+                        for i in 0..n {
+                            let c = at(i);
+                            let origin = point(c.x - px(2.5), c.y - px(2.5));
+                            window.paint_quad(
+                                fill(
+                                    Bounds::new(origin, size(px(5.), px(5.))),
+                                    hues[s],
+                                )
+                                .corner_radii(px(2.5)),
+                            );
+                        }
                     }
                 },
             );
@@ -2128,6 +2184,7 @@ fn render_el<C: Component>(
                 *width,
                 *height,
                 LabelAnchor::Samples,
+                if *axis { range } else { None },
                 th,
             )
         }
@@ -3117,19 +3174,95 @@ enum LabelAnchor {
     Samples,
 }
 
-/// The largest value in a chart's data, or `None` when there is
-/// nothing to normalize by (empty data, or every value <= 0) — the
-/// charts then paint nothing rather than dividing by zero.
-fn chart_max(values: &[f32]) -> Option<f32> {
-    let max = values.iter().copied().fold(f32::NAN, f32::max);
-    (max > 0.0).then_some(max)
+/// The width of the axis gutter: enough for a tick like `-120.0`
+/// at `text_xs`, plus the 6px breathing room before the plot.
+const AXIS_GUTTER: f32 = 46.0;
+/// Half a `text_xs` line, so a tick label centers on its gridline.
+const AXIS_LABEL_HALF: f32 = 8.0;
+
+/// The four hues a multi-series chart cycles through when `colors`
+/// does not name one. Mid-lightness on purpose: each reads against
+/// the dark panel (#181825) and the light one (#e6e9ef) without a
+/// second palette to keep in step.
+const SERIES_PALETTE: [u32; 4] = [0x4f8ff0, 0xe0803a, 0x2ea043, 0xc05cd8];
+
+/// A chart's series as pixel scalars: the `series` lists when there
+/// are any, otherwise the one `data` list. `data` is IGNORED once
+/// `series` is set — the kernel's rule, applied in one place so both
+/// charts read it the same way.
+fn chart_series(data: &List<f64>, series: &List<List<f64>>) -> Vec<Vec<f32>> {
+    if series.is_empty() {
+        vec![data.iter().map(|v| *v as f32).collect()]
+    } else {
+        series
+            .iter()
+            .map(|s| s.iter().map(|v| *v as f32).collect())
+            .collect()
+    }
+}
+
+/// One resolved color per series: `colors` at that index when it has
+/// one, then `color` for a single-series chart (the accent when it is
+/// empty), then the built-in palette. An unparseable color degrades
+/// to the same fallback rather than aborting the frame (cute's QColor
+/// contract, `parse_color`'s rule).
+fn chart_colors(
+    series: &List<List<f64>>,
+    color: &Str,
+    colors: &List<Str>,
+    count: usize,
+    th: &'static Theme,
+) -> Vec<gpui::Rgba> {
+    (0..count)
+        .map(|i| {
+            let fallback = if series.is_empty() {
+                parse_color(color).unwrap_or(rgb(th.accent))
+            } else {
+                rgb(SERIES_PALETTE[i % SERIES_PALETTE.len()])
+            };
+            colors
+                .get(i as i64)
+                .and_then(|c| parse_color(&c))
+                .unwrap_or(fallback)
+        })
+        .collect()
+}
+
+/// The value range a chart plots, as `(lo, hi)`. `min`/`max` pin it
+/// when either is set; otherwise it comes from the data and always
+/// includes zero — `min(0, smallest) .. max(0, largest)` — which is
+/// what makes the zero line a baseline negatives can hang from. A
+/// range with nothing in it (no data, every value zero, or a `max`
+/// below its `min`) is `None`: the charts paint nothing rather than
+/// dividing by zero, exactly as they did when every value was <= 0.
+fn chart_range(sets: &[Vec<f32>], min: f64, max: f64) -> Option<(f32, f32)> {
+    if min != 0.0 || max != 0.0 {
+        let (lo, hi) = (min as f32, max as f32);
+        return (hi > lo).then_some((lo, hi));
+    }
+    let lo = sets.iter().flatten().copied().fold(0.0f32, f32::min);
+    let hi = sets.iter().flatten().copied().fold(0.0f32, f32::max);
+    (hi > lo).then_some((lo, hi))
+}
+
+/// Where an `axis:` chart puts its ticks: the range's two ends, plus
+/// zero when zero is strictly inside (at an end it IS one of them).
+fn chart_ticks(lo: f32, hi: f32) -> Vec<f32> {
+    if lo < 0.0 && hi > 0.0 {
+        vec![lo, 0.0, hi]
+    } else {
+        vec![lo, hi]
+    }
 }
 
 /// The shared chart frame: cute_ui's plot chrome (surface fill, 1px
 /// border, 6px radius, 12px padding) wrapped around a plot box and its
 /// label strip. `width`/`height` size the frame; `0.0` keeps the
-/// full-bleed, 120px-plot geometry the charts shipped with. Labels are
-/// ordinary text divs — only the plot itself is custom-painted.
+/// full-bleed, 120px-plot geometry the charts shipped with. `axis` is
+/// the plotted range when the chart asked for tick labels — they are
+/// ordinary text divs in a gutter beside the plot, like the bottom
+/// labels; only the plot itself (gridlines included) is custom-painted.
+#[allow(clippy::too_many_arguments)]
 fn chart_box(
     plot: gpui::AnyElement,
     labels: &List<Str>,
@@ -3137,6 +3270,7 @@ fn chart_box(
     width: f64,
     height: f64,
     anchor: LabelAnchor,
+    axis: Option<(f32, f32)>,
     th: &'static Theme,
 ) -> gpui::AnyElement {
     // The SCOPED theme, not the engine mirror: a `theme:` rider must
@@ -3165,13 +3299,69 @@ fn chart_box(
     } else {
         plot_box = plot_box.h(px(120.));
     }
-    let mut frame = frame.child(plot_box.child(plot));
+    // With an axis the plot box becomes a row: a fixed gutter holding
+    // the tick labels, then the plot in the rest. Both stretch to the
+    // box's height, so a label's `top` fraction and the gridline the
+    // canvas paints at the same fraction land on the same line.
+    let plot_box = match axis {
+        Some((lo, hi)) => plot_box
+            .flex()
+            .flex_row()
+            .child(axis_gutter(lo, hi, th))
+            .child(div().flex_1().min_w(px(0.)).h_full().child(plot)),
+        None => plot_box.child(plot),
+    };
+    let mut frame = frame.child(plot_box);
     // cute_ui stops at `n == 0` before it draws any label: with nothing
     // plotted there is no slot or sample to sit under.
     if !labels.is_empty() && samples > 0 {
-        frame = frame.child(label_strip(labels, samples, anchor, th));
+        let strip = label_strip(labels, samples, anchor, th);
+        frame = frame.child(if axis.is_some() {
+            // Indent the strip by the gutter so a bar's label stays
+            // under its bar.
+            div()
+                .w_full()
+                .flex()
+                .flex_row()
+                .child(div().w(px(AXIS_GUTTER)).flex_none())
+                .child(div().flex_1().min_w(px(0.)).child(strip))
+        } else {
+            strip
+        });
     }
     frame.into_any_element()
+}
+
+/// The tick-label column beside an `axis:` plot: the range's ends and
+/// zero, right-aligned in the gutter and centered on the gridline the
+/// plot paints at the same fraction. Same float text the dump prints,
+/// so what a script reads and what the window shows are one number.
+fn axis_gutter(lo: f32, hi: f32, th: &'static Theme) -> gpui::Div {
+    let mut gutter = div()
+        .w(px(AXIS_GUTTER))
+        .flex_none()
+        .h_full()
+        .relative()
+        .text_xs()
+        .text_color(rgb(th.text));
+    for v in chart_ticks(lo, hi) {
+        let frac = 1.0 - (v - lo) / (hi - lo);
+        gutter = gutter.child(
+            div()
+                .absolute()
+                .left_0()
+                .right(px(6.))
+                .top(relative(frac))
+                .mt(px(-AXIS_LABEL_HALF))
+                .h(px(AXIS_LABEL_HALF * 2.0))
+                .flex()
+                .items_center()
+                .justify_end()
+                .whitespace_nowrap()
+                .child(SharedString::from(pixie_kernel::float_text(v as f64))),
+        );
+    }
+    gutter
 }
 
 /// The label strip under a plot. `Slots` gives every sample an equal

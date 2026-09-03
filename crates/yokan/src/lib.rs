@@ -709,6 +709,16 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
     l
 }
 
+/// A chart's `series=`: a Python sequence of sequences of float, one
+/// inner list per series.
+fn to_list_f64_2(v: Vec<Vec<f64>>) -> List<List<f64>> {
+    let mut l = List::default();
+    for x in v {
+        l.push(to_list_f64(x));
+    }
+    l
+}
+
 
 // ---------------------------------------------------------------------------
 // Element constructors.
@@ -1023,23 +1033,61 @@ fn row(
     }))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, tooltip=String::new()))]
-fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, tooltip: String) -> Reg {
+#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn bar_chart(
+    data: Option<Vec<f64>>,
+    labels: Option<Vec<String>>,
+    width: f64,
+    height: f64,
+    min: f64,
+    max: f64,
+    axis: bool,
+    color: String,
+    series: Option<Vec<Vec<f64>>>,
+    colors: Option<Vec<String>>,
+    tooltip: String,
+) -> Reg {
     Reg::tip(&tooltip, Element::BarChart {
-        data: to_list_f64(data),
+        data: to_list_f64(data.unwrap_or_default()),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
         height,
+        min,
+        max,
+        axis,
+        color: Str::from(color),
+        series: to_list_f64_2(series.unwrap_or_default()),
+        colors: to_list_str(colors.unwrap_or_default()),
     })
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, tooltip=String::new()))]
-fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, tooltip: String) -> Reg {
+#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn line_chart(
+    data: Option<Vec<f64>>,
+    labels: Option<Vec<String>>,
+    width: f64,
+    height: f64,
+    min: f64,
+    max: f64,
+    axis: bool,
+    color: String,
+    series: Option<Vec<Vec<f64>>>,
+    colors: Option<Vec<String>>,
+    tooltip: String,
+) -> Reg {
     Reg::tip(&tooltip, Element::LineChart {
-        data: to_list_f64(data),
+        data: to_list_f64(data.unwrap_or_default()),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
         height,
+        min,
+        max,
+        axis,
+        color: Str::from(color),
+        series: to_list_f64_2(series.unwrap_or_default()),
+        colors: to_list_str(colors.unwrap_or_default()),
     })
 }
 
