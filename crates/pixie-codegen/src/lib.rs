@@ -4141,17 +4141,13 @@ fn lower_view_size(el: &Element, cx: &ViewCtx) -> Result<(String, String), EmitE
     Ok((width, height))
 }
 
-/// Lower an `open:` property (Modal) to a `bool` expression.
-/// Mirrors `lower_view_float`'s shape: a literal arm plus a Member arm
-/// that only accepts a Bool-typed property.
-fn lower_view_bool(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
-    lower_view_bool_keyed(e, cx, "open")
-}
-
-/// The keyed body behind `lower_view_bool` — `key` names the property
-/// in the errors (`lower_view_float`'s rule), so the toggles' required
-/// `checked:` does not misreport itself as Modal's `open:`.
-fn lower_view_bool_keyed(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
+/// Lower a Bool property (Modal's `open:`, the toggles' `checked:`,
+/// Text's typography flags) to a `bool` expression. Mirrors
+/// `lower_view_float`'s shape: a literal arm plus a Member arm that
+/// only accepts a Bool-typed property, and `key` names the property in
+/// the errors (`lower_view_float`'s rule) so no prop misreports itself
+/// as another one.
+fn lower_view_bool(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
     match &e.kind {
         ExprKind::Bool(v) => Ok(format!("{v}")),
         // `open: name.prop` / `checked: name.prop` — a Bool prop /
@@ -5172,10 +5168,7 @@ fn lower_anim(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitE
     let flag = |e: Option<&Expr>, key: &str| -> Result<String, EmitError> {
         match e {
             None => Ok("false".to_string()),
-            Some(x) => lower_view_bool(x, cx).map_err(|mut err| {
-                err.message = err.message.replace("`open:`", &format!("`{key}:`"));
-                err
-            }),
+            Some(x) => lower_view_bool(x, cx, key),
         }
     };
     let enter = flag(enter, "enter")?;
@@ -5308,9 +5301,45 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 Some(v) => lower_view_float(v, cx, "grow")?,
                 None => "0f64".into(),
             };
+            // Typography, wrapping and the text's own box. Each prop
+            // takes what its kind of view prop takes everywhere else —
+            // a literal or a bound property — so a pill's background
+            // can follow state like any other value.
+            let mut flags: Vec<String> = Vec::new();
+            for key in ["bold", "italic", "mono", "underline"] {
+                flags.push(match element_prop(el, key) {
+                    Some(v) => lower_view_bool(v, cx, key)?,
+                    None => "false".into(),
+                });
+            }
+            let wrap = match element_prop(el, "wrap") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let max_lines = match element_prop(el, "maxLines") {
+                Some(v) => lower_view_int(v, cx, "maxLines")?,
+                None => "0i64".into(),
+            };
+            let width = match element_prop(el, "width") {
+                Some(v) => lower_view_float(v, cx, "width")?,
+                None => "0f64".into(),
+            };
+            let background = match element_prop(el, "background") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let padding = match element_prop(el, "padding") {
+                Some(v) => lower_view_float(v, cx, "padding")?,
+                None => "0f64".into(),
+            };
+            let (bold, italic, mono, underline) =
+                (&flags[0], &flags[1], &flags[2], &flags[3]);
             Ok(format!(
-                "Element::Text {{ text: {}, font_size: {font_size}, color: {color}, align: {align}, grow: {grow} }}",
-                lower_view_text(text, cx)?
+                "Element::Text {{ text: {}, font_size: {font_size}, color: {color}, align: {align}, grow: {grow}, \
+                 bold: {bold}, italic: {italic}, mono: {mono}, underline: {underline}, wrap: {wrap}, \
+                 max_lines: {max_lines}, width: {width}, background: {background}, padding: {padding}, {} }}",
+                lower_view_text(text, cx)?,
+                lower_box_props(el, cx)?
             ))
         }
         "Button" => {
@@ -5474,7 +5503,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // `lower_children` walks the same member list (which
             // allowlists them for ListView alone).
             let virtualized = match element_prop(el, "virtualized") {
-                Some(v) => lower_view_bool(v, cx)?,
+                Some(v) => lower_view_bool(v, cx, "virtualized")?,
                 None => "false".into(),
             };
             let item_height = match element_prop(el, "itemHeight") {
@@ -5639,7 +5668,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // Modal (cute_ui's propless shape) renders open, and the
             // view wraps it in `if` for visibility.
             let open = match element_prop(el, "open") {
-                Some(o) => lower_view_bool(o, cx)?,
+                Some(o) => lower_view_bool(o, cx, "open")?,
                 None => "true".into(),
             };
             let children = lower_children(el, cx, ind)?;
@@ -5713,7 +5742,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 span: el.span,
                 message: format!("{name} needs `checked:` (the Bool state it shows)"),
             })?;
-            let checked = lower_view_bool_keyed(checked, cx, "checked")?;
+            let checked = lower_view_bool(checked, cx, "checked")?;
             let on_toggle = match element_prop(el, "onToggle") {
                 Some(a) => format!(
                     "Some({})",

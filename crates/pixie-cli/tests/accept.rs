@@ -599,6 +599,12 @@ fn tiers_agree_on_every_demo() {
             "examples/choosers/choosers.pix",
             "select:banana,select@1:cherry,select@2:Settings",
         ),
+        // Text's typography, wrapping and box props. The `flip`
+        // steps move the last pill's background through a state
+        // read — the dump carries every one of these props, so a
+        // tier that lowered one of them differently is caught here
+        // rather than in a screenshot.
+        ("examples/badges/badges.pix", "click:flip,click:flip"),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);

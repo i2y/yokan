@@ -304,7 +304,7 @@ class Translator:
 
     HELPER_TY = {"int": "Int", "float": "Float", "str": "String", "bool": "Bool"}
 
-    # python kwarg -> (pixie style key, kind)
+    # python kwarg -> (pixie style key, kind: num / int / str / bool)
     STYLE_KEYS = {
         "spacing": ("spacing", "num"), "padding": ("padding", "num"),
         "background": ("background", "str"), "grow": ("grow", "num"),
@@ -316,9 +316,24 @@ class Translator:
         "border_radius": ("borderRadius", "num"),
         "border_width": ("borderWidth", "num"),
         "border_color": ("borderColor", "str"),
+        # A label's typography and its wrapping — a style bag is where
+        # a heading or a status pill is named once and worn by many.
+        "bold": ("bold", "bool"), "italic": ("italic", "bool"),
+        "mono": ("mono", "bool"), "underline": ("underline", "bool"),
+        "wrap": ("wrap", "str"), "max_lines": ("maxLines", "int"),
     }
 
     EASINGS = ("linear", "in", "out", "inOut")
+
+    # `text()`'s own kwargs (the riders are stripped before this check)
+    # and the three answers `wrap=` takes.
+    TEXT_WRAPS = ("", "nowrap", "ellipsis")
+    TEXT_KEYS = (
+        "size", "color", "align", "grow",
+        "bold", "italic", "mono", "underline", "wrap", "max_lines",
+        "width", "background", "padding",
+        "border_radius", "border_width", "border_color",
+    )
 
     # Scalar-returning standard-library calls the type reader knows.
     STDLIB_RET = {
@@ -453,6 +468,14 @@ class Translator:
                 if not (isinstance(v, ast.Constant) and type(v.value) in (int, float) and type(v.value) is not bool):
                     raise Untranslatable(v, f"`{kw.arg}` takes a number literal")
                 lines.append(f"  {key}: {float(v.value)!r}")
+            elif kind == "int":
+                if not (isinstance(v, ast.Constant) and type(v.value) is int):
+                    raise Untranslatable(v, f"`{kw.arg}` takes a whole-number literal")
+                lines.append(f"  {key}: {v.value}")
+            elif kind == "bool":
+                if not (isinstance(v, ast.Constant) and type(v.value) is bool):
+                    raise Untranslatable(v, f"`{kw.arg}` takes True or False")
+                lines.append(f"  {key}: {'true' if v.value else 'false'}")
             else:
                 if not (isinstance(v, ast.Constant) and type(v.value) is str):
                     raise Untranslatable(v, f"`{kw.arg}` takes a string literal (hex or theme token)")
@@ -3671,8 +3694,40 @@ class Translator:
             grow = num("grow")
             if grow is not None:
                 props.append(f"grow: {grow}")
+            # Typography, then wrapping, then the box the text paints
+            # for itself. Each takes a literal or a read of state, so a
+            # pill can change color without the view branching.
+            for flag in ("bold", "italic", "mono", "underline"):
+                line = self._value(kw, flag, "bool")
+                if line is not None:
+                    props.append(line)
+            if "wrap" in kw:
+                wv = kw["wrap"]
+                if not (
+                    isinstance(wv, ast.Constant)
+                    and type(wv.value) is str
+                    and wv.value in self.TEXT_WRAPS
+                ):
+                    raise Untranslatable(
+                        wv,
+                        'wrap= is "" (wrap at the parent\'s width), "nowrap" or "ellipsis"',
+                    )
+                if wv.value:
+                    props.append(f'wrap: "{wv.value}"')
+            for pykey, pixkey, kind in (
+                ("max_lines", "maxLines", "int"),
+                ("width", "width", "num"),
+                ("background", "background", "str"),
+                ("padding", "padding", "num"),
+                ("border_radius", "borderRadius", "num"),
+                ("border_width", "borderWidth", "num"),
+                ("border_color", "borderColor", "str"),
+            ):
+                line = self._value(kw, pykey, kind, pixkey)
+                if line is not None:
+                    props.append(line)
             for k in kw:
-                if k not in ("size", "color", "align", "grow"):
+                if k not in self.TEXT_KEYS:
                     raise Untranslatable(kw[k], f"text() does not take `{k}=`")
             return [f"{pad}Text {{ {'; '.join(props)} }}"]
 
@@ -4030,6 +4085,57 @@ class Translator:
         if not (isinstance(v, ast.Constant) and isinstance(v.value, str)):
             raise Untranslatable(v, f"{name} must be a string literal")
         return v.value
+
+    # What each value kind may be READ from, and how a refusal names it.
+    _VALUE_TYS = {
+        "num": (("Float", "Int"), "a number"),
+        "int": (("Int",), "a whole number"),
+        "str": (("String",), "a string"),
+        "bool": (("Bool",), "True or False"),
+    }
+
+    def _value(self, kw, name, kind, pixkey=None):
+        """A value prop: a literal of `kind`, or a read of a state cell
+        or store field of that type — a style value is a value, so a
+        pill's background can follow state the way its text does.
+        Returns the emitted `key: value` line, or None when unset."""
+        if name not in kw:
+            return None
+        v = kw[name]
+        tys, said = self._VALUE_TYS[kind]
+        key = pixkey or name
+        out = None
+        neg = isinstance(v, ast.UnaryOp) and isinstance(v.op, ast.USub)
+        c = v.operand if neg else v
+        if isinstance(c, ast.Constant):
+            val = c.value
+            if kind == "bool" and type(val) is bool and not neg:
+                out = "true" if val else "false"
+            elif kind == "str" and type(val) is str and not neg:
+                out = f'"{esc(val)}"'
+            elif kind in ("num", "int") and type(val) is int:
+                n = -val if neg else val
+                out = str(n)
+            elif kind == "num" and type(val) is float:
+                n = -val if neg else val
+                out = str(int(n)) if float(n).is_integer() else repr(n)
+        if out is None:
+            cell = self._cell_read(v)
+            if cell is not None and self._ty(cell) in tys:
+                out = f"App.{cell}"
+            elif (
+                isinstance(v, ast.Attribute)
+                and isinstance(v.value, ast.Name)
+                and v.value.id in self.stores
+                and self.stores[v.value.id]["field_tys"].get(v.attr) in tys
+            ):
+                out = f"{v.value.id}.{v.attr}"
+        if out is None:
+            raise Untranslatable(
+                v,
+                f"{name}= takes {said}, or a state or store field holding one",
+            )
+        return f"{key}: {out}"
 
     def _container_props(self, kw, pad) -> list[str]:
         lines = []

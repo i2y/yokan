@@ -40,12 +40,33 @@ class State(Generic[T]):
     def __iadd__(self, other: Any) -> "State[T]": ...
     def __isub__(self, other: Any) -> "State[T]": ...
 
+# `bold` / `italic` / `mono` / `underline` are the typography flags;
+# `mono` asks for a monospace family. `wrap` is "" (wrap at the
+# parent's width), "nowrap" (one line, overflowing) or "ellipsis"
+# (one line clipped with a trailing "…" — give it `width`, or a
+# parent that sizes it, or there is nothing to clip against).
+# `max_lines` clamps a wrapped paragraph to that many lines.
+# `background`, `padding` and the `border_*` trio draw a box behind
+# the text: padded and rounded with a background, inside a row, that
+# is a pill.
 def text(
     text: str,
     size: float = 0.0,
     color: str = "",
     align: str = "",
     grow: float = 0.0,
+    bold: bool = False,
+    italic: bool = False,
+    mono: bool = False,
+    underline: bool = False,
+    wrap: str = "",
+    max_lines: int = 0,
+    width: float = 0.0,
+    background: str = "",
+    padding: float = 0.0,
+    border_radius: float = 0.0,
+    border_width: float = 0.0,
+    border_color: str = "",
     animate: float = 0.0,
     easing: str = "",
     enter: bool = False,

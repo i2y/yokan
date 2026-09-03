@@ -342,13 +342,7 @@ mod tests {
     use std::rc::Rc;
 
     fn text(s: &str) -> Element {
-        Element::Text {
-            text: Str::from(s),
-            font_size: 0.0,
-            color: Str::new(),
-            align: Str::new(),
-            grow: 0.0,
-        }
+        Element::text(s)
     }
 
     fn button(s: &str) -> Element {

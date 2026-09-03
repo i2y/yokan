@@ -1141,3 +1141,59 @@ fn for_bodies_and_if_branches_hold_a_run_of_items() {
         ),
     }
 }
+
+#[test]
+fn text_typography_wrapping_and_box_join_the_dump_only_when_set() {
+    // The per-prop rule (ListView's) on the element with the most
+    // props: a plain Text dumps exactly as it did before they
+    // existed, a flag dumps as its bare name, and an explicitly
+    // false flag is the same as an absent one.
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view(
+            "Text { text: \"plain\" }\n    \
+             Text { text: \"loud\"; bold: true; italic: true; mono: true; underline: true }\n    \
+             Text { text: \"long\"; wrap: \"ellipsis\"; width: 260; maxLines: 2 }\n    \
+             Text { text: \"pill\"; background: \"#2fa84f\"; padding: 4; borderRadius: 10; \
+             borderWidth: 1; borderColor: \"#11111b\" }\n    \
+             Text { text: \"off\"; bold: false; wrap: \"\" }",
+        ),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Text(plain), Text(loud, bold, italic, mono, underline), \
+         Text(long, wrap=ellipsis, maxLines=2, width=260), \
+         Text(pill, bg=#2fa84f, padding=4, radius=10, border=1, borderColor=#11111b), \
+         Text(off)]"
+    );
+
+    // A value prop is a value: an Int property reaches `maxLines:`,
+    // and the same read widens into the Float slot next to it.
+    let tree = build_view(
+        &chart_view("Text { text: \"bound\"; maxLines: counter.count; width: counter.count }"),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Text(bound, maxLines=3, width=3)]");
+
+    // A flag that is not a Bool is refused rather than coerced —
+    // assert on the type name, never the whole message.
+    match build_view(
+        &chart_view("Text { text: \"x\"; bold: counter.count }"),
+        &e,
+        &tables(),
+        &w,
+    ) {
+        Ok(_) => panic!("an Int in a Bool slot must error"),
+        Err(err) => assert!(
+            err.contains("Bool"),
+            "error should name the expected type: {err}"
+        ),
+    }
+}

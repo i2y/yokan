@@ -18,9 +18,14 @@
 //! GC — transient engine state a dump never sees.
 //! Box decoration (`borderRadius:` / `borderWidth:` / `borderColor:`)
 //! is shared by every element that paints a box — Column, Row, Grid,
-//! Button — and applied by `style_box` on the div that carries the
-//! background, since a wrapper would round the fill and leave the
-//! border square.
+//! Button, Text — and applied by `style_box` on the div that carries
+//! the background, since a wrapper would round the fill and leave the
+//! border square. A Text carrying a background and padding is the
+//! pill: it hugs its content in a row, and `width:` fixes it.
+//! Text's typography (`bold:` / `italic:` / `mono:` / `underline:`)
+//! and its wrapping (`wrap: "nowrap" | "ellipsis"`, `maxLines:`) are
+//! gpui text-style calls on that same div, so they cascade to the
+//! string it carries.
 //! The charts paint themselves through a `canvas` element (quads for
 //! BarChart, a stroked `PathBuilder` polyline for LineChart) inside
 //! cute_ui's plot chrome; the Spinner is a stroked 120° arc rotating
@@ -243,6 +248,12 @@ const THUMB_W: f32 = 6.0;
 const THUMB_MIN: f32 = 24.0;
 const THUMB_INSET: f32 = 2.0;
 const THUMB_SLOP: f32 = 3.0;
+
+/// The family `Text { mono: true }` asks for. A single name rather
+/// than a user-supplied family: the platform ships this one, so the
+/// prop is a promise the engine can keep (an unknown family would
+/// fall back silently, which is the shape a screenshot cannot catch).
+const MONO_FAMILY: &str = "Menlo";
 
 /// Slider metrics: a 4 px track and a 14 px round thumb inside a
 /// 20 px-tall, parent-wide box.
@@ -942,6 +953,18 @@ fn render_el<C: Component>(
             color,
             align,
             grow,
+            bold,
+            italic,
+            mono,
+            underline,
+            wrap,
+            max_lines,
+            width,
+            background,
+            padding,
+            border_radius,
+            border_width,
+            border_color,
         } => {
             pass.next_id += 1;
             let mut d = with_a11y(div().id(pass.next_id), el, sem);
@@ -953,6 +976,42 @@ fn render_el<C: Component>(
             // `theme:` scope does not reach (§8.37). Inheriting it
             // put dark-theme labels on a light-theme button.
             d = d.text_color(parse_color(color).unwrap_or(rgb(th.text)));
+            // Typography: each flag is one text-style call on the same
+            // div, so they compose (a bold italic underlined label is
+            // three of them).
+            if *bold {
+                d = d.font_weight(gpui::FontWeight::BOLD);
+            }
+            if *italic {
+                d = d.italic();
+            }
+            if *mono {
+                d = d.font_family(MONO_FAMILY);
+            }
+            if *underline {
+                d = d.underline();
+            }
+            // "nowrap" keeps one line and lets it overflow; "ellipsis"
+            // adds the clip and the trailing "…" — which only shows
+            // where the box is bounded, hence `width:` next to it.
+            match wrap.as_str() {
+                "nowrap" => d = d.whitespace_nowrap(),
+                "ellipsis" => d = d.overflow_hidden().whitespace_nowrap().text_ellipsis(),
+                _ => {}
+            }
+            if *max_lines > 0 {
+                d = d.line_clamp(*max_lines as usize);
+            }
+            // The box the text paints for itself: padding first so the
+            // background covers it, then the shared decoration — the
+            // radius has to ride the div that carries the fill.
+            if *padding > 0.0 {
+                d = d.p(px(*padding as f32));
+            }
+            if let Some(c) = parse_color(background) {
+                d = d.bg(c);
+            }
+            d = style_box(d, *border_radius, *border_width, border_color, th, false);
             // Alignment needs the div to own its box: flex + full
             // width, content pushed by justify; a grown text absorbs
             // spare main-axis space (its content bottom-anchored, the
@@ -961,6 +1020,12 @@ fn render_el<C: Component>(
                 "right" => d = d.w_full().flex().justify_end(),
                 "center" => d = d.w_full().flex().justify_center(),
                 _ => {}
+            }
+            // After `align`, so an explicit width wins over the
+            // `w_full()` alignment asks for — the alignment still
+            // applies, inside the fixed box.
+            if *width > 0.0 {
+                d = d.w(px(*width as f32));
             }
             if *grow > 0.0 {
                 d = d.flex_grow(*grow as f32).items_end();

@@ -1315,7 +1315,7 @@ fn if_in_views_lowers_both_branches() {
         // Comparison condition through the action-expression grammar.
         "if (w.singleton_ref::<S>().n(w) > 2i64) {",
         "} else {",
-        "__c0.push(Element::Text { text: Str::from(\"small\"), font_size: 0f64, color: Str::new(), align: Str::new(), grow: 0f64 });",
+        "__c0.push(Element::Text { text: Str::from(\"small\"), font_size: 0f64, color: Str::new(), align: Str::new(), grow: 0f64, bold: false, italic: false, mono: false, underline: false, wrap: Str::new(), max_lines: 0i64, width: 0f64, background: Str::new(), padding: 0f64, border_radius: 0f64, border_width: 0f64, border_color: Str::new() });",
     ] {
         assert!(code.contains(needle), "generated code lacks `{needle}`:\n{code}");
     }
@@ -3848,4 +3848,99 @@ fn a_private_style_travels_with_the_component_that_uses_it() {
         "a private style must stay private: {:?}",
         outcome.diagnostics
     );
+}
+
+#[test]
+fn a_text_carries_typography_wrapping_and_a_box() {
+    // Text grew the props a label actually asks for: four typography
+    // flags, the wrapping pair, and the box a status pill paints for
+    // itself. Each takes what its kind of view prop takes elsewhere —
+    // a literal or a bound property — so a pill's background can
+    // follow state without the view branching.
+    let dir = std::env::temp_dir().join("pixie-text-props");
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("badges.pix");
+    std::fs::write(
+        &f,
+        concat!(
+            "store S {\n",
+            "  state tint : String = \"#2fa84f\"\n",
+            "  state loud : Bool = true\n",
+            "  state lines : Int = 2\n",
+            "}\n",
+            "\n",
+            "view Main {\n",
+            "  Column {\n",
+            "    Text { text: \"heading\"; bold: true; italic: true; mono: true; underline: true }\n",
+            "    Text { text: \"long\"; wrap: \"ellipsis\"; width: 260.0 }\n",
+            "    Text { text: \"para\"; maxLines: S.lines }\n",
+            "    Text {\n",
+            "      text: \"pill\"\n",
+            "      background: S.tint\n",
+            "      bold: S.loud\n",
+            "      padding: 4.0\n",
+            "      borderRadius: 10.0\n",
+            "      borderWidth: 1.0\n",
+            "      borderColor: \"#000000\"\n",
+            "    }\n",
+            "  }\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        "bold: true, italic: true, mono: true, underline: true",
+        "wrap: Str::from(\"ellipsis\")",
+        "width: 260f64",
+        // An Int property in the `maxLines:` slot, and a String one
+        // behind the pill: a style value is a value.
+        "max_lines: ",
+        "padding: 4f64, border_radius: 10f64, border_width: 1f64",
+    ] {
+        assert!(
+            code.contains(needle),
+            "generated code lacks `{needle}`:\n{code}"
+        );
+    }
+
+    // And a flag that is not a Bool is refused BY NAME — the shared
+    // bool lowering used to report every property as Modal's `open:`.
+    std::fs::write(
+        &f,
+        concat!(
+            "store S {\n  state tint : String = \"#2fa84f\"\n}\n",
+            "\nview Main {\n  Column {\n    Text { text: \"x\"; bold: S.tint }\n  }\n}\n",
+        ),
+    )
+    .unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    match pixie_codegen::emit_program(
+        outcome.module.as_ref().unwrap(),
+        outcome.binding_items,
+        None,
+    ) {
+        Ok(_) => panic!("a String in a Bool slot must be refused"),
+        Err(e) => {
+            assert!(
+                e.message.contains("bold"),
+                "the error names the prop: {}",
+                e.message
+            );
+            assert!(
+                e.message.contains("Bool"),
+                "the error names the type: {}",
+                e.message
+            );
+        }
+    }
 }

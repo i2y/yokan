@@ -666,13 +666,15 @@ fn take_children(children: &Bound<'_, PyTuple>) -> PyResult<Vec<Element>> {
 }
 
 fn err_text(msg: &str) -> Element {
-    Element::Text {
-        text: Str::from(msg),
-        font_size: 14.0,
-        color: Str::from("#ff6666"),
-        align: Str::from(""),
-        grow: 0.0,
+    let mut el = Element::text(msg);
+    if let Element::Text {
+        font_size, color, ..
+    } = &mut el
+    {
+        *font_size = 14.0;
+        *color = Str::from("#ff6666");
     }
+    el
 }
 
 fn to_list_f64(v: Vec<f64>) -> List<f64> {
@@ -695,9 +697,31 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
 // ---------------------------------------------------------------------------
 // Element constructors.
 
-#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false))]
+#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, bold=false, italic=false, mono=false, underline=false, wrap=String::new(), max_lines=0, width=0.0, background=String::new(), padding=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false))]
 #[allow(clippy::too_many_arguments)]
-fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool) -> Reg {
+fn text(
+    text: String,
+    size: f64,
+    color: String,
+    align: String,
+    grow: f64,
+    bold: bool,
+    italic: bool,
+    mono: bool,
+    underline: bool,
+    wrap: String,
+    max_lines: i64,
+    width: f64,
+    background: String,
+    padding: f64,
+    border_radius: f64,
+    border_width: f64,
+    border_color: String,
+    animate: f64,
+    easing: String,
+    enter: bool,
+    exit: bool,
+) -> Reg {
     Reg::wrap(wrap_anim(
         Element::Text {
             text: Str::from(text),
@@ -705,6 +729,18 @@ fn text(text: String, size: f64, color: String, align: String, grow: f64, animat
             color: Str::from(color),
             align: Str::from(align),
             grow,
+            bold,
+            italic,
+            mono,
+            underline,
+            wrap: Str::from(wrap),
+            max_lines,
+            width,
+            background: Str::from(background),
+            padding,
+            border_radius,
+            border_width,
+            border_color: Str::from(border_color),
         },
         animate,
         &easing,
