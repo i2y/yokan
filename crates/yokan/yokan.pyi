@@ -265,6 +265,29 @@ def table(
     takes that form, or one `with row():` block); `selected` and
     `sort` are state or store-field reads, since a literal could
     never reflect the selection."""
+
+# A typed number: `enter` or leaving the field commits, text that is
+# not a number is dropped and the shown value returns to `value`;
+# min/max clamp, step snaps (0 = free). In a headless script
+# `input:<text>` commits.
+def number_field(
+    value: float,
+    min: float = 0.0,
+    max: float = 0.0,
+    step: float = 0.0,
+    placeholder: str = "",
+    on_change: Optional[Callable[[float], Any]] = None,
+    tooltip: str = "",
+) -> Element: ...
+def int_field(
+    value: int,
+    min: int = 0,
+    max: int = 0,
+    step: int = 1,
+    placeholder: str = "",
+    on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
+) -> Element: ...
 def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
 def spacer(grow: float = 0.0, tooltip: str = "") -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""

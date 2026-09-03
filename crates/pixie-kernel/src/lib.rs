@@ -922,6 +922,32 @@ pub type FloatListener = Rc<dyn Fn(&mut World, f64)>;
 /// the payload is the chosen 0-based index.
 pub type IntListener = Rc<dyn Fn(&mut World, i64)>;
 
+/// What `find_input` found: the three widgets a headless `input:`
+/// step can type into, each with what committing that text needs.
+/// They share one numbering because they share the verb.
+#[derive(Clone)]
+pub enum InputTarget {
+    Text {
+        value: Str,
+        on_change: Option<TextListener>,
+        on_submit: Option<TextListener>,
+    },
+    Number {
+        value: f64,
+        min: f64,
+        max: f64,
+        step: f64,
+        on_change: Option<FloatListener>,
+    },
+    Int {
+        value: i64,
+        min: i64,
+        max: i64,
+        step: i64,
+        on_change: Option<IntListener>,
+    },
+}
+
 #[derive(Clone)]
 pub enum Element {
     /// The theme scope (§8.37). Produced by the lowerers when an
@@ -1381,6 +1407,36 @@ pub enum Element {
         children: Vec<Element>,
         lazy: Option<LazyRows>,
     },
+    /// A single-line field that holds a NUMBER rather than text.
+    /// `value` is BOUND data the app owns — the field shows it, and
+    /// the shown number moves only when the app writes the new one
+    /// back (the TextField / Slider rule). Typing is not a change:
+    /// pressing `enter` or leaving the field COMMITS, which parses
+    /// the text with Python's `float()` rules, clamps it into
+    /// `[min, max]`, snaps it to the `step` grid and runs `on_change`
+    /// only when the result differs from `value`. Text that is not a
+    /// number commits nothing and the shown text returns to `value`.
+    /// `min == max == 0.0` means unbounded; `step` `0.0` means free.
+    NumberField {
+        value: f64,
+        min: f64,
+        max: f64,
+        step: f64,
+        placeholder: Str,
+        on_change: Option<FloatListener>,
+    },
+    /// `NumberField` one primitive over: Python's `int()` rules for
+    /// the parse (no decimal point, no exponent), integer arithmetic
+    /// for the clamp and the snap. `step` `0` and `1` both mean every
+    /// integer.
+    IntField {
+        value: i64,
+        min: i64,
+        max: i64,
+        step: i64,
+        placeholder: Str,
+        on_change: Option<IntListener>,
+    },
 }
 
 /// Clamp `v` into `[min, max]`, then snap it to the nearest `step`
@@ -1396,6 +1452,114 @@ pub fn slider_snap(min: f64, max: f64, step: f64, v: f64) -> f64 {
     } else {
         v
     }
+}
+
+/// `NumberField`'s clamp-and-snap. A slider always has a range; a
+/// typed field does not, so `min == max == 0.0` means "no range at
+/// all" and only the step applies (counted from zero). Every bounded
+/// case IS `slider_snap`, so a number typed into a field and a value
+/// dragged on a slider round to the same place.
+pub fn number_snap(min: f64, max: f64, step: f64, v: f64) -> f64 {
+    if min == 0.0 && max == 0.0 {
+        if step > 0.0 {
+            (v / step).round() * step
+        } else {
+            v
+        }
+    } else {
+        slider_snap(min, max, step, v)
+    }
+}
+
+/// `number_snap` in integers — no float round-trip, so a big count
+/// snaps exactly rather than to the nearest representable double.
+/// `step` `0` and `1` both mean every integer; the snap counts from
+/// `min` when the range is bounded and from zero when it is not, and
+/// rounds halves away from zero the way `f64::round` does.
+pub fn int_snap(min: i64, max: i64, step: i64, v: i64) -> i64 {
+    let bounded = !(min == 0 && max == 0);
+    let clamp = |x: i64| if bounded { x.max(min).min(max) } else { x };
+    let v = clamp(v);
+    if step <= 1 {
+        return v;
+    }
+    let base = if bounded { min } else { 0 };
+    let d = v.saturating_sub(base);
+    let mut q = d / step;
+    let r = d % step;
+    if r.saturating_mul(2).abs() >= step {
+        q += if d < 0 { -1 } else { 1 };
+    }
+    clamp(base.saturating_add(q.saturating_mul(step)))
+}
+
+/// Python's `float(s)`: surrounding whitespace is ignored, everything
+/// else must be the whole number — `"2.5 "` parses, `"2.5kg"` does
+/// not, and neither does `""`. Rust's own `f64` grammar is Python's
+/// (sign, digits, point, exponent, plus `inf` / `infinity` / `nan`),
+/// so the parse itself is delegated rather than rewritten.
+pub fn parse_float_text(text: &str) -> Option<f64> {
+    let t = text.trim();
+    if t.is_empty() {
+        return None;
+    }
+    t.parse::<f64>().ok()
+}
+
+/// Python's `int(s)`, the same way: sign and digits only, so `"3.0"`
+/// and `"1e3"` are refused here exactly as they are in Python.
+pub fn parse_int_text(text: &str) -> Option<i64> {
+    let t = text.trim();
+    if t.is_empty() {
+        return None;
+    }
+    t.parse::<i64>().ok()
+}
+
+/// `str(float)` — CPython's shortest-round-trip rendering: fixed
+/// notation while the decimal point sits in [-3, 16], scientific with
+/// a two-digit-minimum signed exponent outside, integral values keep
+/// a trailing `.0`.
+///
+/// It lives here rather than beside the other Python-semantics
+/// functions because a `NumberField` has to SHOW its bound value, and
+/// what a number field shows must be the same string an interpolation
+/// of that number produces — one function, or `3.0` reads as `3` in
+/// one place and `3.0` in the other. `yokan_stdlib::py_float_repr`
+/// re-exports this.
+pub fn py_float_repr(v: f64) -> String {
+    if v.is_nan() {
+        return "nan".to_string();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "inf" } else { "-inf" }.to_string();
+    }
+    let neg = v.is_sign_negative();
+    let a = v.abs();
+    let e = format!("{a:e}"); // shortest digits, e.g. "1.2345e-7"
+    let (mant, exp) = e.split_once('e').expect("Rust {:e} always has an exponent");
+    let exp: i32 = exp.parse().expect("integer exponent");
+    let digits: String = mant.chars().filter(|c| *c != '.').collect();
+    let decpt = exp + 1; // digits before the decimal point
+    let n = digits.len() as i32;
+    let body = if (-3..=16).contains(&decpt) {
+        if decpt <= 0 {
+            format!("0.{}{}", "0".repeat((-decpt) as usize), digits)
+        } else if decpt >= n {
+            format!("{}{}.0", digits, "0".repeat((decpt - n) as usize))
+        } else {
+            format!("{}.{}", &digits[..decpt as usize], &digits[decpt as usize..])
+        }
+    } else {
+        let rest = &digits[1..];
+        let m = if rest.is_empty() {
+            digits[..1].to_string()
+        } else {
+            format!("{}.{}", &digits[..1], rest)
+        };
+        format!("{}e{}{:02}", m, if exp < 0 { '-' } else { '+' }, exp.abs())
+    };
+    if neg { format!("-{body}") } else { body }
 }
 
 /// The lazy half of a virtualized ListView: `build` produces just the
@@ -2017,6 +2181,67 @@ impl Element {
                     labels.iter().map(|l| l.as_str().to_string()).collect();
                 format!("TabBar(active={active})[{}]", inner.join(", "))
             }
+            // The bound number is the whole widget, so it always
+            // prints — as `str(value)` would print it, which is what
+            // the field itself shows. The range is one decision, not
+            // two: a `[-10, 0]` range would lose its `max=0` under a
+            // per-prop rule, so both ends print together as soon as
+            // there IS a range. `step` and `placeholder` join only
+            // when set.
+            Element::NumberField {
+                value,
+                min,
+                max,
+                step,
+                placeholder,
+                ..
+            } => {
+                let mut props: Vec<String> = Vec::new();
+                if !(*min == 0.0 && *max == 0.0) {
+                    props.push(format!("min={min}"));
+                    props.push(format!("max={max}"));
+                }
+                if *step != 0.0 {
+                    props.push(format!("step={step}"));
+                }
+                if !placeholder.as_str().is_empty() {
+                    props.push(format!("placeholder={placeholder}"));
+                }
+                let v = py_float_repr(*value);
+                if props.is_empty() {
+                    format!("NumberField({v})")
+                } else {
+                    format!("NumberField({v}, {})", props.join(", "))
+                }
+            }
+            // `NumberField`'s rule in integers. A `step` of 0 or 1
+            // both mean every integer and neither changes what the
+            // user sees, so neither prints.
+            Element::IntField {
+                value,
+                min,
+                max,
+                step,
+                placeholder,
+                ..
+            } => {
+                let mut props: Vec<String> = Vec::new();
+                if !(*min == 0 && *max == 0) {
+                    props.push(format!("min={min}"));
+                    props.push(format!("max={max}"));
+                }
+                if *step > 1 {
+                    props.push(format!("step={step}"));
+                }
+                if !placeholder.as_str().is_empty() {
+                    props.push(format!("placeholder={placeholder}"));
+                }
+                if props.is_empty() {
+                    format!("IntField({value})")
+                } else {
+                    format!("IntField({value}, {})", props.join(", "))
+                }
+            }
             // Paints nothing itself, so the dump has nothing to show
             // beyond the one prop that decides how much slack it eats
             // — `ProgressBar`/`Spinner`'s bare-number rendering,
@@ -2262,20 +2487,13 @@ impl Element {
         }
     }
 
-    /// The n-th TextField in document order (headless-script targeting):
-    /// its (value, on_change, on_submit) triple.
-    #[allow(clippy::type_complexity)]
-    pub fn find_text_field(
-        &self,
-        w: &World,
-        n: usize,
-    ) -> Option<(Str, Option<TextListener>, Option<TextListener>)> {
-        fn walk(
-            el: &Element,
-            w: &World,
-            seen: &mut usize,
-            n: usize,
-        ) -> Option<(Str, Option<TextListener>, Option<TextListener>)> {
+    /// The n-th typed-into field in document order (headless-script
+    /// targeting). TextField, NumberField and IntField count TOGETHER
+    /// — they share the `input:` verb the way the three choosers share
+    /// `select:` — so `input@1:` reaches the second box on the screen
+    /// whatever kind it is.
+    pub fn find_input(&self, w: &World, n: usize) -> Option<InputTarget> {
+        fn walk(el: &Element, w: &World, seen: &mut usize, n: usize) -> Option<InputTarget> {
             match el {
                 Element::TextField {
                     value,
@@ -2284,7 +2502,51 @@ impl Element {
                     ..
                 } => {
                     if *seen == n {
-                        return Some((value.clone(), on_change.clone(), on_submit.clone()));
+                        return Some(InputTarget::Text {
+                            value: value.clone(),
+                            on_change: on_change.clone(),
+                            on_submit: on_submit.clone(),
+                        });
+                    }
+                    *seen += 1;
+                    None
+                }
+                Element::NumberField {
+                    value,
+                    min,
+                    max,
+                    step,
+                    on_change,
+                    ..
+                } => {
+                    if *seen == n {
+                        return Some(InputTarget::Number {
+                            value: *value,
+                            min: *min,
+                            max: *max,
+                            step: *step,
+                            on_change: on_change.clone(),
+                        });
+                    }
+                    *seen += 1;
+                    None
+                }
+                Element::IntField {
+                    value,
+                    min,
+                    max,
+                    step,
+                    on_change,
+                    ..
+                } => {
+                    if *seen == n {
+                        return Some(InputTarget::Int {
+                            value: *value,
+                            min: *min,
+                            max: *max,
+                            step: *step,
+                            on_change: on_change.clone(),
+                        });
                     }
                     *seen += 1;
                     None
@@ -2408,8 +2670,8 @@ impl Element {
     }
 
     /// The n-th Slider in document order (headless-script targeting):
-    /// its (min, max, step, on_change) tuple — `find_text_field`'s
-    /// shape, one widget over.
+    /// its (min, max, step, on_change) tuple — `find_input`'s shape,
+    /// one widget over.
     #[allow(clippy::type_complexity)]
     pub fn find_slider(
         &self,
@@ -2518,8 +2780,8 @@ impl Element {
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
                 | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
-                // Same as `find_text_field`: virtualization never
-                // hides a row from document order.
+                // Same as `find_input`: virtualization never hides a
+                // row from document order.
                 Element::ListView { children, lazy, .. } => {
                     if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
                         return Some(hit);
@@ -3468,5 +3730,86 @@ mod memory_tests {
         w.notify_changed(h.erase(), 1);
         w.flush();
         assert_eq!(fired.get(), 2, "a later change is a new notification");
+    }
+
+    /// The number fields' clamp-and-snap. A slider always has a
+    /// range; a typed field may have none, and `min == max == 0` is
+    /// how it says so.
+    #[test]
+    fn a_number_field_snaps_and_may_be_unbounded() {
+        // Bounded: `slider_snap`'s answers, unchanged.
+        assert_eq!(number_snap(0.0, 10.0, 0.5, 2.7), 2.5);
+        assert_eq!(number_snap(0.0, 10.0, 0.5, 500.0), 10.0);
+        assert_eq!(number_snap(0.0, 10.0, 0.0, 2.7), 2.7);
+        // Unbounded: the step still applies, counted from zero, and
+        // nothing is clamped to the degenerate [0, 0] range.
+        assert_eq!(number_snap(0.0, 0.0, 0.0, -412.5), -412.5);
+        assert_eq!(number_snap(0.0, 0.0, 0.25, 1.1), 1.0);
+    }
+
+    /// The int field does its arithmetic in integers, and a step of
+    /// 0 or 1 both mean every integer.
+    #[test]
+    fn an_int_field_snaps_in_integers() {
+        assert_eq!(int_snap(1, 99, 1, 500), 99);
+        assert_eq!(int_snap(1, 99, 0, 3), 3);
+        assert_eq!(int_snap(0, 100, 5, 13), 15);
+        assert_eq!(int_snap(0, 100, 5, 12), 10);
+        // Counted from `min`, like the slider's grid.
+        assert_eq!(int_snap(1, 100, 10, 16), 21);
+        // Unbounded: negatives survive, halves round away from zero.
+        assert_eq!(int_snap(0, 0, 0, -7), -7);
+        assert_eq!(int_snap(0, 0, 2, -3), -4);
+    }
+
+    /// Python's `float()` / `int()`: whitespace is ignored, junk is
+    /// not a number, and a decimal point is not an integer.
+    #[test]
+    fn the_number_parses_are_pythons() {
+        assert_eq!(parse_float_text(" 2.5 "), Some(2.5));
+        assert_eq!(parse_float_text("2.5kg"), None);
+        assert_eq!(parse_float_text(""), None);
+        assert_eq!(parse_int_text("  42"), Some(42));
+        assert_eq!(parse_int_text("3.0"), None);
+        assert_eq!(parse_int_text("abc"), None);
+    }
+
+    /// What a NumberField SHOWS is what an interpolation of the same
+    /// number prints — one function, so `3.0` never reads as `3`.
+    #[test]
+    fn a_number_field_dumps_the_python_spelling() {
+        let f = |value: f64, min: f64, max: f64, step: f64, ph: &str| Element::NumberField {
+            value,
+            min,
+            max,
+            step,
+            placeholder: Str::from(ph),
+            on_change: None,
+        };
+        let w = World::new();
+        assert_eq!(f(3.0, 0.0, 0.0, 0.0, "").dump(&w), "NumberField(3.0)");
+        assert_eq!(
+            f(2.5, 0.0, 10.0, 0.5, "price").dump(&w),
+            "NumberField(2.5, min=0, max=10, step=0.5, placeholder=price)"
+        );
+        // A range whose max IS zero still prints both ends.
+        assert_eq!(
+            f(-1.0, -10.0, 0.0, 0.0, "").dump(&w),
+            "NumberField(-1.0, min=-10, max=0)"
+        );
+        let i = |value: i64, min: i64, max: i64, step: i64| Element::IntField {
+            value,
+            min,
+            max,
+            step,
+            placeholder: Str::new(),
+            on_change: None,
+        };
+        assert_eq!(i(3, 0, 0, 1).dump(&w), "IntField(3)");
+        assert_eq!(i(3, 0, 0, 0).dump(&w), "IntField(3)");
+        assert_eq!(
+            i(3, 1, 99, 5).dump(&w),
+            "IntField(3, min=1, max=99, step=5)"
+        );
     }
 }

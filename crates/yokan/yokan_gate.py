@@ -6810,6 +6810,48 @@ class Translator:
                 props.append(f"onChange: {h}")
             return [f"{pad}Slider {{ {'; '.join(props)} }}"]
 
+        # The typed number fields — the slider emitter with a
+        # placeholder and an Int twin. `value=` is a read for the same
+        # reason: the field SHOWS the app's number, and a literal
+        # could never move.
+        for fname, tag, want in (("number_field", "NumberField", "Float"),
+                                 ("int_field", "IntField", "Int")):
+            if not self._is_ui(node.func, fname):
+                continue
+            if node.args:
+                v0 = node.args[0]
+            elif "value" in kw:
+                v0 = kw.pop("value")
+            else:
+                raise Untranslatable(node, f"{fname}() needs value=")
+            props = [f"value: {typed_read(v0, want, 'value=')}"]
+            for k2 in ("min", "max", "step"):
+                if k2 not in kw:
+                    continue
+                # The range takes what any number-valued property
+                # takes (a literal, a read, arithmetic over them) —
+                # except that an int field's range is in integers, so
+                # a fractional one is refused here rather than deeper.
+                if want == "Int" and self._num_ty(kw[k2], "view", None) == "Float":
+                    raise Untranslatable(kw[k2], f"{fname}() {k2}= must be a whole number")
+                props.append(f"{k2}: {self._num(kw, k2)}")
+            ph = strlit("placeholder")
+            if ph is not None:
+                props.append(f"placeholder: {pixstr(ph)}")
+            handler = kw.get("on_change")
+            for k2 in kw:
+                if k2 not in ("min", "max", "step", "placeholder", "on_change"):
+                    raise Untranslatable(kw[k2], f"{fname}() does not take `{k2}=`")
+            if handler is not None:
+                h = self.handler(handler, takes_text=True, implicit=("value", want))
+                if isinstance(h, tuple):
+                    lines = [f"{pad}{tag} {{"] + [f"{pad}  {p}" for p in props]
+                    lines += [f"{pad}  onChange: {{"] + [f"{pad}    {ln}" for ln in h[1]]
+                    lines += [f"{pad}  }}", f"{pad}}}"]
+                    return lines
+                props.append(f"onChange: {h}")
+            return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
+
         for fname, tag, listkey, selkey, pixlist, pixsel in (
             ("select", "Select", "options", "selected", "options", "selected"),
             ("radio_group", "RadioGroup", "options", "selected", "options", "selected"),

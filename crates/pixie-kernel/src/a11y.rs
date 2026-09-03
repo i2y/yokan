@@ -197,6 +197,11 @@ pub fn role_of(el: &Element) -> Option<Role> {
         Element::TabBar { .. } => Some(Role::TabList),
         Element::Link { .. } => Some(Role::Link),
         Element::Table { .. } => Some(Role::Table),
+        // A typed number field is a text input that refuses
+        // non-numbers. AccessKit has a `SpinButton`, and this
+        // vocabulary has no numeric role yet, so `textInput` is what
+        // it honestly is — with the number as its value, below.
+        Element::NumberField { .. } | Element::IntField { .. } => Some(Role::TextInput),
         _ => None,
     }
 }
@@ -222,6 +227,11 @@ pub fn name_of(el: &Element) -> Str {
         Element::TabBar { labels, active, .. } => labels.get(*active).unwrap_or_else(Str::new),
         // Mirrors how Button derives `button`: the label IS the name.
         Element::Link { label, .. } => label.clone(),
+        // A number field names itself the way a TextField does: the
+        // placeholder is the label ("price"), the number is the value.
+        Element::NumberField { placeholder, .. } | Element::IntField { placeholder, .. } => {
+            placeholder.clone()
+        }
         _ => Str::new(),
     }
 }
@@ -237,6 +247,9 @@ pub fn value_of(el: &Element) -> Str {
         // No name to derive (a Slider has no label prop) — but the
         // number a screen reader reads out is this.
         Element::Slider { value, .. } => Str::from(format!("{value}")),
+        // Read out exactly what the field shows.
+        Element::NumberField { value, .. } => Str::from(crate::py_float_repr(*value)),
+        Element::IntField { value, .. } => Str::from(format!("{value}")),
         _ => Str::new(),
     }
 }

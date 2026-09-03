@@ -458,6 +458,54 @@ fn progress_bar_dumps_its_float_value() {
 }
 
 #[test]
+fn the_number_fields_dump_their_bound_value_and_range() {
+    // The interp tier's mirror of codegen's arms: `value:` is
+    // required, min/max default to 0 (= unbounded), the float field's
+    // step to 0.0 and the int field's to 1, and `placeholder:` joins
+    // the dump only when set. The float's text is `str(value)`, so a
+    // whole number keeps its `.0`.
+    let mut w = World::new();
+    let job = w.insert(Job { ratio: 0.5 });
+    let counter = w.insert(Counter { count: 3 });
+    let e = FieldEnv {
+        fields: vec![
+            ("job".into(), "Job".into(), job.erase()),
+            ("counter".into(), "Counter".into(), counter.erase()),
+        ],
+    };
+    let tb = tables();
+    let prelude = "view Main {\n  let job = Job()\n  let counter = Counter()\n  Column {\n    ";
+    let lv = view_of(&format!(
+        "{prelude}NumberField {{ value: job.ratio }}\n    \
+         NumberField {{ value: job.ratio; min: 0.0; max: 10.0; step: 0.5; placeholder: \"price\" }}\n    \
+         IntField {{ value: counter.count }}\n    \
+         IntField {{ value: counter.count; min: 1; max: 99; step: 5 }}\n  }}\n}}\n"
+    ));
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[NumberField(0.5), \
+         NumberField(0.5, min=0, max=10, step=0.5, placeholder=price), \
+         IntField(3), IntField(3, min=1, max=99, step=5)]"
+    );
+
+    // Required props, mirroring codegen's errors.
+    for (body, needle) in [
+        ("NumberField { }", "NumberField needs `value:`"),
+        ("IntField { }", "IntField needs `value:`"),
+        // An Int is not an Int-typed slot's only failure mode: a
+        // Float where an Int belongs names the type it wanted.
+        ("IntField { value: job.ratio }", "Int"),
+    ] {
+        let lv = view_of(&format!("{prelude}{body}\n  }}\n}}\n"));
+        match build_view(&lv, &e, &tb, &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(err.contains(needle), "error should name it: {err}"),
+        }
+    }
+}
+
+#[test]
 fn modal_dumps_its_open_flag_and_children() {
     // `open` is a bound Bool, so both states produce the same subtree
     // — only the flag in the dump (and the engine's paint) changes.

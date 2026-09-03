@@ -636,6 +636,18 @@ fn tiers_agree_on_every_demo() {
         // `click:ping` to prove wrong — the count it drives is what
         // ties the dump to the click having landed at all.
         ("examples/layout/layout.pix", "click:ping"),
+        // The typed number fields. `input:` COMMITS on them the way
+        // `enter` does in a window, and the three readings are the
+        // whole contract: a number lands snapped (2.7 → 2.5 on the
+        // step-0.5 grid), text that is not a number changes nothing
+        // (`abc` leaves qty at 3), and out of range clamps (500 → 99).
+        // `submit` is accepted on a number field and does nothing, so
+        // the way a person finishes an edit reads the same in a
+        // script.
+        (
+            "examples/numbers/numbers.pix",
+            "input@0:3,input@1:2.7,submit@1,dump,input@0:abc,dump,input@0:500",
+        ),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);

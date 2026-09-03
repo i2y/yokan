@@ -958,6 +958,53 @@ fn link(label: String, url: String, size: f64, tooltip: String) -> Reg {
     })
 }
 
+/// The typed number fields: the value comes in from state, and the
+/// handler receives the COMMITTED number — `enter` or leaving the
+/// field, not every keystroke. `min`/`max` both 0 means unbounded;
+/// `step` snaps (0 = free for the float field, and 0 or 1 mean every
+/// integer for the int one).
+#[pyfunction(signature = (value, min=0.0, max=0.0, step=0.0, placeholder=String::new(), on_change=None, tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn number_field(
+    value: f64,
+    min: f64,
+    max: f64,
+    step: f64,
+    placeholder: String,
+    on_change: Option<Py<PyAny>>,
+    tooltip: String,
+) -> Reg {
+    Reg::tip(&tooltip, Element::NumberField {
+        value,
+        min,
+        max,
+        step,
+        placeholder: Str::from(placeholder),
+        on_change: on_change.map(float_listener),
+    })
+}
+
+#[pyfunction(signature = (value, min=0, max=0, step=1, placeholder=String::new(), on_change=None, tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn int_field(
+    value: i64,
+    min: i64,
+    max: i64,
+    step: i64,
+    placeholder: String,
+    on_change: Option<Py<PyAny>>,
+    tooltip: String,
+) -> Reg {
+    Reg::tip(&tooltip, Element::IntField {
+        value,
+        min,
+        max,
+        step,
+        placeholder: Str::from(placeholder),
+        on_change: on_change.map(int_listener),
+    })
+}
+
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
 fn text_field(
     value: String,
@@ -2347,6 +2394,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(divider, m)?)?;
     m.add_function(wrap_pyfunction!(link, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
+    m.add_function(wrap_pyfunction!(number_field, m)?)?;
+    m.add_function(wrap_pyfunction!(int_field, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

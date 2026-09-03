@@ -397,6 +397,84 @@ fn sliders_demo_checks_and_emits() {
 }
 
 #[test]
+fn numbers_demo_checks_and_emits() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/numbers/numbers.pix"
+    );
+    let outcome = pixie_driver::check_file(Path::new(path)).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        // The int field: an Int property read, an Int range, and the
+        // default step of 1 (0 would mean the same thing).
+        "Element::IntField { value: w.singleton_ref::<Order>().qty(w), min: 1i64, max: 99i64, step: 1i64, placeholder: Str::from(\"qty\")",
+        // The float twin, with a step on the 0.5 grid.
+        "Element::NumberField { value: w.singleton_ref::<Order>().price(w), min: 0f64, max: 1000f64, step: 0.5f64, placeholder: Str::from(\"unit price\")",
+        // Two `onChange` handlers, and the implicit `value` carries a
+        // DIFFERENT primitive in each — the reason there are two
+        // fields rather than one.
+        "move |w: &mut World, value: i64|",
+        "move |w: &mut World, value: f64|",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+#[test]
+fn number_field_values_must_be_properties() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Same rule as the Slider's: the field SHOWS the app's number, so
+    // a literal could never move.
+    for (name, src, needle) in [
+        (
+            "number_field_literal_value.pix",
+            "view Main {\n  Column {\n    NumberField { value: 0.5 }\n  }\n}\n",
+            "property",
+        ),
+        (
+            "int_field_literal_value.pix",
+            "view Main {\n  Column {\n    IntField { value: 3 }\n  }\n}\n",
+            "property",
+        ),
+        (
+            "number_field_no_value.pix",
+            "view Main {\n  Column {\n    NumberField { min: 0.0 }\n  }\n}\n",
+            "NumberField needs `value:`",
+        ),
+        (
+            "int_field_no_value.pix",
+            "view Main {\n  Column {\n    IntField { min: 0 }\n  }\n}\n",
+            "IntField needs `value:`",
+        ),
+    ] {
+        let f = dir.join(name);
+        std::fs::write(&f, src).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        let err = pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .expect_err("must not emit");
+        assert!(
+            err.message.contains(needle),
+            "error should say `{needle}`: {}",
+            err.message
+        );
+    }
+}
+
+#[test]
 fn slider_value_must_be_a_property() {
     let dir = std::env::temp_dir().join("pixie-m0-gate");
     std::fs::create_dir_all(&dir).unwrap();
