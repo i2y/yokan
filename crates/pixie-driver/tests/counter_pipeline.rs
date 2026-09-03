@@ -949,13 +949,13 @@ fn charts_demo_checks_and_emits() {
         // The negative-valued chart asks for an axis: `axis:` is a
         // plain bool, and the range stays at the data's own.
         "Element::BarChart { data: w.singleton_ref::<Charts>().pnl(w), labels: List::new(), \
-         width: 0f64, height: 130f64, min: 0f64, max: 0f64, axis: true, color: Str::new(), \
+         width: 0f64, height: 100f64, min: 0f64, max: 0f64, axis: true, color: Str::new(), \
          series: List::new(), colors: List::new() }",
         // The multi-series chart: `series:` is a List<List<Float>>
         // read (`lower_view_float_list2`), `colors:` a literal list
         // built in place, and the pinned range carries its sign.
         "Element::LineChart { data: List::new(), labels: List::new(), width: 0f64, \
-         height: 130f64, min: (-2f64), max: 12f64, axis: true, color: Str::new(), \
+         height: 100f64, min: (-2f64), max: 12f64, axis: true, color: Str::new(), \
          series: w.singleton_ref::<Charts>().pairs(w), colors: { let mut __c = List::new(); \
          __c.push(Str::from(\"accent\")); __c.push(Str::from(\"#f38ba8\")); __c } }",
         // Spinner's single square axis.

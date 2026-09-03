@@ -28,14 +28,14 @@ view Main {
     Text { text: "points: #{Charts.values.length}" }
     BarChart { data: Charts.values; labels: Charts.names; width: 260.0; height: 110.0 }
     LineChart { data: Charts.values; labels: Charts.names; color: "#f9e2af" }
-    BarChart { data: Charts.pnl; axis: true; height: 130.0 }
+    BarChart { data: Charts.pnl; axis: true; height: 100.0 }
     LineChart {
       series: Charts.pairs
       colors: ["accent", "#f38ba8"]
       axis: true
       min: -2.0
       max: 12.0
-      height: 130.0
+      height: 100.0
     }
     Spinner { size: 32.0 }
     Row {
