@@ -872,6 +872,49 @@ fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>) -> Re
     })
 }
 
+/// The typed number fields: the value comes in from state, and the
+/// handler receives the COMMITTED number — `enter` or leaving the
+/// field, not every keystroke. `min`/`max` both 0 means unbounded;
+/// `step` snaps (0 = free for the float field, and 0 or 1 mean every
+/// integer for the int one).
+#[pyfunction(signature = (value, min=0.0, max=0.0, step=0.0, placeholder=String::new(), on_change=None))]
+fn number_field(
+    value: f64,
+    min: f64,
+    max: f64,
+    step: f64,
+    placeholder: String,
+    on_change: Option<Py<PyAny>>,
+) -> Reg {
+    Reg::wrap(Element::NumberField {
+        value,
+        min,
+        max,
+        step,
+        placeholder: Str::from(placeholder),
+        on_change: on_change.map(float_listener),
+    })
+}
+
+#[pyfunction(signature = (value, min=0, max=0, step=1, placeholder=String::new(), on_change=None))]
+fn int_field(
+    value: i64,
+    min: i64,
+    max: i64,
+    step: i64,
+    placeholder: String,
+    on_change: Option<Py<PyAny>>,
+) -> Reg {
+    Reg::wrap(Element::IntField {
+        value,
+        min,
+        max,
+        step,
+        placeholder: Str::from(placeholder),
+        on_change: on_change.map(int_listener),
+    })
+}
+
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None))]
 fn text_field(
     value: String,
@@ -1788,6 +1831,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(radio_group, m)?)?;
     m.add_function(wrap_pyfunction!(tab_bar, m)?)?;
+    m.add_function(wrap_pyfunction!(number_field, m)?)?;
+    m.add_function(wrap_pyfunction!(int_field, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

@@ -1704,6 +1704,21 @@ fn make_float_listener(e: &Expr, env: &ClosEnv) -> FloatListener {
     })
 }
 
+/// The IntField's `onChange`: an Int payload like the choosers', but
+/// bound as `value` — it is the number the field now holds, not a
+/// position in a list, and the checker types it the same way.
+fn make_int_value_listener(e: &Expr, env: &ClosEnv) -> IntListener {
+    let ast = e.clone();
+    let env = env.clone();
+    Rc::new(move |w: &mut World, value: i64| {
+        let mut scope = Scope::default();
+        scope.vars.push(("value".into(), Value::Int(value)));
+        if let Err(err) = eval_action(&ast, &env, &mut scope, w) {
+            eprintln!("pixie reload: handler error: {err}");
+        }
+    })
+}
+
 /// `make_text_listener`, one primitive over: the choosers' `onSelect`
 /// binds the chosen 0-based index as the implicit `index` argument.
 fn make_int_listener(e: &Expr, env: &ClosEnv) -> IntListener {
@@ -2432,6 +2447,55 @@ fn build_element_inner(
                 labels: eval_str_list(l, env, scope, w)?,
                 active: eval_expr(a, env, scope, w)?.as_int()?,
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
+            })
+        }
+        // The typed number fields, mirroring codegen: `value:` is
+        // required (codegen additionally restricts it to a property
+        // read — the Slider asymmetry, compile-time strictness with a
+        // lenient mirror), min/max default to 0 = unbounded, the
+        // NumberField's step to 0.0 = free and the IntField's to 1.
+        "NumberField" => {
+            let v = prop_of(el, "value").ok_or("NumberField needs `value:`")?;
+            let value = eval_expr(v, env, scope, w)?.as_float()?;
+            let mut range = [0.0f64; 3];
+            for (i, key) in ["min", "max", "step"].iter().enumerate() {
+                if let Some(e) = prop_of(el, key) {
+                    range[i] = eval_expr(e, env, scope, w)?.as_float()?;
+                }
+            }
+            Ok(Element::NumberField {
+                value,
+                min: range[0],
+                max: range[1],
+                step: range[2],
+                placeholder: match prop_of(el, "placeholder") {
+                    Some(p) => eval_text(p, env, scope, w)?,
+                    None => Str::new(),
+                },
+                on_change: prop_of(el, "onChange").map(|a| make_float_listener(a, env)),
+            })
+        }
+        "IntField" => {
+            let v = prop_of(el, "value").ok_or("IntField needs `value:`")?;
+            let value = eval_expr(v, env, scope, w)?.as_int()?;
+            let mut min = 0i64;
+            let mut max = 0i64;
+            let mut step = 1i64;
+            for (key, slot) in [("min", &mut min), ("max", &mut max), ("step", &mut step)] {
+                if let Some(e) = prop_of(el, key) {
+                    *slot = eval_expr(e, env, scope, w)?.as_int()?;
+                }
+            }
+            Ok(Element::IntField {
+                value,
+                min,
+                max,
+                step,
+                placeholder: match prop_of(el, "placeholder") {
+                    Some(p) => eval_text(p, env, scope, w)?,
+                    None => Str::new(),
+                },
+                on_change: prop_of(el, "onChange").map(|a| make_int_value_listener(a, env)),
             })
         }
         other => Err(format!("element `{other}` is not in the engine vocabulary")),

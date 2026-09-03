@@ -541,7 +541,13 @@ impl<'a> Checker<'a> {
         for m in &e.members {
             match m {
                 pixie_syntax::ast::ElementMember::Property { key, value, .. } => {
-                    self.check_element_property(env, parent_class.as_deref(), key, value);
+                    self.check_element_property(
+                        env,
+                        parent_class.as_deref(),
+                        &e.name.name,
+                        key,
+                        value,
+                    );
                 }
                 pixie_syntax::ast::ElementMember::Child(c) => {
                     self.walk_element(env, c);
@@ -568,6 +574,11 @@ impl<'a> Checker<'a> {
         &mut self,
         env: &mut TypeEnv<'_>,
         parent_class: Option<&str>,
+        // The element's own name, for the handful of handler keys
+        // whose implicit argument depends on WHICH widget carries
+        // them (`onChange` is a Float on Slider / NumberField and an
+        // Int on IntField).
+        element: &str,
         key: &str,
         value: &Expr,
     ) {
@@ -593,11 +604,18 @@ impl<'a> Checker<'a> {
             let _ = self.synth(&mut child, value);
             return;
         }
-        // The Slider's `onChange:` binds an implicit `value : Float`
-        // argument (the new value) the same way.
+        // The value controls' `onChange:` binds an implicit `value`
+        // argument (the new value) the same way — a Float on the
+        // Slider and the NumberField, an Int on the IntField, which
+        // is the whole point of having two number fields.
         if key == "onChange" {
             let mut child = env.child();
-            child.bind("value", Type::Prim(Prim::Float));
+            let prim = if element == "IntField" {
+                Prim::Int
+            } else {
+                Prim::Float
+            };
+            child.bind("value", Type::Prim(prim));
             let _ = self.synth(&mut child, value);
             return;
         }

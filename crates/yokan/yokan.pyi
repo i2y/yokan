@@ -177,6 +177,27 @@ def tab_bar(
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
 ) -> Element: ...
+
+# A typed number: `enter` or leaving the field commits, text that is
+# not a number is dropped and the shown value returns to `value`;
+# min/max clamp, step snaps (0 = free). In a headless script
+# `input:<text>` commits.
+def number_field(
+    value: float,
+    min: float = 0.0,
+    max: float = 0.0,
+    step: float = 0.0,
+    placeholder: str = "",
+    on_change: Optional[Callable[[float], Any]] = None,
+) -> Element: ...
+def int_field(
+    value: int,
+    min: int = 0,
+    max: int = 0,
+    step: int = 1,
+    placeholder: str = "",
+    on_change: Optional[Callable[[int], Any]] = None,
+) -> Element: ...
 def spinner(size: float = 0.0) -> Element: ...
 def task(
     work: Callable[[], Any],

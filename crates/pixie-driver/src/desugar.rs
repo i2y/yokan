@@ -319,7 +319,9 @@ fn rewrite_element_member(m: &ElementMember, props: &HashSet<String>) -> Element
                 scoped.remove("checked");
                 rewrite_expr(value, &scoped)
             } else if key == "onChange" {
-                // The Slider's implicit `value` argument, same rule.
+                // The implicit `value` argument of the Slider and the
+                // two number fields, same rule (its TYPE differs per
+                // widget; the name it shadows does not).
                 let mut scoped = props.clone();
                 scoped.remove("value");
                 rewrite_expr(value, &scoped)

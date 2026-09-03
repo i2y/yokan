@@ -355,44 +355,12 @@ pub fn sqlite_query_text_or(path: &str, sql: &str) -> Vec<String> {
 // contained, matching Python's raised-exception abort of the same
 // statement.
 
-/// str(float) — CPython's shortest-round-trip rendering: fixed
-/// notation while the decimal point sits in [-3, 16], scientific
-/// with a two-digit-minimum signed exponent outside, integral
-/// values keep a trailing `.0`.
-pub fn py_float_repr(v: f64) -> String {
-    if v.is_nan() {
-        return "nan".to_string();
-    }
-    if v.is_infinite() {
-        return if v > 0.0 { "inf" } else { "-inf" }.to_string();
-    }
-    let neg = v.is_sign_negative();
-    let a = v.abs();
-    let e = format!("{a:e}"); // shortest digits, e.g. "1.2345e-7"
-    let (mant, exp) = e.split_once('e').expect("Rust {:e} always has an exponent");
-    let exp: i32 = exp.parse().expect("integer exponent");
-    let digits: String = mant.chars().filter(|c| *c != '.').collect();
-    let decpt = exp + 1; // digits before the decimal point
-    let n = digits.len() as i32;
-    let body = if (-3..=16).contains(&decpt) {
-        if decpt <= 0 {
-            format!("0.{}{}", "0".repeat((-decpt) as usize), digits)
-        } else if decpt >= n {
-            format!("{}{}.0", digits, "0".repeat((decpt - n) as usize))
-        } else {
-            format!("{}.{}", &digits[..decpt as usize], &digits[decpt as usize..])
-        }
-    } else {
-        let rest = &digits[1..];
-        let m = if rest.is_empty() {
-            digits[..1].to_string()
-        } else {
-            format!("{}.{}", &digits[..1], rest)
-        };
-        format!("{}e{}{:02}", m, if exp < 0 { '-' } else { '+' }, exp.abs())
-    };
-    if neg { format!("-{body}") } else { body }
-}
+/// str(float) — CPython's shortest-round-trip rendering. The one
+/// implementation lives in the kernel, because a `NumberField` has to
+/// show its bound value with exactly the string an interpolation of
+/// that number produces; this re-export is the name the generated
+/// code calls (`Py.floatRepr`).
+pub use pixie_kernel::py_float_repr;
 
 /// str(bool) — "True"/"False".
 pub fn py_bool_repr(v: bool) -> String {

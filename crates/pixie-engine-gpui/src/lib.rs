@@ -7,11 +7,14 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar.
+//! RadioGroup / TabBar / NumberField / IntField.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
-//! survives rebuilds — positional state transfer, engine-side. Scroll
-//! offsets follow the same rule in a second path-keyed map of gpui
+//! survives rebuilds — positional state transfer, engine-side. The
+//! two number fields are that same editor in numeric mode: `enter`,
+//! an up/down arrow or leaving the field commits the typed text as a
+//! number, and text that is not a number puts the bound value back.
+//! Scroll offsets follow the same rule in a second path-keyed map of gpui
 //! `ScrollHandle`s, which also feeds the draggable scrollbar thumb
 //! every scrolling viewport paints over its far edge. A Select's
 //! open/closed popover flag is a third path-keyed map under the same
@@ -43,7 +46,7 @@ use futures::FutureExt as _;
 use gpui::Asset as _;
 use pixie_kernel::{Component, Element, Handle, List, Runtime, Str, TextListener, World};
 
-use text_input::PixieInput;
+use text_input::{Numeric, PixieInput};
 
 struct Root<C: Component> {
     runtime: Runtime,
@@ -1083,6 +1086,13 @@ fn render_el<C: Component>(
             entity.update(cx, |inp, cx| {
                 inp.on_commit = commit_cb;
                 inp.on_submit = submit_cb;
+                // An editor is reused by PATH, and a path can hold a
+                // NumberField one rebuild and a TextField the next
+                // (an `if` swapping them): clear the numeric mode, or
+                // this field would quietly refuse everything that is
+                // not a number.
+                inp.numeric = None;
+                inp.on_number = None;
                 inp.sync(&v, &p, cx);
             });
             pass.next_id += 1;
@@ -2451,7 +2461,129 @@ fn render_el<C: Component>(
             }
             d.into_any_element()
         }
+        // The two typed number fields are `Element::TextField`'s
+        // editor in numeric mode — one `PixieInput`, keyed by element
+        // path and GC'd by the same pass rule, so caret, selection
+        // and focus survive a rebuild exactly as they do in a text
+        // field. What differs is where a value comes from: the shown
+        // text is the bound number's own spelling, pushed in only
+        // when that number changes (the `sync` rule), and it is
+        // `enter` / an arrow / leaving the field that commits.
+        Element::NumberField {
+            value,
+            min,
+            max,
+            step,
+            placeholder,
+            on_change,
+        } => {
+            let num = Numeric {
+                min: *min,
+                max: *max,
+                step: *step,
+                int: false,
+            };
+            let root = cx.entity().downgrade();
+            let cb = on_change.clone().map(|f| -> text_input::NumberCallback {
+                Rc::new(move |v: f64, cx: &mut App| {
+                    let f = f.clone();
+                    let _ = root.update(cx, move |root, cx| {
+                        root.apply(cx, move |w| f(w, v));
+                    });
+                })
+            });
+            number_field(el, *value, num, placeholder, cb, inputs, pass, slot, sem, cx)
+        }
+        Element::IntField {
+            value,
+            min,
+            max,
+            step,
+            placeholder,
+            on_change,
+        } => {
+            let num = Numeric {
+                min: *min as f64,
+                max: *max as f64,
+                step: *step as f64,
+                int: true,
+            };
+            let root = cx.entity().downgrade();
+            let cb = on_change.clone().map(|f| -> text_input::NumberCallback {
+                Rc::new(move |v: f64, cx: &mut App| {
+                    let f = f.clone();
+                    let n = v as i64;
+                    let _ = root.update(cx, move |root, cx| {
+                        root.apply(cx, move |w| f(w, n));
+                    });
+                })
+            });
+            number_field(
+                el,
+                *value as f64,
+                num,
+                placeholder,
+                cb,
+                inputs,
+                pass,
+                slot,
+                sem,
+                cx,
+            )
+        }
     }
+}
+
+/// The half `NumberField` and `IntField` share: create-or-reuse the
+/// path-keyed editor, put it in numeric mode, push the bound number's
+/// text through `sync`, and wrap it the way a TextField is wrapped
+/// (the editor entity paints the text; the wrapper is what assistive
+/// technology sees).
+#[allow(clippy::too_many_arguments)]
+fn number_field<C: Component>(
+    el: &Element,
+    value: f64,
+    num: Numeric,
+    placeholder: &Str,
+    on_number: Option<text_input::NumberCallback>,
+    inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
+    pass: &mut RenderPass,
+    slot: Slot,
+    sem: Sem<'_>,
+    cx: &mut Context<Root<C>>,
+) -> gpui::AnyElement {
+    let shown = num.show(value);
+    let key = pass.path.clone();
+    let entity = match inputs.get(&key) {
+        Some(e) => e.clone(),
+        None => {
+            let e = cx.new(|cx| PixieInput::new(cx, &shown, placeholder.as_str()));
+            inputs.insert(key.clone(), e.clone());
+            e
+        }
+    };
+    pass.seen.push(key);
+    pass.order.push(entity.clone());
+    let p = placeholder.as_str().to_string();
+    entity.update(cx, |inp, cx| {
+        inp.numeric = Some(num);
+        inp.bound_num = value;
+        inp.on_number = on_number;
+        // The mirror of the TextField arm's reset: this path may have
+        // held a text field last rebuild.
+        inp.on_commit = None;
+        inp.on_submit = None;
+        inp.sync(&shown, &p, cx);
+    });
+    pass.next_id += 1;
+    let wrap = if slot == Slot::Row {
+        div().flex_1().min_w(px(96.))
+    } else {
+        div().w_full()
+    };
+    with_a11y(wrap.id(pass.next_id), el, sem)
+        .child(entity)
+        .into_any_element()
 }
 
 /// The app-wide animation clock — cute_ui's `PaintCtx::elapsedMs()`.

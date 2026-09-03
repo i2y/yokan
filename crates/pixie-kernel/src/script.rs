@@ -93,10 +93,20 @@ fn split_steps(script: &str) -> Vec<String> {
     out
 }
 
-/// The step loop. Steps: `click[@n]:<label>` · `input[@n]:<text>` ·
-/// `submit[@n]` · `slide[@n]:<value>` (the n-th Slider in tree
-/// order, default 0: clamp the value to `[min, max]`, snap it to
-/// the nearest step multiple counted from min, run `onChange`) ·
+/// The step loop. Steps: `click[@n]:<label>` · `input[@n]:<text>`
+/// (the n-th field a person types into — TextField, NumberField and
+/// IntField counted TOGETHER in tree order, default 0, because they
+/// share this verb. On a TextField the text runs `onTextChanged`; on
+/// a numeric field the step COMMITS it, which is what `enter` or
+/// leaving the field does in a window: parse with Python's `float()`
+/// / `int()` rules, clamp, snap, and run `onChange` only when the
+/// result differs from the bound value — text that is not a number
+/// commits nothing) · `submit[@n]` (the same numbering; `onSubmitted`
+/// on a TextField, accepted and inert on a numeric field, so
+/// `input:3,submit` reads naturally) · `slide[@n]:<value>` (the n-th
+/// Slider in tree order, default 0: clamp the value to `[min, max]`,
+/// snap it to the nearest step multiple counted from min, run
+/// `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar — picks the option with exactly this text) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
@@ -217,13 +227,60 @@ pub fn run<C: Component>(
             } else {
                 panic!("unknown script step `{step}`");
             };
-            let (_, change, _) = rt
-                .with(|w| tree.find_text_field(w, n))
-                .unwrap_or_else(|| panic!("no TextField #{n}"));
-            let f = change.unwrap_or_else(|| panic!("TextField #{n} has no onTextChanged"));
-            crate::contain("input handler", || {
-                rt.with(|w: &mut World| f(w, Str::from(text)))
-            });
+            let target = rt
+                .with(|w| tree.find_input(w, n))
+                .unwrap_or_else(|| panic!("no input field #{n}"));
+            match target {
+                crate::InputTarget::Text { on_change, .. } => {
+                    let f = on_change
+                        .unwrap_or_else(|| panic!("TextField #{n} has no onTextChanged"));
+                    crate::contain("input handler", || {
+                        rt.with(|w: &mut World| f(w, Str::from(text)))
+                    });
+                }
+                // A number field COMMITS what was typed, in one step:
+                // a person presses `enter` or leaves the field, and
+                // that runs exactly this — parse, clamp, snap, and
+                // fire only on a real change. Text that is not a
+                // number commits nothing (the field would put the
+                // bound value back on screen, which no dump can see).
+                crate::InputTarget::Number {
+                    value,
+                    min,
+                    max,
+                    step: snap_step,
+                    on_change,
+                } => {
+                    if let Some(v) = crate::parse_float_text(text) {
+                        let v = crate::number_snap(min, max, snap_step, v);
+                        if v != value {
+                            let f = on_change
+                                .unwrap_or_else(|| panic!("NumberField #{n} has no onChange"));
+                            crate::contain("input handler", || {
+                                rt.with(|w: &mut World| f(w, v))
+                            });
+                        }
+                    }
+                }
+                crate::InputTarget::Int {
+                    value,
+                    min,
+                    max,
+                    step: snap_step,
+                    on_change,
+                } => {
+                    if let Some(v) = crate::parse_int_text(text) {
+                        let v = crate::int_snap(min, max, snap_step, v);
+                        if v != value {
+                            let f = on_change
+                                .unwrap_or_else(|| panic!("IntField #{n} has no onChange"));
+                            crate::contain("input handler", || {
+                                rt.with(|w: &mut World| f(w, v))
+                            });
+                        }
+                    }
+                }
+            }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {
                 r.parse()
@@ -233,11 +290,24 @@ pub fn run<C: Component>(
             } else {
                 panic!("unknown script step `{step}`");
             };
-            let (val, _, submit) = rt
-                .with(|w| tree.find_text_field(w, n))
-                .unwrap_or_else(|| panic!("no TextField #{n}"));
-            let f = submit.unwrap_or_else(|| panic!("TextField #{n} has no onSubmitted"));
-            crate::contain("submit handler", || rt.with(|w: &mut World| f(w, val)));
+            let target = rt
+                .with(|w| tree.find_input(w, n))
+                .unwrap_or_else(|| panic!("no input field #{n}"));
+            match target {
+                crate::InputTarget::Text { value, on_submit, .. } => {
+                    let f =
+                        on_submit.unwrap_or_else(|| panic!("TextField #{n} has no onSubmitted"));
+                    crate::contain("submit handler", || {
+                        rt.with(|w: &mut World| f(w, value))
+                    });
+                }
+                // `enter` on a number field commits, and `input:`
+                // already did — so `input:3,submit` reads the way a
+                // person works and means the same thing. Accepted,
+                // does nothing, rather than a step that fails on the
+                // wrong kind of field.
+                crate::InputTarget::Number { .. } | crate::InputTarget::Int { .. } => {}
+            }
         } else if let Some(rest) = step.strip_prefix("slide") {
             let (n, raw) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r

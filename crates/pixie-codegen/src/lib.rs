@@ -4127,6 +4127,22 @@ fn lower_view_int(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError
     }
 }
 
+/// `lower_view_float_prop`'s Int twin (the IntField's `value:`): the
+/// Member arm and nothing else, because a literal could never reflect
+/// state across rebuilds.
+fn lower_view_int_prop(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
+    match &e.kind {
+        ExprKind::Member { .. } => lower_view_int(e, cx, key),
+        _ => err(
+            e.span,
+            format!(
+                "`{key}:` must be an Int property (a literal cannot reflect \
+                 state — bind a store prop or state cell)"
+            ),
+        ),
+    }
+}
+
 /// The optional `width:`/`height:` pair every sized leaf shares, as a
 /// lowered `(width, height)` — `0f64` for an axis the view left unset.
 fn lower_view_size(el: &Element, cx: &ViewCtx) -> Result<(String, String), EmitError> {
@@ -5808,13 +5824,88 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(active, cx, "active")?
             ))
         }
+        // The typed number fields, mirroring Slider: `value:` is
+        // required and must be a property READ, since the field
+        // SHOWS the app's number and a literal could never move.
+        // `min`/`max` default to 0, which means unbounded (a slider
+        // is a range by construction, a typed field is not);
+        // `placeholder:` is TextField's. `onChange:` binds an
+        // implicit `value` carrying the committed number — Float for
+        // NumberField, Int for IntField.
+        "NumberField" => {
+            let value = element_prop(el, "value").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "NumberField needs `value:` (a Float property to reflect)".into(),
+            })?;
+            let value = lower_view_float_prop(value, cx, "value")?;
+            let mut range = Vec::new();
+            for key in ["min", "max", "step"] {
+                range.push(match element_prop(el, key) {
+                    Some(v) => lower_view_float(v, cx, key)?,
+                    None => "0f64".to_string(),
+                });
+            }
+            let placeholder = match element_prop(el, "placeholder") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let on_change = match element_prop(el, "onChange") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onChange", &[("value", "f64")])?
+                ),
+                None => "None".into(),
+            };
+            Ok(format!(
+                "Element::NumberField {{ value: {value}, min: {}, max: {}, step: {}, \
+                 placeholder: {placeholder}, on_change: {on_change} }}",
+                range[0], range[1], range[2]
+            ))
+        }
+        "IntField" => {
+            let value = element_prop(el, "value").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "IntField needs `value:` (an Int property to reflect)".into(),
+            })?;
+            let value = lower_view_int_prop(value, cx, "value")?;
+            let min = match element_prop(el, "min") {
+                Some(v) => lower_view_int(v, cx, "min")?,
+                None => "0i64".to_string(),
+            };
+            let max = match element_prop(el, "max") {
+                Some(v) => lower_view_int(v, cx, "max")?,
+                None => "0i64".to_string(),
+            };
+            // A step of 1 IS every integer, and so is 0 — the default
+            // matches `int_field(step=1)` in the dialect.
+            let step = match element_prop(el, "step") {
+                Some(v) => lower_view_int(v, cx, "step")?,
+                None => "1i64".to_string(),
+            };
+            let placeholder = match element_prop(el, "placeholder") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let on_change = match element_prop(el, "onChange") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onChange", &[("value", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            Ok(format!(
+                "Element::IntField {{ value: {value}, min: {min}, max: {max}, step: {step}, \
+                 placeholder: {placeholder}, on_change: {on_change} }}"
+            ))
+        }
         other => err(
             el.span,
             format!(
                 "element `{other}` is not in the engine vocabulary yet \
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
-                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar), and no \
+                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
+                 NumberField / IntField), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),

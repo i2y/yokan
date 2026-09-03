@@ -1,0 +1,29 @@
+store Order {
+  state qty : Int = 1
+  state price : Float = 0.0
+}
+
+view Main {
+  Column {
+    IntField {
+      value: Order.qty
+      min: 1
+      max: 99
+      placeholder: "qty"
+      onChange: {
+        Order.qty = value
+      }
+    }
+    NumberField {
+      value: Order.price
+      min: 0.0
+      max: 1000.0
+      step: 0.5
+      placeholder: "unit price"
+      onChange: {
+        Order.price = value
+      }
+    }
+    Text { text: "qty #{Order.qty} at #{Order.price:.2f}" }
+  }
+}
