@@ -575,7 +575,9 @@ fn wrap_anim(el: Element, animate: f64, easing: &str, enter: bool, exit: bool) -
     if animate == 0.0 && easing.is_empty() && !enter && !exit {
         return el;
     }
-    let e = pixie_kernel::anim::Easing::parse(easing).unwrap_or(pixie_kernel::anim::Easing::Linear);
+    // The compiled run's default (codegen and interp both fall back to
+    // `Out`); the interpreted run must tween the same way.
+    let e = pixie_kernel::anim::Easing::parse(easing).unwrap_or(pixie_kernel::anim::Easing::Out);
     Element::Anim {
         duration: animate,
         easing: e,
