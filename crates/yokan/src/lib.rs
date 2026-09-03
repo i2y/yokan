@@ -596,6 +596,36 @@ fn wrap_span(el: Element, col_span: i64, row_span: i64) -> Element {
     Element::GridCell { col_span: col_span.max(1), row_span: row_span.max(1), children: vec![el] }
 }
 
+/// The accessibility riders (§8.36), tier-A side: the same
+/// `Element::Semantics` both lowerers wrap `role:`/`label:` into.
+/// INNERMOST of the wrappers — pixie's own `lower_semantics` runs
+/// before `lower_themed`/`lower_anim`, because the accessibility walk
+/// reads the role/name off whatever `Semantics` wraps directly, and a
+/// theme or animation scope between the two would take that with it.
+fn wrap_sem(el: Element, role: &str, label: &str) -> Element {
+    if role.is_empty() && label.is_empty() {
+        return el;
+    }
+    Element::Semantics { role: Str::from(role), label: Str::from(label), children: vec![el] }
+}
+
+/// The tooltip rider, tier-A side, mid-chain (unlike `Reg::tip`,
+/// which is the terminal step for elements that carry no
+/// theme/anim/span of their own): pixie's own `lower_element` runs
+/// `lower_tooltip` right after `lower_semantics` and BEFORE
+/// `lower_themed`/`lower_anim`, so a themed or animated element's
+/// tooltip rides inside that scope/tween, not outside it. `Reg::tip`
+/// applied last (outside `wrap_anim`/`wrap_span`) gets this order
+/// backwards for any element that also animates or spans a grid —
+/// harmless while only one rider was ever set at a time, visible the
+/// moment two are (the a11y demo's tooltip+animate button).
+fn wrap_tip(el: Element, tooltip: &str) -> Element {
+    if tooltip.is_empty() {
+        return el;
+    }
+    Element::Tooltip { text: Str::from(tooltip), children: vec![el] }
+}
+
 fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str> {
     match el {
         // A theme scope wraps exactly one container — the `with`
@@ -610,6 +640,12 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
         // ...and for the tooltip rider: `with column(tooltip="…")`
         // opens the column, not the wrapper.
         Element::Tooltip { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        // ...and for the accessibility rider: `with row(role="…")`
+        // opens the row, not the `Semantics` wrapper `wrap_sem` put
+        // around it.
+        Element::Semantics { children, .. } if children.len() == 1 => {
             set_children(&mut children[0], kids)
         }
         Element::Column { children, .. }
@@ -723,7 +759,7 @@ fn to_list_f64_2(v: Vec<Vec<f64>>) -> List<List<f64>> {
 // ---------------------------------------------------------------------------
 // Element constructors.
 
-#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, bold=false, italic=false, mono=false, underline=false, wrap=String::new(), max_lines=0, width=0.0, background=String::new(), padding=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, tooltip=String::new()))]
+#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, bold=false, italic=false, mono=false, underline=false, wrap=String::new(), max_lines=0, width=0.0, background=String::new(), padding=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn text(
     text: String,
@@ -747,28 +783,37 @@ fn text(
     easing: String,
     enter: bool,
     exit: bool,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, wrap_anim(
-        Element::Text {
-            text: Str::from(text),
-            font_size: size,
-            color: Str::from(color),
-            align: Str::from(align),
-            grow,
-            bold,
-            italic,
-            mono,
-            underline,
-            wrap: Str::from(wrap),
-            max_lines,
-            width,
-            background: Str::from(background),
-            padding,
-            border_radius,
-            border_width,
-            border_color: Str::from(border_color),
-        },
+    Reg::wrap(wrap_anim(
+        wrap_tip(
+            wrap_sem(
+                Element::Text {
+                    text: Str::from(text),
+                    font_size: size,
+                    color: Str::from(color),
+                    align: Str::from(align),
+                    grow,
+                    bold,
+                    italic,
+                    mono,
+                    underline,
+                    wrap: Str::from(wrap),
+                    max_lines,
+                    width,
+                    background: Str::from(background),
+                    padding,
+                    border_radius,
+                    border_width,
+                    border_color: Str::from(border_color),
+                },
+                &role,
+                &a11y_label,
+            ),
+            &tooltip,
+        ),
         animate,
         &easing,
         enter,
@@ -776,7 +821,7 @@ fn text(
     ))
 }
 
-#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, tooltip=String::new()))]
+#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn button(
     label: String,
@@ -799,6 +844,8 @@ fn button(
     exit: bool,
     col_span: i64,
     row_span: i64,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
     let listener: Listener = match on_click {
@@ -812,7 +859,7 @@ fn button(
         }),
         None => Rc::new(|_| {}),
     };
-    Reg::tip(&tooltip, wrap_span(wrap_anim(Element::Button {
+    Reg::wrap(wrap_span(wrap_anim(wrap_tip(wrap_sem(Element::Button {
         label: Str::from(label),
         background: Str::from(background),
         hover_background: Str::from(hover_background),
@@ -827,7 +874,7 @@ fn button(
         border_width,
         border_color: Str::from(border_color),
         on_click: listener,
-    }, animate, &easing, enter, exit), col_span, row_span))
+    }, &role, &a11y_label), &tooltip), animate, &easing, enter, exit), col_span, row_span))
 }
 
 fn text_listener(cb: Py<PyAny>) -> TextListener {
@@ -876,64 +923,76 @@ fn int_listener(cb: Py<PyAny>) -> IntListener {
 
 /// The form controls: value in from state, the handler receives the
 /// NEW value as its one argument (bool / float / int).
-#[pyfunction(signature = (label, checked=false, on_change=None, tooltip=String::new()))]
-fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Checkbox {
+// `a11y_label` rides every OTHER element, but a Checkbox/Switch's own
+// `label` already IS its accessible name (a11y.rs's `name_of`), and
+// pixie's own `lower_semantics` refuses to let `label:` ride on them
+// too (their one `label:` prop slot is already claimed for the
+// visible text). So there is no independent accessible name for a
+// toggle to take — the stub omits `a11y_label` here on purpose, and
+// the translator refuses it too (`_a11y_props(kw, allow_label=False)`)
+// as a clearer error than this signature's own `unexpected keyword`.
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new(), tooltip=String::new()))]
+fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Checkbox {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
-    })
+    }, &role, ""))
 }
 
-#[pyfunction(signature = (label, checked=false, on_change=None, tooltip=String::new()))]
-fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Switch {
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new(), tooltip=String::new()))]
+fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Switch {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
-    })
+    }, &role, ""))
 }
 
-#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, tooltip=String::new()))]
-fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Slider {
+#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Slider {
         value,
         min,
         max,
         step,
         on_change: on_change.map(float_listener),
-    })
+    }, &role, &a11y_label))
 }
 
 fn str_list(v: Vec<String>) -> List<Str> {
     v.into_iter().map(Str::from).collect()
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
-fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Select {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Select {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
-fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::RadioGroup {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::RadioGroup {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (labels=vec![], active=0, on_change=None, tooltip=String::new()))]
-fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::TabBar {
+#[pyfunction(signature = (labels=vec![], active=0, on_change=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::TabBar {
         labels: str_list(labels),
         active,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
 #[pyfunction(signature = (grow=0.0, tooltip=String::new()))]
@@ -1016,7 +1075,8 @@ fn segmented(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, 
     })
 }
 
-#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
+#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
 fn text_field(
     value: String,
     placeholder: String,
@@ -1024,19 +1084,21 @@ fn text_field(
     on_submit: Option<Py<PyAny>>,
     multiline: bool,
     rows: f64,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, Element::TextField {
+    Reg::tip(&tooltip, wrap_sem(Element::TextField {
         value: Str::from(value),
         placeholder: Str::from(placeholder),
         on_change: on_change.map(text_listener),
         on_submit: on_submit.map(text_listener),
         multiline,
         rows,
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, tooltip=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn column(
     children: &Bound<'_, PyTuple>,
@@ -1052,6 +1114,8 @@ fn column(
     easing: String,
     enter: bool,
     exit: bool,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> PyResult<Reg> {
     let el = Element::Column {
@@ -1064,6 +1128,12 @@ fn column(
         border_color: Str::from(border_color),
         children: take_children(children)?,
     };
+    // Innermost first (role:/label: describe the Column itself), then
+    // the tooltip, then the theme scope — the same order pixie's own
+    // `lower_element` applies them in (`lower_semantics`, then
+    // `lower_tooltip`, then `lower_themed`).
+    let el = wrap_sem(el, &role, &a11y_label);
+    let el = wrap_tip(el, &tooltip);
     let el = if theme.is_empty() {
         el
     } else {
@@ -1072,10 +1142,10 @@ fn column(
         // resolution runs in the shared kernel.
         Element::Themed { theme: Str::from(theme), children: vec![el] }
     };
-    Ok(Reg::tip(&tooltip, wrap_anim(el, animate, &easing, enter, exit)))
+    Ok(Reg::wrap(wrap_anim(el, animate, &easing, enter, exit)))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), tooltip=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn row(
     children: &Bound<'_, PyTuple>,
@@ -1086,9 +1156,11 @@ fn row(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::Row {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Row {
         spacing,
         padding,
         background: Str::from(background),
@@ -1097,10 +1169,10 @@ fn row(
         border_width,
         border_color: Str::from(border_color),
         children: take_children(children)?,
-    }))
+    }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, tooltip=String::new()))]
+#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn bar_chart(
     data: Option<Vec<f64>>,
@@ -1113,9 +1185,11 @@ fn bar_chart(
     color: String,
     series: Option<Vec<Vec<f64>>>,
     colors: Option<Vec<String>>,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, Element::BarChart {
+    Reg::tip(&tooltip, wrap_sem(Element::BarChart {
         data: to_list_f64(data.unwrap_or_default()),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -1126,10 +1200,10 @@ fn bar_chart(
         color: Str::from(color),
         series: to_list_f64_2(series.unwrap_or_default()),
         colors: to_list_str(colors.unwrap_or_default()),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, tooltip=String::new()))]
+#[pyfunction(signature = (data=None, labels=None, width=0.0, height=0.0, min=0.0, max=0.0, axis=false, color=String::new(), series=None, colors=None, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn line_chart(
     data: Option<Vec<f64>>,
@@ -1142,9 +1216,11 @@ fn line_chart(
     color: String,
     series: Option<Vec<Vec<f64>>>,
     colors: Option<Vec<String>>,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> Reg {
-    Reg::tip(&tooltip, Element::LineChart {
+    Reg::tip(&tooltip, wrap_sem(Element::LineChart {
         data: to_list_f64(data.unwrap_or_default()),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -1155,55 +1231,55 @@ fn line_chart(
         color: Str::from(color),
         series: to_list_f64_2(series.unwrap_or_default()),
         colors: to_list_str(colors.unwrap_or_default()),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction]
-fn progress(value: f64) -> Reg {
-    Reg::wrap(Element::ProgressBar { value })
+#[pyfunction(signature = (value, role=String::new(), a11y_label=String::new()))]
+fn progress(value: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::ProgressBar { value }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (size=0.0, tooltip=String::new()))]
-fn spinner(size: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Spinner { size })
+#[pyfunction(signature = (size=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn spinner(size: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Spinner { size }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0, tooltip=String::new()))]
-fn image(source: String, width: f64, height: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Image { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn image(source: String, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Image { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0, tooltip=String::new()))]
-fn svg(source: String, width: f64, height: f64, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, Element::Svg { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn svg(source: String, width: f64, height: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::Svg { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, height=0.0, tooltip=String::new()))]
-fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::ScrollView { height, children: take_children(children)? }))
+#[pyfunction(signature = (*children, height=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::ScrollView { height, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, tooltip=String::new()))]
-fn h_scroll_view(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::HScrollView(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn h_scroll_view(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::HScrollView(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, tooltip=String::new()))]
-fn data_table(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::DataTable(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn data_table(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::DataTable(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, open=true, tooltip=String::new()))]
-fn modal(children: &Bound<'_, PyTuple>, open: bool, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::Modal { open, children: take_children(children)? }))
+#[pyfunction(signature = (*children, open=true, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn modal(children: &Bound<'_, PyTuple>, open: bool, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Modal { open, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, tooltip=String::new()))]
-fn stack(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::Stack(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn stack(children: &Bound<'_, PyTuple>, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Stack(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), tooltip=String::new()))]
+#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn grid(
     children: &Bound<'_, PyTuple>,
@@ -1216,9 +1292,11 @@ fn grid(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    role: String,
+    a11y_label: String,
     tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::Grid {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::Grid {
         columns,
         rows,
         spacing,
@@ -1229,16 +1307,17 @@ fn grid(
         border_width,
         border_color: Str::from(border_color),
         children: take_children(children)?,
-    }))
+    }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (child, col_span=1, row_span=1, tooltip=String::new()))]
-fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, tooltip: String) -> PyResult<Reg> {
-    Ok(Reg::tip(&tooltip, Element::GridCell {
+#[pyfunction(signature = (child, col_span=1, row_span=1, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, role: String, a11y_label: String, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, wrap_sem(Element::GridCell {
         col_span,
         row_span,
         children: vec![take_el(child)?],
-    }))
+    }, &role, &a11y_label)))
 }
 
 /// The lazy half of `list_view` and `table`: a kernel row builder
@@ -1284,17 +1363,17 @@ fn py_row_builder(row: Py<PyAny>) -> Rc<dyn Fn(&World, std::ops::Range<usize>) -
 
 /// Virtualized rows: `row(i)` is called only for the visible range
 /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
-#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, tooltip=String::new()))]
-fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, tooltip: String) -> Reg {
+#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, role: String, a11y_label: String, tooltip: String) -> Reg {
     let build = py_row_builder(row);
-    Reg::tip(&tooltip, Element::ListView {
+    Reg::tip(&tooltip, wrap_sem(Element::ListView {
         virtualized,
         item_height,
         height,
         grow,
         children: Vec::new(),
         lazy: Some(LazyRows { len: count, build }),
-    })
+    }, &role, &a11y_label))
 }
 
 /// A virtualized table: the `(count, row)` pair is `list_view`'s —
