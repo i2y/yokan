@@ -1005,6 +1005,17 @@ fn int_field(
     })
 }
 
+/// The fourth chooser: same `options`/`selected` contract as
+/// `select`/`radio_group`, painted as one joined pill group.
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
+fn segmented(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Segmented {
+        options: str_list(options),
+        selected,
+        on_select: on_change.map(int_listener),
+    })
+}
+
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
 fn text_field(
     value: String,
@@ -2396,6 +2407,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(number_field, m)?)?;
     m.add_function(wrap_pyfunction!(int_field, m)?)?;
+    m.add_function(wrap_pyfunction!(segmented, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

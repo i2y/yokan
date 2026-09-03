@@ -111,7 +111,7 @@ fn split_steps(script: &str) -> Vec<String> {
 /// snap it to the nearest step multiple counted from min, run
 /// `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
-/// TabBar / Table, counted together — picks the option with exactly
+/// TabBar / Segmented / Table, counted together — picks the option with exactly
 /// this text; a Table's options are its rows' first cells, so the
 /// step picks a ROW and runs `onSelect` with its index) ·
 /// `click:<column>` on a sorting Table (a header label matches like a
@@ -393,7 +393,7 @@ pub fn run<C: Component>(
             crate::contain("slide handler", || rt.with(|w: &mut World| f(w, v)));
         } else if let Some(rest) = step.strip_prefix("select") {
             // `select:<label>` / `select@n:<label>` — the nth CHOOSER
-            // (Select, RadioGroup, TabBar or Table, counted together
+            // (Select, RadioGroup, TabBar, Segmented or Table, counted together
             // in tree order; default 0) picks the option/label with
             // exactly this text, running `onSelect` with its 0-based
             // index. A Table's options are its rows' first cells, so
@@ -413,7 +413,7 @@ pub fn run<C: Component>(
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar / Table)"));
+                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)

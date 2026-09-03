@@ -7,7 +7,7 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField.
+//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
 //! survives rebuilds — positional state transfer, engine-side. The
@@ -3138,6 +3138,55 @@ fn render_el<C: Component>(
                 sem,
                 cx,
             )
+        }
+        // The joined pill chooser: a rounded surface (theme `surface`)
+        // holding one segment per option, the selected one painted
+        // solid in `accent` with window-colored text (the Checkbox/
+        // Switch "readable on the accent" rule) and the others
+        // hovering like a Button rests on the same surface tone. No
+        // engine-side state — unlike Select's popover, every segment
+        // is always visible, so a dump's `selected` is the whole
+        // story.
+        Element::Segmented {
+            options,
+            selected,
+            on_select,
+        } => {
+            pass.next_id += 1;
+            let mut d = with_a11y(div().id(pass.next_id), el, sem)
+                .flex()
+                .flex_row()
+                .bg(rgb(th.surface))
+                .rounded_full()
+                .p(px(2.))
+                .gap(px(2.));
+            for (i, opt) in options.iter().enumerate() {
+                let f = on_select.clone();
+                pass.next_id += 1;
+                let is_selected = i as i64 == *selected;
+                let mut seg = div()
+                    .id(pass.next_id)
+                    .px_3()
+                    .py_1()
+                    .rounded_full()
+                    .cursor_pointer()
+                    .child(SharedString::from(opt.as_str().to_string()))
+                    .on_click(cx.listener(
+                        move |this: &mut Root<C>, _ev, _window, cx| {
+                            if let Some(f) = f.clone() {
+                                this.apply(cx, move |w| f(w, i as i64));
+                            }
+                        },
+                    ));
+                seg = if is_selected {
+                    seg.bg(rgb(th.accent)).text_color(rgb(th.window_bg))
+                } else {
+                    seg.text_color(rgb(th.text))
+                        .hover(|s| s.bg(rgb(th.surface_hover)))
+                };
+                d = d.child(seg);
+            }
+            d.into_any_element()
         }
     }
 }

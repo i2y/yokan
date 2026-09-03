@@ -619,7 +619,7 @@ impl<'a> Checker<'a> {
             let _ = self.synth(&mut child, value);
             return;
         }
-        // Chooser handlers (Select / RadioGroup / TabBar / Table
+        // Chooser handlers (Select / RadioGroup / TabBar / Segmented / Table
         // `onSelect:`, and the Table's `onSort:`) bind an implicit
         // `index : Int` — the chosen 0-based index (a row's, or the
         // clicked column's).

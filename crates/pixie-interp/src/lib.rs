@@ -2783,6 +2783,19 @@ fn build_element_inner(
                 on_change: prop_of(el, "onChange").map(|a| make_int_value_listener(a, env)),
             })
         }
+        // The fourth chooser, mirroring codegen's standalone
+        // `"Segmented"` arm: same `options:`/`selected:` contract as
+        // Select/RadioGroup, kept separate from their arm so the
+        // fleet's after-TabBar catalog order stays mechanical.
+        "Segmented" => {
+            let o = prop_of(el, "options").ok_or("Segmented needs `options:`")?;
+            let s = prop_of(el, "selected").ok_or("Segmented needs `selected:`")?;
+            Ok(Element::Segmented {
+                options: eval_str_list(o, env, scope, w)?,
+                selected: eval_expr(s, env, scope, w)?.as_int()?,
+                on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
+            })
+        }
         other => Err(format!("element `{other}` is not in the engine vocabulary")),
     }
 }

@@ -202,6 +202,9 @@ pub fn role_of(el: &Element) -> Option<Role> {
         // vocabulary has no numeric role yet, so `textInput` is what
         // it honestly is — with the number as its value, below.
         Element::NumberField { .. } | Element::IntField { .. } => Some(Role::TextInput),
+        // Every segment is always visible and one is always the
+        // current choice — the same shape RadioGroup reports.
+        Element::Segmented { .. } => Some(Role::RadioGroup),
         _ => None,
     }
 }
@@ -232,6 +235,9 @@ pub fn name_of(el: &Element) -> Str {
         Element::NumberField { placeholder, .. } | Element::IntField { placeholder, .. } => {
             placeholder.clone()
         }
+        Element::Segmented {
+            options, selected, ..
+        } => options.get(*selected).unwrap_or_else(Str::new),
         _ => Str::new(),
     }
 }

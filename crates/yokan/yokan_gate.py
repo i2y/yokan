@@ -6856,6 +6856,7 @@ class Translator:
             ("select", "Select", "options", "selected", "options", "selected"),
             ("radio_group", "RadioGroup", "options", "selected", "options", "selected"),
             ("tab_bar", "TabBar", "labels", "active", "labels", "active"),
+            ("segmented", "Segmented", "options", "selected", "options", "selected"),
         ):
             if self._is_ui(node.func, fname):
                 if listkey not in kw:

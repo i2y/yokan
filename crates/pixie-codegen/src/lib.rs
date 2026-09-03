@@ -4434,8 +4434,8 @@ fn lower_view_float_list2(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
 }
 
 /// Lower a `List<String>` property (`labels:` on the charts and
-/// TabBar, `options:` on Select / RadioGroup) to a `List<Str>`
-/// expression. The `List<String>` twin of `lower_view_float_list`;
+/// TabBar, `options:` on Select / RadioGroup / Segmented) to a
+/// `List<Str>` expression. The `List<String>` twin of `lower_view_float_list`;
 /// `key` names the property in the errors (the `lower_view_float`
 /// rule — a mistyped `options:` must not read as `labels:`).
 fn lower_view_str_list(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
@@ -6397,6 +6397,34 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                  placeholder: {placeholder}, on_change: {on_change} }}"
             ))
         }
+        // The fourth chooser: same contract as Select/RadioGroup
+        // (`options:`/`selected:`, not TabBar's `labels:`/`active:`),
+        // painted as a joined pill group instead of a dropdown or a
+        // radio column. A standalone arm rather than folded into the
+        // `"Select" | "RadioGroup"` arm above, so the fleet's
+        // after-TabBar catalog order stays mechanical to merge.
+        "Segmented" => {
+            let options = element_prop(el, "options").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Segmented needs `options:`".into(),
+            })?;
+            let selected = element_prop(el, "selected").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Segmented needs `selected:`".into(),
+            })?;
+            let on_select = match element_prop(el, "onSelect") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSelect", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            Ok(format!(
+                "Element::Segmented {{ options: {}, selected: {}, on_select: {on_select} }}",
+                lower_view_str_list(options, cx, "options")?,
+                lower_view_int(selected, cx, "selected")?
+            ))
+        }
         other => err(
             el.span,
             format!(
@@ -6404,7 +6432,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
                  BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
-                 Spacer / Divider / Link / Table / NumberField / IntField), and no \
+                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),

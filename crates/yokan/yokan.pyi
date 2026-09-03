@@ -288,6 +288,15 @@ def int_field(
     on_change: Optional[Callable[[int], Any]] = None,
     tooltip: str = "",
 ) -> Element: ...
+def segmented(
+    options: Sequence[str] = (),
+    selected: int = 0,
+    on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
+) -> Element:
+    """A row of joined toggle buttons; the handler receives the
+    chosen index."""
+
 def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
 def spacer(grow: float = 0.0, tooltip: str = "") -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""

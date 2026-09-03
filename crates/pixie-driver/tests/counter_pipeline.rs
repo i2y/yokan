@@ -4282,3 +4282,77 @@ fn a_text_carries_typography_wrapping_and_a_box() {
         }
     }
 }
+
+#[test]
+fn segmented_demo_checks_and_emits() {
+    // Segmented is the fourth chooser (Select / RadioGroup / TabBar):
+    // same `options:`/`selected:`/`onSelect` contract, proved with the
+    // same needle shape `choosers_demo_checks_and_emits` uses — a
+    // standalone snippet rather than `examples/choosers/choosers.pix`,
+    // since Segmented lands in its own example (`examples/segmented`).
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = "store App {\n  state levels : List<String> = [\"all\", \"crit\", \"warn\"]\n  \
+               state level : Int = 0\n}\n\nview Main {\n  Column {\n    \
+               Segmented { options: App.levels; selected: App.level; onSelect: { App.level = index } }\n  \
+               }\n}\n";
+    let f = dir.join("segmented_emit.pix");
+    std::fs::write(&f, src).unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        "Element::Segmented { options: w.singleton_ref::<App>().levels(w), \
+         selected: w.singleton_ref::<App>().level(w), on_select: Some(",
+        "move |w: &mut World, index: i64|",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+
+#[test]
+fn segmented_requires_its_props() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let emit_err = |name: &str, src: &str| -> String {
+        let f = dir.join(name);
+        std::fs::write(&f, src).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .expect_err("this chooser must not emit")
+        .message
+    };
+
+    let err = emit_err(
+        "segmented_no_options.pix",
+        "view Main {\n  Column {\n    Segmented { }\n  }\n}\n",
+    );
+    assert!(
+        err.contains("Segmented needs `options:`"),
+        "error should name the missing prop: {err}"
+    );
+
+    let store = "store S {\n  state ns : List<String> = []\n  state i : Int = 0\n}\n\n";
+    let err = emit_err(
+        "segmented_no_selected.pix",
+        &format!("{store}view Main {{\n  Column {{\n    Segmented {{ options: S.ns }}\n  }}\n}}\n"),
+    );
+    assert!(
+        err.contains("Segmented needs `selected:`"),
+        "error should name the missing prop: {err}"
+    );
+}
+
