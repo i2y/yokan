@@ -6119,7 +6119,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 None => "-1i64".into(),
             };
             let descending = match element_prop(el, "descending") {
-                Some(v) => lower_view_bool_keyed(v, cx, "descending")?,
+                Some(v) => lower_view_bool(v, cx, "descending")?,
                 None => "false".into(),
             };
             let on_select = match element_prop(el, "onSelect") {
