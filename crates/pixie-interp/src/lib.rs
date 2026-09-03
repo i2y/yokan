@@ -1553,7 +1553,7 @@ fn single_repeater_of(
                     Some(ExprKind::Element(_))
                 );
             if !one {
-                return Err(VIRTUAL_ROW_RULE.into());
+                return Err(virtual_row_rule(&el.name.name));
             }
             let ExprKind::Element(child) = &body.trailing.as_deref().unwrap().kind else {
                 unreachable!("checked above");
@@ -1569,10 +1569,107 @@ fn single_repeater_of(
     }
 }
 
-/// Both tiers say this, word for word.
-pub(crate) const VIRTUAL_ROW_RULE: &str =
-    "a virtualized ListView builds one element per row, so its `for` body \
-     holds exactly one element — wrap several in a Column";
+/// Both tiers say this, word for word — for whichever element
+/// (ListView, Table) carries the repeater.
+pub(crate) fn virtual_row_rule(el: &str) -> String {
+    format!(
+        "a virtualized {el} builds one element per row, so its `for` body \
+         holds exactly one element — wrap several in a Column"
+    )
+}
+
+/// The `LazyRows` of a virtualized single-repeater body (ListView,
+/// Table): `len` from the list now, rows built on demand for the
+/// requested range with the loop variable (and the index, when
+/// bound) in scope — codegen's `lower_lazy_rows`, interpreted. Row 0
+/// is trial-built so a reload-time validation pass catches bad row
+/// expressions before install.
+fn build_lazy_rows(
+    binding: &str,
+    index: Option<&str>,
+    iter: &Expr,
+    child: &ast::Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<LazyRows, String> {
+    let len = match eval_expr(iter, env, scope, w)? {
+        Value::List(xs) => xs.len(),
+        other => {
+            return Err(format!("`for` needs a List, got {}", other.type_name()));
+        }
+    };
+    let iter_ast = iter.clone();
+    let child_ast = child.clone();
+    let binding_name = binding.to_string();
+    let index_name = index.map(|i| i.to_string());
+    let cenv = env.clone();
+    let outer_vars = scope.vars.clone();
+    let outer_path = scope.row_path.clone();
+    // Trial-build row 0 so a reload-time validation pass
+    // catches bad row expressions before install.
+    if len > 0 {
+        let mut trial = Scope {
+            row_path: {
+                let mut p = outer_path.clone();
+                p.push(0);
+                p
+            },
+            vars: outer_vars.clone(),
+        };
+        if let Value::List(xs) = eval_expr(iter, env, scope, w)? {
+            trial.vars.push((binding_name.clone(), xs[0].clone()));
+            if let Some(ix) = &index_name {
+                trial.vars.push((ix.clone(), Value::Int(0)));
+            }
+            build_element(&child_ast, env, &trial, w)?;
+        }
+    }
+    let build = Rc::new(move |w: &World, range: std::ops::Range<usize>| {
+        let xs = match eval_expr(
+            &iter_ast,
+            &cenv,
+            &Scope {
+                row_path: outer_path.clone(),
+                vars: outer_vars.clone(),
+            },
+            w,
+        ) {
+            Ok(Value::List(xs)) => xs,
+            _ => return Vec::new(),
+        };
+        let mut rows = Vec::new();
+        for i in range {
+            if i >= xs.len() {
+                break;
+            }
+            // The lazy row's own index joins the path, so
+            // per-row state works in a virtualized list —
+            // `prepare` sized the seat from the FULL list
+            // length, not just the visible range (§8.34).
+            let mut row_scope = Scope {
+                row_path: {
+                    let mut p = outer_path.clone();
+                    p.push(i);
+                    p
+                },
+                vars: outer_vars.clone(),
+            };
+            row_scope.vars.push((binding_name.clone(), xs[i].clone()));
+            if let Some(ix) = &index_name {
+                row_scope.vars.push((ix.clone(), Value::Int(i as i64)));
+            }
+            match build_element(&child_ast, &cenv, &row_scope, w) {
+                Ok(e) => rows.push(e),
+                Err(err) => {
+                    eprintln!("pixie reload: lazy row {i}: {err}");
+                }
+            }
+        }
+        rows
+    });
+    Ok(LazyRows { len, build })
+}
 
 /// A string literal's text, when the expr is a plain literal.
 fn str_lit(e: &Expr) -> Option<String> {
@@ -2212,89 +2309,15 @@ fn build_element_inner(
             // clipped-viewport path renders `children`).
             if virtualized {
                 if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
-                let len = match eval_expr(iter, env, scope, w)? {
-                    Value::List(xs) => xs.len(),
-                    other => {
-                        return Err(format!("`for` needs a List, got {}", other.type_name()));
-                    }
-                };
-                let iter_ast = iter.clone();
-                let child_ast = child.clone();
-                let binding_name = binding.to_string();
-                let index_name = index.map(|i| i.to_string());
-                let cenv = env.clone();
-                let outer_vars = scope.vars.clone();
-                let outer_path = scope.row_path.clone();
-                // Trial-build row 0 so a reload-time validation pass
-                // catches bad row expressions before install.
-                if len > 0 {
-                    let mut trial = Scope {
-                        row_path: {
-                            let mut p = outer_path.clone();
-                            p.push(0);
-                            p
-                        },
-                        vars: outer_vars.clone(),
-                    };
-                    if let Value::List(xs) = eval_expr(iter, env, scope, w)? {
-                        trial.vars.push((binding_name.clone(), xs[0].clone()));
-                        if let Some(ix) = &index_name {
-                            trial.vars.push((ix.clone(), Value::Int(0)));
-                        }
-                        build_element(&child_ast, env, &trial, w)?;
-                    }
-                }
-                let build = Rc::new(move |w: &World, range: std::ops::Range<usize>| {
-                    let xs = match eval_expr(
-                        &iter_ast,
-                        &cenv,
-                        &Scope {
-                            row_path: outer_path.clone(),
-                            vars: outer_vars.clone(),
-                        },
-                        w,
-                    ) {
-                        Ok(Value::List(xs)) => xs,
-                        _ => return Vec::new(),
-                    };
-                    let mut rows = Vec::new();
-                    for i in range {
-                        if i >= xs.len() {
-                            break;
-                        }
-                        // The lazy row's own index joins the path, so
-                        // per-row state works in a virtualized list —
-                        // `prepare` sized the seat from the FULL list
-                        // length, not just the visible range (§8.34).
-                        let mut row_scope = Scope {
-                            row_path: {
-                                let mut p = outer_path.clone();
-                                p.push(i);
-                                p
-                            },
-                            vars: outer_vars.clone(),
-                        };
-                        row_scope.vars.push((binding_name.clone(), xs[i].clone()));
-                        if let Some(ix) = &index_name {
-                            row_scope.vars.push((ix.clone(), Value::Int(i as i64)));
-                        }
-                        match build_element(&child_ast, &cenv, &row_scope, w) {
-                            Ok(e) => rows.push(e),
-                            Err(err) => {
-                                eprintln!("pixie reload: lazy row {i}: {err}");
-                            }
-                        }
-                    }
-                    rows
-                });
-                return Ok(Element::ListView {
-                    virtualized,
-                    item_height,
-                    height,
-                    grow,
-                    children: Vec::new(),
-                    lazy: Some(LazyRows { len, build }),
-                });
+                    let lazy = build_lazy_rows(binding, index, iter, child, env, scope, w)?;
+                    return Ok(Element::ListView {
+                        virtualized,
+                        item_height,
+                        height,
+                        grow,
+                        children: Vec::new(),
+                        lazy: Some(lazy),
+                    });
                 }
             }
             Ok(Element::ListView {
@@ -2483,6 +2506,76 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // Mirrors codegen's arm: `columns:` required, the rest with
+        // ListView's "unset" defaults (`-1` = no row / no sorted
+        // column), both handlers binding the implicit `index`, and a
+        // single-repeater body going lazy with no `virtualized:`
+        // switch — a table is always a viewport.
+        "Table" => {
+            let c = prop_of(el, "columns").ok_or("Table needs `columns:`")?;
+            let columns = eval_str_list(c, env, scope, w)?;
+            let widths = match prop_of(el, "widths") {
+                Some(v) => eval_float_list(v, env, scope, w)?,
+                None => List::new(),
+            };
+            let item_height = match prop_of(el, "itemHeight") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let height = match prop_of(el, "height") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let grow = match prop_of(el, "grow") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            let selected = match prop_of(el, "selected") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => -1,
+            };
+            let sort = match prop_of(el, "sort") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => -1,
+            };
+            let descending = match prop_of(el, "descending") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            let on_select = prop_of(el, "onSelect").map(|a| make_int_listener(a, env));
+            let on_sort = prop_of(el, "onSort").map(|a| make_int_listener(a, env));
+            if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
+                let lazy = build_lazy_rows(binding, index, iter, child, env, scope, w)?;
+                return Ok(Element::Table {
+                    columns,
+                    widths,
+                    item_height,
+                    height,
+                    grow,
+                    selected,
+                    sort,
+                    descending,
+                    on_select,
+                    on_sort,
+                    children: Vec::new(),
+                    lazy: Some(lazy),
+                });
+            }
+            Ok(Element::Table {
+                columns,
+                widths,
+                item_height,
+                height,
+                grow,
+                selected,
+                sort,
+                descending,
+                on_select,
+                on_sort,
+                children: build_children(el, env, scope, w)?,
+                lazy: None,
+            })
+        }
         other => Err(format!("element `{other}` is not in the engine vocabulary")),
     }
 }
@@ -2540,6 +2633,18 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
+        "Table" => &[
+            "columns",
+            "widths",
+            "itemHeight",
+            "height",
+            "grow",
+            "selected",
+            "sort",
+            "descending",
+            "onSelect",
+            "onSort",
+        ],
         _ => &[],
     }
 }

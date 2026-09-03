@@ -4417,6 +4417,15 @@ class Translator:
             return f"{code}[{code}.length - {ix.operand.value}]"
         if isinstance(ix, ast.Name) and ix.id in self.nonneg_loop_vars:
             return f"{code}[{ix.id}]"
+        if ctx == "view" and self.row is not None and isinstance(ix, ast.Name) and ix.id == self.row[1]:
+            # A parallel list indexed by the ROW index (`Roster.teams[i]`
+            # in a row builder over `Roster.names`): the index reads
+            # like any other local in the row's text — the row's own
+            # list became the loop variable — and it counts from zero
+            # by construction, so the compiled view subscripts through
+            # the same trapping index a handler's `range()` variable
+            # does.
+            return f"{code}[{self.row[3]}]"
         if ctx != "store" or self.pre_lines is None:
             raise Untranslatable(
                 node,
@@ -6552,42 +6561,9 @@ class Translator:
         if self._is_ui(node.func, "list_view"):
             if len(node.args) != 2:
                 raise Untranslatable(node, "list_view takes the count and the row builder: `list_view(len(items()), row, ...)`")
-            count_cell = None
-            ca = node.args[0]
-            if (
-                isinstance(ca, ast.Call)
-                and isinstance(ca.func, ast.Name)
-                and ca.func.id == "len"
-                and len(ca.args) == 1
-            ):
-                count_cell = self._cell_read(ca.args[0])
-                a0 = ca.args[0]
-                if (
-                    count_cell is None
-                    and isinstance(a0, ast.Attribute)
-                    and isinstance(a0.value, ast.Name)
-                    and a0.value.id in self.stores
-                    and self.stores[a0.value.id]["field_tys"].get(a0.attr, "").startswith("List<")
-                ):
-                    count_cell = ("store", a0.value.id, a0.attr)
-            if count_cell is None or (
-                isinstance(count_cell, str)
-                and not self.cells.get(count_cell, "").startswith("List<")
-            ):
-                raise Untranslatable(ca, "list_view's count is `len()` of a list state or store field")
+            count_cell = self._rows_source(node.args[0], "list_view")
             rf = node.args[1]
-            if isinstance(rf, ast.Name) and rf.id in self.defs:
-                d = self.defs[rf.id]
-                if len(d.args.args) != 1:
-                    raise Untranslatable(rf, "a row builder takes one argument, the row index")
-                rparam = d.args.args[0].arg
-                rbody = d.body
-            elif isinstance(rf, ast.Lambda) and len(rf.args.args) == 1:
-                rparam = rf.args.args[0].arg
-                rbody = [ast.Return(rf.body)]
-            else:
-                raise Untranslatable(rf, "a row builder is a one-argument lambda or a module-level def")
-            loopvar = "it" if "it" not in self.cells else "it_"
+            rparam, rbody = self._row_builder(rf)
             lines = [f"{pad}ListView {{"]
             virt = kw.get("virtualized")
             virt_on = not (
@@ -6603,25 +6579,7 @@ class Translator:
             g = self._num(kw, "grow")
             if g is not None:
                 lines.append(f"{pad}  grow: {g}")
-            iter_src = (
-                f"{count_cell[1]}.{count_cell[2]}"
-                if isinstance(count_cell, tuple)
-                else f"App.{count_cell}"
-            )
-            ixvar = rparam if rparam not in self.cells and rparam != loopvar else f"{rparam}_"
-            lines.append(f"{pad}  for {loopvar}, {ixvar} in {iter_src} {{")
-            prev = self.row
-            self.row = (count_cell, rparam, loopvar, ixvar)
-            try:
-                if len(rbody) == 1 and isinstance(rbody[0], ast.Return):
-                    lines += self.element(rbody[0].value, indent + 2)
-                elif len(rbody) == 1 and isinstance(rbody[0], ast.With):
-                    lines += self.with_element(rbody[0], indent + 2)
-                else:
-                    raise Untranslatable(rf, "a row builder is a single `return text(...)` or one `with` block")
-            finally:
-                self.row = prev
-            lines.append(f"{pad}  }}")
+            lines += self._row_repeater(count_cell, rf, rparam, rbody, pad, indent)
             lines.append(f"{pad}}}")
             return lines
 
@@ -6656,6 +6614,84 @@ class Translator:
             ):
                 return self._list_literal(v, "String")
             raise Untranslatable(v, f"{what} is a list of str literals, or a list[str] state or store-field read")
+
+        if self._is_ui(node.func, "table"):
+            # `table(columns, count, row, ...)`: the count and the row
+            # builder are list_view's pair, the columns a str list;
+            # the three may also come by keyword.
+            spec = {}
+            for name, a in zip(("columns", "count", "row"), node.args):
+                spec[name] = a
+            if len(node.args) > 3:
+                raise Untranslatable(node, 'table takes the columns, the count and the row builder: `table(["a", "b"], len(items()), cells, ...)`')
+            for name in ("columns", "count", "row"):
+                if name not in spec and name in kw:
+                    spec[name] = kw.pop(name)
+                if name not in spec:
+                    raise Untranslatable(node, f"table() needs its {name}: `table(columns, count, row, ...)`")
+            count_cell = self._rows_source(spec["count"], "table")
+            rf = spec["row"]
+            rparam, rbody = self._row_builder(rf)
+
+            def int_read(v, what):
+                if isinstance(v, ast.Constant):
+                    raise Untranslatable(v, f"{what} is an int state or store-field read — a literal could never reflect the selection")
+                return typed_read(v, "Int", what)
+
+            def bool_read(v, what):
+                if isinstance(v, ast.Constant) and type(v.value) is bool:
+                    return "true" if v.value else "false"
+                return typed_read(v, "Bool", what)
+
+            def float_list_read(v, what):
+                c9 = self._cell_read(v)
+                if c9 is not None and self._ty(c9) == "List<Float>":
+                    return f"App.{c9}"
+                if (
+                    isinstance(v, ast.Attribute)
+                    and isinstance(v.value, ast.Name)
+                    and v.value.id in self.stores
+                    and self.stores[v.value.id]["field_tys"].get(v.attr) == "List<Float>"
+                ):
+                    return f"{v.value.id}.{v.attr}"
+                if isinstance(v, ast.List) and all(
+                    isinstance(e, ast.Constant) and type(e.value) in (int, float) for e in v.elts
+                ):
+                    return "[" + ", ".join(repr(float(e.value)) for e in v.elts) + "]"
+                raise Untranslatable(v, f"{what} is a list of number literals, or a list[float] state or store-field read")
+
+            lines = [f"{pad}Table {{"]
+            lines.append(f"{pad}  columns: {list_read(spec['columns'], 'columns=')}")
+            if "widths" in kw:
+                lines.append(f"{pad}  widths: {float_list_read(kw['widths'], 'widths=')}")
+            ih = self._num(kw, "item_height")
+            lines.append(f"{pad}  itemHeight: {ih if ih is not None else 24}")
+            h = self._num(kw, "height")
+            if h is not None:
+                lines.append(f"{pad}  height: {h}")
+            g = self._num(kw, "grow")
+            if g is not None:
+                lines.append(f"{pad}  grow: {g}")
+            if "selected" in kw:
+                lines.append(f"{pad}  selected: {int_read(kw['selected'], 'selected=')}")
+            if "sort" in kw:
+                lines.append(f"{pad}  sort: {int_read(kw['sort'], 'sort=')}")
+            if "descending" in kw:
+                lines.append(f"{pad}  descending: {bool_read(kw['descending'], 'descending=')}")
+            for pykey, prop in (("on_select", "onSelect"), ("on_sort", "onSort")):
+                if pykey in kw:
+                    h9 = self.handler(kw[pykey], takes_text=True, implicit=("index", "Int"))
+                    if isinstance(h9, tuple):
+                        lines += [f"{pad}  {prop}: {{"] + [f"{pad}    {ln}" for ln in h9[1]] + [f"{pad}  }}"]
+                    else:
+                        lines.append(f"{pad}  {prop}: {h9}")
+            known = {"widths", "item_height", "height", "grow", "selected", "sort", "descending", "on_select", "on_sort"}
+            for k in kw:
+                if k not in known:
+                    raise Untranslatable(kw[k], f"table() does not take `{k}=`")
+            lines += self._row_repeater(count_cell, rf, rparam, rbody, pad, indent)
+            lines.append(f"{pad}}}")
+            return lines
 
         for fname, tag in (("checkbox", "Checkbox"), ("switch", "Switch")):
             if self._is_ui(node.func, fname):
@@ -6833,6 +6869,71 @@ class Translator:
             return self._component_use(node, indent)
 
         raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner")
+
+    def _rows_source(self, ca, what):
+        """The list a row-built element (list_view, table) counts with
+        `len(xs)`: a list state's key, or ("store", S, field)."""
+        count_cell = None
+        if (
+            isinstance(ca, ast.Call)
+            and isinstance(ca.func, ast.Name)
+            and ca.func.id == "len"
+            and len(ca.args) == 1
+        ):
+            count_cell = self._cell_read(ca.args[0])
+            a0 = ca.args[0]
+            if (
+                count_cell is None
+                and isinstance(a0, ast.Attribute)
+                and isinstance(a0.value, ast.Name)
+                and a0.value.id in self.stores
+                and self.stores[a0.value.id]["field_tys"].get(a0.attr, "").startswith("List<")
+            ):
+                count_cell = ("store", a0.value.id, a0.attr)
+        if count_cell is None or (
+            isinstance(count_cell, str)
+            and not self.cells.get(count_cell, "").startswith("List<")
+        ):
+            raise Untranslatable(ca, f"{what}'s count is `len()` of a list state or store field")
+        return count_cell
+
+    def _row_builder(self, rf):
+        """The row builder of a row-built element: (its index parameter,
+        its body) — a module-level def or a lambda of one argument."""
+        if isinstance(rf, ast.Name) and rf.id in self.defs:
+            d = self.defs[rf.id]
+            if len(d.args.args) != 1:
+                raise Untranslatable(rf, "a row builder takes one argument, the row index")
+            return d.args.args[0].arg, d.body
+        if isinstance(rf, ast.Lambda) and len(rf.args.args) == 1:
+            return rf.args.args[0].arg, [ast.Return(rf.body)]
+        raise Untranslatable(rf, "a row builder is a one-argument lambda or a module-level def")
+
+    def _row_repeater(self, count_cell, rf, rparam, rbody, pad, indent):
+        """The `for it, i in xs { … }` of a row-built element, the row
+        builder's body lowered in the row's scope: the row itself and
+        its index are the repeater's bindings."""
+        loopvar = "it" if "it" not in self.cells else "it_"
+        iter_src = (
+            f"{count_cell[1]}.{count_cell[2]}"
+            if isinstance(count_cell, tuple)
+            else f"App.{count_cell}"
+        )
+        ixvar = rparam if rparam not in self.cells and rparam != loopvar else f"{rparam}_"
+        lines = [f"{pad}  for {loopvar}, {ixvar} in {iter_src} {{"]
+        prev = self.row
+        self.row = (count_cell, rparam, loopvar, ixvar)
+        try:
+            if len(rbody) == 1 and isinstance(rbody[0], ast.Return):
+                lines += self.element(rbody[0].value, indent + 2)
+            elif len(rbody) == 1 and isinstance(rbody[0], ast.With):
+                lines += self.with_element(rbody[0], indent + 2)
+            else:
+                raise Untranslatable(rf, "a row builder is a single `return text(...)` or one `with` block")
+        finally:
+            self.row = prev
+        lines.append(f"{pad}  }}")
+        return lines
 
     def _num(self, kw, name):
         """A number-valued element property. A literal is written as

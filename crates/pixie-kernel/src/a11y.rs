@@ -190,6 +190,7 @@ pub fn role_of(el: &Element) -> Option<Role> {
         Element::Select { .. } => Some(Role::ComboBox),
         Element::RadioGroup { .. } => Some(Role::RadioGroup),
         Element::TabBar { .. } => Some(Role::TabList),
+        Element::Table { .. } => Some(Role::Table),
         _ => None,
     }
 }
@@ -331,7 +332,8 @@ fn children_of(el: &Element) -> &[Element] {
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
-        | Element::Modal { children, .. } => children,
+        | Element::Modal { children, .. }
+        | Element::Table { children, .. } => children,
         Element::Stack(cs) | Element::HScrollView(cs) | Element::DataTable(cs) => cs,
         _ => &[],
     }

@@ -98,7 +98,11 @@ fn split_steps(script: &str) -> Vec<String> {
 /// order, default 0: clamp the value to `[min, max]`, snap it to
 /// the nearest step multiple counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
-/// TabBar — picks the option with exactly this text) ·
+/// TabBar / Table, counted together — picks the option with exactly
+/// this text; a Table's options are its rows' first cells, so the
+/// step picks a ROW and runs `onSelect` with its index) ·
+/// `click:<column>` on a sorting Table (a header label matches like a
+/// button and runs `onSort` with the column's index) ·
 /// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
 /// `menu:<item>` (pick a menu item by name) ·
 /// `file:<path>` (the answer the next file dialog gets) ·
@@ -313,9 +317,11 @@ pub fn run<C: Component>(
             crate::contain("slide handler", || rt.with(|w: &mut World| f(w, v)));
         } else if let Some(rest) = step.strip_prefix("select") {
             // `select:<label>` / `select@n:<label>` — the nth CHOOSER
-            // (Select, RadioGroup or TabBar, counted together in tree
-            // order; default 0) picks the option/label with exactly
-            // this text, running `onSelect` with its 0-based index.
+            // (Select, RadioGroup, TabBar or Table, counted together
+            // in tree order; default 0) picks the option/label with
+            // exactly this text, running `onSelect` with its 0-based
+            // index. A Table's options are its rows' first cells, so
+            // the index is the row's.
             let (n, label) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
@@ -331,7 +337,7 @@ pub fn run<C: Component>(
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar)"));
+                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar / Table)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)

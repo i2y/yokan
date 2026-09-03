@@ -1261,6 +1261,36 @@ pub enum Element {
         active: i64,
         on_select: Option<IntListener>,
     },
+    /// A virtualized table: a header strip of `columns` over rows laid
+    /// on column tracks. Rows are `Row` elements whose children are the
+    /// cells, one per column (extra cells are ignored, missing ones
+    /// render empty); a row that is not a `Row` spans every track.
+    /// `widths` are flex shares per column (empty = equal). `selected`
+    /// is the tinted row (`-1` = none) and `on_select` receives the
+    /// clicked row's index; `sort` is the column whose header shows the
+    /// ▲/▼ indicator (`-1` = none, `descending` picks which) and
+    /// `on_sort` receives the clicked header's index — the APP owns the
+    /// order and re-sorts its own lists. `item_height` `0.0` lets the
+    /// engine measure the first row, `height` `0.0` is the 320 px
+    /// viewport default for the rows, and `grow` takes a flex share
+    /// instead, exactly as ListView does. `lazy` is ListView's: when
+    /// the body is one `for` repeater the lowerers fill it and the
+    /// engine builds only the visible rows; `dump` and the finders
+    /// materialize them in full.
+    Table {
+        columns: List<Str>,
+        widths: List<f64>,
+        item_height: f64,
+        height: f64,
+        grow: f64,
+        selected: i64,
+        sort: i64,
+        descending: bool,
+        on_select: Option<IntListener>,
+        on_sort: Option<IntListener>,
+        children: Vec<Element>,
+        lazy: Option<LazyRows>,
+    },
 }
 
 /// Clamp `v` into `[min, max]`, then snap it to the nearest `step`
@@ -1776,6 +1806,65 @@ impl Element {
                     labels.iter().map(|l| l.as_str().to_string()).collect();
                 format!("TabBar(active={active})[{}]", inner.join(", "))
             }
+            // The header props first — the columns always, the rest
+            // only when set (ListView's rule) — then the rows, lazy
+            // ones materialized in full exactly as ListView's are.
+            Element::Table {
+                columns,
+                widths,
+                item_height,
+                height,
+                grow,
+                selected,
+                sort,
+                descending,
+                children,
+                lazy,
+                ..
+            } => {
+                let mut inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                if let Some(rows) = lazy {
+                    inner.extend((rows.build)(w, 0..rows.len).iter().map(|c| c.dump(w)));
+                }
+                let cols: Vec<String> = columns.iter().map(|c| c.as_str().to_string()).collect();
+                let mut props = format!("[{}]", cols.join(", "));
+                if !widths.is_empty() {
+                    let ws: Vec<String> = widths.iter().map(|v| format!("{v}")).collect();
+                    props.push_str(&format!(", widths=[{}]", ws.join(", ")));
+                }
+                if *item_height != 0.0 {
+                    props.push_str(&format!(", itemHeight={item_height}"));
+                }
+                if *height != 0.0 {
+                    props.push_str(&format!(", height={height}"));
+                }
+                if *grow != 0.0 {
+                    props.push_str(&format!(", grow={grow}"));
+                }
+                if *selected >= 0 {
+                    props.push_str(&format!(", selected={selected}"));
+                }
+                if *sort >= 0 {
+                    props.push_str(&format!(", sort={sort}"));
+                }
+                if *descending {
+                    props.push_str(", descending=true");
+                }
+                format!("Table({props})[{}]", inner.join(", "))
+            }
+        }
+    }
+
+    /// The text of a table row's first cell — what `select:<text>`
+    /// matches a row by. Through the riders to the `Row`, then through
+    /// the cell's own riders to its `Text`; anything else has no text.
+    fn first_cell_text(&self) -> Str {
+        match self.inner() {
+            Element::Row { children, .. } => match children.first().map(|c| c.inner()) {
+                Some(Element::Text { text, .. }) => text.clone(),
+                _ => Str::new(),
+            },
+            _ => Str::new(),
         }
     }
 
@@ -1863,6 +1952,40 @@ impl Element {
                             .find_map(|c| c.find_button_skip(w, label, skip))
                     })
                 }),
+            // A Table's header labels click like buttons when the
+            // table sorts: the n-th match runs `onSort` with the
+            // column's index. Its rows are walked as ListView's are,
+            // lazy ones materialized, so a button inside a row is
+            // reachable too.
+            Element::Table {
+                columns,
+                on_sort,
+                children,
+                lazy,
+                ..
+            } => {
+                if let Some(f) = on_sort {
+                    for (j, col) in columns.iter().enumerate() {
+                        if col.as_str() == label {
+                            if *skip == 0 {
+                                let f = f.clone();
+                                return Some(Rc::new(move |w: &mut World| f(w, j as i64)));
+                            }
+                            *skip -= 1;
+                        }
+                    }
+                }
+                children
+                    .iter()
+                    .find_map(|c| c.find_button_skip(w, label, skip))
+                    .or_else(|| {
+                        lazy.as_ref().and_then(|rows| {
+                            (rows.build)(w, 0..rows.len)
+                                .iter()
+                                .find_map(|c| c.find_button_skip(w, label, skip))
+                        })
+                    })
+            }
             // Headless scripts must be able to reach a closed dialog's
             // buttons, so the walk ignores `open` (a rendered-visibility
             // flag, not a tree edit).
@@ -1912,7 +2035,8 @@ impl Element {
                 | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
                 // Same as `find_button`: virtualization never hides a
                 // row from document order.
-                Element::ListView { children, lazy, .. } => {
+                Element::ListView { children, lazy, .. }
+                | Element::Table { children, lazy, .. } => {
                     if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
                         return Some(hit);
                     }
@@ -1997,7 +2121,8 @@ impl Element {
             | Element::DataTable(cs) => cs.iter().find_map(|c| c.find_toggle_skip(w, label, skip)),
             // Same relaxations as `find_button`: virtualization and a
             // closed Modal never hide a toggle from a script.
-            Element::ListView { children, lazy, .. } => children
+            Element::ListView { children, lazy, .. }
+            | Element::Table { children, lazy, .. } => children
                 .iter()
                 .find_map(|c| c.find_toggle_skip(w, label, skip))
                 .or_else(|| {
@@ -2057,7 +2182,8 @@ impl Element {
                 | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
                 // Same as `find_button`: virtualization never hides a
                 // row from document order.
-                Element::ListView { children, lazy, .. } => {
+                Element::ListView { children, lazy, .. }
+                | Element::Table { children, lazy, .. } => {
                     if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
                         return Some(hit);
                     }
@@ -2078,9 +2204,10 @@ impl Element {
         let mut seen = 0;
         walk(self, w, &mut seen, n)
     }    /// The n-th chooser in document order (headless-script targeting).
-    /// Select, RadioGroup and TabBar count TOGETHER — they share one
-    /// contract, so `select@n:` numbers them as one family: the
-    /// option/label list and the `onSelect` listener.
+    /// Select, RadioGroup, TabBar and Table count TOGETHER — they share
+    /// one contract, so `select@n:` numbers them as one family: the
+    /// option/label list (a Table's rows by their first cell) and the
+    /// `onSelect` listener.
     #[allow(clippy::type_complexity)]
     pub fn find_chooser(
         &self,
@@ -2126,6 +2253,40 @@ impl Element {
                 // Same as `find_text_field`: virtualization never
                 // hides a row from document order.
                 Element::ListView { children, lazy, .. } => {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                        return Some(hit);
+                    }
+                    lazy.as_ref().and_then(|rows| {
+                        (rows.build)(w, 0..rows.len)
+                            .iter()
+                            .find_map(|c| walk(c, w, seen, n))
+                    })
+                }
+                // A Table is a chooser too: its options are the rows'
+                // first-cell texts and `onSelect` takes the row index,
+                // so `select:<text>` picks the row whose first cell
+                // says exactly that. It counts with the other choosers
+                // in tree order, and its rows (lazy ones materialized)
+                // are then walked for choosers nested in cells.
+                Element::Table {
+                    on_select,
+                    children,
+                    lazy,
+                    ..
+                } => {
+                    if *seen == n {
+                        let mut options: List<Str> = List::new();
+                        for c in children {
+                            options.push(c.first_cell_text());
+                        }
+                        if let Some(rows) = lazy {
+                            for c in (rows.build)(w, 0..rows.len) {
+                                options.push(c.first_cell_text());
+                            }
+                        }
+                        return Some((options, on_select.clone()));
+                    }
+                    *seen += 1;
                     if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
                         return Some(hit);
                     }

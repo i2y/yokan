@@ -239,7 +239,8 @@ fn children_of(el: &mut Element) -> Option<&mut Vec<Element>> {
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
-        | Element::Modal { children, .. } => Some(children),
+        | Element::Modal { children, .. }
+        | Element::Table { children, .. } => Some(children),
         Element::Stack(cs) | Element::HScrollView(cs) | Element::DataTable(cs) => Some(cs),
         _ => None,
     }

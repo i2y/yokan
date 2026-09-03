@@ -601,6 +601,77 @@ fn biglist_demo_checks_and_emits() {
 }
 
 #[test]
+fn roster_demo_checks_and_emits() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/roster/roster.pix"
+    );
+    let outcome = pixie_driver::check_file(Path::new(path)).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        // The Table's header props: a literal column list, literal
+        // width shares (Ints widened), the selection and sort state
+        // read from the store, both handlers binding the implicit
+        // `index: i64` — and the single-repeater body going lazy
+        // through ListView's LazyRows, with the row index bound.
+        "Element::Table {",
+        "columns: { let mut __lit = List::<Str>::new(); __lit.push(",
+        "widths: { let mut __lit = List::<f64>::new(); __lit.push(2f64); __lit.push(1f64); __lit.push(1f64); __lit }",
+        "selected: w.singleton_ref::<Roster>().sel(w)",
+        "sort: w.singleton_ref::<Roster>().sort_col(w)",
+        "descending: w.singleton_ref::<Roster>().desc(w)",
+        "on_sort: Some(Rc::new(move |w: &mut World, index: i64|",
+        "lazy: Some(LazyRows {",
+        "len: w.singleton_ref::<Roster>().names(w).len(),",
+        "let it = __xs.at(__row_idx0 as i64);",
+        "let i = __row_idx0 as i64;",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+#[test]
+fn table_requires_columns_and_one_element_per_row() {
+    let dir = std::env::temp_dir().join("pixie-table-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = "store S {\n  state xs : List<String> = []\n}\n\n";
+    let emit_err = |name: &str, src: String| {
+        let f = dir.join(name);
+        std::fs::write(&f, src).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .expect_err("must not emit")
+            .message
+    };
+    let err = emit_err(
+        "table_no_columns.pix",
+        format!(
+            "{store}view Main {{\n  Column {{\n    Table {{\n      for it in S.xs {{\n        Text {{ text: it }}\n      }}\n    }}\n  }}\n}}\n"
+        ),
+    );
+    assert!(err.contains("Table needs `columns:`"), "unexpected error: {err}");
+    // The repeater rule names the element that carries it.
+    let err = emit_err(
+        "table_two_per_row.pix",
+        format!(
+            "{store}view Main {{\n  Column {{\n    Table {{\n      columns: [\"a\"]\n      for it in S.xs {{\n        Text {{ text: it }}\n        Text {{ text: it }}\n      }}\n    }}\n  }}\n}}\n"
+        ),
+    );
+    assert!(
+        err.contains("a virtualized Table builds one element per row"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn container_properties_are_allowlisted_per_element() {
     let dir = std::env::temp_dir().join("pixie-m0-gate");
     std::fs::create_dir_all(&dir).unwrap();

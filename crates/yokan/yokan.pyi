@@ -200,6 +200,30 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
     tooltip: str = "",
 ) -> Element: ...
+def table(
+    columns: Sequence[str],
+    count: int,
+    row: Callable[[int], Any],
+    widths: Sequence[float] = (),
+    item_height: float = 24.0,
+    height: float = 0.0,
+    grow: float = 0.0,
+    selected: int = -1,
+    on_select: Optional[Callable[[int], Any]] = None,
+    sort: int = -1,
+    descending: bool = False,
+    on_sort: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
+) -> Element:
+    """A virtualized table: `row(i)` builds row i as a `row` of one
+    cell per column, laid on tracks whose shares are `widths`.
+    `on_select` receives the clicked row's index, `on_sort` the
+    clicked header's; the app re-sorts its own lists. In a headless
+    script `select:<first cell>` picks a row and `click:<column>`
+    sorts. The row builder returns its `row(...)` (the compiled run
+    takes that form, or one `with row():` block); `selected` and
+    `sort` are state or store-field reads, since a literal could
+    never reflect the selection."""
 def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
 # The work runs off the UI thread in both runs — a Python thread
 # during development, the engine's pool for the standard-library

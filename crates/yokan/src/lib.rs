@@ -1076,49 +1076,97 @@ fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, tooltip: St
     }))
 }
 
+/// The lazy half of `list_view` and `table`: a kernel row builder
+/// that calls the Python `row(i)` for exactly the range the engine
+/// asks for, with the component path and the per-call counters set
+/// up so component state and `local()` cells inside a row stay keyed
+/// by the row's index.
+fn py_row_builder(row: Py<PyAny>) -> Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>> {
+    Rc::new(move |_w, range| {
+        Python::attach(|py| {
+            range
+                .map(|i| {
+                    let args = match PyTuple::new(py, [i]) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            e.print(py);
+                            return err_text("internal: could not build row args");
+                        }
+                    };
+                    COMP_PATH.with(|p| p.borrow_mut().push(i));
+                    let saved_c = COMP_COUNTER.with(|c| {
+                        let v = c.get();
+                        c.set(0);
+                        v
+                    });
+                    let saved_l = LOCAL_IX.with(|c| {
+                        let v = c.get();
+                        c.set(0);
+                        v
+                    });
+                    let el = invoke_view(py, row.bind(py), args);
+                    COMP_PATH.with(|p| {
+                        p.borrow_mut().pop();
+                    });
+                    COMP_COUNTER.with(|c| c.set(saved_c));
+                    LOCAL_IX.with(|c| c.set(saved_l));
+                    el
+                })
+                .collect()
+        })
+    })
+}
+
 /// Virtualized rows: `row(i)` is called only for the visible range
 /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
 #[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, tooltip=String::new()))]
 fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, tooltip: String) -> Reg {
-    let build: Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>> =
-        Rc::new(move |_w, range| {
-            Python::attach(|py| {
-                range
-                    .map(|i| {
-                        let args = match PyTuple::new(py, [i]) {
-                            Ok(a) => a,
-                            Err(e) => {
-                                e.print(py);
-                                return err_text("internal: could not build row args");
-                            }
-                        };
-                        COMP_PATH.with(|p| p.borrow_mut().push(i));
-                        let saved_c = COMP_COUNTER.with(|c| {
-                            let v = c.get();
-                            c.set(0);
-                            v
-                        });
-                        let saved_l = LOCAL_IX.with(|c| {
-                            let v = c.get();
-                            c.set(0);
-                            v
-                        });
-                        let el = invoke_view(py, row.bind(py), args);
-                        COMP_PATH.with(|p| {
-                            p.borrow_mut().pop();
-                        });
-                        COMP_COUNTER.with(|c| c.set(saved_c));
-                        LOCAL_IX.with(|c| c.set(saved_l));
-                        el
-                    })
-                    .collect()
-            })
-        });
+    let build = py_row_builder(row);
     Reg::tip(&tooltip, Element::ListView {
         virtualized,
         item_height,
         height,
         grow,
+        children: Vec::new(),
+        lazy: Some(LazyRows { len: count, build }),
+    })
+}
+
+/// A virtualized table: the `(count, row)` pair is `list_view`'s —
+/// `row(i)` builds row i on demand as a `row` of one cell per column
+/// — laid on column tracks whose flex shares are `widths` (empty =
+/// equal). `selected` / `sort` are `-1` for none; both handlers
+/// receive an index (the clicked row's, the clicked header's), and
+/// the app re-sorts its own lists.
+#[pyfunction(signature = (columns, count, row, widths=vec![], item_height=24.0, height=0.0, grow=0.0, selected=-1, on_select=None, sort=-1, descending=false, on_sort=None, tooltip=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn table(
+    columns: Vec<String>,
+    count: usize,
+    row: Py<PyAny>,
+    widths: Vec<f64>,
+    item_height: f64,
+    height: f64,
+    grow: f64,
+    selected: i64,
+    on_select: Option<Py<PyAny>>,
+    sort: i64,
+    descending: bool,
+    on_sort: Option<Py<PyAny>>,
+    tooltip: String,
+) -> Reg {
+    let build = py_row_builder(row);
+    Reg::tip(&tooltip, Element::Table {
+        columns: str_list(columns),
+        widths: to_list_f64(widths),
+        item_height,
+        height,
+        grow,
+        selected,
+        sort,
+        descending,
+        on_select: on_select.map(int_listener),
+        on_sort: on_sort.map(int_listener),
         children: Vec::new(),
         lazy: Some(LazyRows { len: count, build }),
     })
@@ -2188,6 +2236,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(radio_group, m)?)?;
     m.add_function(wrap_pyfunction!(tab_bar, m)?)?;
+    m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

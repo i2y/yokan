@@ -1029,6 +1029,62 @@ fn lazy_rows_build_only_the_requested_range() {
 }
 
 #[test]
+fn table_rows_are_lazy_and_picked_by_their_first_cell() {
+    // A single-repeater Table carries LazyRows exactly as a
+    // virtualized ListView does (no `virtualized:` switch — a table
+    // is always a viewport): the closure builds the asked-for window
+    // with the row index bound, the dump renders the header props
+    // and materializes every row, and `find_chooser` offers the rows
+    // by their first cell so `select:<text>` can pick one.
+    let mut w = World::new();
+    let mut items: List<Str> = List::new();
+    for i in 0..50 {
+        items.push(Str::from(format!("item {i}")));
+    }
+    let t = w.insert(Todo { items });
+    let e = FieldEnv {
+        fields: vec![("todo".into(), "Todo".into(), t.erase())],
+    };
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  let todo = Todo()\n  Column {\n    Table {\n      columns: [\"name\", \"n\"]\n      widths: [2.0, 1]\n      selected: 1\n      sort: 0\n      descending: true\n      for it, i in todo.items {\n        Row {\n          Text { text: it }\n          Text { text: \"#{i}\" }\n        }\n      }\n    }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    let Element::Column { children, .. } = &tree else {
+        panic!("root is a Column");
+    };
+    let Element::Table {
+        lazy: Some(rows),
+        children: static_children,
+        widths,
+        ..
+    } = &children[0]
+    else {
+        panic!("a single-repeater Table must carry LazyRows");
+    };
+    assert!(static_children.is_empty());
+    assert_eq!(rows.len, 50);
+    assert_eq!(widths.iter().copied().collect::<Vec<f64>>(), [2.0, 1.0]);
+    let window = (rows.build)(&w, 10..12);
+    let dumps: Vec<String> = window.iter().map(|c| c.dump(&w)).collect();
+    assert_eq!(
+        dumps,
+        ["Row[Text(item 10), Text(10)]", "Row[Text(item 11), Text(11)]"]
+    );
+    let dump = tree.dump(&w);
+    assert!(
+        dump.starts_with(
+            "Column[Table([name, n], widths=[2, 1], selected=1, sort=0, descending=true)[Row[Text(item 0), Text(0)], "
+        ),
+        "dump: {dump}"
+    );
+    assert!(dump.contains("Row[Text(item 49), Text(49)]]]"), "dump: {dump}");
+    let (options, _) = tree.find_chooser(&w, 0).expect("a Table is a chooser");
+    assert_eq!(options.len(), 50);
+    assert_eq!(options.get(7).expect("row 7").as_str(), "item 7");
+}
+
+#[test]
 fn if_in_views_toggles_and_takes_else() {
     // Mirrors codegen: a false bare `if` contributes nothing, an
     // if/else takes exactly one branch, and the condition is strict
