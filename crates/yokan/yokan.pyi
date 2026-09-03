@@ -50,6 +50,7 @@ def text(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    tooltip: str = "",
 ) -> Element: ...
 def button(
     label: str,
@@ -72,12 +73,19 @@ def button(
     exit: bool = False,
     col_span: int = 1,
     row_span: int = 1,
+    tooltip: str = "",
 ) -> Element: ...
 def text_field(
     value: str,
     placeholder: str = "",
     on_change: Optional[Callable[[str], Any]] = None,
     on_submit: Optional[Callable[[str], Any]] = None,
+    # A field that holds paragraphs: it wraps, `enter` writes a
+    # newline instead of submitting, and the caret moves by visual
+    # line. `rows` is how many lines are visible (default 4).
+    multiline: bool = False,
+    rows: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def column(
     *children: Element,
@@ -93,6 +101,7 @@ def column(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    tooltip: str = "",
 ) -> Element: ...
 def row(
     *children: Element,
@@ -103,6 +112,7 @@ def row(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    tooltip: str = "",
 ) -> Element: ...
 def grid(
     *children: Element,
@@ -115,9 +125,10 @@ def grid(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    tooltip: str = "",
 ) -> Element: ...
-def grid_cell(child: Element, col_span: int = 1, row_span: int = 1) -> Element: ...
-def stack(*children: Element) -> Element: ...
+def grid_cell(child: Element, col_span: int = 1, row_span: int = 1, tooltip: str = "") -> Element: ...
+def stack(*children: Element, tooltip: str = "") -> Element: ...
 def list_view(
     count: int,
     row: Callable[[int], Any],
@@ -125,38 +136,43 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
-def scroll_view(*children: Element, height: float = 0.0) -> Element: ...
-def h_scroll_view(*children: Element) -> Element: ...
-def data_table(*children: Element) -> Element:
+def scroll_view(*children: Element, height: float = 0.0, tooltip: str = "") -> Element: ...
+def h_scroll_view(*children: Element, tooltip: str = "") -> Element: ...
+def data_table(*children: Element, tooltip: str = "") -> Element:
     """The first `row` child is the header; later `row` children
     are data rows shaded in alternation. The frame comes with the
     element."""
-def modal(*children: Element, open: bool = True) -> Element: ...
-def image(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
-def svg(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
+def modal(*children: Element, open: bool = True, tooltip: str = "") -> Element: ...
+def image(source: str, width: float = 0.0, height: float = 0.0, tooltip: str = "") -> Element: ...
+def svg(source: str, width: float = 0.0, height: float = 0.0, tooltip: str = "") -> Element: ...
 def bar_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def line_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def progress(value: float) -> Element: ...
 def checkbox(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -164,23 +180,27 @@ def slider(
     max: float = 1.0,
     step: float = 0.0,
     on_change: Optional[Callable[[float], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def select(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def radio_group(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def tab_bar(
     labels: Sequence[str] = (),
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
-def spinner(size: float = 0.0) -> Element: ...
+def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
 # The work runs off the UI thread in both runs — a Python thread
 # during development, the engine's pool for the standard-library
 # calls inside it once compiled. It is the last statement of its
@@ -244,6 +264,9 @@ def on_key(handler: Callable[[str], Any]) -> None: ...
 # name it shows, and the handler it runs. Declaration order is menu
 # order; a headless script picks one with `menu:Save`.
 def menu_item(menu: str, item: str, on_pick: Callable[[], Any]) -> None: ...
+# What happens to a file dragged onto the window: the handler receives
+# its path. A headless script drops one with `drop:<path>`.
+def on_file_drop(handler: Callable[[str], Any]) -> None: ...
 def run(
     view: Callable[..., Any],
     state: Any = None,
@@ -291,6 +314,13 @@ class fs:
     # is not there yet.
     @staticmethod
     def app_dir(name: str) -> str: ...
+    # The platform's own panels. A dialog waits for a person, so it
+    # runs inside `task(...)`; the answer is a path, or "" when the
+    # person cancelled. A headless script answers with `file:<path>`.
+    @staticmethod
+    def open_dialog(title: str = "") -> str: ...
+    @staticmethod
+    def save_dialog(name: str = "") -> str: ...
 
 class sqlite:
     """Bundled sqlite; interpreted and compiled apps run the same

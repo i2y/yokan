@@ -7,6 +7,27 @@
 ハンドラは三つの形で渡せます。
 lambda（複数の操作はタプル `lambda: (a.set(x), b.set(y))`）、モジュールレベルの def、そしてストアのメソッド参照（`on_click=Cart.clear`）です。
 
+デコレータもコンパイルできます。
+デコレートはインポート時に起きるもので、コンパイル済みのアプリはモジュールを実行しません。
+そこでラッパは、デコレートされたハンドラの本体に畳み込まれます。
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+デコレータは引数ひとつの def で、その引数をそのまま返すか、その引数を一度だけ呼ぶラッパを定義して返します。
+自分が引数を取るデコレータ、関数を二度呼ぶラッパ、値として使うラッパは名指しで断られます。
+
 def ハンドラの中身は、if や for などの制御フローごとコンパイルされます。
 
 ```python

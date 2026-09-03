@@ -252,6 +252,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
 - **select / radio_group / tab_bar**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`.
+- **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
+
+Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 

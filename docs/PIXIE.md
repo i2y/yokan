@@ -63,7 +63,7 @@ and the interpreter are stripped from the crate graph entirely
 (13 MB vs 60 MB for the counter demo), behavior byte-identical.
 
 Every built app is scriptable headless:
-`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s"` drives it and prints the element
+`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s,drop:/tmp/x.txt"` drives it and prints the element
 tree, and `PIXIE_TIER=interp` replays the same script through the
 hot-reload interpreter — the two runs must print byte-identical trees,
 which is the project's standing divergence gate.
@@ -153,8 +153,9 @@ Early but real. Working today:
   repeating callback, `fn save @key("cmd-s")` is a shortcut and
   `fn save @menu("File", "Save")` is an item in the application's
   menu bar, all bound the moment the store exists;
-  `fn typed(k: String) @key` sees every key as the chord it was. They
-  fire off the same clock and the same dispatch a window uses, so
+  `fn typed(k: String) @key` sees every key as the chord it was, and
+  `fn opened(p: String) @drop` takes a file dragged onto the window.
+  They fire off the same clock and the same dispatch a window uses, so
   `PIXIE_SCRIPT="advance:1000"`, `PIXIE_SCRIPT="key:cmd-s"` and
   `PIXIE_SCRIPT="menu:Save"` reach exactly what a second, a keystroke
   and a menu pick would.

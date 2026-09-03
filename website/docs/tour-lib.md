@@ -29,6 +29,7 @@ The shipped binary needs no Python.
 Call them from handlers (views stay pure).
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)
+  — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
 - **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
@@ -227,5 +228,7 @@ menu_item("File", "Clear", clear)
 ```
 
 Declaration order is menu order, the window hands the bar to the platform, and a script picks an item by name with `menu:Save`.
+
+`on_file_drop(handler)` is the same kind of declaration for a file dragged onto the window: the handler receives its path, and a script drops one with `drop:<path>`.
 
 

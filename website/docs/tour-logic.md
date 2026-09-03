@@ -7,6 +7,25 @@ The [tour](tour.md) continues: what handlers can do, arithmetic with CPython's m
 Handlers can be passed in three forms:
 a lambda (a tuple for multiple operations, `lambda: (a.set(x), b.set(y))`), a module-level def, and a store's bound method (`on_click=Cart.clear`).
 
+A decorator compiles too. Decoration happens at import and the compiled app never runs the module, so the wrapper is folded into the handler it decorates:
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+The decorator is a def of one argument that either returns that argument or defines a wrapper calling it once.
+A decorator that takes arguments of its own, or calls the function twice, or uses its value, is refused by name.
+
 The body of a def handler compiles with its real control flow.
 
 ```python

@@ -1604,3 +1604,18 @@ pub fn clipboard_set_text(text: &str) -> i64 {
 pub fn clipboard_get_text() -> String {
     pixie_kernel::clipboard::get().as_str().to_string()
 }
+
+
+// ---- file dialogs ---------------------------------------------------
+// A dialog waits for a person, so it belongs inside a task: the call
+// blocks while the window keeps drawing. A headless run answers from
+// the queue a script filled with `file:<path>` steps, so a flow that
+// opens a file is replayed like any other.
+
+pub fn fs_open_dialog(title: &str) -> String {
+    pixie_kernel::dialog::ask(pixie_kernel::dialog::Kind::Open, title)
+}
+
+pub fn fs_save_dialog(name: &str) -> String {
+    pixie_kernel::dialog::ask(pixie_kernel::dialog::Kind::Save, name)
+}

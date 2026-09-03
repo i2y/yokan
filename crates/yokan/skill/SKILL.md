@@ -522,7 +522,17 @@ presses one with `key:cmd+s`.
 
 `menu_item("File", "Save", save)` puts a handler in the application
 menu bar — declaration order is menu order, and a script picks one
-with `menu:Save`.
+with `menu:Save`. `on_file_drop(handler)` takes a file dragged onto
+the window (script: `drop:<path>`), and `fs.open_dialog(title)` /
+`fs.save_dialog(name)` open the platform's panels from inside a
+`task` (script: `file:<path>` answers the next one).
+
+A user decorator is folded into the function it decorates: the
+decorator is a def of one argument that returns it, or a wrapper
+that calls it once. Anything else is refused by name.
+
+`text_field(..., multiline=True, rows=3)` is a field that holds
+paragraphs; every element takes `tooltip="…"`.
 
 ## The window and startup
 
@@ -615,9 +625,10 @@ Same list as the tour's closing section; each is refused by name.
 - Standard library: reading a time back from text, file metadata
   and copy/rename, streaming or binary downloads, nested json
   writing (a value inside a written dict or list is a scalar).
-- Desktop surface: a multi-line text field, file dialogs, tooltips,
-  drag and drop, a second window. Shortcuts, the clipboard and the
-  menu bar are in.
+- A second window: one app, one window (the engine's window root
+  takes a single view, and a headless dump is that one tree).
+- Decorators beyond a plain wrapper: one taking arguments of its
+  own, or whose wrapper calls the function twice or uses its value.
 - At the Rust-crate boundary: payload-carrying enums and methods
   on a twin; enum- or list-typed struct fields.
 - macOS on Apple silicon is the measured platform.

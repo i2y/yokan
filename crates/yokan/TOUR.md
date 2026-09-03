@@ -282,6 +282,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
 - **select / radio_group / tab_bar**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`.
+- **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
+
+Every element also takes `tooltip="…"`: the window shows it when the pointer rests there, and it is in the dump either way, so a verification script sees it.
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 
@@ -289,6 +292,25 @@ Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 
 Handlers can be passed in three forms:
 a lambda (a tuple for multiple operations, `lambda: (a.set(x), b.set(y))`), a module-level def, and a store's bound method (`on_click=Cart.clear`).
+
+A decorator compiles too. Decoration happens at import and the compiled app never runs the module, so the wrapper is folded into the handler it decorates:
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+The decorator is a def of one argument that either returns that argument or defines a wrapper calling it once.
+A decorator that takes arguments of its own, or calls the function twice, or uses its value, is refused by name.
 
 The body of a def handler compiles with its real control flow.
 
@@ -745,6 +767,7 @@ The shipped binary needs no Python.
 Call them from handlers (views stay pure).
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)
+  — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
 - **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
@@ -944,6 +967,8 @@ menu_item("File", "Clear", clear)
 
 Declaration order is menu order, the window hands the bar to the platform, and a script picks an item by name with `menu:Save`.
 
+`on_file_drop(handler)` is the same kind of declaration for a file dragged onto the window: the handler receives its path, and a script drops one with `drop:<path>`.
+
 
 ## Working with type checkers
 
@@ -1064,7 +1089,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In the standard library**: reading a time back from text, file metadata (size, times) and copying or renaming, streaming or binary downloads, and nested json writing (a value inside a written dict or list is a str, int, float or bool).
-- **Desktop surface still to come**: a multi-line text field (the field is one line), file open/save dialogs, tooltips, drag and drop, and a second window. Keyboard shortcuts, the clipboard and the menu bar are in.
+- **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
+- **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused with a named reason.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 

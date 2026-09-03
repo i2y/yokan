@@ -283,6 +283,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
 - **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
+
+どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 
@@ -290,6 +293,27 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 
 ハンドラは三つの形で渡せます。
 lambda（複数の操作はタプル `lambda: (a.set(x), b.set(y))`）、モジュールレベルの def、そしてストアのメソッド参照（`on_click=Cart.clear`）です。
+
+デコレータもコンパイルできます。
+デコレートはインポート時に起きるもので、コンパイル済みのアプリはモジュールを実行しません。
+そこでラッパは、デコレートされたハンドラの本体に畳み込まれます。
+
+```python
+def announced(f):
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
+
+@announced
+def save():
+    fs.write_text(path, body())
+```
+
+デコレータは引数ひとつの def で、その引数をそのまま返すか、その引数を一度だけ呼ぶラッパを定義して返します。
+自分が引数を取るデコレータ、関数を二度呼ぶラッパ、値として使うラッパは名指しで断られます。
 
 def ハンドラの中身は、if や for などの制御フローごとコンパイルされます。
 
@@ -745,6 +769,7 @@ except Exception as e:
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
 - **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
+  それと、プラットフォーム自身のパネルである `open_dialog(title)` と `save_dialog(name)`。返るのはパスで、取り消されたときは `""` です。ダイアログは人を待つので `task(...)` の中で呼びます。検証スクリプトは `file:<path>` で答えます。
 - **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
 - **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
 - **math**：`sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
@@ -937,6 +962,9 @@ menu_item("File", "Clear", clear)
 宣言した順がメニューの順で、ウィンドウはこのバーをプラットフォームに渡します。
 スクリプトからは `menu:Save` のように名前で選びます。
 
+ウィンドウに落とされたファイルも同じ形で宣言します。
+`on_file_drop(handler)` のハンドラがパスを受け取り、スクリプトは `drop:<path>` で落とします。
+
 ## 型チェッカーとの併用
 
 yokan は型スタブを同梱しているので、pyright（VS Code の Pylance）によるチェックがそのまま働きます。
@@ -1058,7 +1086,8 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
 - **標準ライブラリでは**：文字列から時刻を読み戻すこと、ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード、入れ子の json の書き出し（書き出す dict やリストの中の値は str、int、float、bool のいずれか）。
-- **デスクトップまわりでこれからのもの**：複数行のテキストフィールド（今のフィールドは一行）、ファイルの開く・保存ダイアログ、ツールチップ、ドラッグ＆ドロップ、二つめのウィンドウ。キーボードショートカット、クリップボード、メニューバーは入っています。
+- **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
+- **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。
 - **Rust crate の境界で、ペイロード付き enum と、双子へのメソッドは、まだ越えられない。** スカラ、String、List、Optional、str キーの辞書、構造体（入れ子・幅付きフィールド込み）、enum、Result（複合型の返りも）までは越えます。残る二つの前提: ペイロード enum は rpi-gen 自体の残件、メソッドは rpi 宣言済み struct への実装接合。構造体のフィールドに enum やリストを置く形もまだで、どれも呼ぶと理由を名指しして断られます。
 - 実測値はすべて macOS/arm64 のものです。ほかのプラットフォームはまだ測っていません。
 

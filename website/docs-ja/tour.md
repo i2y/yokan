@@ -253,6 +253,9 @@ tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 - **checkbox / switch**：ラベルと `checked=`。ハンドラは新しい bool を受け取ります。検証スクリプトでは `click:<ラベル>` がトグルです。
 - **slider**：`value=` と `min=` / `max=` / `step=`。ハンドラは新しい float。スクリプトは `slide:<値>`（範囲に収め、step に吸着）。
 - **select / radio_group / tab_bar**：選択肢のリストと現在位置。ハンドラは選ばれた**インデックス**。スクリプトは `select:<ラベル>`。
+- **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
+
+どの要素も `tooltip="…"` を取ります。ポインタを置いたときにウィンドウが表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 

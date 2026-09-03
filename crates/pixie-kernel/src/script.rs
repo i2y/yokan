@@ -101,6 +101,8 @@ fn split_steps(script: &str) -> Vec<String> {
 /// TabBar — picks the option with exactly this text) ·
 /// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
 /// `menu:<item>` (pick a menu item by name) ·
+/// `file:<path>` (the answer the next file dialog gets) ·
+/// `drop:<path>` (a file dragged onto the window) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -245,6 +247,20 @@ pub fn run<C: Component>(
             if !matches!(fired, Some(true)) {
                 panic!("no shortcut or key handler for `{chord}`");
             }
+        } else if let Some(path) = step.strip_prefix("drop:") {
+            // A file dragged onto the window. The drag is the
+            // platform's; what the app does with the path is the
+            // app's, and that is the part a script checks.
+            let took = crate::contain("drop handler", || {
+                rt.with(|w: &mut World| crate::drop::fire(w, path))
+            });
+            if !matches!(took, Some(true)) {
+                panic!("nothing takes a dropped file (`on_file_drop`)");
+            }
+        } else if let Some(path) = step.strip_prefix("file:") {
+            // The answer the next file dialog gets. A headless run has
+            // no person to pick a file, so the script is the person.
+            crate::dialog::push_answer(path);
         } else if let Some(name) = step.strip_prefix("menu:") {
             // Pick a menu item by the name it shows. Nothing under
             // that name is a script's typo, the way a missing button

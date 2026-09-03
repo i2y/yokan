@@ -25,6 +25,7 @@ gate table   python3 yokan_gate.py gate demo/table.py --script "click:refresh,du
 gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
 gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
 gate keys    python3 yokan_gate.py gate demo/keys.py --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
+gate picker  python3 yokan_gate.py gate demo/picker.py --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
 gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
@@ -46,7 +47,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys) continue;;
+    stdlib|files|webfetch|ledger|keys|picker) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac

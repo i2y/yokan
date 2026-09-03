@@ -6,6 +6,11 @@ for-over-range and for-over-list with break/continue, and a pure
 helper fn that lowers to a native free fn (not an escape — the
 computation itself compiles). Locals are block-scoped natively, so
 the translator refuses reads that Python would leak.
+
+A decorator compiles too: decoration happens at import and the
+compiled app never runs the module, so the wrapper is folded into
+the handler it decorates. Both runs then do the same thing — which
+is what the gate compares.
 """
 import os
 import sys
@@ -21,6 +26,18 @@ status: State[str] = State("start")
 
 def double(v: int) -> int:
     return v * 2
+
+
+def announced(f):
+    """A wrapper around the handler: it says what it is doing, runs
+    the handler, and says it is done."""
+
+    def wrapper():
+        status.set("working")
+        f()
+        status.set("done")
+
+    return wrapper
 
 
 def step():
@@ -41,6 +58,7 @@ def tally():
         total.set(total() + double(i))
 
 
+@announced
 def bump3():
     while count() < 3:
         count.set(count() + 1)

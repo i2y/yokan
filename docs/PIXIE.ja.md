@@ -61,7 +61,7 @@ cargo run -q -p pixie-cli -- build examples/counter/counter.pix --run
 60 MB → 13 MB)、挙動はバイト単位で同一です。
 
 ビルドしたアプリはすべてヘッドレスでスクリプト実行できます:
-`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s"` で操作を再生してエレメントツリーを
+`PIXIE_SCRIPT="input:Ada,click:save,key:cmd-s,drop:/tmp/x.txt"` で操作を再生してエレメントツリーを
 出力し、`PIXIE_TIER=interp` は同じスクリプトをホットリロード用
 インタプリタで再実行します — 両者の出力はバイト単位で一致しなければ
 ならず、これがこのプロジェクト常設の分岐ゲートです。
@@ -147,7 +147,8 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   コールバック、`fn save @key("cmd-s")` はショートカット、
   `fn save @menu("File", "Save")` はアプリケーションのメニューバーの
   項目で、どれも store ができた時点で結び付きます。
-  `fn typed(k: String) @key` はすべてのキーをコードの形で受け取ります。
+  `fn typed(k: String) @key` はすべてのキーをコードの形で受け取り、
+  `fn opened(p: String) @drop` はウィンドウに落とされたファイルを受け取ります。
   発火する時計も配送の経路もウィンドウと同じなので、
   `PIXIE_SCRIPT="advance:1000"`、`PIXIE_SCRIPT="key:cmd-s"`、
   `PIXIE_SCRIPT="menu:Save"` は、一秒とひと押しとメニュー選択がする
