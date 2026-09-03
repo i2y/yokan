@@ -12,7 +12,9 @@ from typing import (
     Optional,
     ParamSpec,
     Sequence,
+    TypedDict,
     TypeVar,
+    Unpack,
     dataclass_transform,
     overload,
 )
@@ -39,6 +41,59 @@ class State(Generic[T]):
     def __setitem__(self: "State[list[V]]", key: int, value: V) -> None: ...
     def __iadd__(self, other: Any) -> "State[T]": ...
     def __isub__(self, other: Any) -> "State[T]": ...
+
+# The riders: the cross-cutting keyword arguments EVERY element takes.
+# Each one is a wrapper around the element, not a property of it, so
+# the same spelling works on a text, a button or a whole column — and
+# the two runs build the same tree, which is what the build checks.
+class OwnLabelRiders(TypedDict, total=False):
+    """Every rider except `a11y_label` — the set for an element whose
+    own `label` is already its accessible name (checkbox, switch,
+    progress)."""
+
+    # TODO(riders): the sizing riders and `disabled` join the table
+    # once the substrate carries them:
+    # width: float
+    # height: float
+    # min_width: float
+    # max_width: float
+    # disabled: bool
+
+    # The palette this element's subtree resolves its color tokens in:
+    # "light", "dark", or a str state/field read, so a view can offer a
+    # theme switcher.
+    theme: str
+    # Tween this element's appearance over `animate` milliseconds;
+    # `easing` is one of "linear", "in", "out", "inOut" (default
+    # "out"), and `enter` / `exit` fade it in when it appears and out
+    # when it goes. A script's `advance:<ms>` steps through the frames.
+    animate: float
+    easing: str
+    enter: bool
+    exit: bool
+    # How many grid tracks this element covers when its parent is a
+    # `grid`; inert in a column or a row.
+    col_span: int
+    row_span: int
+    # `role` overrides the role the element derives (a screen reader's
+    # "button" / "list" / …). A literal must be one of pixie's
+    # vocabulary (button, label, heading, textInput, image, list,
+    # listItem, table, dialog, progress, slider, group, checkbox,
+    # switch, comboBox, radioGroup, tabList); a state/store-field read
+    # is resolved at run time instead, and falls back to the derived
+    # role when it does not name one of these. `a11y` in a `_headless`
+    # script prints the resulting tree.
+    role: str
+    # A line the window shows when the pointer rests on the element,
+    # and a dumped property either way.
+    tooltip: str
+
+class Riders(OwnLabelRiders, total=False):
+    """Every rider an element takes."""
+
+    # The name assistive technology reads instead of the one the
+    # element would otherwise derive.
+    a11y_label: str
 
 # `bold` / `italic` / `mono` / `underline` are the typography flags;
 # `mono` asks for a monospace family. `wrap` is "" (wrap at the
@@ -67,23 +122,7 @@ def text(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    animate: float = 0.0,
-    easing: str = "",
-    enter: bool = False,
-    exit: bool = False,
-    # Accessibility riders, on every element: `role` overrides the
-    # role the element derives (a screen reader's "button" / "list" /
-    # …); `a11y_label` is the name assistive technology reads instead
-    # of what the element would otherwise derive. A literal `role`
-    # must be one of pixie's vocabulary (button, label, heading,
-    # textInput, image, list, listItem, table, dialog, progress,
-    # slider, group, checkbox, switch, comboBox, radioGroup, tabList);
-    # a state/store-field read is resolved at run time instead, and
-    # falls back to the derived role when it does not name one of
-    # these. `a11y` in a `_headless` script prints the resulting tree.
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def button(
     label: str,
@@ -100,15 +139,7 @@ def button(
     border_width: float = 0.0,
     border_color: str = "",
     basis: float = 0.0,
-    animate: float = 0.0,
-    easing: str = "",
-    enter: bool = False,
-    exit: bool = False,
-    col_span: int = 1,
-    row_span: int = 1,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def text_field(
     value: str,
@@ -120,9 +151,7 @@ def text_field(
     # line. `rows` is how many lines are visible (default 4).
     multiline: bool = False,
     rows: float = 0.0,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def column(
     *children: Element,
@@ -133,14 +162,7 @@ def column(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    theme: str = "",
-    animate: float = 0.0,
-    easing: str = "",
-    enter: bool = False,
-    exit: bool = False,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def row(
     *children: Element,
@@ -151,9 +173,7 @@ def row(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def grid(
     *children: Element,
@@ -166,19 +186,12 @@ def grid(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
-def grid_cell(
-    child: Element,
-    col_span: int = 1,
-    row_span: int = 1,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
-) -> Element: ...
-def stack(*children: Element, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element: ...
+def grid_cell(child: Element, **riders: Unpack[Riders]) -> Element:
+    """The span rider written out: `grid_cell(child, col_span=2)` and
+    `col_span=2` on the child itself are the same tree."""
+def stack(*children: Element, **riders: Unpack[Riders]) -> Element: ...
 def list_view(
     count: int,
     row: Callable[[int], Any],
@@ -186,36 +199,30 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def scroll_view(
-    *children: Element, height: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = ""
+    *children: Element, height: float = 0.0, **riders: Unpack[Riders]
 ) -> Element: ...
-def h_scroll_view(*children: Element, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element: ...
-def data_table(*children: Element, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
+def h_scroll_view(*children: Element, **riders: Unpack[Riders]) -> Element: ...
+def data_table(*children: Element, **riders: Unpack[Riders]) -> Element:
     """The first `row` child is the header; later `row` children
     are data rows shaded in alternation. The frame comes with the
     element."""
 def modal(
-    *children: Element, open: bool = True, role: str = "", a11y_label: str = "", tooltip: str = ""
+    *children: Element, open: bool = True, **riders: Unpack[Riders]
 ) -> Element: ...
 def image(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def svg(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 # min/max pin the range (0/0 = from the data, which may be negative —
 # the zero line is the baseline); `axis` draws tick labels and
@@ -232,9 +239,7 @@ def bar_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def line_chart(
     data: Sequence[float] = (),
@@ -247,19 +252,17 @@ def line_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def progress(
     value: float,
     width: float = 0.0,
     height: float = 0.0,
+    # The caption above the track, which is also this element's
+    # accessible name — so `a11y_label` is deliberately absent here.
     label: str = "",
     indeterminate: bool = False,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[OwnLabelRiders],
 ) -> Element:
     """A track filled to `value` (0..1); `indeterminate=True` sweeps
     instead, for work with no known length."""
@@ -267,18 +270,16 @@ def checkbox(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
-    role: str = "",
     # `label` is ALREADY this toggle's accessible name (pixie derives
     # it from the same visible text) — the dialect has no way to give
     # it a different one, so a11y_label is deliberately absent here.
-    tooltip: str = "",
+    **riders: Unpack[OwnLabelRiders],
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
-    role: str = "",
-    tooltip: str = "",
+    **riders: Unpack[OwnLabelRiders],
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -286,36 +287,28 @@ def slider(
     max: float = 1.0,
     step: float = 0.0,
     on_change: Optional[Callable[[float], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def select(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def radio_group(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def tab_bar(
     labels: Sequence[str] = (),
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
-def spinner(size: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element: ...
-def link(label: str, url: str, size: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
+def spinner(size: float = 0.0, **riders: Unpack[Riders]) -> Element: ...
+def link(label: str, url: str, size: float = 0.0, **riders: Unpack[Riders]) -> Element:
     """Text that opens `url` in the browser when clicked; a headless
     run records the click and opens nothing."""
 def table(
@@ -331,9 +324,7 @@ def table(
     sort: int = -1,
     descending: bool = False,
     on_sort: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element:
     """A virtualized table: `row(i)` builds row i as a `row` of one
     cell per column, laid on tracks whose shares are `widths`.
@@ -356,9 +347,7 @@ def number_field(
     step: float = 0.0,
     placeholder: str = "",
     on_change: Optional[Callable[[float], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def int_field(
     value: int,
@@ -367,25 +356,21 @@ def int_field(
     step: int = 1,
     placeholder: str = "",
     on_change: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element: ...
 def segmented(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    role: str = "",
-    a11y_label: str = "",
-    tooltip: str = "",
+    **riders: Unpack[Riders],
 ) -> Element:
     """A row of joined toggle buttons; the handler receives the
     chosen index."""
 
-def spacer(grow: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
+def spacer(grow: float = 0.0, **riders: Unpack[Riders]) -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""
 
-def divider(color: str = "", thickness: float = 0.0, role: str = "", a11y_label: str = "", tooltip: str = "") -> Element:
+def divider(color: str = "", thickness: float = 0.0, **riders: Unpack[Riders]) -> Element:
     """A rule across the parent: horizontal in a column, vertical in a row."""
 
 # The work runs off the UI thread in both runs — a Python thread
