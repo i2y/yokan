@@ -36,8 +36,8 @@ gate badges  python3 yokan_gate.py gate demo/badges.py --script "click:flip,dump
 gate quantities python3 yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
 gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,click:next month"
 gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
-# Wave 2a: every rider on every element; the middle steps are inert while locked.
-gate riders  python3 yokan_gate.py gate demo/riders.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+# The shared properties on every element; the middle steps are inert while locked.
+gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
@@ -61,7 +61,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
-    riders) continue;;
+    shared) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac

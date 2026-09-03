@@ -1,21 +1,21 @@
 # /// script
 # requires-python = ">=3.14"
 # ///
-"""The riders: the cross-cutting keyword arguments EVERY element
-takes. `width=`/`min_width=` put a box around one, `disabled=` dims
-it and stops taking its clicks, `theme=` scopes a palette over a
-subtree, `animate=`/`easing=` tween what changes, `col_span=` places
-an element on a grid's tracks, `role=` names it for assistive
-technology and `tooltip=` is the line the window shows under the
-pointer. None of them belongs to any one element: each is a wrapper
-the compiler puts around whatever it is written on, so the same
-spelling works on a spacer, a segmented chooser, a field, a link or
-a rule — and both runs build the same tree, which is what the gate
-compares. Locking proves it: while `locked` is true the save button
-and the field are inert, in the window and in a script alike.
+"""The shared properties: the keyword arguments EVERY element takes,
+under the same names and with the same meaning. `width=`/`min_width=`
+size an element, `disabled=` dims it and stops taking its clicks,
+`theme=` scopes a palette over a subtree, `animate=`/`easing=` tween
+what changes, `col_span=` places an element on a grid's tracks,
+`role=` names it for assistive technology and `tooltip=` is the line
+the window shows under the pointer. None of them belongs to any one
+element, so the same spelling works on a spacer, a segmented chooser,
+a field, a link or a rule — and both runs build the same tree, which
+is what the gate compares. Locking proves it: while `locked` is true
+the save button and the field are inert, in the window and in a
+script alike.
 
-Develop:  uv run demo/riders.py
-Ship:     python3 yokan_gate.py gate demo/riders.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+Develop:  uv run demo/shared.py
+Ship:     python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 """
 import os
 import sys
@@ -43,7 +43,7 @@ class Locks:
     locked: bool = False
     saves: int = 0
     # The palette the spacer's subtree resolves its tokens in — a
-    # rider takes a read, not just a literal, so the lock switches it.
+    # property takes a read, not just a literal, so the lock switches it.
     mode: str = "dark"
     tab: int = 0
     note: str = "draft"
@@ -67,10 +67,10 @@ class Locks:
 
 def view():
     with column(spacing=10, padding=14):
-        text("riders", size=20, role="heading")
+        text("shared", size=20, role="heading")
         with row(spacing=8):
             text(f"mode: {Locks.mode}  saves: {Locks.saves}", size=12)
-            # A theme scope on a spacer: the rider is the element's,
+            # A theme scope on a spacer: the property is the element's,
             # whichever element it is.
             spacer(grow=1.0, theme=Locks.mode)
             button("lock", on_click=Locks.flip, tooltip="flip the lock")
@@ -95,8 +95,8 @@ def view():
                 )
             button("save", on_click=Locks.save, disabled=Locks.locked, tooltip="count a save")
         link("Docs", "https://i2y.github.io/yokan/", role="button")
-        divider(tooltip="the end of the riders")
+        divider(tooltip="the end of the shared properties")
 
 
 if __name__ == "__main__":
-    run(view, title="riders")
+    run(view, title="shared")

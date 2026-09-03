@@ -128,11 +128,11 @@ the initial state, right after launch.
 #### roster — table: a virtualized table with column tracks, row selection and header sort (the app re-sorts its own lists)
 <img src="screenshots/roster.png" width="360">
 
-#### labels — the accessibility riders `role=` and `a11y_label=`, printed by a script's `a11y` step
+#### labels — the accessibility properties `role=` and `a11y_label=`, printed by a script's `a11y` step
 <img src="screenshots/labels.png" width="360">
 
-#### riders — every rider on an element that could not take it before: a themed spacer, an animated segmented, a field spanning two grid tracks, a link with a role, a divider with a tooltip, a disabled button and field, a sized column
-<img src="screenshots/riders.png" width="360">
+#### shared — the shared properties on elements that could not take them before: a themed spacer, an animated segmented, a field spanning two grid tracks, a link with a role, a divider with a tooltip, a disabled button and field, a sized column
+<img src="screenshots/shared.png" width="360">
 
 ## The standard library
 

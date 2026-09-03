@@ -256,7 +256,7 @@ re-sorts its own lists. Charts take `min=` / `max=`, `axis=True`,
 `series=` (a `list[list[float]]` field) with `colors=`; negatives hang
 below the zero line. `progress(value)` takes `width=` / `height=`,
 `label=` and `indeterminate=True`. Every element takes the same
-riders: `tooltip=`, `role=` / `a11y_label=` (not on checkbox, switch
+shared properties: `tooltip=`, `role=` / `a11y_label=` (not on checkbox, switch
 or progress, which are named by their own label), `disabled=` (dimmed
 and inert, in the window and in scripts), `width=` / `height=` /
 `min_width=` / `max_width=` (an element with its own `width=` /
