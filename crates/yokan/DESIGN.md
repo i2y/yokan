@@ -722,3 +722,72 @@ gpui menu items carry an ACTION, and an action is a type, so a bar
 whose items are only known at run time needs one action type that
 carries which item it was. That is the whole of the engine side: one
 `MenuCommand { index }`, dispatched on the root.
+
+
+## A decorator is folded in, not ignored
+
+A user decorator used to pass through the translator unread: the
+compiled app ran the bare function while the development app ran the
+wrapper, and only the gate would have caught it. Refusing it by name
+was the small fix; compiling it is the right one. Decoration happens
+at import, and the compiled app never executes the module, so the
+wrapper is inlined around the body it decorates and both runs do the
+same thing.
+
+The shape that folds is a def of one argument that returns that
+argument, or defines a wrapper calling it once and returns the
+wrapper. A decorator taking arguments of its own, a wrapper calling
+the function twice (the compiled side cannot declare the same local
+twice) or using its value are each refused with the reason.
+
+## A field that holds paragraphs
+
+`multiline=True` turns a text field into one: it shapes wrapped
+instead of on one line, `enter` writes a newline rather than
+submitting, `home` / `end` walk the line the caret is on, the arrows
+move by visual line, and `rows=` says how many lines are visible.
+The flag is in the dump, so a script sees which kind of field it is
+looking at.
+
+## Tooltips, dialogs and dropped files
+
+Three more riders on the same idea that carried the shortcuts. A
+`tooltip:` is a universal rider like `role:` — the sixth table both
+lowerers share — and it is dumped whether or not a pointer is there
+to reveal it. A file dialog is a wait for a person, so it runs inside
+a `task`: the call blocks on the worker while the window opens the
+panel on its own thread, and a headless run answers from the queue a
+script filled with `file:<path>`. A dropped file is a declaration
+like a shortcut (`on_file_drop`), delivered by the platform's drag or
+by a script's `drop:<path>`.
+
+Async lowering grew one thing to make the dialog usable: an `await`
+inside an `if` inside an `async fn`. The branch used to go through
+the sync lowering, where an await cannot appear at all — and "what
+happens next depends on the answer" is the first thing anyone writes
+after opening a dialog.
+
+
+## The gate got its afternoon back
+
+A gate ran in 110 seconds and used 19% of the machine, so the wait
+was not compute. Two causes, both structural.
+
+The generated app crate shared one target directory with the dev
+tree while resolving the same dependencies under a different
+configuration, so every switch between "build the compiler" and
+"build an app" rebuilt gpui. Giving generated apps their own dev
+profile (`debug = 0` — a gate never debugs the binary it compares)
+made the two sets of artifacts distinct, and they stopped evicting
+each other.
+
+The second is what the compiled tier links: a gate's binary is never
+hot-reloaded, so `pixie build --no-interp` leaves the interpreter and
+the reload wiring out of the crate graph. The binary went from 62 MB
+to 51 MB.
+
+Measured on the demo sweep: 110 s per app build became 8 s when
+nothing changed and 25 s when everything had to be rebuilt, and the
+44-demo sweep went from over an hour to 19 minutes. Nothing about
+what the gate CHECKS changed — the same two runs, the same
+byte comparison.

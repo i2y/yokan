@@ -243,6 +243,46 @@ def at(new, old):
     return new
 
 
+def _rename_names(node, names: dict):
+    """Rename plain reads and writes inside a copied body — the
+    wrapper's parameter names win, because the wrapper is what the
+    call site sees."""
+    class R(ast.NodeTransformer):
+        def visit_Name(self, n):
+            if n.id in names:
+                return at(ast.Name(id=names[n.id], ctx=n.ctx), n)
+            return n
+
+    return ast.fix_missing_locations(R().visit(node))
+
+
+def _splice_call(body, name: str, inner: list):
+    """The wrapper's body with its one `name(...)` STATEMENT replaced
+    by `inner`. `None` when the call sits where a value is expected,
+    which the dialect does not inline yet."""
+    out, done = [], False
+    for st in body:
+        if (
+            isinstance(st, ast.Expr)
+            and isinstance(st.value, ast.Call)
+            and isinstance(st.value.func, ast.Name)
+            and st.value.func.id == name
+        ):
+            out += inner
+            done = True
+            continue
+        if isinstance(st, (ast.If, ast.For, ast.While, ast.With, ast.Try)):
+            for attr in ("body", "orelse", "finalbody"):
+                alt = getattr(st, attr, None)
+                if alt:
+                    sub = _splice_call(alt, name, inner)
+                    if sub is not None:
+                        setattr(st, attr, sub)
+                        done = True
+        out.append(st)
+    return out if done else None
+
+
 def py_ty(t) -> str:
     """The user-facing spelling of an internal type name: `Int` is
     `int`, `List<String>` is `list[str]`, `Int?` is `int | None`."""
@@ -394,6 +434,8 @@ class Translator:
         self.key_handlers = {}    # handler name -> chord, or None for every key
         self.menu_items = []      # (menu, item, fn node, call node)
         self.menu_handlers = {}   # handler name -> (menu, item)
+        self.file_drops = []      # (fn node, call node)
+        self.drop_handlers = set()  # handler names marked @drop
         self.view = None
 
     def _scan_import(self, node):
@@ -745,6 +787,8 @@ class Translator:
         ("fs", "remove"): "Int",
         ("fs", "make_dir"): "Int",
         ("fs", "app_dir"): "String",
+        ("fs", "open_dialog"): "String",
+        ("fs", "save_dialog"): "String",
         ("http", "status"): "Int",
         ("http", "get_text"): "String",
         ("http", "get_text_with"): "String",
@@ -756,6 +800,19 @@ class Translator:
         ("time", "format_local_ms"): "String",
         ("time", "local_offset_minutes"): "Int",
     }
+
+    def _tooltip_prop(self, kw):
+        """`tooltip=` as a pixie property, or None. The rider belongs
+        to the element it is written on, whichever element that is."""
+        if "tooltip" not in kw:
+            return None
+        v = kw.pop("tooltip")
+        if isinstance(v, ast.Constant) and type(v.value) is str:
+            return f"tooltip: {pixstr(v.value)}"
+        cell = self._cell_read(v)
+        if cell is None or self._ty(cell) != "String":
+            raise Untranslatable(v, "tooltip= takes a str literal or a str state read")
+        return f"tooltip: App.{cell}"
 
     def _anim_props(self, kw) -> list[str]:
         """§8.35's riders as kwargs: animate= (ms), easing=,
@@ -1583,6 +1640,121 @@ class Translator:
         finally:
             self.text_hole = prev_hole
 
+    # The dialect's own decorators; the compiled side reads these
+    # directly. Everything else is a user decorator, which is folded
+    # into the function it decorates (see `_apply_decorators`).
+    DEF_DECORATORS = ("component", "py")
+
+    def _apply_decorators(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        """A user decorator is compiled AWAY: the wrapper it returns is
+        inlined around the body of the function it decorates, so the
+        compiled app runs what the development app runs. Decoration
+        itself happens at import, which the compiled app never
+        executes — folding it in is what keeps the two the same."""
+        keep, user = [], []
+        for d in node.decorator_list:
+            f = d.func if isinstance(d, ast.Call) else d
+            if any(self._is_ui(f, name) or self._is_deco(f, name) for name in self.DEF_DECORATORS):
+                keep.append(d)
+                continue
+            if isinstance(d, ast.Call):
+                raise Untranslatable(
+                    d,
+                    "a decorator that takes arguments is not in the dialect yet — a plain "
+                    "`@deco` whose wrapper calls the function is",
+                )
+            if not (isinstance(d, ast.Name) and d.id in self.defs):
+                raise Untranslatable(
+                    d,
+                    f"`@{ast.unparse(f)}` is not a decorator the dialect reads — a decorator "
+                    "is a module-level def that takes the function and returns it, or a "
+                    "wrapper around it",
+                )
+            user.append(d.id)
+        if not user:
+            node.decorator_list = keep
+            return node
+        fn = node
+        # `decorator_list[0]` is the outermost, so the innermost is
+        # applied first — the order Python applies them in.
+        for name in reversed(user):
+            fn = self._inline_decorator(self.defs[name], fn)
+        fn.decorator_list = keep
+        return fn
+
+    def _inline_decorator(self, deco: ast.FunctionDef, target: ast.FunctionDef) -> ast.FunctionDef:
+        """`deco(target)` as one def. The decorator is either the
+        identity (`return f`) or a wrapper that calls `f` once."""
+        why = (
+            "a decorator is a def of one argument whose body either returns that argument "
+            "or defines a wrapper that calls it once and returns the wrapper"
+        )
+        if len(deco.args.args) != 1 or deco.args.defaults or deco.args.kwonlyargs:
+            raise Untranslatable(deco, why)
+        p = deco.args.args[0].arg
+        body = [st for st in deco.body if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
+        # `def deco(f): return f` — the function passes through.
+        if len(body) == 1 and isinstance(body[0], ast.Return):
+            r = body[0].value
+            if isinstance(r, ast.Name) and r.id == p:
+                return target
+            raise Untranslatable(deco, why)
+        if (
+            len(body) != 2
+            or not isinstance(body[0], ast.FunctionDef)
+            or not isinstance(body[1], ast.Return)
+            or not isinstance(body[1].value, ast.Name)
+            or body[1].value.id != body[0].name
+        ):
+            raise Untranslatable(deco, why)
+        wrapper = body[0]
+        if wrapper.decorator_list:
+            raise Untranslatable(wrapper.decorator_list[0], "a wrapper takes no decorators of its own")
+        if [a.arg for a in wrapper.args.args] and len(wrapper.args.args) != len(target.args.args):
+            raise Untranslatable(
+                wrapper,
+                f"`{deco.name}`'s wrapper takes {len(wrapper.args.args)} argument(s) and "
+                f"`{target.name}` takes {len(target.args.args)} — they have to agree",
+            )
+        # The one call to the decorated function, spliced with the
+        # target's own body. More than one would duplicate its locals,
+        # which the compiled side cannot name twice.
+        calls = [
+            st
+            for st in ast.walk(wrapper)
+            if isinstance(st, ast.Call) and isinstance(st.func, ast.Name) and st.func.id == p
+        ]
+        if len(calls) != 1:
+            raise Untranslatable(
+                wrapper,
+                f"`{deco.name}`'s wrapper calls `{p}` {len(calls)} times — the dialect inlines "
+                "one call (the compiled side cannot declare the same local twice)",
+            )
+        rename = {}
+        for w, t in zip(wrapper.args.args, target.args.args):
+            if w.arg != t.arg:
+                rename[t.arg] = w.arg
+        inner = [copy.deepcopy(st) for st in target.body]
+        if rename:
+            inner = [_rename_names(st, rename) for st in inner]
+        spliced = _splice_call(wrapper.body, p, inner)
+        if spliced is None:
+            raise Untranslatable(
+                wrapper,
+                f"`{deco.name}`'s wrapper calls `{p}` where a value is expected — the dialect "
+                "inlines a call written as its own statement",
+            )
+        out = ast.FunctionDef(
+            name=target.name,
+            args=wrapper.args if wrapper.args.args else target.args,
+            body=spliced,
+            decorator_list=[],
+            returns=target.returns,
+            type_comment=None,
+            type_params=[],
+        )
+        return at(out, target)
+
     def _take_helper_inner(self, node: ast.FunctionDef):
         if node.decorator_list:
             raise Untranslatable(node, "a helper takes no decorators (a def with @component is a component, with @py an escape)")
@@ -1760,6 +1932,7 @@ class Translator:
                 self._take_escape(node)
             elif isinstance(node, ast.FunctionDef):
                 self.defs[node.name] = node
+                self.defs[node.name] = self._apply_decorators(node)
                 if any(
                     self._is_ui(d, "component") for d in node.decorator_list
                 ):
@@ -1945,6 +2118,12 @@ class Translator:
                 and self._is_ui(node.value.func, "menu_item")
             ):
                 self._take_menu_item(node.value)
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and self._is_ui(node.value.func, "on_file_drop")
+            ):
+                self._take_on_drop(node.value)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
                 # A literal constant is a declaration: nothing runs.
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
@@ -1986,6 +2165,8 @@ class Translator:
                 self._take_on_key(call)
             elif isinstance(call, ast.Call) and self._is_ui(call.func, "menu_item"):
                 self._take_menu_item(call)
+            elif isinstance(call, ast.Call) and self._is_ui(call.func, "on_file_drop"):
+                self._take_on_drop(call)
             elif isinstance(stmt, ast.Pass) or (
                 isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
             ):
@@ -2052,6 +2233,14 @@ class Translator:
             if not (isinstance(node, ast.Constant) and type(node.value) is str and node.value.strip()):
                 raise Untranslatable(node, 'a menu item names its menu and itself in writing (`menu_item("File", "Save", save)`)')
         self.menu_items.append((menu.value, item.value, fn, call))
+
+    def _take_on_drop(self, call: ast.Call):
+        """`on_file_drop(opened)` at module level: one handler, every
+        file dragged onto the window."""
+        args = list(call.args) or [k.value for k in call.keywords if k.arg == "handler"]
+        if len(args) != 1:
+            raise Untranslatable(call, "on_file_drop(handler) takes one function, which receives the path")
+        self.file_drops.append((args[0], call))
 
     def _refuse_module_stmt(self, node, under_guard: bool):
         call = node.value if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) else None
@@ -2530,6 +2719,8 @@ class Translator:
         ("fs", "remove"): ("Fs", "remove", 1),
         ("fs", "make_dir"): ("Fs", "makeDir", 1),
         ("fs", "app_dir"): ("Fs", "appDir", 1),
+        ("fs", "open_dialog"): ("Fs", "openDialog", 1),
+        ("fs", "save_dialog"): ("Fs", "saveDialog", 1),
         ("math", "sqrt"): ("Math", "sqrt", 1),
         ("math", "sin"): ("Math", "sin", 1),
         ("math", "cos"): ("Math", "cos", 1),
@@ -3266,6 +3457,13 @@ class Translator:
                     node, f"`{mod}.{fn}` is not in the standard library's {mod} — it has {', '.join(f for (m, f) in self.STDLIB_CALLS if m == mod)}"
                 )
             pick = self._stdlib_pick(node, mod, fn, spec)
+            if (mod, fn) in (("fs", "open_dialog"), ("fs", "save_dialog")) and not self.in_async:
+                raise Untranslatable(
+                    node,
+                    f"`{mod}.{fn}` waits for a person to pick a file, so it runs inside a "
+                    "task: `task(pick, on_done=chosen)` keeps the window drawing while it "
+                    "waits",
+                )
             self.uses_stdlib = True
             if (mod, fn) == ("json", "dumps"):
                 call = self._json_dumps(node, ctx, param)
@@ -6184,6 +6382,27 @@ class Translator:
     # ---- elements --------------------------------------------------
 
     def element(self, node, indent: int) -> list[str]:
+        """One element, with the riders every element takes applied
+        around it. `tooltip=` is handled here rather than in each
+        widget: it belongs to the element, whichever element it is."""
+        tip = None
+        if isinstance(node, ast.Call):
+            kw = {k.arg: k.value for k in node.keywords if k.arg}
+            tip = self._tooltip_prop(kw)
+            if tip is not None:
+                node.keywords = [k for k in node.keywords if k.arg != "tooltip"]
+        lines = self._element_inner(node, indent)
+        if tip is None:
+            return lines
+        pad = "  " * indent
+        if lines and lines[0].rstrip().endswith("{"):
+            return [lines[0], f"{pad}  {tip}", *lines[1:]]
+        # the one-line form: `Tag { a; b }`
+        head = lines[0]
+        brace = head.index("{")
+        return [f"{head[:brace + 1]} {tip};{head[brace + 1:]}", *lines[1:]]
+
+    def _element_inner(self, node, indent: int) -> list[str]:
         pad = "  " * indent
         if isinstance(node, ast.IfExp):
             lines = [f"{pad}if {self._cond(node.test)} {{"]
@@ -6297,6 +6516,26 @@ class Translator:
             ph = strlit("placeholder")
             if ph is not None:
                 lines.append(f"{pad}  placeholder: {pixstr(ph)}")
+            # A field that holds paragraphs: it wraps, `enter` writes a
+            # newline, and `rows` is how many lines are visible.
+            if "multiline" in kw:
+                v = kw["multiline"]
+                if not (isinstance(v, ast.Constant) and type(v.value) is bool):
+                    raise Untranslatable(v, "multiline= takes True or False")
+                if v.value:
+                    lines.append(f"{pad}  multiline: true")
+            if "rows" in kw:
+                v = kw["rows"]
+                if not (
+                    isinstance(v, ast.Constant)
+                    and type(v.value) in (int, float)
+                    and type(v.value) is not bool
+                    and v.value > 0
+                ):
+                    raise Untranslatable(v, "rows= takes a positive number of visible lines")
+                if "multiline" not in kw:
+                    raise Untranslatable(v, "rows= belongs to a multiline field — write `multiline=True` beside it")
+                lines.append(f"{pad}  rows: {v.value}")
             for pykey, prop in (("on_change", "onTextChanged"), ("on_submit", "onSubmitted")):
                 if pykey not in kw:
                     continue
@@ -6721,6 +6960,9 @@ class Translator:
             lines.append(f"{pad}  style: {style_rider}")
         if theme_rider:
             lines.append(f"{pad}  theme: {theme_rider}")
+        tip = self._tooltip_prop(kw)
+        if tip is not None:
+            lines.append(f"{pad}  {tip}")
         for p in self._anim_props(kw):
             lines.append(f"{pad}  {p}")
         if tag == "Grid":
@@ -7094,6 +7336,17 @@ class Translator:
             self.menu_handlers[name] = (menu, item)
             self.handlers.append((name, None, [callstr]))
 
+    def _emit_drops(self):
+        """One store method per `on_file_drop`, marked `@drop` and
+        taking the path."""
+        for i, (fn, call) in enumerate(self.file_drops):
+            if not (isinstance(fn, ast.Name) and fn.id in self.defs):
+                raise Untranslatable(fn, "on_file_drop() runs a module-level def that takes the path")
+            callstr = self.handler(fn, takes_text=True, implicit=("t", "String"))
+            name = f"__drop{i}"
+            self.drop_handlers.add(name)
+            self.handlers.append((name, "String", [callstr]))
+
     def translate(self) -> str:
         trees = [self.tree, *self.modules.values()]
         for tree in trees:
@@ -7107,6 +7360,7 @@ class Translator:
         self._emit_timers()
         self._emit_keys()
         self._emit_menu()
+        self._emit_drops()
         if ("width" in self.window) != ("height" in self.window):
             raise Untranslatable(self.view, "width= and height= come as a pair")
         body = self.view.body
@@ -7270,6 +7524,8 @@ class Translator:
                 if name in self.key_handlers:
                     chord = self.key_handlers[name]
                     mark = f' @key("{chord}")' if chord else " @key"
+                if name in self.drop_handlers:
+                    mark = " @drop"
                 if name in self.menu_handlers:
                     m, it = self.menu_handlers[name]
                     mark = f' @menu("{m}", "{it}")'
@@ -8017,6 +8273,8 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             '  static fn remove(path: String) Int @rust("yokan_stdlib::fs_remove")\n'
             '  static fn makeDir(path: String) Int @rust("yokan_stdlib::fs_make_dir")\n'
             '  static fn appDir(name: String) String @rust("yokan_stdlib::fs_app_dir")\n'
+            '  static fn openDialog(title: String) String @rust("yokan_stdlib::fs_open_dialog")\n'
+            '  static fn saveDialog(name: String) String @rust("yokan_stdlib::fs_save_dialog")\n'
             "}\n"
             "\n"
             "class Sqlite {\n"
@@ -8441,6 +8699,8 @@ def tier_b_project(
     ]
     if release:
         cmd.append("--release")
+    else:
+        cmd.append("--no-interp")
     env = dict(os.environ)
     if pyo3_python:
         env["PYO3_PYTHON"] = pyo3_python
@@ -8698,6 +8958,10 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
     cmd = ["cargo", "run", "-q", "-p", "pixie-cli", "--", "build", pix_path]
     if release:
         cmd.append("--release")
+    else:
+        # The gate's compiled tier is never hot-reloaded, and leaving
+        # the interpreter out of the crate graph is most of the link.
+        cmd.append("--no-interp")
     p = subprocess.run(cmd, cwd=repo(), capture_output=True, text=True)
     if p.returncode != 0:
         sys.exit(f"pixie build failed:\n{p.stdout}\n{p.stderr}")
