@@ -5225,11 +5225,12 @@ fn lower_tooltip(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, Em
 /// expression, so an icon's alt text can name what it stands for.
 fn lower_semantics(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
     let role = element_prop(el, "role");
-    // The toggles OWN `label:` — it is their visible text, and their
-    // accessible name DERIVES from it — so only `role:` rides on
-    // them. Letting the rider fire too would wrap every toggle in a
-    // Semantics carrying the same string and shadow that derivation.
-    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch") {
+    // The toggles and ProgressBar OWN `label:` — it is their visible
+    // text, and their accessible name DERIVES from it (a11y::name_of)
+    // — so only `role:` rides on them. Letting the rider fire too
+    // would wrap them in a Semantics carrying the same string and
+    // shadow that derivation.
+    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch" | "ProgressBar") {
         None
     } else {
         element_prop(el, "label")

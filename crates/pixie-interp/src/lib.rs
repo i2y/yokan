@@ -1825,10 +1825,12 @@ fn build_semantics(
     w: &World,
 ) -> Result<Element, String> {
     let role = prop_of(el, "role");
-    // The toggles OWN `label:` (mirrors codegen): only `role:` rides
-    // on a Checkbox / Switch — their accessible name derives from
-    // the label they already carry.
-    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch") {
+    // The toggles and ProgressBar OWN `label:` (mirrors codegen): only
+    // `role:` rides on them — their accessible name derives from the
+    // label they already carry (a11y::name_of), so letting the rider
+    // fire too would wrap them in a Semantics carrying the same
+    // string and shadow that derivation.
+    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch" | "ProgressBar") {
         None
     } else {
         prop_of(el, "label")
