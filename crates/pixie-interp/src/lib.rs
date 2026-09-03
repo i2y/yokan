@@ -50,8 +50,8 @@ pub enum Value {
     Object(ErasedHandle, String),
     /// A `Map<K, V>` read out of a property (§8.68). Keys are the
     /// scalar values a pixie map key can be, so the pair list is
-    /// enough — and it stays SORTED, because the compiled tier reads
-    /// a `BTreeMap` and the two tiers have to agree on order.
+    /// enough — and it stays in INSERTION order, which is the order
+    /// the compiled tier's map keeps and the order a dict promises.
     Map(Vec<(Value, Value)>),
     /// A byte string (§8.68). Its length is the only thing pixie can
     /// ask of one today, which is what the compiled tier offers too.
@@ -67,21 +67,6 @@ pub enum Value {
     /// with no unwrapping in the interpreter.
     Nil,
     Unit,
-}
-
-/// Map keys compare by value. Only the scalar shapes a pixie map key
-/// can take are compared; anything else is not a key (§8.68).
-/// The ordering the compiled tier's `BTreeMap` gives the same keys —
-/// the interp pair list stays sorted by it.
-fn value_key_cmp(a: &Value, b: &Value) -> std::cmp::Ordering {
-    use std::cmp::Ordering::Equal;
-    match (a, b) {
-        (Value::Int(x), Value::Int(y)) => x.cmp(y),
-        (Value::Str(x), Value::Str(y)) => x.cmp(y),
-        (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
-        (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(Equal),
-        _ => Equal,
-    }
 }
 
 /// The bindings a `when Variant(a, b)` arm introduces, zipped with
@@ -670,8 +655,8 @@ fn eval_expr(e: &Expr, env: &ClosEnv, scope: &Scope, w: &World) -> Result<Value,
             // against the receiver's VALUE rather than the name alone,
             // because a class may perfectly well have a property
             // called `values` — the charts demo does. The pair list is
-            // already in key order, so both come back in the order the
-            // compiled tier's `BTreeMap` produces.
+            // already in insertion order, so both come back in the
+            // order the compiled tier's map produces.
             if name.name == "keys" || name.name == "values" {
                 if let Ok(Value::Map(kv)) = eval_expr(receiver, env, scope, w) {
                     let want_keys = name.name == "keys";
@@ -1182,12 +1167,13 @@ fn eval_action_stmt(
                             Value::List(xs)
                         }
                         (Value::Map(mut kv), key) => {
+                            // A new key goes on the end and a known
+                            // one keeps its place — the compiled
+                            // tier's map does exactly this, and so
+                            // does a dict.
                             match kv.iter_mut().find(|(k2, _)| value_key_eq(k2, &key)) {
                                 Some(slot) => slot.1 = v,
-                                None => {
-                                    kv.push((key, v));
-                                    kv.sort_by(|a, b| value_key_cmp(&a.0, &b.0));
-                                }
+                                None => kv.push((key, v)),
                             }
                             Value::Map(kv)
                         }

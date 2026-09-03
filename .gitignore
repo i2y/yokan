@@ -22,5 +22,7 @@ dist/
 crates/yokan/DESIGN.local.md
 docs/WIDGET_PLAYBOOK.local.md
 docs/WIDGET_GAPS.local.md
+docs/WIDGET_FLEET.local.md
+docs/STDLIB_COMPAT.local.md
 crates/yokan/BACKLOG.local.md
 crates/yokan/tools/probe_dialect.local.py

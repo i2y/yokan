@@ -211,7 +211,7 @@ list_view(len(items()), line, item_height=24.0, height=200.0)
 
 ## 辞書
 
-読みは `.get`、書きはキー単位、数えるのは `len`、回すのは `sorted()` です。
+読みは `.get`、書きはキー単位、数えるのは `len`、回すのは Python の辞書と同じ形です。
 キーには str なら何でも書けます（リテラル、状態の読み、ループ変数）。
 
 ```python
@@ -221,11 +221,17 @@ if "cherry" in prices(): ...           # 所属
 len(prices())                          # 件数
 
 def scan():
-    for k in sorted(prices()):         # キー順で回る
+    for k in prices():                 # 挿入順、Python が回るのと同じ順
         last.set(k)
+    for v in prices().values():        # 同じ順
+        total.set(total() + v)
+    for k in sorted(prices()):         # キー順で回りたいとき
+        first.set(k)
 ```
 
-素の `d[k]` 読みと素の `for k in d` は断られます。
-`d[k]` は無いキーをどうするかを、`for k in d` はどの順で回るかを、書き手が決めないまま進めてしまう形だからです。
-`get` と `sorted()` はその決定を式の上に出します。
+コンパイル後の辞書はキーを入れた順を覚えているので、回すと Python と同じ順に並びます。
+素の `d[k]` 読みは断られます。
+無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
+`.items()` も断られます。
+二つの名前を一度に束ねる形にはまだコンパイル後の姿がないので、キーを回してループの中で値を読みます。
 

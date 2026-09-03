@@ -523,7 +523,7 @@ list_view(len(items()), line, item_height=24.0, height=200.0)
 
 ## 辞書
 
-読みは `.get`、書きはキー単位、数えるのは `len`、回すのは `sorted()` です。
+読みは `.get`、書きはキー単位、数えるのは `len`、回すのは Python の辞書と同じ形です。
 キーには str なら何でも書けます（リテラル、状態の読み、ループ変数）。
 
 ```python
@@ -533,13 +533,19 @@ if "cherry" in prices(): ...           # 所属
 len(prices())                          # 件数
 
 def scan():
-    for k in sorted(prices()):         # キー順で回る
+    for k in prices():                 # 挿入順、Python が回るのと同じ順
         last.set(k)
+    for v in prices().values():        # 同じ順
+        total.set(total() + v)
+    for k in sorted(prices()):         # キー順で回りたいとき
+        first.set(k)
 ```
 
-素の `d[k]` 読みと素の `for k in d` は断られます。
-`d[k]` は無いキーをどうするかを、`for k in d` はどの順で回るかを、書き手が決めないまま進めてしまう形だからです。
-`get` と `sorted()` はその決定を式の上に出します。
+コンパイル後の辞書はキーを入れた順を覚えているので、回すと Python と同じ順に並びます。
+素の `d[k]` 読みは断られます。
+無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
+`.items()` も断られます。
+二つの名前を一度に束ねる形にはまだコンパイル後の姿がないので、キーを回してループの中で値を読みます。
 
 ## Value クラスとインターフェース
 
@@ -1105,7 +1111,6 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 
 今日の時点でできないことと、その理由です。
 
-- **辞書を挿入順で回すこと**。Python の辞書は挿入順、コンパイル後の辞書はキー順で並ぶためです。`sorted()` で回す形（キー順、両方で同じ）が用意されています。
 - **素の `d[k]` 読み**。無いキーの扱いを呼び出し側が決める `.get(key, default)` が読みの形です。
 - **片方の分岐でしか代入していないローカルを後で読むこと**。実行されなかったとき Python なら NameError になる形です。if / else 両方で代入すれば読めます。
 - **`int ** int` の負の指数**。結果の型が実行時に変わるためで、どちらかを float にすれば書けます。
@@ -1125,7 +1130,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **ローカルの辞書**と、注釈のないローカルのリスト（`out: list[str] = []` と書けば、コンパイル側が要素の型を読めます）。
 - **よく使う分を超えた str のメソッド**（`.title()`、`.zfill()`、`.format()`、`.encode()` など）。`.upper()`、`.lower()`、`.strip()` / `.lstrip()` / `.rstrip()`、`.split()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.count()`、`len(s)`、`s[i]`、`s[a:b]`、`in` は使えます。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
-- **辞書の `.values()` / `.items()` の反復**。Python は挿入順、コンパイル後はキー順に回るためです。`sorted(d())` を回して `d().get(k, default)` で読みます。
+- **辞書の `.items()` の反復**。二つの名前を一度に束ねる形にはまだコンパイル後の姿がないためです。キーを回して、ループの中で `d().get(k, default)` を読みます。キーの反復と `.values()` は入っていて、どちらも Python と同じ挿入順です。
 - **一部の制御構文**：入れ子の def（クロージャにはコンパイル後の形がありません。ヘルパはモジュールレベルに書きます）と、ビューの中の条件式（ビューでは要素を `if` で分けます）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
 - **`tuple` と `set`**。tuple にはまだコンパイル後の形がなく、Python の set の反復順はコンパイル側で再現できないため、並べ替えずに断ります。今日は `list` がどちらも代わりになります。

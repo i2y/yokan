@@ -512,7 +512,7 @@ list_view(len(items()), line, item_height=24.0, height=200.0)
 
 ## Dicts
 
-Read with `.get`, write per key, count with `len`, iterate with `sorted()`.
+Read with `.get`, write per key, count with `len`, walk it like a Python dict.
 A key is any str the app can name — a literal, a state read, a loop variable.
 
 ```python
@@ -522,12 +522,17 @@ if "cherry" in prices(): ...           # membership
 len(prices())                          # count
 
 def scan():
-    for k in sorted(prices()):         # iterates in key order
+    for k in prices():                 # insertion order, as Python walks it
         last.set(k)
+    for v in prices().values():        # the same order
+        total.set(total() + v)
+    for k in sorted(prices()):         # key order, when that is what you mean
+        first.set(k)
 ```
 
-Bare `d[k]` reads and bare `for k in d` are refused.
-Missing keys and iteration order are the places where Python is particular, and `get` / `sorted()` are the forms that state the intent.
+A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
+Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
+`.items()` is refused too — binding two names at once has no compiled shape yet, so walk the keys and read the value inside the loop.
 
 ## Value classes and interfaces
 
@@ -1107,7 +1112,6 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 
 What Yokan cannot do as of today, with the reason for each refusal:
 
-- **Iterating a dict in insertion order.** A Python dict iterates in insertion order; the compiled dict is ordered by key. The provided form is `sorted()` iteration (key order, the same in both).
 - **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
@@ -1127,7 +1131,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
 - **str methods beyond the common set**: `.title()`, `.zfill()`, `.format()`, `.encode()` and the rest. `.upper()`, `.lower()`, `.strip()` / `.lstrip()` / `.rstrip()`, `.split()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.count()`, `len(s)`, `s[i]`, `s[a:b]` and `in` are in.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
-- **Iterating a dict's `.values()` / `.items()`.** Python walks them in insertion order, the compiled dict by key; iterate `sorted(d())` and read `d().get(k, default)`.
+- **Iterating a dict's `.items()`.** Binding two names at once has no compiled shape yet; walk the dict for its keys and read `d().get(k, default)` inside the loop. Walking the keys, and `.values()`, are in — both in insertion order, as Python walks them.
 - **Some control flow**: nested defs (a closure has no compiled shape — define helpers at module level) and a conditional expression in a view (branch the elements with `if` there).
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
 - **`tuple` and `set`.** A tuple has no compiled shape yet; a Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered. A `list` covers both today.

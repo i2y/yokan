@@ -735,14 +735,14 @@ fn binding_ret_conv(
         // only. `Fallible` is unwrapped by the caller, which knows
         // whether it is in a `try` position.
         RustTy::Handle(_) | RustTy::Fallible { .. } => Err(()),
-        // A `stdmap:` fn answers std's HashMap — collect it into the
-        // kernel Map (sorted by the BTreeMap underneath, so the
-        // crossing is deterministic; yokan's crate boundary).
+        // A `stdmap:` fn answers std's HashMap, which has no order to
+        // inherit — `from_unordered` sorts, so the crossing is
+        // deterministic (yokan's crate boundary).
         RustTy::Map(mk, mv) if std_map => {
             let kf = std_map_in_conv(mk, "__k");
             let wf = std_map_in_conv(mv, "__w");
             Ok(RetConv::Expr(format!(
-                "__v.into_iter().map(|(__k, __w)| ({kf}, {wf})).collect::<Map<_, _>>()"
+                "Map::from_unordered(__v.into_iter().map(|(__k, __w)| ({kf}, {wf})))"
             )))
         }
         // Kernel-typed returns pass through untouched.
@@ -9600,7 +9600,11 @@ fn emit_view(
         writeln!(out, "        let {sf} = self.{sf};").unwrap();
     }
     let root = lower_element(&view.root, &mut cx, "        ")?;
-    writeln!(out, "        {root}").unwrap();
+    // Contained: a view can reach a panic the app owns (an index past
+    // the end of a list), and the run that interprets the view draws
+    // an error and keeps going. This one does the same, so the two
+    // agree on a program neither refused.
+    writeln!(out, "        pixie_kernel::contain_view(|| {root})").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
     Ok(())
@@ -9647,9 +9651,9 @@ fn interp_value_expr(ty: &RustTy, read: &str, p: &Program) -> Option<String> {
                 "pixie_interp::Value::List({read}.iter().map(|x| {elem}).collect())"
             ))
         }
-        // A MAP crosses as its sorted pair list (§8.68). `BTreeMap`
-        // iterates in key order, and the interpreted tier keeps that
-        // order, so `keys` answers the same sequence in both tiers.
+        // A MAP crosses as its pair list in insertion order (§8.68),
+        // which the interpreted tier keeps, so `keys` answers the
+        // same sequence in both tiers.
         RustTy::Map(k, v) => {
             let kx = interp_value_expr(k, "__k.clone()", p)?;
             let vx = interp_value_expr(v, "__v.clone()", p)?;

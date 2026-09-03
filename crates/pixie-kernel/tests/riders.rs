@@ -128,3 +128,29 @@ fn the_riders_dump_their_props_only_when_set() {
     assert!(matches!(dimmed.inner(), Element::Text { .. }));
     assert!(matches!(boxed(1.0, 1.0, 1.0, 1.0).inner(), Element::Text { .. }));
 }
+
+/// A view that panics collapses to the shared error element rather
+/// than taking the process with it, and the element it collapses to
+/// is the one the interpreted run draws — the same constructor, so a
+/// dump cannot drift between the two.
+#[test]
+fn a_failing_view_collapses_to_the_error_element() {
+    let quiet = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let got = pixie_kernel::contain_view(|| {
+        let xs: pixie_kernel::List<i64> = pixie_kernel::List::new();
+        pixie_kernel::Element::text(format!("{}", xs.at(0)))
+    });
+    std::panic::set_hook(quiet);
+    let w = pixie_kernel::World::new();
+    assert_eq!(got.dump(&w), pixie_kernel::view_error_element().dump(&w));
+    assert!(got.dump(&w).contains(pixie_kernel::VIEW_ERROR_TEXT));
+}
+
+/// And a view that does not panic is untouched by the containment.
+#[test]
+fn a_working_view_passes_through_containment() {
+    let w = pixie_kernel::World::new();
+    let got = pixie_kernel::contain_view(|| pixie_kernel::Element::text("ok"));
+    assert_eq!(got.dump(&w), "Text(ok)");
+}

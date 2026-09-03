@@ -104,18 +104,93 @@ pub fn http_get_text(url: &str) -> String {
 }
 
 // ---- math -----------------------------------------------------------
-// Not "Python's math reimplemented": yokan's math, ONE Rust
-// implementation both tiers call — so fidelity-to-CPython never needs
-// proving, only self-consistency, which the two doors give for free.
+// Python's `math`, as a twin: the interpreted run calls CPython's own
+// module, so these have to answer what CPython answers — including
+// where CPython raises and IEEE-754 would shrug. The gate holds the
+// two runs together; `tests/expected/math.txt`, printed by CPython
+// itself, holds this half to CPython.
 
-pub fn math_sqrt(v: f64) -> f64 { v.sqrt() }
+pub fn math_sqrt(v: f64) -> f64 {
+    // Python's domain, not IEEE's: a negative input is an error here,
+    // not a quiet NaN. Contained as one failing statement in both runs.
+    assert!(!(v < 0.0), "expected a nonnegative input, got {}", py_float_repr(v));
+    v.sqrt()
+}
 pub fn math_sin(v: f64) -> f64 { v.sin() }
 pub fn math_cos(v: f64) -> f64 { v.cos() }
-pub fn math_pow(a: f64, b: f64) -> f64 { a.powf(b) }
+
+/// `math.pow` — CPython's domain and range rules laid over libm's
+/// `pow`. Rust's `powf` answers NaN where Python raises and infinity
+/// where Python overflows, so the special cases are written out; the
+/// order is CPython's `m_pow` (Modules/mathmodule.c).
+pub fn math_pow(x: f64, y: f64) -> f64 {
+    if !x.is_finite() || !y.is_finite() {
+        if x.is_nan() {
+            return if y == 0.0 { 1.0 } else { x };
+        }
+        if y.is_nan() {
+            return if x == 1.0 { 1.0 } else { y };
+        }
+        if x.is_infinite() {
+            let odd_y = y.is_finite() && (y.abs() % 2.0) == 1.0;
+            return if y > 0.0 {
+                if odd_y { x } else { x.abs() }
+            } else if y == 0.0 {
+                1.0
+            } else if odd_y {
+                0.0_f64.copysign(x)
+            } else {
+                0.0
+            };
+        }
+        // y is the infinite one.
+        if x.abs() == 1.0 {
+            return 1.0;
+        }
+        if y > 0.0 && x.abs() > 1.0 {
+            return y;
+        }
+        if y < 0.0 && x.abs() < 1.0 {
+            assert!(x != 0.0, "math domain error");
+            return -y;
+        }
+        return 0.0;
+    }
+    let r = x.powf(y);
+    if r.is_nan() {
+        // A negative base under a fractional exponent.
+        panic!("math domain error");
+    }
+    if r.is_infinite() {
+        // Zero under a negative exponent is a domain error in Python;
+        // anything else that reached infinity overflowed.
+        assert!(x != 0.0, "math domain error");
+        panic!("math range error");
+    }
+    r
+}
 pub fn math_fabs(v: f64) -> f64 { v.abs() }
-pub fn math_floor(v: f64) -> i64 { v.floor() as i64 }
-pub fn math_ceil(v: f64) -> i64 { v.ceil() as i64 }
+pub fn math_floor(v: f64) -> i64 { float_to_int("floor", v.floor()) }
+pub fn math_ceil(v: f64) -> i64 { float_to_int("ceil", v.ceil()) }
 pub fn math_pi() -> f64 { std::f64::consts::PI }
+
+/// A whole double as an int, with CPython's two refusals — it tells
+/// infinity and NaN apart, and so does the message. Python's int is
+/// unbounded and this one is 64 bits wide (a decided constraint), so
+/// a value past the range stops the statement rather than wrapping.
+fn float_to_int(what: &str, v: f64) -> i64 {
+    if v.is_nan() {
+        panic!("cannot convert float NaN to integer");
+    }
+    if v.is_infinite() {
+        panic!("cannot convert float infinity to integer");
+    }
+    assert!(
+        v >= -9223372036854775808.0 && v < 9223372036854775808.0,
+        "`{what}` overflows the 64-bit int range"
+    );
+    v as i64
+}
 
 // ---- json -----------------------------------------------------------
 // Typed extractors over a dotted path ("users.1.name"); a missing or
@@ -680,17 +755,17 @@ pub fn py_float_of_int(v: i64) -> f64 {
 
 /// int(f) — Python truncates toward zero, and refuses nan/inf.
 pub fn py_int_of_float(v: f64) -> i64 {
-    if v.is_nan() || v.is_infinite() {
-        panic!("cannot convert float NaN or infinity to integer");
-    }
-    v.trunc() as i64
+    float_to_int("int", v.trunc())
 }
 
 /// round(f) — Python rounds half to EVEN, which is not what Rust's
 /// `f64::round` does.
 pub fn py_round(v: f64) -> i64 {
-    if v.is_nan() || v.is_infinite() {
-        panic!("cannot convert float NaN or infinity to integer");
+    if v.is_nan() {
+        panic!("cannot convert float NaN to integer");
+    }
+    if v.is_infinite() {
+        panic!("cannot convert float infinity to integer");
     }
     let f = v.floor();
     let diff = v - f;

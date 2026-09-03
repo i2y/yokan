@@ -2,7 +2,8 @@
 # requires-python = ">=3.14"
 # ///
 """Python-semantics operations, gated: `/` `//` `%` `**`, bare
-float/bool/enum text, negative indexing, sorted() dict iteration,
+float/bool/enum text, negative indexing, dict iteration (the keys
+in the order they went in, the values, and sorted()),
 if/else locals that outlive the branch, @value, list-typed store
 method parameters. The interpreted run uses the real
 operators and str(); the compiled run reproduces CPython's results
@@ -40,6 +41,8 @@ flag: State[bool] = State(False)
 mood: State[Mood] = State(Mood.HAPPY)
 grade: State[str] = State("-")
 last_key: State[str] = State("-")
+walked: State[str] = State("-")
+spend: State[int] = State(0)
 tail: State[str] = State("-")
 pt: State[Point] = State(Point(3, 4))
 prices: State[dict[str, int]] = State({"cherry": 300, "apple": 120, "banana": 80})
@@ -81,6 +84,16 @@ def crunch():
 def walk():
     for k in sorted(prices()):
         last_key.set(k)
+    # A dict walks in the order its keys went in, which is not the
+    # sorted order above — cherry, apple, banana.
+    order = ""
+    for k in prices():
+        order = order + k[0]
+    walked.set(order)
+    n = 0
+    for v in prices().values():
+        n = n + v
+    spend.set(n)
     r = names()
     tail.set(r[-1])
     Bag.take(names())
@@ -97,6 +110,7 @@ def view():
         text(f"flag = {flag()}  mood = {mood()}")
         text(f"grade = {grade()}  doubled = {p2() * 2 + 1}")
         text(f"last key = {last_key()}  tail = {tail()}")
+        text(f"walked = {walked()}  spend = {spend()}")
         text(f"bag = {Bag.joined}")
         with row(spacing=6):
             button("crunch", on_click=crunch)

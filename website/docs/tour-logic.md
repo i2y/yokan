@@ -202,7 +202,7 @@ list_view(len(items()), line, item_height=24.0, height=200.0)
 
 ## Dicts
 
-Read with `.get`, write per key, count with `len`, iterate with `sorted()`.
+Read with `.get`, write per key, count with `len`, walk it like a Python dict.
 A key is any str the app can name — a literal, a state read, a loop variable.
 
 ```python
@@ -212,10 +212,15 @@ if "cherry" in prices(): ...           # membership
 len(prices())                          # count
 
 def scan():
-    for k in sorted(prices()):         # iterates in key order
+    for k in prices():                 # insertion order, as Python walks it
         last.set(k)
+    for v in prices().values():        # the same order
+        total.set(total() + v)
+    for k in sorted(prices()):         # key order, when that is what you mean
+        first.set(k)
 ```
 
-Bare `d[k]` reads and bare `for k in d` are refused.
-Missing keys and iteration order are the places where Python is particular, and `get` / `sorted()` are the forms that state the intent.
+A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
+Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
+`.items()` is refused too — binding two names at once has no compiled shape yet, so walk the keys and read the value inside the loop.
 

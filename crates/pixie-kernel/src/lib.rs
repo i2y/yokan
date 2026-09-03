@@ -9,6 +9,7 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -772,27 +773,32 @@ impl<T: Clone> List<T> {
 }
 
 /// COW ordered map — `Map<K, V>` in pixie (QMap's role, §12 design:
-/// the HTTP headers carrier). BTreeMap so key order — and therefore
-/// every dump and TAP assertion — is deterministic. Clones share
-/// until mutation, `List`'s contract.
+/// the HTTP headers carrier). ORDERED means insertion-ordered: a
+/// pixie map is a Python dict where the dialect can see it, and a
+/// dict answers its keys in the order they went in. That is the
+/// observable order — iteration, `keys()`, `values()`, what a JSON
+/// writer prints — so it is the order the store keeps, and it is
+/// still deterministic, which is what every dump and TAP assertion
+/// needed from the sorted map this used to be. Clones share until
+/// mutation, `List`'s contract.
 #[derive(Debug, PartialEq)]
-pub struct Map<K: Ord, V>(Rc<std::collections::BTreeMap<K, V>>);
+pub struct Map<K: Hash + Eq, V>(Rc<indexmap::IndexMap<K, V>>);
 
-impl<K: Ord, V> Clone for Map<K, V> {
+impl<K: Hash + Eq, V> Clone for Map<K, V> {
     fn clone(&self) -> Self {
         Map(self.0.clone())
     }
 }
 
-impl<K: Ord, V> Default for Map<K, V> {
+impl<K: Hash + Eq, V> Default for Map<K, V> {
     fn default() -> Self {
         Map::new()
     }
 }
 
-impl<K: Ord, V> Map<K, V> {
+impl<K: Hash + Eq, V> Map<K, V> {
     pub fn new() -> Self {
-        Map(Rc::new(std::collections::BTreeMap::new()))
+        Map(Rc::new(indexmap::IndexMap::new()))
     }
     pub fn len(&self) -> usize {
         self.0.len()
@@ -802,7 +808,20 @@ impl<K: Ord, V> Map<K, V> {
     }
 }
 
-impl<K: Ord + Clone, V: Clone> Map<K, V> {
+impl<K: Hash + Eq + Ord + Clone, V: Clone> Map<K, V> {
+    /// Collect pairs from a source that has no order of its own — a
+    /// Rust crate's `HashMap` at the boundary — into KEY order. The
+    /// crossing has to be deterministic and there is no insertion
+    /// order to inherit, so the boundary picks one and sorts. Only
+    /// the boundary does; a map built in pixie keeps its own.
+    pub fn from_unordered<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        let mut pairs: Vec<(K, V)> = iter.into_iter().collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        pairs.into_iter().collect()
+    }
+}
+
+impl<K: Hash + Eq + Clone, V: Clone> Map<K, V> {
     pub fn insert(&mut self, k: K, v: V) {
         Rc::make_mut(&mut self.0).insert(k, v);
     }
@@ -828,14 +847,16 @@ impl<K: Ord + Clone, V: Clone> Map<K, V> {
     pub fn contains(&self, k: K) -> bool {
         self.0.contains_key(&k)
     }
+    /// `shift_remove`, not `swap_remove`: taking a key out must not
+    /// reorder the ones that stay, which is what a dict promises.
     pub fn remove(&mut self, k: K) {
-        Rc::make_mut(&mut self.0).remove(&k);
+        Rc::make_mut(&mut self.0).shift_remove(&k);
     }
     /// Keys in order, cloned out as a `List` (iteration rides the
     /// existing `for` machinery).
-    /// The pairs in key order (§8.68). `BTreeMap` iterates sorted,
-    /// which is what lets a map cross to the interpreted tier as a
-    /// pair LIST and come back reading the same.
+    /// The pairs in insertion order (§8.68), which is what lets a map
+    /// cross to the interpreted tier as a pair LIST and come back
+    /// reading the same.
     pub fn pairs(&self) -> Vec<(K, V)> {
         self.0.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
@@ -874,10 +895,10 @@ pub mod notify {
     }
 }
 
-// Binding adapters collect converted std-map returns into Maps
-// (sorted on the way in — BTreeMap — so the crossing stays
-// deterministic no matter what order the HashMap held).
-impl<K: Ord + Clone, V: Clone> FromIterator<(K, V)> for Map<K, V> {
+// Collecting pairs keeps their order. A source with no order of its
+// own (a std `HashMap` crossing a crate boundary) goes through
+// `Map::from_unordered` instead, which picks one.
+impl<K: Hash + Eq + Clone, V: Clone> FromIterator<(K, V)> for Map<K, V> {
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
         Map(std::rc::Rc::new(iter.into_iter().collect()))
     }
@@ -3328,12 +3349,39 @@ impl Runtime {
     }
 }
 
+/// The text a view collapses to when building it failed, and the
+/// look that makes it obvious on screen. Both runs draw THIS one, so
+/// a failing view is a thing the gate can compare rather than one run
+/// dying while the other keeps drawing.
+pub const VIEW_ERROR_TEXT: &str = "error in view — see terminal";
+
+pub fn view_error_element() -> Element {
+    let mut el = Element::text(VIEW_ERROR_TEXT);
+    if let Element::Text { font_size, color, .. } = &mut el {
+        *font_size = 14.0;
+        *color = Str::from("#ff6666");
+    }
+    el
+}
+
+/// Build a view so a panic inside it collapses to `view_error_element`
+/// instead of killing the process.
+///
+/// A view is not the same case as the rest of the build. Reading past
+/// the end of a list (`xs[0]` with nothing in it) is a state an app
+/// can reach, not a compiler bug, and the run that interprets the
+/// view already survives it and draws the error — so this one has to
+/// as well, or the two disagree about a program neither refused.
+pub fn contain_view(f: impl FnOnce() -> Element) -> Element {
+    contain("view", f).unwrap_or_else(view_error_element)
+}
+
 /// Run HANDLER code so a panic inside it is printed and contained
 /// instead of killing the process — the same containment the Python
 /// tier gives handler exceptions, so both tiers observe "this
 /// statement failed, earlier effects kept, the app keeps running".
-/// Build panics stay loud on purpose: they indicate compiler bugs,
-/// not app-reachable states.
+/// Panics outside a handler, a task or a view stay loud on purpose:
+/// they indicate compiler bugs, not app-reachable states.
 pub fn contain<R>(what: &str, f: impl FnOnce() -> R) -> Option<R> {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(v) => Some(v),
@@ -3619,7 +3667,7 @@ copy_wire!(i64, f64, bool);
 /// thread needs `Send`, `Map` holds an `Rc`. The emitter converts to
 /// plain pairs main-side, rebuilds on the worker (§12.3) — generic
 /// over every wire-able key/value.
-pub fn map_to_send<K: Wire + Ord + Clone, V: Wire + Clone>(
+pub fn map_to_send<K: Wire + Hash + Eq + Clone, V: Wire + Clone>(
     m: &Map<K, V>,
 ) -> Vec<(K::W, V::W)> {
     m.keys()
@@ -3628,7 +3676,7 @@ pub fn map_to_send<K: Wire + Ord + Clone, V: Wire + Clone>(
         .collect()
 }
 
-pub fn map_from_send<K: Wire + Ord + Clone, V: Wire + Clone>(
+pub fn map_from_send<K: Wire + Hash + Eq + Clone, V: Wire + Clone>(
     pairs: &[(K::W, V::W)],
 ) -> Map<K, V> {
     let mut m = Map::new();

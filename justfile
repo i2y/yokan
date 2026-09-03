@@ -61,6 +61,20 @@ tier-gate:
 pyright:
     cd {{pkg}} && uv run --with pyright --with numpy pyright demo demo/opsboard
 
+# Run it when a module's case set grows, or when Python moves — and
+# read the diff, because a table is only true of the version that
+# printed it.
+#
+# Print what CPython answers into crates/yokan-stdlib/tests/expected/.
+expected *modules:
+    cd {{pkg}} && uv run tools/gen_expected.py {{modules}}
+
+# Read off the manifest; the tour's library section is written from it.
+#
+# How far each standard-library module reaches into Python's.
+coverage *modules:
+    cd {{pkg}} && uv run tools/stdlib_coverage.py {{modules}}
+
 # ---- documentation site ----------------------------------------------------
 
 # Build both languages, in the order build.sh enforces.

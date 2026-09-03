@@ -955,3 +955,89 @@ their own label already is their accessible name — a refusal that
 also closed a disagreement the two runs had, since the compiled run
 dropped that label on a progress bar while the interpreted run built
 a node for it.
+
+## A dict keeps the order its keys went in
+
+The substrate's `Map` was a `BTreeMap`, so a compiled dict answered
+its keys sorted while the same dict in Python answered them in
+insertion order. Rather than teach the dialect to live with two
+orders, the container changed: `Map` is an `indexmap` now, and
+insertion order is what iteration, `keys()`, `values()` and every
+dump report. It is still deterministic, which is all the sorted map
+was ever chosen for. The one place with no order to inherit is a
+Rust crate's `HashMap` crossing the boundary; that goes through
+`Map::from_unordered`, which sorts, so the crossing stays fixed.
+
+With the orders agreeing, walking a dict entered the dialect:
+`for k in d()`, `d().keys()` and `d().values()` all compile, and
+`sorted(d())` now emits an actual sort instead of leaning on the
+container's own order. `.items()` stays out, with a reason that is
+now about pairs rather than about ordering — a two-name binding has
+no compiled shape yet, so the form to write is a walk over the keys
+with `d().get(k, default)` inside.
+
+## The standard library, in one table
+
+A standard-library function used to be spelled three times: a line in
+the generated `.rpi` door, an entry in the translator's call table
+saying which static and how many arguments, and a third entry saying
+what type a call reads as. Three copies drift, and they had — half
+the functions were missing from the third table, so `math.sqrt(x)`
+had no type where `strings.to_int(s, 0)` did. There is one table now.
+A row names the Python spelling, the `.pix` static, the parameters
+and return in pixie's types, and the Rust function behind both runs;
+the door, the arity and container checks, the type a call reads as,
+the fallible twin a `try` routes to, the module list two scanners had
+hard-coded, and the coverage report are all derived from it. Adding a
+function is one line. Two columns say what a row is rather than what
+it does: `pure`, for the day a view may call one, and `cpython`, for
+a row that answers what Python's function of that name answers.
+
+## What CPython printed, in a table
+
+The gate proves the two runs agree. It cannot prove they agree with
+Python: a twin that is wrong the same way in both runs passes it.
+Where a name is Python's, that gap is now closed from the other side
+— `tools/gen_expected.py` runs the case set through CPython and
+writes the answers to `crates/yokan-stdlib/tests/expected/`, doubles
+in hex, exceptions with their class and message, and a Rust test
+holds each twin to the table. A row marked `~>` allows one ulp,
+because its answer comes from the platform's libm rather than from
+IEEE-754, and that distinction belongs in the table rather than in a
+reader's head. `tools/stdlib_coverage.py` reads the same manifest and
+reports, module by module, how far the dialect reaches into Python's
+— and refuses to count a name it merely borrows.
+
+The first table put the eight `math` functions the library already
+shipped in front of CPython, and two disagreed: `sqrt` of a negative
+answered a quiet NaN where Python raises, and `pow` answered infinity
+where Python overflows. Both now answer what Python answers. This is
+the standard's own division: `sqrt` is exactly rounded and `sin` is
+whatever the C library decided, so only one of them can be held to a
+bit pattern.
+
+## A view that fails draws the failure
+
+Panics inside a handler and inside a task were contained; the view
+build was left loud on the grounds that a panic there means a
+compiler bug. It does not always: `xs[0]` on an empty list is a state
+an app can reach, and the run that interprets the view already caught
+it, printed the traceback and drew a red line in place of the screen.
+The compiled run took the process down. Neither run had refused the
+program, so the gate could only report that one side died. The view
+build is contained now, and both runs collapse a failed view to the
+same element from the same constructor — the failure is a thing the
+gate compares, and the detail goes to the terminal in both.
+
+## A generated app builds against the versions this tree tested
+
+A generated crate is its own workspace, so without a lock file it
+resolved its whole dependency graph afresh — and picked up whatever
+the registry had published that morning. That is how a release of a
+transitive dependency that does not compile broke every new app while
+every already-resolved demo stayed green. Generated code is the
+compiler's responsibility, and so is what it builds against: the
+emitter now seeds the new crate with this tree's own `Cargo.lock`,
+next to the toolchain pin it already copied. Seeded, not overwritten
+— cargo adjusts it from there, and an app that has resolved is left
+alone.

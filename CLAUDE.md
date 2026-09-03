@@ -86,6 +86,15 @@ Run these from `crates/yokan/` (they also work via
   `uv run --with pyright --with numpy pyright demo demo/opsboard`;
   it must stay at 0 errors. (mypy cannot follow type-changing class
   decorators; the docs recommend pyright.)
+- Standard library: one manifest, `Translator.STDLIB` in
+  `yokan_gate.py`. A row is the Python spelling, the `.pix` static,
+  the signature in pixie's types and the Rust function; the `.rpi`
+  door, the arity and type checks, the type a call reads as and the
+  fallible twin are derived from it, so a new function is one line.
+  `uv run tools/gen_expected.py` prints CPython's answers into
+  `crates/yokan-stdlib/tests/expected/` (`--check` fails when a
+  table is stale); `uv run tools/stdlib_coverage.py` reports how far
+  each module reaches into Python's.
 - Website: `website/build.sh` builds both languages, always in that
   order — building only one silently loses the other.
 
@@ -113,7 +122,9 @@ Run these from `crates/yokan/` (they also work via
 ## What to verify for which change
 
 - Translator / runtime / stdlib / demo change → the touched demo's
-  gate, then `gate_all.sh`, then pyright.
+  gate, then `gate_all.sh`, then pyright. A standard-library change
+  also needs its module's ground-truth table (`cargo test -p
+  yokan-stdlib`), regenerated first if the case set grew.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
   from the dialect.
@@ -160,6 +171,14 @@ Run these from `crates/yokan/` (they also work via
   live once, in Rust; the interpreted run calls the same code the
   compiled run links. This is what makes the gate meaningful.
   Blocking stdlib pyfunctions must `py.detach` around the wait.
+- **Where the name is Python's, CPython is the specification.** The
+  gate proves the two runs agree, never that they agree with Python
+  — a function wrong the same way in both passes it. A function
+  carrying a Python name is held to a table CPython printed
+  (`crates/yokan-stdlib/tests/expected/`, read by `tests/expected.rs`,
+  written by `tools/gen_expected.py`), and the manifest's `cpython`
+  column says which rows make that claim. Regenerate the tables when
+  CPython moves, and read the diff.
 - **Generated code is the compiler's responsibility** (the ledger
   calls this D10): the emitter produces only closed, borrow-clean
   stereotypes. A rustc error inside generated code is a compiler

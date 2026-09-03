@@ -10,3 +10,9 @@ edition.workspace = true
 # machine, so the slim-kernel motivation is moot in dev (revisit at
 # --release).
 ureq = "2"
+# `Map`'s backing store. A pixie map is a Python dict on the dialect's
+# side, and a dict remembers the order its keys were put in — which a
+# sorted map cannot answer for. Insertion order is the observable
+# thing (iteration, `keys()`, what `json.dumps` writes), so the map
+# that holds it has to be the one that keeps it.
+indexmap = "2"

@@ -214,14 +214,17 @@ suite "maps" {
       when nil { assert_true(true) }
     }
   }
-  test "keys come back sorted" {
+  # A map answers its keys in the order they went in — `tally` writes
+  # `b` in the literal and inserts `a` after it, so `b` comes first.
+  test "keys come back in insertion order" {
     let m = tally()
     let ks = m.keys()
     assert_eq(ks.length, 2)
     case ks.first() {
-      when some(k) { assert_eq(k, "a") }
+      when some(k) { assert_eq(k, "b") }
       when nil { assert_true(false) }
     }
+    assert_eq(ks[1], "a")
   }
   test "contains and remove" {
     var m : Map<String, Int> = { x: 7 }

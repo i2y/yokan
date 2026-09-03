@@ -953,8 +953,12 @@ fn invoke_view(py: Python<'_>, f: &Bound<'_, PyAny>, args: Bound<'_, PyTuple>) -
             }
         }
         Err(e) => {
+            // The compiled run collapses a failing view to the same
+            // element (`pixie_kernel::contain_view`), so a view that
+            // fails is something the gate compares rather than a
+            // divergence — the detail goes to the terminal in both.
             e.print(py);
-            err_text("Python error in view — see terminal")
+            pixie_kernel::view_error_element()
         }
     }
 }

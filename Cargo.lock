@@ -4003,6 +4003,7 @@ dependencies = [
 name = "pixie-kernel"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
  "ureq",
 ]
 
