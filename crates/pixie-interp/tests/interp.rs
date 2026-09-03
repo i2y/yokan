@@ -506,6 +506,49 @@ fn the_number_fields_dump_their_bound_value_and_range() {
 }
 
 #[test]
+fn progress_bar_dumps_width_height_label_and_indeterminate() {
+    let mut w = World::new();
+    let job = w.insert(Job { ratio: 0.5 });
+    let e = FieldEnv {
+        fields: vec![("job".into(), "Job".into(), job.erase())],
+    };
+    let tb = tables();
+
+    // Every new prop set, in field order — mirrors codegen exactly.
+    let lv = view_of(
+        "view Main {\n  let job = Job()\n  Column {\n    ProgressBar {\n      value: job.ratio\n      width: 200.0\n      height: 8.0\n      label: \"Loading\"\n      indeterminate: true\n    }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[ProgressBar(0.5, width=200, height=8, label=Loading, indeterminate)]"
+    );
+}
+
+#[test]
+fn progress_bar_rejects_a_non_bool_indeterminate() {
+    // Matches codegen's now-generalized strictness: `indeterminate:`
+    // must be a Bool. Interp's own error is already type-generic
+    // (`Value::as_bool`'s "expected Bool, got ..."), so this only
+    // pins the SAME strictness down for the new key.
+    let mut w = World::new();
+    let c = w.insert(Counter { count: 3 });
+    let t = w.insert(Todo { items: List::new() });
+    let e = env(c.erase(), t.erase());
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  let counter = Counter()\n  let todo = Todo()\n  Column {\n    ProgressBar { value: 0.5; indeterminate: counter.count }\n  }\n}\n",
+    );
+    match build_view(&lv, &e, &tb, &w) {
+        Ok(_) => panic!("Int indeterminate: must error, not coerce"),
+        Err(err) => assert!(
+            err.contains("Bool"),
+            "error should name the expected type: {err}"
+        ),
+    }
+}
+
+#[test]
 fn modal_dumps_its_open_flag_and_children() {
     // `open` is a bound Bool, so both states produce the same subtree
     // — only the flag in the dump (and the engine's paint) changes.

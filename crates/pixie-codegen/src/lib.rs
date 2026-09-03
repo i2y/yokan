@@ -5478,11 +5478,12 @@ fn lower_tooltip(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, Em
 /// expression, so an icon's alt text can name what it stands for.
 fn lower_semantics(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
     let role = element_prop(el, "role");
-    // The toggles OWN `label:` — it is their visible text, and their
-    // accessible name DERIVES from it — so only `role:` rides on
-    // them. Letting the rider fire too would wrap every toggle in a
-    // Semantics carrying the same string and shadow that derivation.
-    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch") {
+    // The toggles and ProgressBar OWN `label:` — it is their visible
+    // text, and their accessible name DERIVES from it (a11y::name_of)
+    // — so only `role:` rides on them. Letting the rider fire too
+    // would wrap them in a Semantics carrying the same string and
+    // shadow that derivation.
+    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch" | "ProgressBar") {
         None
     } else {
         element_prop(el, "label")
@@ -6075,8 +6076,20 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 span: el.span,
                 message: "ProgressBar needs `value:`".into(),
             })?;
+            let (width, height) = lower_view_size(el, cx)?;
+            // `label:` takes what `text:` takes (Text's own grammar);
+            // `indeterminate:` is the Bool rider ListView's
+            // `virtualized:` and Modal's `open:` already share.
+            let label = match element_prop(el, "label") {
+                Some(l) => lower_view_text(l, cx)?,
+                None => "Str::new()".into(),
+            };
+            let indeterminate = match element_prop(el, "indeterminate") {
+                Some(v) => lower_view_bool(v, cx, "indeterminate")?,
+                None => "false".into(),
+            };
             Ok(format!(
-                "Element::ProgressBar {{ value: {} }}",
+                "Element::ProgressBar {{ value: {}, width: {width}, height: {height}, label: {label}, indeterminate: {indeterminate} }}",
                 lower_view_float(value, cx, "value")?
             ))
         }

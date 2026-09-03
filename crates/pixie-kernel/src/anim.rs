@@ -432,7 +432,9 @@ fn slots(el: &mut Element) -> Vec<(&'static str, Slot<'_>)> {
         ],
         // cute_ui's eased fill-toward-value, finally: a ProgressBar
         // under `animate:` sweeps to its new value instead of jumping.
-        Element::ProgressBar { value } => vec![("value", Slot::Num(value))],
+        // `width`/`height`/`label`/`indeterminate` are layout/state,
+        // not eased — same scope as every other sizing prop here.
+        Element::ProgressBar { value, .. } => vec![("value", Slot::Num(value))],
         Element::Spinner { size } => vec![("size", Slot::Num(size))],
         Element::ScrollView { height, .. } => vec![("height", Slot::Num(height))],
         Element::ListView {
@@ -758,12 +760,18 @@ mod tests {
     }
 
     fn bar(v: f64) -> Element {
-        Element::ProgressBar { value: v }
+        Element::ProgressBar {
+            value: v,
+            width: 0.0,
+            height: 0.0,
+            label: Str::new(),
+            indeterminate: false,
+        }
     }
 
     fn bar_value(el: &Element) -> f64 {
         match el {
-            Element::ProgressBar { value } => *value,
+            Element::ProgressBar { value, .. } => *value,
             Element::Anim { children, .. } | Element::Column { children, .. } => {
                 bar_value(&children[0])
             }

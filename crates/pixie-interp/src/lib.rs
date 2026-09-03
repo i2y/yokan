@@ -1964,10 +1964,12 @@ fn build_semantics(
     w: &World,
 ) -> Result<Element, String> {
     let role = prop_of(el, "role");
-    // The toggles OWN `label:` (mirrors codegen): only `role:` rides
-    // on a Checkbox / Switch — their accessible name derives from
-    // the label they already carry.
-    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch") {
+    // The toggles and ProgressBar OWN `label:` (mirrors codegen): only
+    // `role:` rides on them — their accessible name derives from the
+    // label they already carry (a11y::name_of), so letting the rider
+    // fire too would wrap them in a Semantics carrying the same
+    // string and shadow that derivation.
+    let label = if matches!(el.name.name.as_str(), "Checkbox" | "Switch" | "ProgressBar") {
         None
     } else {
         prop_of(el, "label")
@@ -2532,7 +2534,22 @@ fn build_element_inner(
             let v = prop_of(el, "value").ok_or("ProgressBar needs `value:`")?;
             // Mirrors codegen exactly, Int widening included (§8.55).
             let value = eval_expr(v, env, scope, w)?.as_float()?;
-            Ok(Element::ProgressBar { value })
+            let (width, height) = eval_size(el, env, scope, w)?;
+            let label = match prop_of(el, "label") {
+                Some(l) => eval_text(l, env, scope, w)?,
+                None => Str::new(),
+            };
+            let indeterminate = match prop_of(el, "indeterminate") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            Ok(Element::ProgressBar {
+                value,
+                width,
+                height,
+                label,
+                indeterminate,
+            })
         }
         "Spinner" => {
             // One square axis, unlike the charts' width/height pair;

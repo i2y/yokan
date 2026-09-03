@@ -1238,9 +1238,15 @@ fn line_chart(
     }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (value, role=String::new(), a11y_label=String::new()))]
-fn progress(value: f64, role: String, a11y_label: String) -> Reg {
-    Reg::wrap(wrap_sem(Element::ProgressBar { value }, &role, &a11y_label))
+#[pyfunction(signature = (value, width=0.0, height=0.0, label=String::new(), indeterminate=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
+fn progress(value: f64, width: f64, height: f64, label: String, indeterminate: bool, role: String, a11y_label: String, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_sem(Element::ProgressBar {
+        value,
+        width,
+        height,
+        label: Str::from(label),
+        indeterminate,
+    }, &role, &a11y_label))
 }
 
 #[pyfunction(signature = (size=0.0, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]

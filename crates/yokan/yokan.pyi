@@ -251,7 +251,18 @@ def line_chart(
     a11y_label: str = "",
     tooltip: str = "",
 ) -> Element: ...
-def progress(value: float, role: str = "", a11y_label: str = "") -> Element: ...
+def progress(
+    value: float,
+    width: float = 0.0,
+    height: float = 0.0,
+    label: str = "",
+    indeterminate: bool = False,
+    role: str = "",
+    a11y_label: str = "",
+    tooltip: str = "",
+) -> Element:
+    """A track filled to `value` (0..1); `indeterminate=True` sweeps
+    instead, for work with no known length."""
 def checkbox(
     label: str,
     checked: bool = False,
