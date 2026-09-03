@@ -1116,6 +1116,12 @@ pub enum Stmt {
     /// what gets repeated.
     For {
         binding: Ident,
+        /// `for x, i in xs` — the row's position, bound alongside the
+        /// row itself. `None` for the one-binding form. Over a range
+        /// the index counts turns of the loop, which is the same
+        /// number the binding already carries when the range starts
+        /// at zero.
+        index: Option<Ident>,
         iter: Expr,
         body: Block,
         span: Span,

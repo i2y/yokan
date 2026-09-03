@@ -50,6 +50,7 @@ def text(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    tooltip: str = "",
 ) -> Element: ...
 def button(
     label: str,
@@ -72,12 +73,19 @@ def button(
     exit: bool = False,
     col_span: int = 1,
     row_span: int = 1,
+    tooltip: str = "",
 ) -> Element: ...
 def text_field(
     value: str,
     placeholder: str = "",
     on_change: Optional[Callable[[str], Any]] = None,
     on_submit: Optional[Callable[[str], Any]] = None,
+    # A field that holds paragraphs: it wraps, `enter` writes a
+    # newline instead of submitting, and the caret moves by visual
+    # line. `rows` is how many lines are visible (default 4).
+    multiline: bool = False,
+    rows: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def column(
     *children: Element,
@@ -93,6 +101,7 @@ def column(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    tooltip: str = "",
 ) -> Element: ...
 def row(
     *children: Element,
@@ -103,6 +112,7 @@ def row(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    tooltip: str = "",
 ) -> Element: ...
 def grid(
     *children: Element,
@@ -115,9 +125,10 @@ def grid(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    tooltip: str = "",
 ) -> Element: ...
-def grid_cell(child: Element, col_span: int = 1, row_span: int = 1) -> Element: ...
-def stack(*children: Element) -> Element: ...
+def grid_cell(child: Element, col_span: int = 1, row_span: int = 1, tooltip: str = "") -> Element: ...
+def stack(*children: Element, tooltip: str = "") -> Element: ...
 def list_view(
     count: int,
     row: Callable[[int], Any],
@@ -125,35 +136,43 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
-def scroll_view(*children: Element, height: float = 0.0) -> Element: ...
-def h_scroll_view(*children: Element) -> Element: ...
-def data_table(*children: Element) -> Element: ...
-def modal(*children: Element, open: bool = True) -> Element: ...
-def image(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
-def svg(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
+def scroll_view(*children: Element, height: float = 0.0, tooltip: str = "") -> Element: ...
+def h_scroll_view(*children: Element, tooltip: str = "") -> Element: ...
+def data_table(*children: Element, tooltip: str = "") -> Element:
+    """The first `row` child is the header; later `row` children
+    are data rows shaded in alternation. The frame comes with the
+    element."""
+def modal(*children: Element, open: bool = True, tooltip: str = "") -> Element: ...
+def image(source: str, width: float = 0.0, height: float = 0.0, tooltip: str = "") -> Element: ...
+def svg(source: str, width: float = 0.0, height: float = 0.0, tooltip: str = "") -> Element: ...
 def bar_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def line_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    tooltip: str = "",
 ) -> Element: ...
 def progress(value: float) -> Element: ...
 def checkbox(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -161,21 +180,25 @@ def slider(
     max: float = 1.0,
     step: float = 0.0,
     on_change: Optional[Callable[[float], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def select(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def radio_group(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def tab_bar(
     labels: Sequence[str] = (),
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 
 # A typed number: `enter` or leaving the field commits, text that is
@@ -189,6 +212,7 @@ def number_field(
     step: float = 0.0,
     placeholder: str = "",
     on_change: Optional[Callable[[float], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
 def int_field(
     value: int,
@@ -197,14 +221,24 @@ def int_field(
     step: int = 1,
     placeholder: str = "",
     on_change: Optional[Callable[[int], Any]] = None,
+    tooltip: str = "",
 ) -> Element: ...
-def spinner(size: float = 0.0) -> Element: ...
+def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
+# The work runs off the UI thread in both runs — a Python thread
+# during development, the engine's pool for the standard-library
+# calls inside it once compiled. It is the last statement of its
+# handler; `on_error=` is development-run only (catch a failing call
+# with try/except around it).
 def task(
     work: Callable[[], Any],
     on_done: Optional[Callable[[Any], Any]] = None,
     on_error: Optional[Callable[[BaseException], Any]] = None,
 ) -> None: ...
 def py(f: Callable[P, R]) -> Callable[P, R]: ...
+# A line on stderr, from either run. `print` writes to stdout, which
+# is where a headless run's screen dump goes, so the dialect asks for
+# this instead.
+def log(msg: str) -> int: ...
 
 # Declared Rust crates (the app's `# [tool.yokan.crates]` block):
 # `crates.<name>.<fn>(...)` calls the crate in both runs.
@@ -239,7 +273,23 @@ def component(
 ) -> Callable[[Callable[P, Any]], Callable[P, Element]]: ...
 def slot() -> None: ...
 def local(init: T) -> State[T]: ...
+# A timer is DECLARED at module level (or under the __main__ guard)
+# and starts with the app. Both runs fire it off the same clock: a
+# frame in a window, an `advance:<ms>` in a headless script.
 def every(seconds: float, on_tick: Callable[[], Any]) -> None: ...
+# A shortcut is declared the same way, with the chord spelled the way
+# the platform spells it ("cmd+s", "shift-tab", "ctrl+alt+k"); a
+# headless script presses one with `key:cmd+s`.
+def shortcut(chord: str, on_press: Callable[[], Any]) -> None: ...
+# One handler for every key, which receives the chord it was.
+def on_key(handler: Callable[[str], Any]) -> None: ...
+# One item in the application's menu bar: the menu it sits in, the
+# name it shows, and the handler it runs. Declaration order is menu
+# order; a headless script picks one with `menu:Save`.
+def menu_item(menu: str, item: str, on_pick: Callable[[], Any]) -> None: ...
+# What happens to a file dragged onto the window: the handler receives
+# its path. A headless script drops one with `drop:<path>`.
+def on_file_drop(handler: Callable[[str], Any]) -> None: ...
 def run(
     view: Callable[..., Any],
     state: Any = None,
@@ -274,21 +324,50 @@ class fs:
     def exists(path: str) -> bool: ...
     @staticmethod
     def read_text_or(path: str, default: str) -> str: ...
+    @staticmethod
+    def append_text(path: str, text: str) -> int: ...
+    # The names in a directory, sorted.
+    @staticmethod
+    def list_dir(path: str) -> list[str]: ...
+    @staticmethod
+    def make_dir(path: str) -> int: ...
+    @staticmethod
+    def remove(path: str) -> int: ...
+    # The directory this app may keep its own files in, created if it
+    # is not there yet.
+    @staticmethod
+    def app_dir(name: str) -> str: ...
+    # The platform's own panels. A dialog waits for a person, so it
+    # runs inside `task(...)`; the answer is a path, or "" when the
+    # person cancelled. A headless script answers with `file:<path>`.
+    @staticmethod
+    def open_dialog(title: str = "") -> str: ...
+    @staticmethod
+    def save_dialog(name: str = "") -> str: ...
 
 class sqlite:
     """Bundled sqlite; interpreted and compiled apps run the same
-    implementation. query_text answers column 0 of each row as text
-    — shape rows with SQL, order with ORDER BY."""
+    implementation. query_text answers column 0 of each row as text,
+    query_rows answers every column; order with ORDER BY.
+
+    Every call takes an optional `params` list: write `?` in the
+    statement and the values beside it, and text a user typed can
+    never become SQL. Values bind as text and the column's affinity
+    converts, so an INTEGER column stores a number."""
     @staticmethod
-    def exec(path: str, sql: str) -> int: ...
+    def exec(path: str, sql: str, params: list[str] = ...) -> int: ...
     @staticmethod
-    def query_text(path: str, sql: str) -> list[str]: ...
+    def query_text(path: str, sql: str, params: list[str] = ...) -> list[str]: ...
     @staticmethod
-    def query_int(path: str, sql: str) -> int: ...
+    def query_int(path: str, sql: str, params: list[str] = ...) -> int: ...
     @staticmethod
-    def query_int_or(path: str, sql: str, default: int) -> int: ...
+    def query_rows(path: str, sql: str, params: list[str] = ...) -> list[list[str]]: ...
     @staticmethod
-    def query_text_or(path: str, sql: str) -> list[str]: ...
+    def query_int_or(path: str, sql: str, default: int, params: list[str] = ...) -> int: ...
+    @staticmethod
+    def query_text_or(path: str, sql: str, params: list[str] = ...) -> list[str]: ...
+    @staticmethod
+    def query_rows_or(path: str, sql: str, params: list[str] = ...) -> list[list[str]]: ...
 
 class strings:
     @staticmethod
@@ -300,14 +379,35 @@ class notify:
     @staticmethod
     def send(title: str, body: str) -> None: ...
 
-class http:
-    """HTTP GET. The call blocks until the response arrives — the
-    interpreted and the compiled app block on the same statement. A
-    failure raises; get_text_or answers the fallback instead."""
+class clipboard:
+    """The system clipboard. A window exchanges it with the platform,
+    a headless run keeps it to itself — so a copy and a paste are a
+    checked interaction like any other."""
     @staticmethod
-    def get_text(url: str) -> str: ...
+    def set_text(text: str) -> int: ...
+    @staticmethod
+    def get_text() -> str: ...
+
+class http:
+    """HTTP. The call blocks until the response arrives — the
+    interpreted and the compiled app block on the same statement, and
+    inside `task(...)` the compiled run awaits it. A failure raises;
+    the *_or variants answer the fallback instead."""
+    # A second argument is the deadline in milliseconds.
+    @staticmethod
+    def get_text(url: str, timeout_ms: int = ...) -> str: ...
     @staticmethod
     def get_text_or(url: str, default: str) -> str: ...
+    @staticmethod
+    def get_text_with(url: str, headers: dict[str, str]) -> str: ...
+    # POST a body; the content type defaults to text/plain.
+    @staticmethod
+    def post_text(url: str, body: str, content_type: str = ...) -> str: ...
+    @staticmethod
+    def post_text_or(url: str, body: str, default: str) -> str: ...
+    # The status code, or 0 when the request never reached a server.
+    @staticmethod
+    def status(url: str) -> int: ...
 
 def style(**kwargs: Any) -> dict[str, Any]: ...
 
@@ -342,12 +442,26 @@ class json:
     def length(src: str, path: str) -> int: ...
     @staticmethod
     def has(src: str, path: str) -> bool: ...
+    # Writes a str, int, float, bool, a list of one of those, or a
+    # dict with str keys. A dict is written in key order.
+    @staticmethod
+    def dumps(value: Any) -> str: ...
 
 class time:
     @staticmethod
     def now_ms() -> int: ...
+    # UTC.
     @staticmethod
     def format_ms(ms: int, fmt: str) -> str: ...
+    # The machine's own zone — both runs read the same zone database.
+    @staticmethod
+    def format_local_ms(ms: int, fmt: str) -> str: ...
+    @staticmethod
+    def local_offset_minutes(ms: int) -> int: ...
+    # Blocks the caller. Inside `task(...)` the compiled run awaits it,
+    # so the window keeps drawing while it waits.
+    @staticmethod
+    def sleep_ms(ms: int) -> int: ...
 
 class random:
     @staticmethod

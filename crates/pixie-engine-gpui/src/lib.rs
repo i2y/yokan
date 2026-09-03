@@ -76,6 +76,10 @@ struct Root<C: Component> {
     /// `svg()` under the root resolves through it, so the budget is
     /// the app's whole image footprint.
     images: Entity<PixieImageCache>,
+    /// Where a keystroke lands when no field has the focus. Declared
+    /// shortcuts are dispatched from here, so an app answers `cmd-s`
+    /// without anything being focused first.
+    root_focus: gpui::FocusHandle,
 }
 
 /// A bounded, least-recently-used image cache.
@@ -270,6 +274,31 @@ fn root_scope_theme(mut el: &Element) -> Option<&'static Theme> {
             }
             _ => return None,
         }
+    }
+}
+
+/// The little panel a `tooltip:` rider shows. gpui asks for a view,
+/// so this is the smallest one that reads like the rest of the
+/// window: the panel background, dim text, one line.
+struct PixieTooltip {
+    label: SharedString,
+}
+
+impl Render for PixieTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let th: &'static Theme = if THEME_LIGHT_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            &THEME_LIGHT
+        } else {
+            &THEME_DARK
+        };
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(rgb(th.panel))
+            .text_color(rgb(th.text))
+            .text_size(px(12.))
+            .child(self.label.clone())
     }
 }
 
@@ -728,9 +757,15 @@ impl<C: Component> Render for Root<C> {
             }
             pixie_kernel::anim::set_reduced(w, reduced);
             pixie_kernel::anim::set_now(w, now);
+            // Declared timers run on the same clock the animations do,
+            // so a frame is the only place they fire — and while one
+            // exists the pump keeps asking for frames.
+            pixie_kernel::timer::fire_due(w);
+            let ticking = pixie_kernel::timer::any(w);
             let animating = pixie_kernel::anim::active(w);
-            let tree = (flipped || animating).then(|| pixie_kernel::build_prepared(w, view));
-            (tree, animating)
+            let tree = (flipped || animating || ticking)
+                .then(|| pixie_kernel::build_prepared(w, view));
+            (tree, animating || ticking)
         });
         if let Some(t) = rebuilt {
             self.tree = t;
@@ -793,6 +828,73 @@ impl<C: Component> Render for Root<C> {
         // It carries LAYOUT only: `ImageCacheElement` refines a style
         // for sizing but paints nothing of its own, so the background
         // stays on a real div inside it.
+        // File dialogs asked for from a task: the panel opens here,
+        // on the thread that may open one, and the answer travels
+        // back to the waiting call when the person has picked.
+        if pixie_kernel::dialog::any() {
+            for req in pixie_kernel::dialog::take() {
+                match req.kind {
+                    pixie_kernel::dialog::Kind::Open => {
+                        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+                            files: true,
+                            directories: false,
+                            multiple: false,
+                            prompt: None,
+                        });
+                        cx.background_executor()
+                            .spawn(async move {
+                                let picked = rx.await.ok().and_then(|r| r.ok()).flatten();
+                                let path = picked
+                                    .and_then(|v| v.first().map(|p| p.to_string_lossy().into_owned()))
+                                    .unwrap_or_default();
+                                req.answer(&path);
+                            })
+                            .detach();
+                    }
+                    pixie_kernel::dialog::Kind::Save => {
+                        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+                        let label = req.label.clone();
+                        let rx = cx.prompt_for_new_path(
+                            std::path::Path::new(&home),
+                            (!label.is_empty()).then_some(label.as_str()),
+                        );
+                        cx.background_executor()
+                            .spawn(async move {
+                                let picked = rx.await.ok().and_then(|r| r.ok()).flatten();
+                                let path = picked
+                                    .map(|p| p.to_string_lossy().into_owned())
+                                    .unwrap_or_default();
+                                req.answer(&path);
+                            })
+                            .detach();
+                    }
+                }
+            }
+        }
+        // The clipboard, exchanged with the platform once per frame:
+        // what the app copied goes out, and otherwise what another
+        // application put there comes in. A headless run does neither,
+        // which is why a script's copy-and-paste stays its own.
+        if let Some(t) = pixie_kernel::clipboard::take_pending() {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(t));
+        } else if let Some(t) = cx.read_from_clipboard().and_then(|i| i.text()) {
+            pixie_kernel::clipboard::adopt(t);
+        }
+        // A key reaches the app when nothing swallowed it first: a
+        // focused field keeps the letters it is being typed into, and
+        // a chord carrying cmd or ctrl is a shortcut either way. This
+        // is the platform's own rule, and it is what lets an app bind
+        // `cmd-s` while a text field has the caret.
+        let typing = self
+            .inputs
+            .values()
+            .any(|e| e.read(cx).focus_handle.is_focused(window));
+        // With nothing focused there is no path for a key to travel,
+        // so the root takes the focus and becomes the window's key
+        // sink. A field that gets clicked takes it back.
+        if window.focused(cx).is_none() {
+            window.focus(&self.root_focus, cx);
+        }
         gpui::image_cache(self.images.clone())
             .relative()
             .flex()
@@ -802,6 +904,37 @@ impl<C: Component> Render for Root<C> {
                     .relative()
                     .flex()
                     .size_full()
+                    .track_focus(&self.root_focus)
+                    .on_action(cx.listener(|root, cmd: &MenuCommand, _window, cx| {
+                        let index = cmd.index;
+                        root.apply(cx, move |w| {
+                            pixie_kernel::menu::pick_at(w, index);
+                        });
+                    }))
+                    .on_drop(cx.listener(
+                        |root, paths: &gpui::ExternalPaths, _window, cx| {
+                            let paths: Vec<String> = paths
+                                .paths()
+                                .iter()
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .collect();
+                            root.apply(cx, move |w| {
+                                for p in &paths {
+                                    pixie_kernel::drop::fire(w, p);
+                                }
+                            });
+                        },
+                    ))
+                    .on_key_down(cx.listener(move |root, ev: &gpui::KeyDownEvent, _window, cx| {
+                        let chord = chord_of(&ev.keystroke);
+                        let mods = &ev.keystroke.modifiers;
+                        if typing && !mods.platform && !mods.control {
+                            return;
+                        }
+                        root.apply(cx, move |w| {
+                            pixie_kernel::keys::fire(w, &chord);
+                        });
+                    }))
                     .bg(rgb(th.window_bg))
                     .text_color(rgb(th.text))
                     .child(
@@ -816,6 +949,65 @@ impl<C: Component> Render for Root<C> {
                     .children(pass.overlays),
             )
     }
+}
+
+/// One menu item, dispatched by the index it was declared at. gpui
+/// menu items carry an ACTION, and an action is a type — so a bar
+/// whose items are only known at run time needs one action type that
+/// carries which item it was.
+#[derive(Clone, PartialEq, Default, Debug, gpui::Action)]
+#[action(namespace = pixie_menu, no_json)]
+struct MenuCommand {
+    index: usize,
+}
+
+/// Hand the declared menu bar to the platform. Called once, after the
+/// stores exist and before the window opens.
+fn install_menus(runtime: &Runtime, cx: &mut App) {
+    let layout = runtime.with(|w: &mut World| {
+        if pixie_kernel::menu::any(w) {
+            Some(pixie_kernel::menu::layout(w))
+        } else {
+            None
+        }
+    });
+    let Some(layout) = layout else { return };
+    let menus: Vec<gpui::Menu> = layout
+        .into_iter()
+        .map(|(name, items)| gpui::Menu {
+            name: SharedString::from(name).into(),
+            items: items
+                .into_iter()
+                .map(|(label, index)| {
+                    gpui::MenuItem::action(SharedString::from(label), MenuCommand { index })
+                })
+                .collect(),
+            disabled: false,
+        })
+        .collect();
+    cx.set_menus(menus);
+}
+
+/// The chord a keystroke spells, in the order `keys::normalize`
+/// writes: one string on both sides of the comparison, so what a
+/// script presses and what a window presses cannot drift apart.
+fn chord_of(ks: &gpui::Keystroke) -> String {
+    let m = &ks.modifiers;
+    let mut out = String::new();
+    if m.platform {
+        out.push_str("cmd-");
+    }
+    if m.control {
+        out.push_str("ctrl-");
+    }
+    if m.alt {
+        out.push_str("alt-");
+    }
+    if m.shift {
+        out.push_str("shift-");
+    }
+    out.push_str(&ks.key);
+    out
 }
 
 /// Route a committed edit (or submit) back into the World through the
@@ -1060,6 +1252,8 @@ fn render_el<C: Component>(
             placeholder,
             on_change,
             on_submit,
+            multiline,
+            rows,
         } => {
             let key = pass.path.clone();
             let entity = match inputs.get(&key) {
@@ -1083,6 +1277,7 @@ fn render_el<C: Component>(
                 value.as_str().to_string(),
                 placeholder.as_str().to_string(),
             );
+            let (ml, rw) = (*multiline, *rows as f32);
             entity.update(cx, |inp, cx| {
                 inp.on_commit = commit_cb;
                 inp.on_submit = submit_cb;
@@ -1093,7 +1288,7 @@ fn render_el<C: Component>(
                 // not a number.
                 inp.numeric = None;
                 inp.on_number = None;
-                inp.sync(&v, &p, cx);
+                inp.sync(&v, &p, ml, rw, cx);
             });
             pass.next_id += 1;
             let wrap = if slot == Slot::Row {
@@ -1232,6 +1427,35 @@ fn render_el<C: Component>(
             let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
             pass.path.pop();
             rendered
+        }
+        // The tooltip rider: the child renders as it would anywhere,
+        // inside a layout-transparent div that carries the hover text.
+        Element::Tooltip { text, children } => {
+            let Some(child) = children.first() else {
+                return div().into_any_element();
+            };
+            pass.path.push(0);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            pass.path.pop();
+            let label: SharedString = text.as_str().to_string().into();
+            let (grow, basis) = child_flex(child);
+            // `tooltip` is a stateful interaction, so the wrapper
+            // needs an id — and it copies the child's flex share so
+            // the extra div changes no layout.
+            pass.next_id += 1;
+            let mut d = div().id(pass.next_id).flex();
+            if grow > 0.0 {
+                d = d.flex_grow(grow as f32).flex_shrink_0();
+                if basis > 0.0 {
+                    d = d.flex_basis(px(basis as f32));
+                }
+            }
+            d.child(rendered)
+                .tooltip(move |_window, cx| {
+                    let label = label.clone();
+                    cx.new(|_| PixieTooltip { label }).into()
+                })
+                .into_any_element()
         }
         // §8.35. A settled wrapper renders NOTHING of its own: the
         // child goes straight out, so `animate:` on a grown element
@@ -2570,10 +2794,11 @@ fn number_field<C: Component>(
         inp.bound_num = value;
         inp.on_number = on_number;
         // The mirror of the TextField arm's reset: this path may have
-        // held a text field last rebuild.
+        // held a text field last rebuild. A number is one line, so
+        // the multiline half is cleared with the callbacks.
         inp.on_commit = None;
         inp.on_submit = None;
-        inp.sync(&shown, &p, cx);
+        inp.sync(&shown, &p, false, 0.0, cx);
     });
     pass.next_id += 1;
     let wrap = if slot == Slot::Row {
@@ -2947,6 +3172,10 @@ pub fn run_app<C: Component>(
             bg.spawn(async move { f() }).detach();
         });
         text_input::bind_keys(cx);
+        // The declared menu bar, handed over before the window opens.
+        install_menus(&runtime, cx);
+        // From here a file dialog has a window to open in.
+        pixie_kernel::dialog::windowed();
         // cute_ui's Cmd+T: flip the theme live. Every color is read
         // per paint, so one refresh restyles the whole window.
         cx.bind_keys([gpui::KeyBinding::new("cmd-t", ToggleTheme, None)]);
@@ -2974,7 +3203,7 @@ pub fn run_app<C: Component>(
                 },
                 move |_, cx| {
                     let images = cx.new(|_| PixieImageCache::new());
-                    cx.new(move |_| Root {
+                    cx.new(move |cx| Root {
                         runtime,
                         view,
                         tree,
@@ -2983,6 +3212,7 @@ pub fn run_app<C: Component>(
                         selects: HashMap::new(),
                         pumping: false,
                         images,
+                        root_focus: cx.focus_handle(),
                     })
                 },
             )

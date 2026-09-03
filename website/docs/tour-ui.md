@@ -31,6 +31,21 @@ with card("counters"):
     counter("b", 10)
 ```
 
+A component can also take a callback or a `State` cell, which is how a child talks back to the caller.
+
+```python
+@component
+def field(label: str, cell: State[str]):
+    with row(spacing=6):
+        text(label)
+        text_field(cell(), on_change=cell.set)
+
+field("name", name)
+field("city", city)
+```
+
+A handler and a cell live in the caller, so a component that takes one becomes a view per call site — two calls that pass the same thing share one.
+
 `local` identity is call-site based.
 Reorder the calls and the states swap along with them.
 
@@ -49,6 +64,9 @@ text(f"n={n()}", **chip)
 
 Colors take hex literals or **theme tokens**.
 `windowBg`, `panel`, `surface`, `surfaceHover`, `border`, `text`, `textDim`, `accent` and the rest resolve to the color the theme in effect dictates.
+
+A style value can come from state as well as from a literal: `size=zoom()`, `color=Look.tone`, `padding=Look.pad * 2`.
+The view re-reads it after every event, like everything else it shows.
 
 A theme is applied to a subtree with `theme=`.
 The value can be a literal or a state read, so an app can own its palette as state.
@@ -89,4 +107,5 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 `width` / `height` are logical pixels, given as a pair (omitted, the engine default applies).
 The declaration is baked into the compiled binary as well.
 `on_start` is a handler that runs once right after mount, and a failure prints and continues (use it for loading startup data or seeding the RNG).
+It is also the only place for startup work: module level holds declarations, and a statement there (`count.set(5)`, say, or `fs.write_text(...)`) is refused by name, because the compiled app reads the module and never executes it.
 

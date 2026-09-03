@@ -23,20 +23,50 @@ except Exception as e:
 
 ## The standard library
 
-Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, notify`.
+Use it with `from yokan import fs, sqlite, http, math, json, time, strings, random, clipboard, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
 
-- **fs**: `read_text` / `write_text` / `exists` / `read_text_or`
-- **sqlite**: `exec` / `query_text` / `query_int` / `query_int_or` / `query_text_or` (SQLite bundled. Wrap aggregates in COALESCE and pin the order with ORDER BY)
-- **http**: `get_text` / `get_text_or` (synchronous)
+- **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)
+  — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
+- **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
+- **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
 - **math**: `sqrt` / `sin` / `cos` / `pow` / `fabs` / `floor` / `ceil` / `pi`
-- **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`)
-- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms)
+- **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`), and `dumps(value)`, which writes a str, int, float, bool, a list of one of those, or a dict with str keys — a dict in key order
+- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **random**: `seed(n)` / `int(lo, hi)` (inclusive on both ends) / `float()` (seed it and the sequence repeats)
+- **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
+
+Every sqlite call takes one more argument, a list of values to bind:
+
+```python
+sqlite.exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [item, str(yen), cat])
+sqlite.query_int_or(DB, "SELECT COALESCE(SUM(amount),0) FROM expenses WHERE cat=?", 0, ["food"])
+```
+
+Write `?` where the value goes and pass it beside the statement.
+An apostrophe in `item` is then an apostrophe, and text a user typed can never become SQL.
+Values bind as text and the column's affinity converts, so an INTEGER column stores the number.
+
+A whole row comes back as a `list[str]`, so a result is a `list[list[str]]`:
+
+```python
+@store
+class Ledger:
+    raw: list[list[str]] = []
+    rows: list[str] = []
+
+    def load(self) -> None:
+        self.raw = sqlite.query_rows_or(DB, "SELECT name, amount, cat FROM expenses ORDER BY rowid")
+        self.rows = []
+        for r in self.raw:
+            self.rows = self.rows + [f"{r[0]}  ¥{r[1]}  ({r[2]})"]
+```
+
+The line is written in Python rather than assembled in SQL.
 
 The discipline underneath all of these is determinism.
 Pass fixed times, seed the RNG — and verification scripts replay the same result every time.
@@ -143,10 +173,10 @@ def slug(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
 ```
 
-Annotate every parameter and the return (int / float / str / bool / list[...]).
+Annotate every parameter and the return: int, float, str, bool, `list[...]` and `dict[str, ...]` of those, a value class, and `T | None`.
 Compiled extensions like numpy work inside escapes.
 
-## Heavy work and timers
+## Heavy work, timers and keys
 
 Never block a handler (the window freezes).
 `task` does the work on a worker thread and runs the continuation on the UI thread when it finishes.
@@ -154,15 +184,51 @@ Never block a handler (the window freezes).
 ```python
 def start():
     busy.set(True)
-    task(fetch_data,
-            on_done=lambda v: (busy.set(False), data.set(v)),
-            on_error=lambda e: (busy.set(False), err.set(str(e))))
+    task(fetch_data, on_done=lambda v: (busy.set(False), data.set(v)))
 ```
 
-`work` must not build UI elements; it just returns a value.
-Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+`on_error=` runs during development only; a failing standard-library call is caught with `try` / `except` around the call itself.
 
-`every(seconds, cb)` is a timer with a seconds interval.
-Call it before `run`.
-Timers are a development-run feature and are not compiled (see [What does not work yet](tour-ship.md#what-does-not-work-yet)).
+`work` must not build UI elements; it just returns a value, and `task` is the last statement of its handler (in Python the statements after it run before the work finishes).
+Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
+Both runs do the same thing with it: during development the work is a Python thread, and the compiled app awaits the standard-library calls inside it, which is what puts them on the engine's pool.
+Pure computation inside a task stays where it is written — what moves off the UI thread is the `fs`, `sqlite`, `http` or `time.sleep_ms` call.
+
+`every(seconds, cb)` is a timer, declared at module level (or under the `__main__` guard) and started with the app.
+
+```python
+def tick():
+    n.set(n() + 1)
+
+every(1.0, tick)
+```
+
+It is a declaration, not a call you make later: both runs start it when the app starts, and both fire it off the same clock — a frame in a window, an `advance:<ms>` in a headless script, so a minute of ticks is gate-checkable.
+
+Keys are declared the same way.
+`shortcut(chord, handler)` binds a chord, and `on_key(handler)` sees every key as the chord it was.
+
+```python
+def save():
+    fs.write_text(path, body())
+
+shortcut("cmd+s", save)
+on_key(lambda k: last.set(k))
+```
+
+The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `ctrl+alt+k` — and `-` reads the same as `+`.
+While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
+A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
+
+`menu_item(menu, name, handler)` puts the same handler in the application's menu bar.
+
+```python
+menu_item("File", "Save", save)
+menu_item("File", "Clear", clear)
+```
+
+Declaration order is menu order, the window hands the bar to the platform, and a script picks an item by name with `menu:Save`.
+
+`on_file_drop(handler)` is the same kind of declaration for a file dragged onto the window: the handler receives its path, and a script drops one with `drop:<path>`.
+
 

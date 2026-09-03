@@ -340,6 +340,7 @@ fn children_of(el: &Element) -> &[Element] {
         | Element::GridCell { children, .. }
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
+        | Element::Tooltip { children, .. }
         | Element::Themed { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }

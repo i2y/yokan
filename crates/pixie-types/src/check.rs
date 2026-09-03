@@ -855,6 +855,7 @@ impl<'a> Checker<'a> {
             }
             Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 ..
@@ -862,6 +863,9 @@ impl<'a> Checker<'a> {
                 self.walk_expr_for_visibility(env, iter);
                 let mut sub = env.child();
                 sub.bind(binding.name.clone(), Type::Unknown);
+                if let Some(i) = index {
+                    sub.bind(i.name.clone(), Type::Unknown);
+                }
                 self.walk_block_for_visibility(&sub, body);
             }
             Stmt::While { cond, body, .. } => {
@@ -1295,18 +1299,31 @@ impl<'a> Checker<'a> {
             }
             Stmt::For {
                 binding,
+                index,
                 iter,
                 body,
                 ..
             } => {
                 // The type system doesn't have a real iterable element-
                 // type derivation yet (no trait machinery / Iterable
-                // type class). Synth the iter expression for side
-                // effects; bind the for-name to Type::Error so it
-                // soft-passes in the body without false positives.
-                let _ = self.synth(env, iter);
+                // type class), but the two iters that carry their
+                // element type in the syntax do bind a real type: a
+                // range counts Ints, and a List<T> yields T. Anything
+                // else stays Type::Error, which soft-passes in the
+                // body without false positives.
+                let iter_ty = self.synth(env, iter);
+                let elem = match (&iter.kind, &iter_ty) {
+                    (ExprKind::Range { .. }, _) => Type::Prim(Prim::Int),
+                    (_, Type::Generic { base, args }) if base == "List" && args.len() == 1 => {
+                        args[0].clone()
+                    }
+                    _ => crate::ty::Type::Error,
+                };
                 let mut sub = env.clone();
-                sub.bind(binding.name.clone(), crate::ty::Type::Error);
+                sub.bind(binding.name.clone(), elem);
+                if let Some(i) = index {
+                    sub.bind(i.name.clone(), Type::Prim(Prim::Int));
+                }
                 for stmt in &body.stmts {
                     self.check_stmt(&mut sub, stmt);
                 }
@@ -1993,7 +2010,7 @@ impl<'a> Checker<'a> {
                 let idx_ty = self.synth(env, index);
                 match &recv_ty {
                     Type::Generic { base, args } if base == "List" && args.len() == 1 => {
-                        if !matches!(idx_ty, Type::Prim(Prim::Int) | Type::Unknown) {
+                        if !matches!(idx_ty, Type::Prim(Prim::Int) | Type::Unknown | Type::Error) {
                             self.diags.push(Diagnostic::error(
                                 index.span,
                                 format!("a list index is an Int, found `{}`", idx_ty.render()),

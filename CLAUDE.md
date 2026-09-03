@@ -66,7 +66,8 @@ Run these from `crates/yokan/` (they also work via
   — **the gate**: runs the app interpreted and compiled with the
   same interaction script and byte-compares the dumps. The gate is
   the product's core promise; a change is not done while it is red.
-- `translate` (emit the `.pix` only), `build` (native binary;
+- `check` (the refusals alone — no compiler started), `translate`
+  (emit the `.pix` only), `build` (native binary;
   `--release`, `--bundle`, `--onefile`, `--app`), `sync` (build the
   crate doors without gating), `add <app> <crate>` (declare a Rust
   crate dependency).
@@ -98,6 +99,7 @@ Run these from `crates/yokan/` (they also work via
 - `cargo run -q -p pixie-cli -- build examples/counter/counter.pix
   --run` opens a window; the `PIXIE_SCRIPT` env var replays it
   headless (`click[@n]:`, `input[@n]:`, `submit`, `slide`, `select`,
+  `key:<chord>`, `menu:<item>`, `file:<path>`, `drop:<path>`,
   `advance:<ms>`, `a11y`, `theme:dark|light`, `mem`, `dump`). Steps
   that produce output are collected into the run's returned
   transcript, so an embedder that captures the return value sees
@@ -143,6 +145,11 @@ Run these from `crates/yokan/` (they also work via
   patch; the pin includes `features = ["font-kit"]`, without which
   no text renders. Upgrading gpui means bumping the rev everywhere,
   re-applying the vendored patch, and running the tier gate.
+- Generated apps build with `debug = 0` and, under the gate,
+  `--no-interp`: a gate's binary is never debugged or hot-reloaded,
+  and the two together took a demo's build from 110 s to 8 s (the
+  sweep from over an hour to 19 minutes). Changing either one costs
+  a full dependency rebuild (~20 min) the first time.
 - Rapid scripted edits to a demo `.py` can leave a stale
   `__pycache__` when size and mtime both match — remove it if a
   reload looks ignored.

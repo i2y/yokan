@@ -27,6 +27,7 @@ use std::rc::Rc;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId, MouseButton,
+    WrappedLine,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine,
     SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window, actions, div, fill,
     point, prelude::*, px, relative, rgb, rgba, size,
@@ -52,8 +53,8 @@ actions!(
         Submit,
         TabNext,
         TabPrev,
-        StepUp,
-        StepDown,
+        Up,
+        Down,
     ]
 );
 
@@ -78,11 +79,11 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", Submit, CTX),
         KeyBinding::new("tab", TabNext, CTX),
         KeyBinding::new("shift-tab", TabPrev, CTX),
-        // The number fields' spinner keys. Bound for every field
-        // because the key context is shared; a text field ignores
-        // them.
-        KeyBinding::new("up", StepUp, CTX),
-        KeyBinding::new("down", StepDown, CTX),
+        // One binding, two meanings, picked by the mode the field is
+        // in: the caret by visual line in a paragraph field, the
+        // value by one step in a number field.
+        KeyBinding::new("up", Up, CTX),
+        KeyBinding::new("down", Down, CTX),
         KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, CTX),
     ]);
 }
@@ -184,7 +185,21 @@ pub struct PixieInput {
     selection_reversed: bool,
     marked_range: Option<Range<usize>>,
     last_layout: Option<ShapedLine>,
+    /// The wrapped layout of a multi-line field, one entry per hard
+    /// line, with the byte offset that line starts at. Both the caret
+    /// and the mouse read positions out of this.
+    last_wrapped: Vec<(WrappedLine, usize)>,
     last_bounds: Option<Bounds<Pixels>>,
+    /// A field that holds paragraphs: it wraps, `enter` writes a
+    /// newline, and the caret moves by visual line.
+    pub multiline: bool,
+    /// How many lines of it are visible (0 = the default 4).
+    pub rows: f32,
+    /// Vertical scroll keeping the caret in view — the multi-line
+    /// twin of `scroll_x`.
+    scroll_y: Pixels,
+    /// The line height the last layout used.
+    line_height: Pixels,
     /// Horizontal scroll keeping the caret in view when the text is
     /// wider than the field (a cute_ui gap closed in the port).
     scroll_x: Pixels,
@@ -218,8 +233,13 @@ impl PixieInput {
             selection_reversed: false,
             marked_range: None,
             last_layout: None,
+            last_wrapped: Vec::new(),
             last_bounds: None,
+            multiline: false,
+            rows: 0.,
             scroll_x: px(0.),
+            scroll_y: px(0.),
+            line_height: px(0.),
             is_selecting: false,
             on_commit: None,
             on_submit: None,
@@ -235,7 +255,19 @@ impl PixieInput {
     /// Reconcile against the element tree after a rebuild. The bound
     /// value is applied only when it differs from the previously bound
     /// one (and never mid-composition, where the IME owns the text).
-    pub fn sync(&mut self, value: &str, placeholder: &str, cx: &mut Context<Self>) {
+    pub fn sync(
+        &mut self,
+        value: &str,
+        placeholder: &str,
+        multiline: bool,
+        rows: f32,
+        cx: &mut Context<Self>,
+    ) {
+        if self.multiline != multiline || self.rows != rows {
+            self.multiline = multiline;
+            self.rows = rows;
+            cx.notify();
+        }
         if self.placeholder.as_ref() != placeholder {
             self.placeholder = SharedString::from(placeholder.to_string());
             cx.notify();
@@ -265,9 +297,18 @@ impl PixieInput {
         }
     }
 
-    fn submit(&mut self, _: &Submit, _window: &mut Window, cx: &mut Context<Self>) {
+    fn submit(&mut self, _: &Submit, window: &mut Window, cx: &mut Context<Self>) {
+        // `enter` means whatever finishing the edit means here: a
+        // number field commits what was typed, a field that holds
+        // paragraphs takes the key as a newline (there is nowhere
+        // else for it to go in one), and a one-line text field
+        // submits.
         if self.numeric.is_some() {
             self.commit_number(cx);
+            return;
+        }
+        if self.multiline {
+            self.replace_text_in_range(None, "\n", window, cx);
             return;
         }
         if let Some(cb) = self.on_submit.clone() {
@@ -314,14 +355,6 @@ impl PixieInput {
         }
     }
 
-    fn step_up(&mut self, _: &StepUp, _: &mut Window, cx: &mut Context<Self>) {
-        self.step_by(true, cx);
-    }
-
-    fn step_down(&mut self, _: &StepDown, _: &mut Window, cx: &mut Context<Self>) {
-        self.step_by(false, cx);
-    }
-
     /// Replace the whole content and park the caret at its end.
     fn set_text(&mut self, text: String, cx: &mut Context<Self>) {
         if self.content.as_str() == text {
@@ -333,6 +366,80 @@ impl PixieInput {
         self.selection_reversed = false;
         self.marked_range = None;
         cx.notify();
+    }
+
+    /// The caret one visual line up or down, keeping its column. A
+    /// single-line field has nowhere to go, so it stays put.
+    fn move_by_line(&mut self, down: bool, cx: &mut Context<Self>) {
+        if !self.multiline || self.last_wrapped.is_empty() {
+            return;
+        }
+        let line_height = self.line_height;
+        let ix = self.cursor_offset();
+        let Some((li, (line, start))) = self
+            .last_wrapped
+            .iter()
+            .enumerate()
+            .find(|(_, (l, st))| ix >= *st && ix <= *st + l.len())
+        else {
+            return;
+        };
+        let Some(here) = line.position_for_index(ix - start, line_height) else {
+            return;
+        };
+        let want_y = if down {
+            here.y + line_height
+        } else {
+            here.y - line_height
+        };
+        // Inside this hard line when the row exists there, otherwise
+        // the neighbouring hard line's first or last row.
+        let rows = line.size(line_height).height;
+        if want_y >= px(0.) && want_y < rows {
+            let target = point(here.x, want_y);
+            let found = line.closest_index_for_position(target, line_height);
+            let off = found.unwrap_or_else(|e| e);
+            self.move_to(start + off, cx);
+            return;
+        }
+        let next = if down { li + 1 } else { li.checked_sub(1).unwrap_or(li) };
+        if down && next >= self.last_wrapped.len() {
+            let end = self.content.len();
+            self.move_to(end, cx);
+            return;
+        }
+        if !down && li == 0 {
+            self.move_to(0, cx);
+            return;
+        }
+        let (nline, nstart) = &self.last_wrapped[next];
+        let y = if down {
+            px(0.)
+        } else {
+            nline.size(line_height).height - line_height
+        };
+        let found = nline.closest_index_for_position(point(here.x, y), line_height);
+        let off = found.unwrap_or_else(|e| e);
+        self.move_to(nstart + off, cx);
+    }
+
+    /// One binding, two meanings. In a number field the arrows are a
+    /// keyboard spinner; everywhere else they move the caret by
+    /// visual line (and a one-line text field has nowhere to go).
+    fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
+        if self.numeric.is_some() {
+            self.step_by(true, cx);
+            return;
+        }
+        self.move_by_line(false, cx);
+    }
+
+    fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
+        if self.numeric.is_some() {
+            self.step_by(false, cx);
+            return;
+        }
+        self.move_by_line(true, cx);
     }
 
     fn tab_next(&mut self, _: &TabNext, window: &mut Window, _cx: &mut Context<Self>) {
@@ -377,11 +484,26 @@ impl PixieInput {
     }
 
     fn home(&mut self, _: &Home, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(0, cx);
+        let to = if self.multiline {
+            let ix = self.cursor_offset();
+            self.content[..ix].rfind('\n').map(|n| n + 1).unwrap_or(0)
+        } else {
+            0
+        };
+        self.move_to(to, cx);
     }
 
     fn end(&mut self, _: &End, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(self.content.len(), cx);
+        let to = if self.multiline {
+            let ix = self.cursor_offset();
+            self.content[ix..]
+                .find('\n')
+                .map(|n| ix + n)
+                .unwrap_or(self.content.len())
+        } else {
+            self.content.len()
+        };
+        self.move_to(to, cx);
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
@@ -472,8 +594,24 @@ impl PixieInput {
             return 0;
         }
 
-        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
-        else {
+        let Some(bounds) = self.last_bounds.as_ref() else {
+            return 0;
+        };
+        if self.multiline {
+            let line_height = self.line_height;
+            let mut y = bounds.top() - self.scroll_y;
+            for (line, start) in &self.last_wrapped {
+                let h = line.size(line_height).height;
+                if position.y < y + h || Some(*start) == self.last_wrapped.last().map(|(_, s)| *s) {
+                    let local = point(position.x - bounds.left(), (position.y - y).max(px(0.)));
+                    let found = line.closest_index_for_position(local, line_height);
+                    return start + found.unwrap_or_else(|e| e);
+                }
+                y += h;
+            }
+            return self.content.len();
+        }
+        let Some(line) = self.last_layout.as_ref() else {
             return 0;
         };
         if position.y < bounds.top() {
@@ -715,9 +853,16 @@ struct PixieInputElement {
 
 struct PrepaintState {
     line: Option<ShapedLine>,
+    /// The wrapped layout of a multi-line field, with each hard line's
+    /// start offset — empty for a single-line one.
+    wrapped: Vec<(WrappedLine, usize)>,
     scroll: Pixels,
+    scroll_y: Pixels,
     cursor: Option<PaintQuad>,
     selection: Option<PaintQuad>,
+    /// Selection quads for a multi-line field: one per visual row the
+    /// selection covers.
+    selections: Vec<PaintQuad>,
 }
 
 impl IntoElement for PixieInputElement {
@@ -749,7 +894,13 @@ impl gpui::Element for PixieInputElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = window.line_height().into();
+        let input = self.input.read(cx);
+        let rows = if input.multiline {
+            if input.rows > 0. { input.rows } else { 4. }
+        } else {
+            1.
+        };
+        style.size.height = (window.line_height() * rows).into();
         (window.request_layout(style, [], cx), ())
     }
 
@@ -815,6 +966,135 @@ impl gpui::Element for PixieInputElement {
 
         let font_size = style.font_size.to_pixels(window.rem_size());
         let display_len = display_text.len();
+        let line_height = window.line_height();
+        if input.multiline {
+            // A field that holds paragraphs: shaped WRAPPED, one entry
+            // per hard line, and every position the caret, the mouse
+            // and the selection need is read out of that layout.
+            let wrap_width = bounds.right() - bounds.left();
+            let shaped = window
+                .text_system()
+                .shape_text(display_text, font_size, &runs, Some(wrap_width), None)
+                .map(|v| v.into_iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            let mut wrapped: Vec<(WrappedLine, usize)> = Vec::with_capacity(shaped.len());
+            let mut at = 0usize;
+            for l in shaped {
+                let len = l.len();
+                wrapped.push((l, at));
+                at += len + 1; // the newline between two hard lines
+            }
+            // Where the caret sits, in the field's own coordinates.
+            let caret = wrapped
+                .iter()
+                .find(|(l, st)| cursor >= *st && cursor <= *st + l.len())
+                .and_then(|(l, st)| {
+                    let p = l.position_for_index(cursor - st, line_height)?;
+                    let above: Pixels = wrapped
+                        .iter()
+                        .take_while(|(_, s)| *s < *st)
+                        .map(|(l, _)| l.size(line_height).height)
+                        .fold(px(0.), |a, b| a + b);
+                    Some(point(p.x, p.y + above))
+                })
+                .unwrap_or(point(px(0.), px(0.)));
+            // Vertical scroll: keep the caret's row inside the field.
+            let total: Pixels = wrapped
+                .iter()
+                .map(|(l, _)| l.size(line_height).height)
+                .fold(px(0.), |a, b| a + b);
+            let view_h = bounds.bottom() - bounds.top();
+            let mut scroll_y = self.input.read(cx).scroll_y;
+            if total <= view_h {
+                scroll_y = px(0.);
+            } else {
+                if caret.y < scroll_y {
+                    scroll_y = caret.y;
+                }
+                if caret.y + line_height > scroll_y + view_h {
+                    scroll_y = caret.y + line_height - view_h;
+                }
+                let max = total - view_h;
+                if scroll_y > max {
+                    scroll_y = max;
+                }
+                if scroll_y < px(0.) {
+                    scroll_y = px(0.);
+                }
+            }
+            let cursor_quad = selected_range.is_empty().then(|| {
+                fill(
+                    Bounds::new(
+                        point(bounds.left() + caret.x, bounds.top() + caret.y - scroll_y),
+                        size(px(2.), line_height),
+                    ),
+                    rgb(crate::theme().accent),
+                )
+            });
+            // One quad per visual row the selection covers.
+            let mut selections = Vec::new();
+            if !selected_range.is_empty() {
+                let mut above = px(0.);
+                for (l, st) in &wrapped {
+                    let (ls, le) = (*st, *st + l.len());
+                    let from = selected_range.start.max(ls);
+                    let to = selected_range.end.min(le);
+                    if from <= to && selected_range.start <= le && selected_range.end >= ls {
+                        if let (Some(a), Some(b)) = (
+                            l.position_for_index(from - ls, line_height),
+                            l.position_for_index(to - ls, line_height),
+                        ) {
+                            let right = bounds.right();
+                            if a.y == b.y {
+                                selections.push(fill(
+                                    Bounds::from_corners(
+                                        point(bounds.left() + a.x, bounds.top() + above + a.y - scroll_y),
+                                        point(bounds.left() + b.x, bounds.top() + above + a.y + line_height - scroll_y),
+                                    ),
+                                    rgba(crate::theme().selection_rgba),
+                                ));
+                            } else {
+                                selections.push(fill(
+                                    Bounds::from_corners(
+                                        point(bounds.left() + a.x, bounds.top() + above + a.y - scroll_y),
+                                        point(right, bounds.top() + above + a.y + line_height - scroll_y),
+                                    ),
+                                    rgba(crate::theme().selection_rgba),
+                                ));
+                                let mut y = a.y + line_height;
+                                while y < b.y {
+                                    selections.push(fill(
+                                        Bounds::from_corners(
+                                            point(bounds.left(), bounds.top() + above + y - scroll_y),
+                                            point(right, bounds.top() + above + y + line_height - scroll_y),
+                                        ),
+                                        rgba(crate::theme().selection_rgba),
+                                    ));
+                                    y += line_height;
+                                }
+                                selections.push(fill(
+                                    Bounds::from_corners(
+                                        point(bounds.left(), bounds.top() + above + b.y - scroll_y),
+                                        point(bounds.left() + b.x, bounds.top() + above + b.y + line_height - scroll_y),
+                                    ),
+                                    rgba(crate::theme().selection_rgba),
+                                ));
+                            }
+                        }
+                    }
+                    above += l.size(line_height).height;
+                }
+            }
+            return PrepaintState {
+                line: None,
+                wrapped,
+                scroll: px(0.),
+                scroll_y,
+                cursor: cursor_quad,
+                selection: None,
+                selections,
+            };
+        }
         let line = window
             .text_system()
             .shape_line(display_text, font_size, &runs, None);
@@ -875,9 +1155,12 @@ impl gpui::Element for PixieInputElement {
         };
         PrepaintState {
             line: Some(line),
+            wrapped: Vec::new(),
             scroll,
+            scroll_y: px(0.),
             cursor,
             selection,
+            selections: Vec::new(),
         }
     }
 
@@ -897,12 +1180,47 @@ impl gpui::Element for PixieInputElement {
             ElementInputHandler::new(bounds, self.input.clone()),
             cx,
         );
+        let line_height = window.line_height();
+        if !prepaint.wrapped.is_empty() || prepaint.line.is_none() {
+            // The multi-line field: every row of every hard line, then
+            // the selection and the caret over them.
+            for quad in std::mem::take(&mut prepaint.selections) {
+                window.paint_quad(quad);
+            }
+            let wrapped = std::mem::take(&mut prepaint.wrapped);
+            let mut y = bounds.origin.y - prepaint.scroll_y;
+            for (l, _) in &wrapped {
+                l.paint(
+                    point(bounds.origin.x, y),
+                    line_height,
+                    gpui::TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                )
+                .ok();
+                y += l.size(line_height).height;
+            }
+            if focus_handle.is_focused(window)
+                && let Some(cursor) = prepaint.cursor.take()
+            {
+                window.paint_quad(cursor);
+            }
+            let scroll_y = prepaint.scroll_y;
+            self.input.update(cx, |input, _cx| {
+                input.last_wrapped = wrapped;
+                input.last_bounds = Some(bounds);
+                input.scroll_y = scroll_y;
+                input.line_height = line_height;
+            });
+            return;
+        }
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection)
         }
         let line = prepaint.line.take().unwrap();
         let origin = point(bounds.origin.x - prepaint.scroll, bounds.origin.y);
-        line.paint(origin, window.line_height(), gpui::TextAlign::Left, None, window, cx)
+        line.paint(origin, line_height, gpui::TextAlign::Left, None, window, cx)
             .unwrap();
 
         if focus_handle.is_focused(window)
@@ -916,6 +1234,7 @@ impl gpui::Element for PixieInputElement {
             input.last_layout = Some(line);
             input.last_bounds = Some(bounds);
             input.scroll_x = scroll;
+            input.line_height = line_height;
         });
     }
 }
@@ -956,8 +1275,8 @@ impl Render for PixieInput {
             .on_action(cx.listener(Self::submit))
             .on_action(cx.listener(Self::tab_next))
             .on_action(cx.listener(Self::tab_prev))
-            .on_action(cx.listener(Self::step_up))
-            .on_action(cx.listener(Self::step_down))
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
