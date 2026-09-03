@@ -169,6 +169,7 @@ pub fn root(w: &World) -> &'static Theme {
 fn color_slots(el: &mut Element) -> Vec<&mut Str> {
     match el {
         Element::Text { color, .. } => vec![color],
+        Element::Divider { color, .. } => vec![color],
         Element::Button {
             background,
             hover_background,

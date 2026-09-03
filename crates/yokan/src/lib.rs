@@ -889,6 +889,16 @@ fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, toolt
     })
 }
 
+#[pyfunction(signature = (grow=0.0, tooltip=String::new()))]
+fn spacer(grow: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Spacer { grow })
+}
+
+#[pyfunction(signature = (color=String::new(), thickness=0.0, tooltip=String::new()))]
+fn divider(color: String, thickness: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Divider { color: Str::from(color), thickness })
+}
+
 #[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
 fn text_field(
     value: String,
@@ -2188,6 +2198,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(radio_group, m)?)?;
     m.add_function(wrap_pyfunction!(tab_bar, m)?)?;
+    m.add_function(wrap_pyfunction!(spacer, m)?)?;
+    m.add_function(wrap_pyfunction!(divider, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

@@ -1261,6 +1261,20 @@ pub enum Element {
         active: i64,
         on_select: Option<IntListener>,
     },
+    /// A flex filler along the parent's main axis: paints nothing,
+    /// has no listeners and no hitbox. `grow` `0.0` = unset, which
+    /// the engine treats as one share (`1.0`) — a Spacer that grew
+    /// by literally 0 would never do anything, so unlike every other
+    /// `grow` prop in the catalog, "unset" here means "the ordinary
+    /// default", not "off".
+    Spacer { grow: f64 },
+    /// A rule across the parent. `color` empty = the theme's border
+    /// color (a `color_slots` entry like `Text`'s, so a theme token
+    /// resolves the same way); `thickness` `0.0` = 1 px. Orientation
+    /// is not a prop: the engine reads it off the render `Slot` the
+    /// way `TextField` reads its width — a vertical line inside a
+    /// `Row`, horizontal everywhere else.
+    Divider { color: Str, thickness: f64 },
 }
 
 /// Clamp `v` into `[min, max]`, then snap it to the nearest `step`
@@ -1775,6 +1789,34 @@ impl Element {
                 let inner: Vec<String> =
                     labels.iter().map(|l| l.as_str().to_string()).collect();
                 format!("TabBar(active={active})[{}]", inner.join(", "))
+            }
+            // Paints nothing itself, so the dump has nothing to show
+            // beyond the one prop that decides how much slack it eats
+            // — `ProgressBar`/`Spinner`'s bare-number rendering,
+            // joined only when set (the `Spinner` rule).
+            Element::Spacer { grow } => {
+                if *grow == 0.0 {
+                    "Spacer".to_string()
+                } else {
+                    format!("Spacer(grow={grow})")
+                }
+            }
+            // Each prop joins only when set; `thickness` leads
+            // because it is the one a reader notices first (the
+            // ordering the port spec's own example uses).
+            Element::Divider { color, thickness } => {
+                let mut props: Vec<String> = Vec::new();
+                if *thickness != 0.0 {
+                    props.push(format!("thickness={thickness}"));
+                }
+                if !color.as_str().is_empty() {
+                    props.push(format!("color={color}"));
+                }
+                if props.is_empty() {
+                    "Divider".to_string()
+                } else {
+                    format!("Divider({})", props.join(", "))
+                }
             }
         }
     }

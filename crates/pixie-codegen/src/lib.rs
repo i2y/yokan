@@ -5976,13 +5976,40 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(active, cx, "active")?
             ))
         }
+        // A flex filler: one optional Float prop, `lower_view_float`'s
+        // shape exactly (literal / property read / arithmetic).
+        "Spacer" => {
+            let grow = match element_prop(el, "grow") {
+                Some(v) => lower_view_float(v, cx, "grow")?,
+                None => "0f64".into(),
+            };
+            Ok(format!("Element::Spacer {{ grow: {grow} }}"))
+        }
+        // A rule: `color:` is a Str prop (`lower_view_text`'s shape,
+        // the same one `Text`'s `color:` and `Button`'s `background:`
+        // use — a hex literal or a String property, theme tokens
+        // included), `thickness:` a Float prop.
+        "Divider" => {
+            let color = match element_prop(el, "color") {
+                Some(v) => lower_view_text(v, cx)?,
+                None => "Str::new()".into(),
+            };
+            let thickness = match element_prop(el, "thickness") {
+                Some(v) => lower_view_float(v, cx, "thickness")?,
+                None => "0f64".into(),
+            };
+            Ok(format!(
+                "Element::Divider {{ color: {color}, thickness: {thickness} }}"
+            ))
+        }
         other => err(
             el.span,
             format!(
                 "element `{other}` is not in the engine vocabulary yet \
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
-                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar), and no \
+                 BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
+                 Spacer / Divider), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),

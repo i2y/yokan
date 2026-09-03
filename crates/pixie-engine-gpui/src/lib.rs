@@ -7,7 +7,7 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar.
+//! RadioGroup / TabBar / Spacer / Divider.
 //! TextField state (caret, selection, IME composition, focus) lives in
 //! per-field `PixieInput` entities keyed by element-tree path, so it
 //! survives rebuilds — positional state transfer, engine-side. Scroll
@@ -1104,6 +1104,11 @@ fn child_flex(el: &Element) -> (f64, f64) {
             (*grow, 0.0)
         }
         Element::Text { grow, .. } => (*grow, 0.0),
+        // A Spacer's unset `0.0` still means one share once it
+        // actually renders (the `Element::Spacer` arm's rule) — a
+        // fading wrapper around one has to grow by the same amount
+        // or an animated Spacer stops pushing its siblings mid-tween.
+        Element::Spacer { grow } => (if *grow > 0.0 { *grow } else { 1.0 }, 0.0),
         _ => (0.0, 0.0),
     }
 }
@@ -2674,6 +2679,37 @@ fn render_el<C: Component>(
                 d = d.child(tab);
             }
             d.into_any_element()
+        }
+        // A flex filler: no id, no listeners, no hitbox — a bare
+        // `div()` creates none (the overlay rule). `grow` 0 = one
+        // share, the same fallback `render_el` gives every unset
+        // `grow:` its zero DOESN'T mean here. Flex-grow does nothing
+        // inside a grid track, so a Grid slot fills its cell the
+        // `Button::fills_cell` way instead.
+        Element::Spacer { grow } => {
+            let g = if *grow > 0.0 { *grow as f32 } else { 1.0 };
+            let mut d = div().flex_grow(g).flex_shrink_0().flex_basis(px(0.));
+            if slot == Slot::Grid {
+                d = d.size_full();
+            }
+            d.into_any_element()
+        }
+        // A rule: no id, no listeners, no hitbox. Orientation follows
+        // the slot, the `TextField` rule — vertical (width = thickness,
+        // full height) inside a `Row`, horizontal (height = thickness,
+        // full width) everywhere else. Color already arrived resolved
+        // to hex by the kernel's `theme::resolve` pass (`color_slots`
+        // carries it), so `parse_color`'s fallback is the theme's
+        // border color exactly the way an unset border uses it.
+        Element::Divider { color, thickness } => {
+            let bg = parse_color(color).unwrap_or(rgb(th.border));
+            let t = px(if *thickness > 0.0 { *thickness as f32 } else { 1.0 });
+            let d = if slot == Slot::Row {
+                div().w(t).h_full()
+            } else {
+                div().h(t).w_full()
+            };
+            d.bg(bg).into_any_element()
         }
     }
 }

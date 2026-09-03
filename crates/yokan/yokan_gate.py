@@ -6805,6 +6805,31 @@ class Translator:
             body = "; ".join(props)
             return [f"{pad}Spinner {{ {body} }}" if body else f"{pad}Spinner {{ }}"]
 
+        if self._is_ui(node.func, "spacer"):
+            props = []
+            g = self._num(kw, "grow")
+            if g is not None:
+                props.append(f"grow: {g}")
+            for k in kw:
+                if k != "grow":
+                    raise Untranslatable(kw[k], f"spacer() does not take `{k}=`")
+            body = "; ".join(props)
+            return [f"{pad}Spacer {{ {body} }}" if body else f"{pad}Spacer {{ }}"]
+
+        if self._is_ui(node.func, "divider"):
+            props = []
+            c = self._strlit(kw, "color")
+            if c is not None:
+                props.append(f"color: {pixstr(c)}")
+            t = self._num(kw, "thickness")
+            if t is not None:
+                props.append(f"thickness: {t}")
+            for k in kw:
+                if k not in ("color", "thickness"):
+                    raise Untranslatable(kw[k], f"divider() does not take `{k}=`")
+            body = "; ".join(props)
+            return [f"{pad}Divider {{ {body} }}" if body else f"{pad}Divider {{ }}"]
+
         for fname, tag in (("image", "Image"), ("svg", "Svg")):
             if self._is_ui(node.func, fname):
                 src = None
@@ -6832,7 +6857,7 @@ class Translator:
         if isinstance(node.func, ast.Name) and node.func.id in self.defs:
             return self._component_use(node, indent)
 
-        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner")
+        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner, spacer, divider")
 
     def _num(self, kw, name):
         """A number-valued element property. A literal is written as

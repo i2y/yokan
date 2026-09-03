@@ -606,6 +606,11 @@ fn tiers_agree_on_every_demo() {
             "examples/choosers/choosers.pix",
             "select:banana,select@1:cherry,select@2:Settings",
         ),
+        // Spacer / Divider: both are leaves that paint from layout
+        // alone (a filler, a rule), so there is no widget STATE for
+        // `click:ping` to prove wrong — the count it drives is what
+        // ties the dump to the click having landed at all.
+        ("examples/layout/layout.pix", "click:ping"),
     ];
     for (rel, script) in demos {
         let (compiled, interp, interp_err) = run_both(rel, script);
