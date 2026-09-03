@@ -2615,6 +2615,27 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // Mirrors codegen exactly: `grow:` optional, 0.0 default.
+        "Spacer" => {
+            let grow = match prop_of(el, "grow") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            Ok(Element::Spacer { grow })
+        }
+        // Mirrors codegen exactly: `color:` a Str read (Text's
+        // `color:` shape), `thickness:` an optional Float.
+        "Divider" => {
+            let color = match prop_of(el, "color") {
+                Some(v) => eval_text(v, env, scope, w)?,
+                None => Str::new(),
+            };
+            let thickness = match prop_of(el, "thickness") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
+            Ok(Element::Divider { color, thickness })
+        }
         "Link" => {
             let t = prop_of(el, "text").ok_or("Link needs `text:`")?;
             let u = prop_of(el, "url").ok_or("Link needs `url:`")?;

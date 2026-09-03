@@ -1210,6 +1210,58 @@ fn chart_and_spinner_sizing_is_optional_and_float_typed() {
 }
 
 #[test]
+fn spacer_and_divider_lower_with_optional_props() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let emit = |name: &str, body: &str| -> Result<String, String> {
+        let f = dir.join(name);
+        std::fs::write(&f, format!("view Main {{\n  Column {{\n    {body}\n  }}\n}}\n"))
+            .unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .map_err(|e| e.message)
+    };
+
+    // Unset lowers to the same sentinels the kernel struct carries —
+    // `grow: 0f64`, an empty `Str` — the ListView/Spinner rule.
+    let code = emit("spacer_unset.pix", "Spacer { }").expect("emits");
+    assert!(
+        code.contains("Element::Spacer { grow: 0f64 }"),
+        "unset Spacer grow must lower to 0f64: {code}"
+    );
+    let code = emit("divider_unset.pix", "Divider { }").expect("emits");
+    assert!(
+        code.contains("Element::Divider { color: Str::new(), thickness: 0f64 }"),
+        "unset Divider props must lower to their sentinels: {code}"
+    );
+
+    // Set props lower verbatim; an Int literal widens into the Float
+    // slot the same way every other sized leaf does (§8.55).
+    let code = emit("spacer_set.pix", "Spacer { grow: 2 }").expect("emits");
+    assert!(
+        code.contains("Element::Spacer { grow: 2f64 }"),
+        "an Int grow widens: {code}"
+    );
+    let code = emit(
+        "divider_set.pix",
+        "Divider { thickness: 2.0; color: \"#8899aa\" }",
+    )
+    .expect("emits");
+    assert!(
+        code.contains("Element::Divider { color: Str::from(\"#8899aa\"), thickness: 2f64 }"),
+        "set Divider props must lower verbatim: {code}"
+    );
+
+    // A String is still a String in a Float slot — no coercion.
+    let err = emit("spacer_str_grow.pix", "Spacer { grow: \"big\" }")
+        .expect_err("a String grow must not emit");
+    assert!(
+        err.contains("numeric"),
+        "error should say what the slot takes: {err}"
+    );
+}
+
+#[test]
 fn toggles_demo_checks_and_emits() {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),

@@ -266,6 +266,12 @@ def table(
     `sort` are state or store-field reads, since a literal could
     never reflect the selection."""
 def spinner(size: float = 0.0, tooltip: str = "") -> Element: ...
+def spacer(grow: float = 0.0, tooltip: str = "") -> Element:
+    """Takes the parent's remaining space along its main axis; 0 = one share."""
+
+def divider(color: str = "", thickness: float = 0.0, tooltip: str = "") -> Element:
+    """A rule across the parent: horizontal in a column, vertical in a row."""
+
 # The work runs off the UI thread in both runs — a Python thread
 # during development, the engine's pool for the standard-library
 # calls inside it once compiled. It is the last statement of its

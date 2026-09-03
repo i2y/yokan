@@ -1,0 +1,26 @@
+view Main {
+  state pings : Int = 0
+
+  Column {
+    spacing: 12.0
+    padding: 16.0
+    Row {
+      Text { text: "Layout"; fontSize: 18.0 }
+      Spacer { }
+      Button { text: "ping"; onClick: { pings = pings + 1 } }
+    }
+    Divider { }
+    Column {
+      spacing: 6.0
+      Text { text: "Section one"; fontSize: 14.0 }
+      Text { text: "Spacer takes the slack a row leaves behind." }
+      Divider { thickness: 2.0; color: "accent" }
+      Text { text: "Section two"; fontSize: 14.0 }
+      Text { text: "Divider draws a rule across its parent." }
+    }
+    Row {
+      Spacer { }
+      Text { text: "pings: #{pings}" }
+    }
+  }
+}

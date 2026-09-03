@@ -947,6 +947,29 @@ fn chart_and_spinner_sizing_widens_int_literals() {
 }
 
 #[test]
+fn spacer_and_divider_dump_with_and_without_props() {
+    // Mirrors codegen exactly: both props are optional and join the
+    // dump only when set (the ListView/Spinner rule); `Divider`'s
+    // group leads with `thickness`, matching the port spec's example.
+    let (w, e) = charts_world();
+    let tree = build_view(&chart_view("Spacer { }\n    Divider { }"), &e, &tables(), &w)
+        .expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Spacer, Divider]");
+
+    let tree = build_view(
+        &chart_view("Spacer { grow: 2.0 }\n    Divider { thickness: 2.0; color: \"#8899aa\" }"),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Spacer(grow=2), Divider(thickness=2, color=#8899aa)]"
+    );
+}
+
+#[test]
 fn choosers_dump_options_and_the_current_index() {
     // The chooser contract in the interp tier: `options:`/`labels:`
     // are a List<String> read, `selected:`/`active:` an Int read, and

@@ -174,6 +174,7 @@ fn color_slots(el: &mut Element) -> Vec<&mut Str> {
             border_color,
             ..
         } => vec![color, background, border_color],
+        Element::Divider { color, .. } => vec![color],
         Element::Button {
             background,
             hover_background,
