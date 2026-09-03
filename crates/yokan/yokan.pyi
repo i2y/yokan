@@ -50,6 +50,18 @@ def text(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    # Accessibility riders, on every element: `role` overrides the
+    # role the element derives (a screen reader's "button" / "list" /
+    # …); `a11y_label` is the name assistive technology reads instead
+    # of what the element would otherwise derive. A literal `role`
+    # must be one of pixie's vocabulary (button, label, heading,
+    # textInput, image, list, listItem, table, dialog, progress,
+    # slider, group, checkbox, switch, comboBox, radioGroup, tabList);
+    # a state/store-field read is resolved at run time instead, and
+    # falls back to the derived role when it does not name one of
+    # these. `a11y` in a `_headless` script prints the resulting tree.
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def button(
     label: str,
@@ -72,12 +84,16 @@ def button(
     exit: bool = False,
     col_span: int = 1,
     row_span: int = 1,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def text_field(
     value: str,
     placeholder: str = "",
     on_change: Optional[Callable[[str], Any]] = None,
     on_submit: Optional[Callable[[str], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def column(
     *children: Element,
@@ -93,6 +109,8 @@ def column(
     easing: str = "",
     enter: bool = False,
     exit: bool = False,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def row(
     *children: Element,
@@ -103,6 +121,8 @@ def row(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def grid(
     *children: Element,
@@ -115,9 +135,13 @@ def grid(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
-def grid_cell(child: Element, col_span: int = 1, row_span: int = 1) -> Element: ...
-def stack(*children: Element) -> Element: ...
+def grid_cell(
+    child: Element, col_span: int = 1, row_span: int = 1, role: str = "", a11y_label: str = ""
+) -> Element: ...
+def stack(*children: Element, role: str = "", a11y_label: str = "") -> Element: ...
 def list_view(
     count: int,
     row: Callable[[int], Any],
@@ -125,35 +149,50 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
-def scroll_view(*children: Element, height: float = 0.0) -> Element: ...
-def h_scroll_view(*children: Element) -> Element: ...
-def data_table(*children: Element) -> Element: ...
-def modal(*children: Element, open: bool = True) -> Element: ...
-def image(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
-def svg(source: str, width: float = 0.0, height: float = 0.0) -> Element: ...
+def scroll_view(*children: Element, height: float = 0.0, role: str = "", a11y_label: str = "") -> Element: ...
+def h_scroll_view(*children: Element, role: str = "", a11y_label: str = "") -> Element: ...
+def data_table(*children: Element, role: str = "", a11y_label: str = "") -> Element: ...
+def modal(*children: Element, open: bool = True, role: str = "", a11y_label: str = "") -> Element: ...
+def image(
+    source: str, width: float = 0.0, height: float = 0.0, role: str = "", a11y_label: str = ""
+) -> Element: ...
+def svg(
+    source: str, width: float = 0.0, height: float = 0.0, role: str = "", a11y_label: str = ""
+) -> Element: ...
 def bar_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def line_chart(
     data: Sequence[float],
     labels: Optional[Sequence[str]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
-def progress(value: float) -> Element: ...
+def progress(value: float, role: str = "", a11y_label: str = "") -> Element: ...
 def checkbox(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    role: str = "",
+    # `label` is ALREADY this toggle's accessible name (pixie derives
+    # it from the same visible text) — the dialect has no way to give
+    # it a different one, so a11y_label is deliberately absent here.
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
+    role: str = "",
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -161,23 +200,31 @@ def slider(
     max: float = 1.0,
     step: float = 0.0,
     on_change: Optional[Callable[[float], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def select(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def radio_group(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
 def tab_bar(
     labels: Sequence[str] = (),
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
+    role: str = "",
+    a11y_label: str = "",
 ) -> Element: ...
-def spinner(size: float = 0.0) -> Element: ...
+def spinner(size: float = 0.0, role: str = "", a11y_label: str = "") -> Element: ...
 def task(
     work: Callable[[], Any],
     on_done: Optional[Callable[[Any], Any]] = None,

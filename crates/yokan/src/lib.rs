@@ -585,6 +585,19 @@ fn wrap_span(el: Element, col_span: i64, row_span: i64) -> Element {
     Element::GridCell { col_span: col_span.max(1), row_span: row_span.max(1), children: vec![el] }
 }
 
+/// The accessibility riders (§8.36), tier-A side: the same
+/// `Element::Semantics` both lowerers wrap `role:`/`label:` into.
+/// INNERMOST of the wrappers — pixie's own `lower_semantics` runs
+/// before `lower_themed`/`lower_anim`, because the accessibility walk
+/// reads the role/name off whatever `Semantics` wraps directly, and a
+/// theme or animation scope between the two would take that with it.
+fn wrap_sem(el: Element, role: &str, label: &str) -> Element {
+    if role.is_empty() && label.is_empty() {
+        return el;
+    }
+    Element::Semantics { role: Str::from(role), label: Str::from(label), children: vec![el] }
+}
+
 fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str> {
     match el {
         // A theme scope wraps exactly one container — the `with`
@@ -695,17 +708,21 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
 // ---------------------------------------------------------------------------
 // Element constructors.
 
-#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false))]
+#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new()))]
 #[allow(clippy::too_many_arguments)]
-fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool) -> Reg {
+fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool, role: String, a11y_label: String) -> Reg {
     Reg::wrap(wrap_anim(
-        Element::Text {
-            text: Str::from(text),
-            font_size: size,
-            color: Str::from(color),
-            align: Str::from(align),
-            grow,
-        },
+        wrap_sem(
+            Element::Text {
+                text: Str::from(text),
+                font_size: size,
+                color: Str::from(color),
+                align: Str::from(align),
+                grow,
+            },
+            &role,
+            &a11y_label,
+        ),
         animate,
         &easing,
         enter,
@@ -713,7 +730,7 @@ fn text(text: String, size: f64, color: String, align: String, grow: f64, animat
     ))
 }
 
-#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1))]
+#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, role=String::new(), a11y_label=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn button(
     label: String,
@@ -736,6 +753,8 @@ fn button(
     exit: bool,
     col_span: i64,
     row_span: i64,
+    role: String,
+    a11y_label: String,
 ) -> Reg {
     let listener: Listener = match on_click {
         Some(cb) => Rc::new(move |w: &mut World| {
@@ -748,7 +767,7 @@ fn button(
         }),
         None => Rc::new(|_| {}),
     };
-    Reg::wrap(wrap_span(wrap_anim(Element::Button {
+    Reg::wrap(wrap_span(wrap_anim(wrap_sem(Element::Button {
         label: Str::from(label),
         background: Str::from(background),
         hover_background: Str::from(hover_background),
@@ -763,7 +782,7 @@ fn button(
         border_width,
         border_color: Str::from(border_color),
         on_click: listener,
-    }, animate, &easing, enter, exit), col_span, row_span))
+    }, &role, &a11y_label), animate, &easing, enter, exit), col_span, row_span))
 }
 
 fn text_listener(cb: Py<PyAny>) -> TextListener {
@@ -812,82 +831,94 @@ fn int_listener(cb: Py<PyAny>) -> IntListener {
 
 /// The form controls: value in from state, the handler receives the
 /// NEW value as its one argument (bool / float / int).
-#[pyfunction(signature = (label, checked=false, on_change=None))]
-fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Checkbox {
+// `a11y_label` rides every OTHER element, but a Checkbox/Switch's own
+// `label` already IS its accessible name (a11y.rs's `name_of`), and
+// pixie's own `lower_semantics` refuses to let `label:` ride on them
+// too (their one `label:` prop slot is already claimed for the
+// visible text). So there is no independent accessible name for a
+// toggle to take — the stub omits `a11y_label` here on purpose, and
+// the translator refuses it too (`_a11y_props(kw, allow_label=False)`)
+// as a clearer error than this signature's own `unexpected keyword`.
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new()))]
+fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Checkbox {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
-    })
+    }, &role, ""))
 }
 
-#[pyfunction(signature = (label, checked=false, on_change=None))]
-fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Switch {
+#[pyfunction(signature = (label, checked=false, on_change=None, role=String::new()))]
+fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, role: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Switch {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
-    })
+    }, &role, ""))
 }
 
-#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None))]
-fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Slider {
+#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, role=String::new(), a11y_label=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Slider {
         value,
         min,
         max,
         step,
         on_change: on_change.map(float_listener),
-    })
+    }, &role, &a11y_label))
 }
 
 fn str_list(v: Vec<String>) -> List<Str> {
     v.into_iter().map(Str::from).collect()
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None))]
-fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Select {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new()))]
+fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Select {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None))]
-fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::RadioGroup {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, role=String::new(), a11y_label=String::new()))]
+fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::RadioGroup {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (labels=vec![], active=0, on_change=None))]
-fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::TabBar {
+#[pyfunction(signature = (labels=vec![], active=0, on_change=None, role=String::new(), a11y_label=String::new()))]
+fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::TabBar {
         labels: str_list(labels),
         active,
         on_select: on_change.map(int_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None))]
+#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, role=String::new(), a11y_label=String::new()))]
+#[allow(clippy::too_many_arguments)]
 fn text_field(
     value: String,
     placeholder: String,
     on_change: Option<Py<PyAny>>,
     on_submit: Option<Py<PyAny>>,
+    role: String,
+    a11y_label: String,
 ) -> Reg {
-    Reg::wrap(Element::TextField {
+    Reg::wrap(wrap_sem(Element::TextField {
         value: Str::from(value),
         placeholder: Str::from(placeholder),
         on_change: on_change.map(text_listener),
         on_submit: on_submit.map(text_listener),
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn column(
     children: &Bound<'_, PyTuple>,
@@ -903,6 +934,8 @@ fn column(
     easing: String,
     enter: bool,
     exit: bool,
+    role: String,
+    a11y_label: String,
 ) -> PyResult<Reg> {
     let el = Element::Column {
         spacing,
@@ -914,6 +947,10 @@ fn column(
         border_color: Str::from(border_color),
         children: take_children(children)?,
     };
+    // Innermost first (role:/label: describe the Column itself), then
+    // the theme scope — the same order pixie's own `lower_element`
+    // applies them in (`lower_semantics` before `lower_themed`).
+    let el = wrap_sem(el, &role, &a11y_label);
     let el = if theme.is_empty() {
         el
     } else {
@@ -925,7 +962,7 @@ fn column(
     Ok(Reg::wrap(wrap_anim(el, animate, &easing, enter, exit)))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn row(
     children: &Bound<'_, PyTuple>,
@@ -936,8 +973,10 @@ fn row(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    role: String,
+    a11y_label: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Row {
+    Ok(Reg::wrap(wrap_sem(Element::Row {
         spacing,
         padding,
         background: Str::from(background),
@@ -946,75 +985,75 @@ fn row(
         border_width,
         border_color: Str::from(border_color),
         children: take_children(children)?,
-    }))
+    }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0))]
-fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::BarChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
+fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::BarChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
         height,
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0))]
-fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::LineChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
+fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::LineChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
         height,
-    })
+    }, &role, &a11y_label))
 }
 
-#[pyfunction]
-fn progress(value: f64) -> Reg {
-    Reg::wrap(Element::ProgressBar { value })
+#[pyfunction(signature = (value, role=String::new(), a11y_label=String::new()))]
+fn progress(value: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::ProgressBar { value }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (size=0.0))]
-fn spinner(size: f64) -> Reg {
-    Reg::wrap(Element::Spinner { size })
+#[pyfunction(signature = (size=0.0, role=String::new(), a11y_label=String::new()))]
+fn spinner(size: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Spinner { size }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0))]
-fn image(source: String, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::Image { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
+fn image(source: String, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Image { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0))]
-fn svg(source: String, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::Svg { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, role=String::new(), a11y_label=String::new()))]
+fn svg(source: String, width: f64, height: f64, role: String, a11y_label: String) -> Reg {
+    Reg::wrap(wrap_sem(Element::Svg { source: Str::from(source), width, height }, &role, &a11y_label))
 }
 
-#[pyfunction(signature = (*children, height=0.0))]
-fn scroll_view(children: &Bound<'_, PyTuple>, height: f64) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::ScrollView { height, children: take_children(children)? }))
+#[pyfunction(signature = (*children, height=0.0, role=String::new(), a11y_label=String::new()))]
+fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::ScrollView { height, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children))]
-fn h_scroll_view(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::HScrollView(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
+fn h_scroll_view(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::HScrollView(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children))]
-fn data_table(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::DataTable(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
+fn data_table(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::DataTable(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, open=true))]
-fn modal(children: &Bound<'_, PyTuple>, open: bool) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Modal { open, children: take_children(children)? }))
+#[pyfunction(signature = (*children, open=true, role=String::new(), a11y_label=String::new()))]
+fn modal(children: &Bound<'_, PyTuple>, open: bool, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::Modal { open, children: take_children(children)? }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children))]
-fn stack(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Stack(take_children(children)?)))
+#[pyfunction(signature = (*children, role=String::new(), a11y_label=String::new()))]
+fn stack(children: &Bound<'_, PyTuple>, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::Stack(take_children(children)?), &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new()))]
+#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn grid(
     children: &Bound<'_, PyTuple>,
@@ -1027,8 +1066,10 @@ fn grid(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    role: String,
+    a11y_label: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Grid {
+    Ok(Reg::wrap(wrap_sem(Element::Grid {
         columns,
         rows,
         spacing,
@@ -1039,22 +1080,23 @@ fn grid(
         border_width,
         border_color: Str::from(border_color),
         children: take_children(children)?,
-    }))
+    }, &role, &a11y_label)))
 }
 
-#[pyfunction(signature = (child, col_span=1, row_span=1))]
-fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::GridCell {
+#[pyfunction(signature = (child, col_span=1, row_span=1, role=String::new(), a11y_label=String::new()))]
+fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, role: String, a11y_label: String) -> PyResult<Reg> {
+    Ok(Reg::wrap(wrap_sem(Element::GridCell {
         col_span,
         row_span,
         children: vec![take_el(child)?],
-    }))
+    }, &role, &a11y_label)))
 }
 
 /// Virtualized rows: `row(i)` is called only for the visible range
 /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
-#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0))]
-fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64) -> Reg {
+#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, role=String::new(), a11y_label=String::new()))]
+#[allow(clippy::too_many_arguments)]
+fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, role: String, a11y_label: String) -> Reg {
     let build: Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>> =
         Rc::new(move |_w, range| {
             Python::attach(|py| {
@@ -1089,14 +1131,14 @@ fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtua
                     .collect()
             })
         });
-    Reg::wrap(Element::ListView {
+    Reg::wrap(wrap_sem(Element::ListView {
         virtualized,
         item_height,
         height,
         grow,
         children: Vec::new(),
         lazy: Some(LazyRows { len: count, build }),
-    })
+    }, &role, &a11y_label))
 }
 
 /// Run `work()` on a background worker thread, then `on_done(result)`
