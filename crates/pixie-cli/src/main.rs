@@ -691,6 +691,23 @@ fn write_crate(
             if pin.is_file() {
                 let _ = std::fs::copy(&pin, out.join("rust-toolchain.toml"));
             }
+            // ...and the dev tree's resolution, once, as a seed. A
+            // generated crate is its own workspace, so without a lock
+            // it resolves the whole graph afresh at every new app and
+            // picks up whatever the registry published this morning —
+            // which is how tinyvec 1.13.0 (published 2026-09-03, does
+            // not compile) started breaking new apps while every
+            // already-resolved demo stayed green. Generated code is
+            // the compiler's responsibility, and so is what it builds
+            // against: a new app now starts from the versions this
+            // tree is tested with. Seeded, never overwritten — cargo
+            // keeps adjusting it from there, and an app that has
+            // resolved (or that someone ran `cargo update` in) is
+            // left alone.
+            let lock = repo.join("Cargo.lock");
+            if lock.is_file() && !out.join("Cargo.lock").exists() {
+                let _ = std::fs::copy(&lock, out.join("Cargo.lock"));
+            }
         }
     }
     let engine_dep = match engine {
