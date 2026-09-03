@@ -274,6 +274,31 @@ fn root_scope_theme(mut el: &Element) -> Option<&'static Theme> {
     }
 }
 
+/// The little panel a `tooltip:` rider shows. gpui asks for a view,
+/// so this is the smallest one that reads like the rest of the
+/// window: the panel background, dim text, one line.
+struct PixieTooltip {
+    label: SharedString,
+}
+
+impl Render for PixieTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let th: &'static Theme = if THEME_LIGHT_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            &THEME_LIGHT
+        } else {
+            &THEME_DARK
+        };
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(rgb(th.panel))
+            .text_color(rgb(th.text))
+            .text_size(px(12.))
+            .child(self.label.clone())
+    }
+}
+
 fn viewport_h(height: f64) -> f32 {
     if height > 0.0 { height as f32 } else { 320.0 }
 }
@@ -800,6 +825,49 @@ impl<C: Component> Render for Root<C> {
         // It carries LAYOUT only: `ImageCacheElement` refines a style
         // for sizing but paints nothing of its own, so the background
         // stays on a real div inside it.
+        // File dialogs asked for from a task: the panel opens here,
+        // on the thread that may open one, and the answer travels
+        // back to the waiting call when the person has picked.
+        if pixie_kernel::dialog::any() {
+            for req in pixie_kernel::dialog::take() {
+                match req.kind {
+                    pixie_kernel::dialog::Kind::Open => {
+                        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+                            files: true,
+                            directories: false,
+                            multiple: false,
+                            prompt: None,
+                        });
+                        cx.background_executor()
+                            .spawn(async move {
+                                let picked = rx.await.ok().and_then(|r| r.ok()).flatten();
+                                let path = picked
+                                    .and_then(|v| v.first().map(|p| p.to_string_lossy().into_owned()))
+                                    .unwrap_or_default();
+                                req.answer(&path);
+                            })
+                            .detach();
+                    }
+                    pixie_kernel::dialog::Kind::Save => {
+                        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+                        let label = req.label.clone();
+                        let rx = cx.prompt_for_new_path(
+                            std::path::Path::new(&home),
+                            (!label.is_empty()).then_some(label.as_str()),
+                        );
+                        cx.background_executor()
+                            .spawn(async move {
+                                let picked = rx.await.ok().and_then(|r| r.ok()).flatten();
+                                let path = picked
+                                    .map(|p| p.to_string_lossy().into_owned())
+                                    .unwrap_or_default();
+                                req.answer(&path);
+                            })
+                            .detach();
+                    }
+                }
+            }
+        }
         // The clipboard, exchanged with the platform once per frame:
         // what the app copied goes out, and otherwise what another
         // application put there comes in. A headless run does neither,
@@ -840,6 +908,20 @@ impl<C: Component> Render for Root<C> {
                             pixie_kernel::menu::pick_at(w, index);
                         });
                     }))
+                    .on_drop(cx.listener(
+                        |root, paths: &gpui::ExternalPaths, _window, cx| {
+                            let paths: Vec<String> = paths
+                                .paths()
+                                .iter()
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .collect();
+                            root.apply(cx, move |w| {
+                                for p in &paths {
+                                    pixie_kernel::drop::fire(w, p);
+                                }
+                            });
+                        },
+                    ))
                     .on_key_down(cx.listener(move |root, ev: &gpui::KeyDownEvent, _window, cx| {
                         let chord = chord_of(&ev.keystroke);
                         let mods = &ev.keystroke.modifiers;
@@ -1167,6 +1249,8 @@ fn render_el<C: Component>(
             placeholder,
             on_change,
             on_submit,
+            multiline,
+            rows,
         } => {
             let key = pass.path.clone();
             let entity = match inputs.get(&key) {
@@ -1190,10 +1274,11 @@ fn render_el<C: Component>(
                 value.as_str().to_string(),
                 placeholder.as_str().to_string(),
             );
+            let (ml, rw) = (*multiline, *rows as f32);
             entity.update(cx, |inp, cx| {
                 inp.on_commit = commit_cb;
                 inp.on_submit = submit_cb;
-                inp.sync(&v, &p, cx);
+                inp.sync(&v, &p, ml, rw, cx);
             });
             pass.next_id += 1;
             let wrap = if slot == Slot::Row {
@@ -1332,6 +1417,35 @@ fn render_el<C: Component>(
             let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
             pass.path.pop();
             rendered
+        }
+        // The tooltip rider: the child renders as it would anywhere,
+        // inside a layout-transparent div that carries the hover text.
+        Element::Tooltip { text, children } => {
+            let Some(child) = children.first() else {
+                return div().into_any_element();
+            };
+            pass.path.push(0);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            pass.path.pop();
+            let label: SharedString = text.as_str().to_string().into();
+            let (grow, basis) = child_flex(child);
+            // `tooltip` is a stateful interaction, so the wrapper
+            // needs an id — and it copies the child's flex share so
+            // the extra div changes no layout.
+            pass.next_id += 1;
+            let mut d = div().id(pass.next_id).flex();
+            if grow > 0.0 {
+                d = d.flex_grow(grow as f32).flex_shrink_0();
+                if basis > 0.0 {
+                    d = d.flex_basis(px(basis as f32));
+                }
+            }
+            d.child(rendered)
+                .tooltip(move |_window, cx| {
+                    let label = label.clone();
+                    cx.new(|_| PixieTooltip { label }).into()
+                })
+                .into_any_element()
         }
         // §8.35. A settled wrapper renders NOTHING of its own: the
         // child goes straight out, so `animate:` on a grown element
@@ -2927,6 +3041,8 @@ pub fn run_app<C: Component>(
         text_input::bind_keys(cx);
         // The declared menu bar, handed over before the window opens.
         install_menus(&runtime, cx);
+        // From here a file dialog has a window to open in.
+        pixie_kernel::dialog::windowed();
         // cute_ui's Cmd+T: flip the theme live. Every color is read
         // per paint, so one refresh restyles the whole window.
         cx.bind_keys([gpui::KeyBinding::new("cmd-t", ToggleTheme, None)]);

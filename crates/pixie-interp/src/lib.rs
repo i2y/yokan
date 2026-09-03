@@ -1748,6 +1748,7 @@ fn build_element(
     // Same nesting as codegen: semantics innermost (they describe the
     // element), then the animation wrapper, then the grid cell.
     let inner = build_semantics(el, inner, env, scope, w)?;
+    let inner = build_tooltip(el, inner, env, scope, w)?;
     let inner = build_themed(el, inner, env, scope, w)?;
     let inner = build_anim(el, inner, env, scope, w)?;
     if col.is_none() && row.is_none() {
@@ -1793,6 +1794,23 @@ fn build_themed(
     };
     Ok(Element::Themed {
         theme: name,
+        children: vec![inner],
+    })
+}
+
+/// `pixie_codegen::lower_tooltip`'s mirror.
+fn build_tooltip(
+    el: &ast::Element,
+    inner: Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<Element, String> {
+    let Some(t) = prop_of(el, "tooltip") else {
+        return Ok(inner);
+    };
+    Ok(Element::Tooltip {
+        text: eval_text(t, env, scope, w)?,
         children: vec![inner],
     })
 }
@@ -2061,11 +2079,21 @@ fn build_element_inner(
                 Some(t) => eval_text(t, env, scope, w)?,
                 None => Str::new(),
             };
+            let multiline = match prop_of(el, "multiline") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            let rows = match prop_of(el, "rows") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                None => 0.0,
+            };
             Ok(Element::TextField {
                 value,
                 placeholder,
                 on_change: prop_of(el, "onTextChanged").map(|a| make_text_listener(a, env)),
                 on_submit: prop_of(el, "onSubmitted").map(|a| make_text_listener(a, env)),
+                multiline,
+                rows,
             })
         }
         "Column" | "Row" => {
@@ -2536,6 +2564,11 @@ pub fn semantic_prop_keys() -> &'static [&'static str] {
     &["role", "label"]
 }
 
+/// The mirror of `pixie_codegen::tooltip_prop_keys`.
+pub fn tooltip_prop_keys() -> &'static [&'static str] {
+    &["tooltip"]
+}
+
 /// The mirror of `pixie_codegen::theme_prop_keys` (§8.37).
 pub fn theme_prop_keys() -> &'static [&'static str] {
     &["theme"]
@@ -2561,6 +2594,7 @@ fn build_children(
                 && !anim_prop_keys().contains(&key.as_str())
                 && !semantic_prop_keys().contains(&key.as_str())
                 && !theme_prop_keys().contains(&key.as_str())
+                && !tooltip_prop_keys().contains(&key.as_str())
                 && !container_prop_keys(&el.name.name).contains(&key.as_str())
             {
                 return Err(format!(

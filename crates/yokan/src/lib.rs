@@ -537,6 +537,20 @@ impl Reg {
     fn wrap(el: Element) -> Self {
         Reg(PyElement::wrap(el))
     }
+
+    /// The same, with the universal `tooltip=` rider applied — an
+    /// empty string is no tooltip, so an element that carries none
+    /// registers exactly what it did before the rider existed.
+    fn tip(tooltip: &str, el: Element) -> Self {
+        Reg::wrap(if tooltip.is_empty() {
+            el
+        } else {
+            Element::Tooltip {
+                text: Str::from(tooltip),
+                children: vec![el],
+            }
+        })
+    }
 }
 
 impl<'py> IntoPyObject<'py> for Reg {
@@ -591,6 +605,11 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
         }
         // Same for an animation rider around a container.
         Element::Anim { children, .. } if children.len() == 1 => {
+            set_children(&mut children[0], kids)
+        }
+        // ...and for the tooltip rider: `with column(tooltip="…")`
+        // opens the column, not the wrapper.
+        Element::Tooltip { children, .. } if children.len() == 1 => {
             set_children(&mut children[0], kids)
         }
         Element::Column { children, .. }
@@ -692,10 +711,10 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
 // ---------------------------------------------------------------------------
 // Element constructors.
 
-#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false))]
+#[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
-fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool) -> Reg {
-    Reg::wrap(wrap_anim(
+fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, wrap_anim(
         Element::Text {
             text: Str::from(text),
             font_size: size,
@@ -710,7 +729,7 @@ fn text(text: String, size: f64, color: String, align: String, grow: f64, animat
     ))
 }
 
-#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1))]
+#[pyfunction(signature = (label, on_click=None, width=0.0, height=0.0, size=0.0, background=String::new(), grow=0.0, color=String::new(), hover_background=String::new(), active_background=String::new(), border_radius=0.0, border_width=0.0, border_color=String::new(), basis=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, col_span=1, row_span=1, tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn button(
     label: String,
@@ -733,6 +752,7 @@ fn button(
     exit: bool,
     col_span: i64,
     row_span: i64,
+    tooltip: String,
 ) -> Reg {
     let listener: Listener = match on_click {
         Some(cb) => Rc::new(move |w: &mut World| {
@@ -745,7 +765,7 @@ fn button(
         }),
         None => Rc::new(|_| {}),
     };
-    Reg::wrap(wrap_span(wrap_anim(Element::Button {
+    Reg::tip(&tooltip, wrap_span(wrap_anim(Element::Button {
         label: Str::from(label),
         background: Str::from(background),
         hover_background: Str::from(hover_background),
@@ -809,27 +829,27 @@ fn int_listener(cb: Py<PyAny>) -> IntListener {
 
 /// The form controls: value in from state, the handler receives the
 /// NEW value as its one argument (bool / float / int).
-#[pyfunction(signature = (label, checked=false, on_change=None))]
-fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Checkbox {
+#[pyfunction(signature = (label, checked=false, on_change=None, tooltip=String::new()))]
+fn checkbox(label: String, checked: bool, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Checkbox {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
     })
 }
 
-#[pyfunction(signature = (label, checked=false, on_change=None))]
-fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Switch {
+#[pyfunction(signature = (label, checked=false, on_change=None, tooltip=String::new()))]
+fn switch(label: String, checked: bool, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Switch {
         label: Str::from(label),
         checked,
         on_toggle: on_change.map(bool_listener),
     })
 }
 
-#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None))]
-fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Slider {
+#[pyfunction(signature = (value=0.0, min=0.0, max=1.0, step=0.0, on_change=None, tooltip=String::new()))]
+fn slider(value: f64, min: f64, max: f64, step: f64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Slider {
         value,
         min,
         max,
@@ -842,49 +862,54 @@ fn str_list(v: Vec<String>) -> List<Str> {
     v.into_iter().map(Str::from).collect()
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None))]
-fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::Select {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
+fn select(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Select {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
     })
 }
 
-#[pyfunction(signature = (options=vec![], selected=0, on_change=None))]
-fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::RadioGroup {
+#[pyfunction(signature = (options=vec![], selected=0, on_change=None, tooltip=String::new()))]
+fn radio_group(options: Vec<String>, selected: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::RadioGroup {
         options: str_list(options),
         selected,
         on_select: on_change.map(int_listener),
     })
 }
 
-#[pyfunction(signature = (labels=vec![], active=0, on_change=None))]
-fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>) -> Reg {
-    Reg::wrap(Element::TabBar {
+#[pyfunction(signature = (labels=vec![], active=0, on_change=None, tooltip=String::new()))]
+fn tab_bar(labels: Vec<String>, active: i64, on_change: Option<Py<PyAny>>, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::TabBar {
         labels: str_list(labels),
         active,
         on_select: on_change.map(int_listener),
     })
 }
 
-#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None))]
+#[pyfunction(signature = (value, placeholder=String::new(), on_change=None, on_submit=None, multiline=false, rows=0.0, tooltip=String::new()))]
 fn text_field(
     value: String,
     placeholder: String,
     on_change: Option<Py<PyAny>>,
     on_submit: Option<Py<PyAny>>,
+    multiline: bool,
+    rows: f64,
+    tooltip: String,
 ) -> Reg {
-    Reg::wrap(Element::TextField {
+    Reg::tip(&tooltip, Element::TextField {
         value: Str::from(value),
         placeholder: Str::from(placeholder),
         on_change: on_change.map(text_listener),
         on_submit: on_submit.map(text_listener),
+        multiline,
+        rows,
     })
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), theme=String::new(), animate=0.0, easing=String::new(), enter=false, exit=false, tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn column(
     children: &Bound<'_, PyTuple>,
@@ -900,6 +925,7 @@ fn column(
     easing: String,
     enter: bool,
     exit: bool,
+    tooltip: String,
 ) -> PyResult<Reg> {
     let el = Element::Column {
         spacing,
@@ -919,10 +945,10 @@ fn column(
         // resolution runs in the shared kernel.
         Element::Themed { theme: Str::from(theme), children: vec![el] }
     };
-    Ok(Reg::wrap(wrap_anim(el, animate, &easing, enter, exit)))
+    Ok(Reg::tip(&tooltip, wrap_anim(el, animate, &easing, enter, exit)))
 }
 
-#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new()))]
+#[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn row(
     children: &Bound<'_, PyTuple>,
@@ -933,8 +959,9 @@ fn row(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Row {
+    Ok(Reg::tip(&tooltip, Element::Row {
         spacing,
         padding,
         background: Str::from(background),
@@ -946,9 +973,9 @@ fn row(
     }))
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0))]
-fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::BarChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, tooltip=String::new()))]
+fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::BarChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -956,9 +983,9 @@ fn bar_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f6
     })
 }
 
-#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0))]
-fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::LineChart {
+#[pyfunction(signature = (data, labels=None, width=0.0, height=0.0, tooltip=String::new()))]
+fn line_chart(data: Vec<f64>, labels: Option<Vec<String>>, width: f64, height: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::LineChart {
         data: to_list_f64(data),
         labels: to_list_str(labels.unwrap_or_default()),
         width,
@@ -971,47 +998,47 @@ fn progress(value: f64) -> Reg {
     Reg::wrap(Element::ProgressBar { value })
 }
 
-#[pyfunction(signature = (size=0.0))]
-fn spinner(size: f64) -> Reg {
-    Reg::wrap(Element::Spinner { size })
+#[pyfunction(signature = (size=0.0, tooltip=String::new()))]
+fn spinner(size: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Spinner { size })
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0))]
-fn image(source: String, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::Image { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, tooltip=String::new()))]
+fn image(source: String, width: f64, height: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Image { source: Str::from(source), width, height })
 }
 
-#[pyfunction(signature = (source, width=0.0, height=0.0))]
-fn svg(source: String, width: f64, height: f64) -> Reg {
-    Reg::wrap(Element::Svg { source: Str::from(source), width, height })
+#[pyfunction(signature = (source, width=0.0, height=0.0, tooltip=String::new()))]
+fn svg(source: String, width: f64, height: f64, tooltip: String) -> Reg {
+    Reg::tip(&tooltip, Element::Svg { source: Str::from(source), width, height })
 }
 
-#[pyfunction(signature = (*children, height=0.0))]
-fn scroll_view(children: &Bound<'_, PyTuple>, height: f64) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::ScrollView { height, children: take_children(children)? }))
+#[pyfunction(signature = (*children, height=0.0, tooltip=String::new()))]
+fn scroll_view(children: &Bound<'_, PyTuple>, height: f64, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::ScrollView { height, children: take_children(children)? }))
 }
 
-#[pyfunction(signature = (*children))]
-fn h_scroll_view(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::HScrollView(take_children(children)?)))
+#[pyfunction(signature = (*children, tooltip=String::new()))]
+fn h_scroll_view(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::HScrollView(take_children(children)?)))
 }
 
-#[pyfunction(signature = (*children))]
-fn data_table(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::DataTable(take_children(children)?)))
+#[pyfunction(signature = (*children, tooltip=String::new()))]
+fn data_table(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::DataTable(take_children(children)?)))
 }
 
-#[pyfunction(signature = (*children, open=true))]
-fn modal(children: &Bound<'_, PyTuple>, open: bool) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Modal { open, children: take_children(children)? }))
+#[pyfunction(signature = (*children, open=true, tooltip=String::new()))]
+fn modal(children: &Bound<'_, PyTuple>, open: bool, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::Modal { open, children: take_children(children)? }))
 }
 
-#[pyfunction(signature = (*children))]
-fn stack(children: &Bound<'_, PyTuple>) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Stack(take_children(children)?)))
+#[pyfunction(signature = (*children, tooltip=String::new()))]
+fn stack(children: &Bound<'_, PyTuple>, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::Stack(take_children(children)?)))
 }
 
-#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new()))]
+#[pyfunction(signature = (*children, columns=2, rows=0, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn grid(
     children: &Bound<'_, PyTuple>,
@@ -1024,8 +1051,9 @@ fn grid(
     border_radius: f64,
     border_width: f64,
     border_color: String,
+    tooltip: String,
 ) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::Grid {
+    Ok(Reg::tip(&tooltip, Element::Grid {
         columns,
         rows,
         spacing,
@@ -1039,9 +1067,9 @@ fn grid(
     }))
 }
 
-#[pyfunction(signature = (child, col_span=1, row_span=1))]
-fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64) -> PyResult<Reg> {
-    Ok(Reg::wrap(Element::GridCell {
+#[pyfunction(signature = (child, col_span=1, row_span=1, tooltip=String::new()))]
+fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64, tooltip: String) -> PyResult<Reg> {
+    Ok(Reg::tip(&tooltip, Element::GridCell {
         col_span,
         row_span,
         children: vec![take_el(child)?],
@@ -1050,8 +1078,8 @@ fn grid_cell(child: &Bound<'_, PyAny>, col_span: i64, row_span: i64) -> PyResult
 
 /// Virtualized rows: `row(i)` is called only for the visible range
 /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
-#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0))]
-fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64) -> Reg {
+#[pyfunction(signature = (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, tooltip=String::new()))]
+fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, tooltip: String) -> Reg {
     let build: Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>> =
         Rc::new(move |_w, range| {
             Python::attach(|py| {
@@ -1086,7 +1114,7 @@ fn list_view(count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtua
                     .collect()
             })
         });
-    Reg::wrap(Element::ListView {
+    Reg::tip(&tooltip, Element::ListView {
         virtualized,
         item_height,
         height,
@@ -1252,6 +1280,43 @@ fn menu_item(menu: &str, item: &str, on_pick: Py<PyAny>) -> PyResult<()> {
         ));
     }
     PENDING_MENUS.with(|m| m.borrow_mut().push((menu.to_string(), item.to_string(), on_pick)));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Files dropped on the window: declared before `run()`, delivered by
+// the platform's drag — or by a script's `drop:<path>` step.
+
+thread_local! {
+    static PENDING_DROPS: RefCell<Vec<Py<PyAny>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn install_drops(rt: &Runtime) {
+    for cb in PENDING_DROPS.with(|d| d.take()) {
+        rt.with(move |w: &mut World| {
+            pixie_kernel::drop::on_file(
+                w,
+                Rc::new(move |w: &mut World, path: Str| {
+                    Python::attach(|py| {
+                        if let Err(e) = cb.call1(py, (path.as_str(),)) {
+                            e.print(py);
+                        }
+                    });
+                    after_py_callback(w);
+                }),
+            );
+        });
+    }
+}
+
+/// Declare what happens to a file dragged onto the window: the
+/// handler receives its path. Call before `run()`.
+#[pyfunction]
+fn on_file_drop(handler: Py<PyAny>) -> PyResult<()> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    PENDING_DROPS.with(|d| d.borrow_mut().push(handler));
     Ok(())
 }
 
@@ -1475,6 +1540,8 @@ fn run(
             install_timers(&rt);
             install_keys(&rt);
             install_menu_items(&rt);
+        install_drops(&rt);
+            install_drops(&rt);
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -1508,6 +1575,7 @@ fn run(
         install_timers(&rt);
         install_keys(&rt);
         install_menu_items(&rt);
+        install_drops(&rt);
         let watch_opt = if watch {
             src_path.map(|p| make_watch(p, shared.clone(), h.erase()))
         } else {
@@ -1705,6 +1773,7 @@ fn _headless(
         install_timers(&rt);
         install_keys(&rt);
         install_menu_items(&rt);
+        install_drops(&rt);
         rt.with(drain_spawns);
         if let Some(f) = &on_start {
             // The startup hook: contained like any handler — a
@@ -2019,6 +2088,18 @@ fn py_fs_make_dir(py: Python<'_>, path: &str) -> i64 {
     py.detach(|| yokan_stdlib::fs_make_dir(path))
 }
 
+/// Both doors release Python while they wait: a dialog is a person's
+/// decision, and the interpreted run's UI thread has to keep going.
+#[pyfunction] #[pyo3(name = "open_dialog", signature = (title = ""))]
+fn py_fs_open_dialog(py: Python<'_>, title: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_open_dialog(title))
+}
+
+#[pyfunction] #[pyo3(name = "save_dialog", signature = (name = ""))]
+fn py_fs_save_dialog(py: Python<'_>, name: &str) -> String {
+    py.detach(|| yokan_stdlib::fs_save_dialog(name))
+}
+
 #[pyfunction] #[pyo3(name = "app_dir")]
 fn py_fs_app_dir(py: Python<'_>, name: &str) -> String {
     py.detach(|| yokan_stdlib::fs_app_dir(name))
@@ -2176,6 +2257,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(shortcut, m)?)?;
     m.add_function(wrap_pyfunction!(on_key, m)?)?;
     m.add_function(wrap_pyfunction!(menu_item, m)?)?;
+    m.add_function(wrap_pyfunction!(on_file_drop, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(_headless, m)?)?;
     let fs = PyModule::new(m.py(), "fs")?;
@@ -2188,6 +2270,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fs.add_function(wrap_pyfunction!(py_fs_remove, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_make_dir, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_app_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_open_dialog, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_save_dialog, &fs)?)?;
     m.add_submodule(&fs)?;
     let sqlite = PyModule::new(m.py(), "sqlite")?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_exec, &sqlite)?)?;

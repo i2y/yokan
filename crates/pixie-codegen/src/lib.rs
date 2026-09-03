@@ -3409,6 +3409,51 @@ fn emit_async_stmt(
                 cx.locals.pop();
                 Ok(())
             }
+            // An `if` whose branches await: the condition is evaluated in
+            // its own re-entry and the branches keep the async lowering,
+            // so `await` reads the same inside a branch as outside one.
+            // (Without this the branch went through the sync lowering,
+            // where an `await` cannot appear at all — a shape an author
+            // writes the moment a dialog's answer decides what happens
+            // next.)
+            ExprKind::If { .. } if stmt_awaits(s) => {
+                let ExprKind::If {
+                    cond,
+                    then_b,
+                    else_b,
+                    let_binding,
+                } = &e.kind
+                else {
+                    unreachable!("guarded above")
+                };
+                if let_binding.is_some() {
+                    return err(e.span, "`if let` survived the desugar (§8.69) — this is a pixie bug");
+                }
+                let c = lower_method_expr(cond, cx)?;
+                let n = *await_n;
+                *await_n += 1;
+                writeln!(
+                    out,
+                    "{ind}let __ac{n} = __ctx.with(|w: &mut World| {{ {c} }});"
+                )
+                .unwrap();
+                writeln!(out, "{ind}if __ac{n} {{").unwrap();
+                let inner = format!("{ind}    ");
+                let depth = cx.locals.len();
+                for st in &then_b.stmts {
+                    emit_async_stmt(st, cx, out, &inner, await_n)?;
+                }
+                cx.locals.truncate(depth);
+                if let Some(eb) = else_b {
+                    writeln!(out, "{ind}}} else {{").unwrap();
+                    for st in &eb.stmts {
+                        emit_async_stmt(st, cx, out, &inner, await_n)?;
+                    }
+                    cx.locals.truncate(depth);
+                }
+                writeln!(out, "{ind}}}").unwrap();
+                Ok(())
+            }
             _ => {
                 writeln!(out, "{ind}__ctx.with(|w: &mut World| {{").unwrap();
                 lower_method_stmt(s, cx, out, &format!("{ind}    "))?;
@@ -3420,12 +3465,46 @@ fn emit_async_stmt(
             *span,
             "`return` in async fns is not lowerable yet (M2); async fns run to completion",
         ),
+
         _ => {
             writeln!(out, "{ind}__ctx.with(|w: &mut World| {{").unwrap();
             lower_method_stmt(s, cx, out, &format!("{ind}    "))?;
             writeln!(out, "{ind}}});").unwrap();
             Ok(())
         }
+    }
+}
+
+/// Does this statement contain an `await` anywhere inside it? The
+/// async lowering asks before it takes a nested block: a branch with
+/// no await keeps the cheaper sync path (one re-entry for the whole
+/// block), and one with an await is lowered statement by statement.
+fn stmt_awaits(s: &Stmt) -> bool {
+    fn expr_awaits(e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Await(_) => true,
+            ExprKind::If {
+                cond,
+                then_b,
+                else_b,
+                ..
+            } => {
+                expr_awaits(cond)
+                    || then_b.stmts.iter().any(stmt_awaits)
+                    || then_b.trailing.as_deref().is_some_and(expr_awaits)
+                    || else_b.as_ref().is_some_and(|b| {
+                        b.stmts.iter().any(stmt_awaits)
+                            || b.trailing.as_deref().is_some_and(expr_awaits)
+                    })
+            }
+            _ => false,
+        }
+    }
+    match s {
+        Stmt::Let { value, .. } | Stmt::Var { value, .. } => expr_awaits(value),
+        Stmt::Assign { value, .. } => expr_awaits(value),
+        Stmt::Expr(e) => expr_awaits(e),
+        _ => false,
     }
 }
 
@@ -5074,6 +5153,9 @@ fn lower_element(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, Em
     // ELEMENT, and the accessibility walk reads the role off whatever
     // `Semantics` wraps directly.
     let inner = lower_semantics(el, inner, cx)?;
+    // The tooltip sits just outside the semantics wrapper: it belongs
+    // to the element, and what it says is not the element's own name.
+    let inner = lower_tooltip(el, inner, cx)?;
     // Outside the semantics wrapper, inside the animation one: the
     // scope has to CONTAIN the element whose tokens it re-resolves.
     let inner = lower_themed(el, inner, cx)?;
@@ -5124,6 +5206,19 @@ fn lower_themed(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, Emi
     };
     Ok(format!(
         "Element::Themed {{ theme: {name}, children: vec![{inner}] }}"
+    ))
+}
+
+/// Wrap `inner` in an `Element::Tooltip` when the element carries the
+/// universal `tooltip:` rider — a line the window shows when the
+/// pointer rests on it, and a dumped output either way.
+fn lower_tooltip(el: &Element, inner: String, cx: &ViewCtx) -> Result<String, EmitError> {
+    let Some(t) = element_prop(el, "tooltip") else {
+        return Ok(inner);
+    };
+    let text = lower_view_text(t, cx)?;
+    Ok(format!(
+        "Element::Tooltip {{ text: {text}, children: vec![{inner}] }}"
     ))
 }
 
@@ -5445,8 +5540,18 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 ),
                 None => "None".into(),
             };
+            // A field that holds paragraphs. `rows` is how many lines
+            // are visible; `0` means the default.
+            let multiline = match element_prop(el, "multiline") {
+                Some(v) => lower_view_bool_keyed(v, cx, "multiline")?,
+                None => "false".into(),
+            };
+            let rows = match element_prop(el, "rows") {
+                Some(v) => lower_view_float(v, cx, "rows")?,
+                None => "0f64".into(),
+            };
             Ok(format!(
-                "Element::TextField {{ value: {value}, placeholder: {placeholder}, on_change: {on_change}, on_submit: {on_submit} }}"
+                "Element::TextField {{ value: {value}, placeholder: {placeholder}, on_change: {on_change}, on_submit: {on_submit}, multiline: {multiline}, rows: {rows} }}"
             ))
         }
         "Column" | "Row" => {
@@ -5963,6 +6068,12 @@ pub fn semantic_prop_keys() -> &'static [&'static str] {
     &["role", "label"]
 }
 
+/// The tooltip rider — the sixth universal table, same contract and
+/// same cross-tier equality test as the others.
+pub fn tooltip_prop_keys() -> &'static [&'static str] {
+    &["tooltip"]
+}
+
 /// The theme-scope rider (§8.37) — the fifth universal table.
 pub fn theme_prop_keys() -> &'static [&'static str] {
     &["theme"]
@@ -6049,6 +6160,7 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
                 && !anim_prop_keys().contains(&key.as_str())
                 && !semantic_prop_keys().contains(&key.as_str())
                 && !theme_prop_keys().contains(&key.as_str())
+                && !tooltip_prop_keys().contains(&key.as_str())
                 && !container_prop_keys(&el.name.name).contains(&key.as_str())
             {
                 return err(
@@ -9685,6 +9797,25 @@ fn emit_main(
             writeln!(
                 out,
                 "    pixie_kernel::menu::item(&mut w, \"{menu}\", \"{item}\", std::rc::Rc::new(move |w: &mut World| {{ {var}.{}(w); }}));",
+                camel_to_snake(&m.name.name)
+            )
+            .unwrap();
+        }
+        // `fn opened(path: String) @drop` — what happens to a file
+        // dragged onto the window, declared like a shortcut.
+        for m in &classes[class].methods {
+            let Some(a) = m.attributes.iter().find(|a| a.name.name == "drop") else {
+                continue;
+            };
+            if m.params.len() != 1 {
+                return err(
+                    a.span,
+                    "`@drop` takes the path: one `String` parameter (`fn opened(p: String) @drop`)",
+                );
+            }
+            writeln!(
+                out,
+                "    pixie_kernel::drop::on_file(&mut w, std::rc::Rc::new(move |w: &mut World, p: Str| {{ {var}.{}(w, p); }}));",
                 camel_to_snake(&m.name.name)
             )
             .unwrap();
