@@ -47,6 +47,7 @@ def view():
                 "save",
                 on_click=save,
                 animate=150,
+                easing="out",
                 role="button",
                 a11y_label="Save the report",
                 tooltip="Save this report",

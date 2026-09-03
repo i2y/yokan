@@ -609,6 +609,23 @@ fn wrap_sem(el: Element, role: &str, label: &str) -> Element {
     Element::Semantics { role: Str::from(role), label: Str::from(label), children: vec![el] }
 }
 
+/// The tooltip rider, tier-A side, mid-chain (unlike `Reg::tip`,
+/// which is the terminal step for elements that carry no
+/// theme/anim/span of their own): pixie's own `lower_element` runs
+/// `lower_tooltip` right after `lower_semantics` and BEFORE
+/// `lower_themed`/`lower_anim`, so a themed or animated element's
+/// tooltip rides inside that scope/tween, not outside it. `Reg::tip`
+/// applied last (outside `wrap_anim`/`wrap_span`) gets this order
+/// backwards for any element that also animates or spans a grid —
+/// harmless while only one rider was ever set at a time, visible the
+/// moment two are (the a11y demo's tooltip+animate button).
+fn wrap_tip(el: Element, tooltip: &str) -> Element {
+    if tooltip.is_empty() {
+        return el;
+    }
+    Element::Tooltip { text: Str::from(tooltip), children: vec![el] }
+}
+
 fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str> {
     match el {
         // A theme scope wraps exactly one container — the `with`
@@ -733,17 +750,20 @@ fn to_list_str(v: Vec<String>) -> List<Str> {
 #[pyfunction(signature = (text, size=0.0, color=String::new(), align=String::new(), grow=0.0, animate=0.0, easing=String::new(), enter=false, exit=false, role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
 #[allow(clippy::too_many_arguments)]
 fn text(text: String, size: f64, color: String, align: String, grow: f64, animate: f64, easing: String, enter: bool, exit: bool, role: String, a11y_label: String, tooltip: String) -> Reg {
-    Reg::tip(&tooltip, wrap_anim(
-        wrap_sem(
-            Element::Text {
-                text: Str::from(text),
-                font_size: size,
-                color: Str::from(color),
-                align: Str::from(align),
-                grow,
-            },
-            &role,
-            &a11y_label,
+    Reg::wrap(wrap_anim(
+        wrap_tip(
+            wrap_sem(
+                Element::Text {
+                    text: Str::from(text),
+                    font_size: size,
+                    color: Str::from(color),
+                    align: Str::from(align),
+                    grow,
+                },
+                &role,
+                &a11y_label,
+            ),
+            &tooltip,
         ),
         animate,
         &easing,
@@ -790,7 +810,7 @@ fn button(
         }),
         None => Rc::new(|_| {}),
     };
-    Reg::tip(&tooltip, wrap_span(wrap_anim(wrap_sem(Element::Button {
+    Reg::wrap(wrap_span(wrap_anim(wrap_tip(wrap_sem(Element::Button {
         label: Str::from(label),
         background: Str::from(background),
         hover_background: Str::from(hover_background),
@@ -805,7 +825,7 @@ fn button(
         border_width,
         border_color: Str::from(border_color),
         on_click: listener,
-    }, &role, &a11y_label), animate, &easing, enter, exit), col_span, row_span))
+    }, &role, &a11y_label), &tooltip), animate, &easing, enter, exit), col_span, row_span))
 }
 
 fn text_listener(cb: Py<PyAny>) -> TextListener {
@@ -980,9 +1000,11 @@ fn column(
         children: take_children(children)?,
     };
     // Innermost first (role:/label: describe the Column itself), then
-    // the theme scope — the same order pixie's own `lower_element`
-    // applies them in (`lower_semantics` before `lower_themed`).
+    // the tooltip, then the theme scope — the same order pixie's own
+    // `lower_element` applies them in (`lower_semantics`, then
+    // `lower_tooltip`, then `lower_themed`).
     let el = wrap_sem(el, &role, &a11y_label);
+    let el = wrap_tip(el, &tooltip);
     let el = if theme.is_empty() {
         el
     } else {
@@ -991,7 +1013,7 @@ fn column(
         // resolution runs in the shared kernel.
         Element::Themed { theme: Str::from(theme), children: vec![el] }
     };
-    Ok(Reg::tip(&tooltip, wrap_anim(el, animate, &easing, enter, exit)))
+    Ok(Reg::wrap(wrap_anim(el, animate, &easing, enter, exit)))
 }
 
 #[pyfunction(signature = (*children, spacing=-1.0, padding=0.0, background=String::new(), grow=0.0, border_radius=0.0, border_width=0.0, border_color=String::new(), role=String::new(), a11y_label=String::new(), tooltip=String::new()))]
