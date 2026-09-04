@@ -1628,6 +1628,16 @@ so no scripted step means less than the hardware does. None of this
 is in the dump — what an app DID with the keys is, which is the thing
 worth comparing.
 
+**Measured, because the shape of the design rested on it.** A frame
+of four hundred commands over two hundred moving things, rebuilt by
+the interpreted run — CPython building the whole element tree and
+crossing into Rust once per command — costs 0.11 ms; thirty of them a
+second is a third of one percent of the time available. Rasterizing
+that frame into a 1280x960 image costs 0.18 ms in a release build and
+2.5 ms in a debug one. So the drawing surface can be what it looks
+like — the app writes the frame it wants, every frame — instead of
+something that holds a command list in state and sends differences.
+
 What is not here yet: sound, closing a window from the app, the
 mouse, tilemaps, a camera offset, and a canvas that sizes itself to
 its box (the painted size would then depend on the window, which the

@@ -478,6 +478,35 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "measurement, not an assertion"]
+    fn measure_a_game_sized_frame() {
+        let mut ops = Vec::new();
+        for i in 0..200i64 {
+            ops.push(Op::Pixel { x: i * 7 % 160, y: i * 11 % 120, color: (i % 4) as i64 });
+            ops.push(Op::Rect { x: i * 7 % 160, y: i * 11 % 120, w: 8, h: 8, color: (i % 4) as i64 });
+        }
+        ops.push(Op::PixelText { x: 2, y: 2, text: Str::from("SCORE 1250"), color: 3 });
+        let spec = Spec {
+            w: 160,
+            h: 120,
+            scale: 4,
+            bg: 0,
+            palette: vec![[0, 0, 0, 255], [255, 255, 255, 255], [40, 60, 90, 255], [200, 60, 90, 255]],
+            ops,
+            dpr: 2,
+        };
+        let mut sprites = Sprites::default();
+        let n = 200;
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let img = render(&spec, &mut sprites, |s| PathBuf::from(s)).unwrap();
+            std::hint::black_box(img.as_bytes(0).unwrap().len());
+        }
+        let ms = t.elapsed().as_secs_f64() * 1000.0 / n as f64;
+        println!("401 commands, 160x120 at scale 4, dpr 2 (1280x960): {ms:.3} ms/frame");
+    }
+
+    #[test]
     fn a_missing_sprite_paints_nothing() {
         let px = pixels(&spec(vec![Op::Sprite {
             x: 0,
