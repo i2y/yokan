@@ -1342,3 +1342,168 @@ dict; this dialect asks that question at the read instead, which is
 the same reason bare `d[k]` is refused. Counting is `Counter`, and
 grouping writes the list back — which now works, because a dict of
 lists reads with `.get(k, [])`.
+
+## `check` warns where the gate cannot look
+
+The gate proves the two runs agree on what the screen shows. A
+mistake both runs make the same way passes it, and so does a
+difference in something a dump never carries. Memory is the second
+kind: models are reference-counted after compilation and a cycle is
+never freed, while the CPython the app is developed on collects it.
+The tour has said exactly that from the start, with nothing behind
+it that could point at the mistake in an app.
+
+`check` now carries advisories beside its refusals. A warning means
+the app is inside the dialect and something in it is still worth
+changing: it prints on every command, the run does not fail, and
+`--strict` turns it into one. Refusals keep their contract — silence
+still means the app translates — because a warning is a different
+answer, not a softer refusal.
+
+The first one is the reference cycle. The translator already knows
+every model field, which of them point at another model, and which
+carry `Weak`, so the graph of strong references is in hand by the
+end of the scan; the warning names the loop field by field
+(`Kid.owner → Parent.kids → Kid`) and asks for `Weak[...]` on the
+reference that points back. Only loops through two or more classes
+are reported. A self-reference is how a list and a tree are written,
+and at the type level those are indistinguishable from a ring; the
+certain form of that catch reads the handler that wires two objects
+to each other, and is a later question.
+
+The rule this sets for the ones after it: an advisory earns its
+place by naming what to write instead, the way a refusal does, and
+by covering something no other check can see. What a Python linter
+already reports stays with the Python linter, and there is no
+configuration file, no severity, and no suppression comment — a
+warning nobody can state in one sentence is not one.
+
+## `init` writes the file the tour opens with
+
+A formatter would be a second answer to a question Python already
+answers: the source is Python, and Python's formatters format it. A
+scaffold is not. Nothing outside this project knows the shape an app
+has to have — exactly one `run(view, ...)` under the `__main__`
+guard, a view that is one `column` block, state that is a `State` or
+a store, the dependency declared where uv reads it. Each of those is
+learned today by being refused.
+
+`yokan init [app.py]` writes the smallest app that is already inside
+the dialect, which is the same file the tour opens with, its title
+taken from the file name. A name that is taken and a name that is not
+a Python file are both refused, naming what to type instead.
+
+What the command is really for is the three lines printed underneath
+it: the run, the gate, the build. The gate is the promise this
+product is built on, and a newcomer has no way to guess that it
+exists. Putting it in front of them at minute one is worth more than
+the code above it.
+
+The scaffold is gated as the user receives it: the sweep runs `init`
+into a scratch directory and gates the file that comes out. A
+template is the one piece of code every new app starts from, so it
+cannot be left to drift out of the dialect quietly. It lives as a
+string in the CLI rather than a file in the wheel, so there is one
+copy of it and nothing extra to install.
+
+## The handler that writes the round trip
+
+The type graph says a cycle is possible; the handler says one was
+built. `a.kid = b` followed by `b.parent = a` puts two objects in
+each other's hands whatever the field types would have allowed, and
+that is a fact about the code rather than a shape it might take.
+
+It reaches what the type graph cannot. A model that references its
+own class is the ordinary way to write a list and a tree, and a ring
+has the same type; only the wiring tells them apart, which is why the
+first rule stays silent there and this one does not.
+
+The analysis is small because it only has to be right. Objects are
+locals, numbered afresh at every binding, so rebinding a name does
+not carry the old object's edges forward; copying a local (`c = a`)
+carries the identity, because it is the same object. A field
+assignment adds an edge and replaces whatever the field held, and
+anything the pass cannot follow removes it. Only a straight run of
+simple statements is one analysis: two assignments in different
+branches of an `if` do not both run, so a compound statement takes
+its own bodies aside and clears what the run had learned. Nothing is
+inferred across a call.
+
+The two rules never say the same thing twice. The classes the type
+graph reported are remembered, and a wired loop confined to them is
+left to the first message.
+
+## The checkout fetches itself
+
+`gate` and `build` compile against the Rust crates in this
+repository, so the instructions began with `git clone`. That is a
+step the tool can take. `repo()` already resolved `PIXIE_REPO`, then
+the tree this file sits in, then upward from the working directory,
+and finding nothing was an error; finding nothing now means the
+checkout is not installed yet, and the first native build fetches it.
+
+The clone is pinned to the tag of the installed version and lives in
+its own directory per version (`~/.cache/yokan/repo-<version>`). The
+compiler and the standard library an app links come from the
+checkout, so one that does not match the wheel is exactly the
+mismatch the release gate exists to catch. A version with no tag yet
+— a local build, a pre-release — falls back to the default branch. It
+is a shallow clone, about 11 MB.
+
+The order in front of it does not change. A checkout the user
+already has still wins, so a contributor's build is untouched and
+nothing is fetched behind their back. If `git` is missing or the
+fetch fails, the message names what to clone and which variable to
+set, which is where the instructions used to start.
+
+The installation page changed shape with it. It used to be two
+halves, develop and ship, with a clone between them; it now opens
+the whole path — install the command, `init`, `uv run`, `check`,
+`gate`, `build` — as one console block, and says which of those need
+Rust. `init` prints the same four steps for the file it just wrote,
+so the tool and the page agree.
+
+## Two refusals that were not teaching
+
+A file that does not parse got a Python traceback: the gate's own
+frames under a `SyntaxError`. The first typo a newcomer writes is the
+worst place to show them the compiler's insides. It now prints what
+every refusal prints — `file:line:col`, the message, the source line,
+the caret — because a file that does not parse is not a dialect
+question and never a fault of the gate's.
+
+`from os import getcwd` refused with "expressions are state reads,
+fields, locals, literals…", while `import os` named the module and
+what to write instead. The difference was only that the from-form
+binds a bare name and nothing remembered where it came from. It is
+remembered now, the way a plain import already was, so both spellings
+of the same mistake teach the same thing.
+
+## The coverage page is generated, and the builtins are probed
+
+How far the dialect reaches had three answers in three places: the
+manifest for the standard library, the translator's own tables for
+`datetime`, `collections` and `itertools`, and for the builtins
+nothing at all — what a reader could learn came from hitting a
+refusal. The site now carries one page that answers it, and nothing
+on that page is typed by hand.
+
+The modules are read where they are declared. The manifest gives the
+rows and the `cpython` flag that says which of them are held to what
+CPython prints; the translator's tables give the three it carries
+itself. Against those stands CPython's own surface, taken by
+inspection when the page is generated — including a module's C
+accelerator, because `bisect_left` says `_bisect`, and dropping it
+had the page reading "bisect: 0 of Python's 0".
+
+The builtins have no declaration to read, so they are probed. Each
+one is written into a handler the way an app would write it, run past
+the translator, and what comes back is either nothing or the refusal;
+sixteen of forty-five are in. The refusals are printed, grouped by
+what they say, so the answer to "why not" is the sentence that
+already knows what to write instead. Probing is also the only honest
+form: `range`, `zip` and `reversed` are refused as values and taken
+in a `for`, and only running them says so.
+
+Both languages come from the same generator, so the two pages cannot
+drift apart, and neither can drift from the compiler.

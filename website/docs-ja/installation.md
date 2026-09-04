@@ -21,23 +21,31 @@ $ uv run app.py
 
 スクリプトではなくプロジェクトに入れるなら `uv add yokan`、`yokan` コマンドは `uv tool install yokan`。pip でも入ります。
 
+## 最初のファイルからリリースまで
+
+```console
+$ uv tool install yokan                     # yokan コマンド
+$ yokan init app.py                         # 最初のファイル
+$ uv run app.py                             # 開発: ウィンドウとライブリロード
+$ yokan check app.py                        # 方言の内側かどうか
+$ yokan gate app.py --script "click:+1"     # 二つの実行を突き合わせる
+$ yokan build app.py --release --onefile    # 1 ファイルで配る
+```
+
+最初の四つは uv だけで動きます。
+下の二つはコンパイルするので Rust が要り、コンパイル先のクレートは自分で取ってきます。
+
+`yokan translate app.py` は、途中のどこででも、リリースビルドがコンパイルする `.pix` を出力します。
+
 !!! note "対応環境"
     現在は **Apple silicon の macOS**、Python **3.14 以上**です。
     Linux にはまもなく対応します。
 
-## リリースはリポジトリの clone と Rust
-
-ネイティブビルド（`yokan build` / `yokan gate`）だけは、コンパイルが依存する Rust クレート群がリポジトリに入っているため、clone と Rust ツールチェーンが要ります。
-
-```console
-$ git clone https://github.com/i2y/yokan && cd yokan
-$ yokan gate path/to/app.py --script "click:+1"
-$ yokan build path/to/app.py --release --onefile
-```
+## リリースに要るのは Rust ツールチェーン
 
 - Rust は [rustup](https://rustup.rs) で入れておきます。コンパイラの版はリポジトリ側で固定してあり、初回ビルド時に自動で取得されます。
 - macOS では Xcode の Metal ツールチェーンも必要です（GPU エンジンのシェーダをビルドするため）。
-- `yokan` コマンドは、チェックアウトの中で実行すればリポジトリを自動で見つけます。外から実行するときは環境変数 `PIXIE_REPO` にチェックアウトの場所を渡します。
+- コンパイル先の Rust クレート群はリポジトリに入っていますが、最初の `gate` か `build` が、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます（約 11 MB）。手で clone するものはありません。チェックアウトの中で `yokan` を実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 - 初回はエンジンごとコンパイルするので数分かかります。二回目からは差分だけです。
 
 ## ビルドで何ができるか

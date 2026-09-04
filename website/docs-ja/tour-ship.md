@@ -18,6 +18,28 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 アプリが import するモジュールをすべて調べ、最初の拒否を `ファイル:行:列` の形で示し、方言の内側なら何も言いません。
 コンパイラを起動しないので、編集しながら何度でも回せます。
 
+`check` は警告も出します。
+拒否ではなく、翻訳は通っているが直したほうがよいところがある、という合図です。
+
+```console
+$ yokan check app.py
+app.py:37:9: warning — these assignments make a reference cycle: b.parent → a.kid → b. The compiled run counts references and never frees a cycle (the CPython you develop on collects it), so write the reference that points back as `Weak[...]`.
+            b.parent = a
+            ^
+```
+
+今ある警告はメモリの話です。
+循環はコンパイル後に解放されず、開発に使う CPython は回収するので、二つの実行で振る舞いが分かれます。
+その差はどのダンプにも現れないので、ゲートでは見つかりません。
+
+見つけ方は二つです。
+一つはフィールドの型で、二つ以上のモデルにまたがって輪になっているときです（`Kid.owner → Parent.kids → Kid`）。
+もう一つはハンドラで、往復を書いたときです（`a.kid = b` のあとに `b.parent = a`）。
+後者があるので、自分自身のクラスを参照するモデルも見つかります。
+型だけでは、リストや木と輪の区別がつかないからです。
+
+`--strict` を付けると、警告が失敗になります。
+
 ## ヘッドレス実行とゲート
 
 アプリはウィンドウなしでも動かせます。
@@ -53,8 +75,9 @@ $ yokan build app.py --release --bundle --app   # ランタイムごと .app に
 $ yokan build app.py --release --onefile    # 1 ファイル配布
 ```
 
-ネイティブビルドの前提はひとつだけです。
-コンパイルが依存する Rust クレート群がリポジトリに入っているので、リポジトリを clone して、その中で（または `PIXIE_REPO` を指して）`yokan` を実行します。
+ネイティブビルドの前提は Rust ツールチェーンだけです。
+コンパイル先の Rust クレート群はリポジトリに入っていますが、最初のネイティブビルドが、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます。
+チェックアウトの中で実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 手順は[インストール](installation.md)のページにまとまっています。
 
 エスケープを使わないアプリのリリースバイナリは、それ自体が自己完結です（Python へのリンクはゼロ）。

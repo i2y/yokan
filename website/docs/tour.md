@@ -32,6 +32,7 @@ if __name__ == "__main__":
     run(view, title="counter")
 ```
 
+`yokan init app.py` writes this file, with the title taken from the file name.
 There are three ways to run it.
 
 ```console

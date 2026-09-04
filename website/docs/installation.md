@@ -23,31 +23,41 @@ involved.
 In a project instead of a script: `uv add yokan`. For the `yokan`
 command: `uv tool install yokan`. Plain pip works too.
 
+## From the first file to a release
+
+```console
+$ uv tool install yokan                     # the yokan command
+$ yokan init app.py                         # the first file
+$ uv run app.py                             # develop: window, live reload
+$ yokan check app.py                        # is it inside the dialect?
+$ yokan gate app.py --script "click:+1"     # both runs, compared
+$ yokan build app.py --release --onefile    # ship one file
+```
+
+The first four need nothing but uv. The last two compile, so they
+need Rust — and they fetch the crates they compile against by
+themselves.
+
+`yokan translate app.py` prints the `.pix` the release build
+compiles, at any point along the way.
+
 !!! note "Platforms"
     Today: **macOS on Apple silicon**, Python **3.14+**. Linux
     support lands shortly.
 
-## Ship: clone the repository, have Rust
-
-Only the native build (`yokan build` / `yokan gate`) needs more:
-the Rust crates it compiles against live in the repository, so
-clone it and have a Rust toolchain.
-
-```console
-$ git clone https://github.com/i2y/yokan && cd yokan
-$ yokan gate path/to/app.py --script "click:+1"
-$ yokan build path/to/app.py --release --onefile
-```
+## Ship: a Rust toolchain
 
 - Install Rust via [rustup](https://rustup.rs); the compiler
   version is pinned by the repository and fetched automatically on
   the first build.
 - On macOS you also need Xcode's Metal toolchain (the GPU engine
   builds shaders).
-- Run `yokan` from inside the checkout and it finds the repository
-  by itself; from anywhere else, point `PIXIE_REPO` at the
-  checkout.
-- The first build compiles the engine and takes a few minutes;
+- The crates the build compiles against live in the repository, and
+  the first `gate` or `build` fetches the checkout matching your
+  version into `~/.cache/yokan/` (about 11 MB). There is nothing to
+  clone by hand. Run `yokan` inside a checkout and it uses that one;
+  `PIXIE_REPO` points it anywhere else.
+- That first build compiles the engine and takes a few minutes;
   later builds are incremental.
 
 ## What a build produces

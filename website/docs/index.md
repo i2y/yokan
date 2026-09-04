@@ -35,7 +35,7 @@ One source, two roads to run it.
 Both roads stand on the same Rust foundation — **pixie**, the
 substrate language Yokan compiles through; the `.pix` in the middle
 of the release road is its readable source, so you can open it and
-see what your app compiled to.
+see what your app compiled to (`yokan translate app.py` prints it).
 
 ![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
 

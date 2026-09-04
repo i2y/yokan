@@ -112,17 +112,18 @@ Today: macOS on Apple silicon, Python 3.14+; Linux support lands
 shortly. Everything you develop with arrives via `uv run app.py`
 (the three-line comment in the example above declares the
 dependency). In a project, `uv add yokan`; for the `yokan` command,
-`uv tool install yokan` — plain pip works too. The window, live
+`uv tool install yokan` — plain pip works too, and `yokan init
+app.py` writes a first file to start from. The window, live
 reload, headless runs: no Rust needed so far.
 
-Only the native build (`yokan build` / `yokan gate`) needs more: the
-Rust crates it compiles against live in this repository, so clone it
-and have a Rust toolchain.
+Only the native build (`yokan build` / `yokan gate`) needs more: a
+Rust toolchain, and the crates it compiles against, which live in
+this repository. `yokan check` and `yokan translate` start no
+compiler, so they run without any of it.
 
 ```console
-$ git clone https://github.com/i2y/yokan && cd yokan
-$ yokan gate path/to/app.py --script "click:+1"
-$ yokan build path/to/app.py --release --onefile
+$ yokan gate app.py --script "click:+1"
+$ yokan build app.py --release --onefile
 ```
 
 - Install Rust via [rustup](https://rustup.rs); the compiler version
@@ -130,9 +131,11 @@ $ yokan build path/to/app.py --release --onefile
   build.
 - On macOS you also need Xcode's Metal toolchain (the GPU engine
   builds shaders).
-- Run `yokan` from inside the checkout and it finds the repository
-  by itself; from anywhere else, point `PIXIE_REPO` at the checkout.
-- The first build compiles the engine and takes a few minutes;
+- The first native build fetches the checkout matching your version
+  into `~/.cache/yokan/` (about 11 MB), so there is nothing to clone
+  by hand. Inside a checkout `yokan` uses that one; `PIXIE_REPO`
+  points it anywhere else.
+- That first build compiles the engine and takes a few minutes;
   later builds are incremental.
 
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload;

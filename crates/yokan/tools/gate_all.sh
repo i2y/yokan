@@ -55,6 +55,12 @@ gate proj     python3 yokan_gate.py gate demo/proj/app.py --script "click:run"
 # Multi-module apps.
 gate multi    python3 yokan_gate.py gate demo/multi/app.py
 gate opsboard python3 yokan_gate.py gate demo/opsboard/app.py
+# The scaffold, gated as the user receives it: `init` writes the file
+# and the gate runs it. A template that stopped compiling would be the
+# one broken thing every new app starts from.
+rm -rf .gate/init && mkdir -p .gate/init
+python3 yokan_gate.py init .gate/init/app.py >/dev/null
+gate init    python3 yokan_gate.py gate .gate/init/app.py --script "click:+1"
 # Everything else: startup-dump gates.
 for f in demo/*.py; do
   b=$(basename "$f" .py)

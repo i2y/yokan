@@ -28,11 +28,66 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+REPO_URL = "https://github.com/i2y/yokan"
+
+
+def wheel_version() -> str:
+    """The installed package's version, or None in a dev tree."""
+    try:
+        from importlib.metadata import version, PackageNotFoundError  # noqa: PLC0415
+
+        return version("yokan")
+    except Exception:
+        return None
+
+
+def cached_repo() -> str:
+    """Where a fetched checkout lives. One directory per version: the
+    native build compiles against the crates in there, so a wheel must
+    never build against another wheel's."""
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, "yokan", "repo-" + (wheel_version() or "main"))
+
+
+def fetch_repo(dest: str) -> str:
+    """No checkout anywhere, so fetch the one this wheel was built
+    from. Pinned to the version's tag, because the compiler and the
+    standard library it links come from the repository — a checkout
+    that does not match the wheel is the mismatch every release gate
+    exists to catch."""
+    if shutil.which("git") is None:
+        sys.exit(f"the native build needs the yokan repository and git is not on PATH — "
+                 f"clone {REPO_URL} and set PIXIE_REPO to it")
+    ver = wheel_version()
+    ref = f"v{ver}" if ver else None
+    print(f"fetching {REPO_URL} ({ref or 'main'}) into {dest}", file=sys.stderr)
+    print("  first native build only; later builds reuse it", file=sys.stderr)
+    tmp = dest + ".part"
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    base = ["git", "clone", "--depth", "1", "--quiet"]
+    r = subprocess.run(base + (["--branch", ref] if ref else []) + [REPO_URL, tmp],
+                       capture_output=True, text=True)
+    if r.returncode != 0 and ref:
+        # a version with no tag yet (a local build, a pre-release):
+        # the default branch is the closest thing to it
+        r = subprocess.run(base + [REPO_URL, tmp], capture_output=True, text=True)
+    if r.returncode != 0:
+        shutil.rmtree(tmp, ignore_errors=True)
+        sys.exit(f"could not fetch {REPO_URL}:\n{r.stderr.strip()}\n"
+                 f"clone it yourself and set PIXIE_REPO to it")
+    shutil.rmtree(dest, ignore_errors=True)
+    os.replace(tmp, dest)
+    return dest
+
+
 def repo() -> str:
     """The pixie repo, needed only to compile the native tier —
     `translate` never asks. Resolution: $PIXIE_REPO, then the dev
     tree this file sits in, then upward from the cwd (so the
-    wheel-installed `yokan` command works inside a checkout)."""
+    wheel-installed `yokan` command works inside a checkout), then
+    the cache. Nothing found means nothing is installed to find, so
+    it is fetched rather than demanded of the user."""
     cands = [os.environ.get("PIXIE_REPO"), os.path.abspath(os.path.join(HERE, "..", ".."))]
     d = os.getcwd()
     while True:
@@ -41,10 +96,11 @@ def repo() -> str:
         if up == d:
             break
         d = up
+    cands.append(cached_repo())
     for c in cands:
         if c and os.path.isfile(os.path.join(c, "crates", "pixie-cli", "Cargo.toml")):
             return c
-    sys.exit("the native build needs the pixie repo — set PIXIE_REPO=/path/to/pixie")
+    return fetch_repo(cached_repo())
 
 
 SOURCES: dict = {}   # parsed file -> its lines, for refusal excerpts
@@ -328,9 +384,61 @@ def pixstr(v) -> str:
     return str(v) if isinstance(v, RawPix) else f'"{esc(v)}"'
 
 
+def _sub_bodies(st):
+    """The statement lists a compound statement carries."""
+    for f in ("body", "orelse", "finalbody"):
+        b = getattr(st, f, None)
+        if b:
+            yield b
+    for h in getattr(st, "handlers", None) or []:
+        if h.body:
+            yield h.body
+    for c in getattr(st, "cases", None) or []:
+        if c.body:
+            yield c.body
+
+
+def _assigned_names(st) -> set:
+    """Every local a statement (and anything under it) binds."""
+    out = set()
+    for n in ast.walk(st):
+        if isinstance(n, ast.Assign):
+            out |= {t.id for t in n.targets if isinstance(t, ast.Name)}
+        elif isinstance(n, (ast.AnnAssign, ast.For, ast.NamedExpr)):
+            if isinstance(n.target, ast.Name):
+                out.add(n.target.id)
+        elif isinstance(n, ast.withitem):
+            if isinstance(n.optional_vars, ast.Name):
+                out.add(n.optional_vars.id)
+    return out
+
+
+def _route(start, goal, edges) -> list | None:
+    """The shortest way from one object to another, step by step."""
+    back = {start: None}
+    queue = [start]
+    while queue:
+        cur = queue.pop(0)
+        for f, nxt in sorted(edges.get(cur, {}).items()):
+            if nxt == goal:
+                steps = [(cur, f)]
+                while back[cur] is not None:
+                    cur, field = back[cur]
+                    steps.append((cur, field))
+                steps.reverse()
+                return steps
+            if nxt not in back:
+                back[nxt] = (cur, f)
+                queue.append(nxt)
+    return None
+
+
 class Untranslatable(Exception):
     """A refusal: where (file, line, column) and why. `str(e)` is
-    the one-line form; `render()` adds the source excerpt."""
+    the one-line form; `render()` adds the source excerpt. The same
+    shape is built (never raised) for the advisories in
+    `Translator.warnings`, which want the identical file:line:col
+    form."""
 
     def __init__(self, node, msg):
         self.msg = msg
@@ -491,6 +599,7 @@ class Translator:
         self.fs_name = None            # `from yokan import fs` binding, if any
         self.stdlib_mods = {}        # local name -> stdlib module ("fs", ...)
         self.py_imports = {}         # plain `import x` -> module name, for refusals
+        self.py_from = {}            # `from x import y` -> x, for the same refusals
         self.stdlib_names = {}       # `from math import sqrt` -> (module, name)
         self.dt_names = {}           # `from datetime import date` -> "date"
         self.tuple_parts = {}        # tuple struct name -> its part types
@@ -503,6 +612,8 @@ class Translator:
         self.text_hole = False         # inside an f-string hole (reads only)
         self.structs = {}              # frozen dataclass -> [(field, pixty, default_lit)]
         self.models = {}               # @ui.model -> {"fields", "methods", "impls"}
+        self.model_refs = {}           # model -> [(field, target model, node)], strong only
+        self.warnings = []             # advisories: translated, but worth changing
         self.model_instances = {}      # module-level `x = Model()` -> model name
         self.protocols = {}            # Protocol class -> [(method, params, ret)]
         self.replace_name = None       # `from dataclasses import replace` binding
@@ -638,6 +749,13 @@ class Translator:
                     # `from yokan import State, store, value, ...`
                     # — the bare spelling every doc sample uses.
                     self.yokan_names[a.asname or a.name] = a.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            # `from os import getcwd` — the name arrives bare, so
+            # without this the refusal could only say "getcwd is not
+            # in the dialect here". Remembered the way `import os` is,
+            # and for the same reason: name the module at the call.
+            for a in node.names:
+                self.py_from[a.asname or a.name] = node.module
 
     def _is_state_call(self, node) -> bool:
         if not isinstance(node, ast.Call):
@@ -1635,6 +1753,192 @@ class Translator:
             return ann.slice.id
         return None
 
+    def _ref_cycles(self):
+        """Strong model references that close a loop. The compiled
+        run counts references and frees no cycle, while the CPython
+        you develop on collects it — a real difference between the two
+        runs that no dump shows, so the gate cannot be the one to
+        catch it. Only loops through two or more classes are reported:
+        a self-reference is how a list or a tree is written, and at
+        the type level those look exactly like a ring."""
+        edges = {m: [e for e in refs if e[1] != m]
+                 for m, refs in self.model_refs.items()}
+
+        def reach(start):
+            seen, stack = set(), [t for _, t, _ in edges.get(start, ())]
+            while stack:
+                m = stack.pop()
+                if m not in seen:
+                    seen.add(m)
+                    stack += [t for _, t, _ in edges.get(m, ())]
+            return seen
+
+        reachable = {m: reach(m) for m in edges}
+        reported = set()
+        for m in sorted(edges):
+            if m in reported:
+                continue
+            # every class that reaches m and is reached by m: one tangle
+            comp = {m} | {o for o in reachable[m]
+                          if o != m and m in reachable.get(o, ())}
+            if len(comp) < 2:
+                continue
+            reported |= comp
+            self.warnings.append(self._cycle_note(comp, edges))
+        self.cycle_classes = reported
+
+    def _cycle_note(self, comp: set, edges: dict) -> Untranslatable:
+        """The shortest loop inside one tangle, named field by field."""
+        root = sorted(comp)[0]
+        parent = {root: None}        # class -> the (holder, field, node) reaching it
+        closing = None               # the edge that lands back on root
+        queue = [root]
+        while queue and closing is None:
+            cur = queue.pop(0)
+            for f, t, n in sorted(edges.get(cur, ()), key=lambda e: (e[1], e[0])):
+                if t not in comp:
+                    continue
+                if t == root:
+                    closing = (cur, f, n)
+                    break
+                if t not in parent:
+                    parent[t] = (cur, f, n)
+                    queue.append(t)
+        chain = [closing]
+        while parent[chain[-1][0]] is not None:
+            chain.append(parent[chain[-1][0]])
+        chain.reverse()
+        path = " → ".join(f"{h}.{f}" for h, f, _ in chain) + f" → {root}"
+        return Untranslatable(
+            chain[0][2],
+            f"these references form a cycle: {path}. The compiled run "
+            f"counts references and never frees a cycle (the CPython you "
+            f"develop on collects it), so write the reference that points "
+            f"back as `Weak[...]`.",
+        )
+
+    def _wired_cycles(self):
+        """A handler that writes the round trip — `a.kid = b`, then
+        `b.parent = a` — has built a cycle between two objects, whatever
+        the field types would have allowed. This is the certain half of
+        the cycle check, and it sees what the type graph cannot: a model
+        pointing at its own class, where a list, a tree and a ring are
+        the same shape."""
+        strong = {m: {f: t for f, t, _ in refs}
+                  for m, refs in self.model_refs.items()}
+        if not strong:
+            return
+
+        def walk(body, owner):
+            for st in body:
+                if isinstance(st, ast.ClassDef):
+                    walk(st.body, st.name if st.name in self.models else None)
+                elif isinstance(st, ast.FunctionDef):
+                    note = self._wired_in(st, owner, strong)
+                    if note is not None:
+                        self.warnings.append(note)
+
+        for tree in [self.tree, *self.modules.values()]:
+            walk(tree.body, None)
+
+    def _wired_in(self, fn: ast.FunctionDef, owner, strong):
+        """One function: `self` and the annotated parameters name
+        objects on the way in, and the body is walked from there."""
+        serial = [0]
+        labels = {}
+
+        def bind(name: str, model):
+            serial[0] += 1
+            ident = (model, serial[0])
+            labels[ident] = name
+            return ident
+
+        env = {}
+        args = fn.args.args
+        if owner is not None and args and args[0].arg == "self":
+            env["self"] = bind("self", owner)
+        for a in args:
+            m = self._ann_model(a.annotation) if a.annotation is not None else None
+            if m is not None:
+                env[a.arg] = bind(a.arg, m)
+        return self._wired_body(fn.body, env, bind, labels, strong)
+
+    def _wired_body(self, stmts, env, bind, labels, strong):
+        """A straight run of simple statements is one analysis. Two
+        assignments in different branches of an `if` do not both run, so
+        a compound statement takes its own bodies aside and clears what
+        the run had learned."""
+        edges = {}                     # object -> {field: object}
+        for st in stmts:
+            tgt = val = None
+            if isinstance(st, ast.Assign) and len(st.targets) == 1:
+                tgt, val = st.targets[0], st.value
+            elif isinstance(st, ast.AnnAssign) and st.value is not None:
+                tgt, val = st.target, st.value
+            if tgt is None:
+                bodies = list(_sub_bodies(st))
+                for body in bodies:
+                    note = self._wired_body(body, dict(env), bind, labels, strong)
+                    if note is not None:
+                        return note
+                if bodies:
+                    edges = {}
+                    for n in _assigned_names(st):
+                        env.pop(n, None)
+                continue
+            if isinstance(tgt, ast.Name):
+                env[tgt.id] = self._wired_value(val, env, bind, tgt.id)
+                continue
+            if not (isinstance(tgt, ast.Attribute) and isinstance(tgt.value, ast.Name)):
+                continue
+            holder = env.get(tgt.value.id)
+            if holder is None or holder[0] is None:
+                continue
+            want = strong.get(holder[0], {}).get(tgt.attr)
+            if want is None:
+                continue               # not a strong reference to a model
+            other = env.get(val.id) if isinstance(val, ast.Name) else None
+            if other is None or other[0] != want:
+                # `= None`, or an object this pass cannot follow: the
+                # field no longer holds what it held.
+                edges.get(holder, {}).pop(tgt.attr, None)
+                continue
+            edges.setdefault(holder, {})[tgt.attr] = other
+            path = [] if other == holder else _route(other, holder, edges)
+            if path is None:
+                continue
+            on_loop = {holder[0], other[0], *(n[0] for n, _ in path)}
+            if on_loop <= self.cycle_classes:
+                continue               # the type graph already said it
+            loop = " → ".join([f"{labels[holder]}.{tgt.attr}"]
+                              + [f"{labels[n]}.{f}" for n, f in path])
+            return Untranslatable(
+                st,
+                f"these assignments make a reference cycle: {loop} → "
+                f"{labels[holder]}. The compiled run counts references and "
+                f"never frees a cycle (the CPython you develop on collects "
+                f"it), so write the reference that points back as "
+                f"`Weak[...]`.",
+            )
+        return None
+
+    def _wired_value(self, val, env, bind, name: str):
+        """The object a local takes: a fresh one from `Model()`, the
+        same one when a local is copied, otherwise nothing to follow."""
+        if (isinstance(val, ast.Call) and isinstance(val.func, ast.Name)
+                and val.func.id in self.models):
+            return bind(name, val.func.id)
+        if isinstance(val, ast.Name) and val.id in env:
+            return env[val.id]
+        return bind(name, None)
+
+    def _ann_model(self, ann):
+        """The model a parameter's annotation names, `Weak` aside."""
+        if isinstance(ann, ast.Name) and ann.id in self.models:
+            return ann.id
+        ref = self._model_ref_ann(ann)
+        return ref[0] if ref is not None and not ref[1] else None
+
     def _take_model(self, node: ast.ClassDef):
         """`@ui.model` ↔ pixie class: an observed object. Python
         objects and pixie handles are both references, so identity
@@ -1656,12 +1960,19 @@ class Translator:
                     fields.append((st.target.id, f"{mname2}?", "nil"))
                     if weak2:
                         weak_fields.add(st.target.id)
+                    else:
+                        self.model_refs.setdefault(node.name, []).append(
+                            (st.target.id, mname2, st))
                     continue
                 lref = self._model_list_ann(st.annotation)
                 if lref is not None:
                     if not (isinstance(st.value, ast.List) and not st.value.elts):
                         raise Untranslatable(st.value, "a model-list field starts as `[]`")
                     fields.append((st.target.id, f"List<{lref}>", "[]"))
+                    # `list[Weak[M]]` is not a shape the dialect takes,
+                    # so a model list is always a strong reference.
+                    self.model_refs.setdefault(node.name, []).append(
+                        (st.target.id, lref, st))
                     continue
                 ty = self._pix_ty(st.annotation)
                 if ty is None:
@@ -4207,9 +4518,13 @@ class Translator:
                 node = node.value
             else:
                 break
-        if not (seen_attr and isinstance(node, ast.Name)):
+        if not isinstance(node, ast.Name):
             return None
-        return self.py_imports.get(node.id)
+        if seen_attr:
+            return self.py_imports.get(node.id)
+        # `getcwd()`, with nothing to the left of it: the module is
+        # the one the name was imported from.
+        return self.py_from.get(node.id)
 
     def _stdlib_call(self, func):
         # `from math import sqrt` binds the function itself, so the
@@ -10204,6 +10519,8 @@ class Translator:
             for tree in trees:
                 inline.visit(tree)
         self.scan()
+        self._ref_cycles()
+        self._wired_cycles()
         self._emit_timers()
         self._emit_keys()
         self._emit_menu()
@@ -11840,16 +12157,65 @@ def do_add(args) -> None:
         sys.exit(f"add failed (declaration rolled back) — {e}")
 
 
+TEMPLATE = """# /// script
+# dependencies = ["yokan"]
+# ///
+from yokan import State, button, column, run, text
+
+count: State[int] = State(0)
+
+
+def view():
+    with column(spacing=12, padding=16):
+        text(f"count: {count()}", size=34)
+        button("+1", on_click=lambda: count.set(count() + 1))
+
+
+if __name__ == "__main__":
+    run(view, title="TITLE")
+"""
+
+
+def do_init(path: str) -> None:
+    """Write the smallest app that is already inside the dialect: the
+    file the tour opens with, its title taken from the file name. The
+    sweep gates what `init` writes, so the scaffold cannot drift away
+    from what compiles. What it teaches is not the code but the three
+    commands printed underneath — the gate is the product's promise,
+    and nobody finds it by guessing."""
+    if not path.endswith(".py"):
+        sys.exit(f"an app is a Python file — `yokan init {path}.py`")
+    if os.path.exists(path):
+        sys.exit(f"{path} is already there — `yokan init <another name>.py`")
+    stem = os.path.splitext(os.path.basename(path))[0]
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    open(path, "w").write(TEMPLATE.replace('title="TITLE"', f'title="{stem}"'))
+    steps = [
+        (f"uv run {path}", "develop: CPython, live reload"),
+        (f"yokan check {path}", "is it inside the dialect?"),
+        (f'yokan gate {path} --script "click:+1"', "verify: the two runs, compared"),
+        (f"yokan build {path} --release", "ship: the native binary"),
+    ]
+    w = max(len(c) for c, _ in steps)
+    print(f"wrote {path}\n")
+    for c, note in steps:
+        print(f"  {c.ljust(w)}   # {note}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["check", "translate", "gate", "build", "sync", "add"])
-    ap.add_argument("app")
+    ap.add_argument("mode", choices=["init", "check", "translate", "gate", "build", "sync", "add"])
+    ap.add_argument("app", nargs="?", default=None,
+                    help="the app; `init` defaults it to app.py")
     ap.add_argument("extra", nargs="*",
                     help="for `add`: <crate> [VERSION]")
     ap.add_argument("--path", default=None,
                     help="for `add`: bind a local crate directory instead of a crates.io version")
     ap.add_argument("--features", default="",
                     help="for `add`: comma-separated cargo features")
+    ap.add_argument("--strict", action="store_true",
+                    help="fail on warnings too, not on refusals alone")
     ap.add_argument("--script", default="")
     ap.add_argument("--release", action="store_true")
     ap.add_argument("--fresh", action="append", default=[],
@@ -11862,6 +12228,13 @@ def main():
                     help="ship a python-build-standalone runtime next to the binary (@ui.py apps)")
     args = ap.parse_args()
 
+    if args.mode == "init":
+        do_init(args.app or "app.py")
+        return
+    if args.app is None:
+        tail = " <crate>" if args.mode == "add" else ""
+        ap.error(f"{args.mode} takes an app: yokan {args.mode} app.py{tail}")
+
     for step in args.script.split(","):
         if step.split(":")[0] in ("mem", "a11y"):
             sys.exit(f"`{step}` prints outside the dump; not gate-comparable for now")
@@ -11872,15 +12245,29 @@ def main():
 
     try:
         pix, tr = translate_file(args.app)
+    except SyntaxError as e:
+        rel = os.path.relpath(e.filename or args.app)
+        out = [f"{rel if not rel.startswith('..') else e.filename}:{e.lineno}:{e.offset or 1}: {e.msg}"]
+        if e.text:
+            out += [f"    {e.text.rstrip()}", "    " + " " * max((e.offset or 1) - 1, 0) + "^"]
+        sys.exit("\n".join(out))
     except Untranslatable as e:
         sys.exit(e.render() if e.file else f"{args.app}: {e.render()}")
     except ValueError as e:
         sys.exit(f"{args.app}: not in the dialect — {e}")
 
+    for w in tr.warnings:
+        print(w.render("warning"), file=sys.stderr)
+    if tr.warnings and args.strict:
+        n = len(tr.warnings)
+        sys.exit(f"--strict: {n} warning{'' if n == 1 else 's'}")
+
     if args.mode == "check":
         # The checker IS the translator: everything the compiled run
         # would refuse is refused here, before a compiler is started.
-        # Silent means the app is in the dialect.
+        # Silent means the app is in the dialect. A warning above says
+        # the app translates but something in it is worth changing —
+        # it costs nothing to run, so it goes out on every mode.
         return
 
     if args.mode == "translate":

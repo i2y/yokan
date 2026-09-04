@@ -88,6 +88,7 @@ Objects that own each other never let go, and the release build does not free th
 The habit is to not build cycles: make the back reference `Weak`.
 One honest note: the CPython you develop on does collect cycles, so a cycle you build by mistake is the one place the two runs' memory behavior differs.
 The gate compares screens; memory is outside what it checks.
+`check` warns in its place: when the field types close a loop through two or more model classes, and when a handler writes the round trip (`a.kid = b`, then `b.parent = a`).
 
 The number of live objects is countable at any time with the headless `mem` step.
 

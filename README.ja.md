@@ -96,19 +96,20 @@ GATE OK — 2 dump lines identical in both runs
 Linux にはまもなく対応します。
 開発に使うものは `uv run app.py` だけで揃います（冒頭の例の 3 行コメントが依存宣言です）。
 プロジェクトに入れるなら `uv add yokan`、`yokan` コマンドは `uv tool install yokan`。pip でも入ります。
+最初のファイルは `yokan init app.py` が書きます。
 ウィンドウ、ライブリロード、ヘッドレス実行まで、ここに Rust は要りません。
 
-ネイティブビルド（`yokan build` / `yokan gate`）だけは、コンパイルが依存する Rust クレート群がこのリポジトリに入っているため、clone と Rust ツールチェーンが要ります。
+ネイティブビルド（`yokan build` / `yokan gate`）だけは、Rust ツールチェーンと、コンパイル先の Rust クレート群（このリポジトリに入っています）が要ります。
+`yokan check` と `yokan translate` はコンパイラを起動しないので、どちらも無しで動きます。
 
 ```console
-$ git clone https://github.com/i2y/yokan && cd yokan
-$ yokan gate path/to/app.py --script "click:+1"
-$ yokan build path/to/app.py --release --onefile
+$ yokan gate app.py --script "click:+1"
+$ yokan build app.py --release --onefile
 ```
 
 - Rust は [rustup](https://rustup.rs) で入れておきます。コンパイラの版はリポジトリ側で固定してあり、初回ビルド時に自動で取得されます。
 - macOS では Xcode の Metal ツールチェーンも必要です（GPU エンジンのシェーダをビルドするため）。
-- `yokan` コマンドは、チェックアウトの中で実行すればリポジトリを自動で見つけます。外から実行するときは環境変数 `PIXIE_REPO` にチェックアウトの場所を渡します。
+- 最初のネイティブビルドが、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます（約 11 MB）。手で clone するものはありません。チェックアウトの中なら `yokan` はそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 - 初回はエンジンごとコンパイルするので数分かかります。二回目からは差分だけです。
 
 実測値（macOS/arm64、リリースビルド）：起動 4.7 ms、ライブリロード約 1 ms。サイズは上の配布の節の通りです。

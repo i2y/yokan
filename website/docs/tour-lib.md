@@ -25,6 +25,7 @@ except Exception as e:
 
 It comes in two halves, told apart by where the name comes from.
 Neither half puts Python in the shipped binary.
+How far each module reaches into Python's, function by function, is on the [coverage page](support.md), which is generated rather than written.
 
 **Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`, `import collections`, `import itertools`.
 During development the app imports CPython's module and CPython runs it.

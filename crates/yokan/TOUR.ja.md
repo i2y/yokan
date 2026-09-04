@@ -62,6 +62,7 @@ if __name__ == "__main__":
     run(view, title="counter")
 ```
 
+このファイルは `yokan init app.py` が書きます（title はファイル名から取ります）。
 三つの動かし方があります。
 
 ```console
@@ -247,7 +248,7 @@ int、str、float、bool、Enum の値がそのまま描画でき、表示は Py
 float の小数点以下を揃えたいときは `f"{x:.1f}"` の形式指定も使えます。
 `{}` の中では `+`、`-`、`*` の計算も書けます（`f"{n * 2 + 1}"`）。
 
-条件分岐はビューの中の普通の `if` / `elif` / `else` です。
+条件分岐は、ビューの中でも普通の `if` / `elif` / `else` です。
 モーダルは、置けば開いていて、置かなければ閉じています。
 だから `if` で包みます。
 
@@ -694,6 +695,8 @@ def area_of(s: Shape) -> float:
 逆向きの参照を `Weak` にして、循環を作らないのが作法です。
 なお開発中の CPython には循環回収があるので、循環を作ってしまったときのメモリの振る舞いだけは二つの実行で同じになりません。
 ゲートが比べるのは画面で、メモリは検証の対象外だからです。
+代わりに `check` が警告します。
+フィールドの型が二つ以上のモデルにまたがって輪になっているときと、ハンドラに `a.kid = b`、`b.parent = a` と往復を書いたときです。
 
 生きているオブジェクトの数は、ヘッドレス実行の `mem` ステップでいつでも数えられます。
 
@@ -897,6 +900,7 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 どちらの半分も、リリースバイナリに Python を持ち込みません。
+どのモジュールが Python のどこまで届いているかは、関数の単位で[対応状況のページ](https://i2y.github.io/yokan/ja/support/)にあります（手で書かずに生成しています）。
 
 **Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
@@ -1078,7 +1082,7 @@ Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そ�
 
 ## CPython エスケープ
 
-ここまでの範囲の外の Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
+ここまでの範囲から外れる Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
 その関数は**本物の Python のまま**残ります。
 開発中はそのまま、リリース後は同梱または実行環境の CPython で実行されます（自己完結にするなら後述の `--bundle` / `--onefile`）。
 
@@ -1172,6 +1176,28 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 アプリが import するモジュールをすべて調べ、最初の拒否を `ファイル:行:列` の形で示し、方言の内側なら何も言いません。
 コンパイラを起動しないので、編集しながら何度でも回せます。
 
+`check` は警告も出します。
+拒否ではなく、翻訳は通っているが直したほうがよいところがある、という合図です。
+
+```console
+$ yokan check app.py
+app.py:37:9: warning — these assignments make a reference cycle: b.parent → a.kid → b. The compiled run counts references and never frees a cycle (the CPython you develop on collects it), so write the reference that points back as `Weak[...]`.
+            b.parent = a
+            ^
+```
+
+今ある警告はメモリの話です。
+循環はコンパイル後に解放されず、開発に使う CPython は回収するので、二つの実行で振る舞いが分かれます。
+その差はどのダンプにも現れないので、ゲートでは見つかりません。
+
+見つけ方は二つです。
+一つはフィールドの型で、二つ以上のモデルにまたがって輪になっているときです（`Kid.owner → Parent.kids → Kid`）。
+もう一つはハンドラで、往復を書いたときです（`a.kid = b` のあとに `b.parent = a`）。
+後者があるので、自分自身のクラスを参照するモデルも見つかります。
+型だけでは、リストや木と輪の区別がつかないからです。
+
+`--strict` を付けると、警告が失敗になります。
+
 ## ヘッドレス実行とゲート
 
 アプリはウィンドウなしでも動かせます。
@@ -1207,8 +1233,9 @@ $ yokan build app.py --release --bundle --app   # ランタイムごと .app に
 $ yokan build app.py --release --onefile    # 1 ファイル配布
 ```
 
-ネイティブビルドの前提はひとつだけです。
-コンパイルが依存する Rust クレート群がリポジトリに入っているので、リポジトリを clone して、その中で（または `PIXIE_REPO` を指して）`yokan` を実行します。
+ネイティブビルドの前提は Rust ツールチェーンだけです。
+コンパイル先の Rust クレート群はリポジトリに入っていますが、最初のネイティブビルドが、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます。
+チェックアウトの中で実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 手順は README の「対応環境」にまとまっています。
 
 エスケープを使わないアプリのリリースバイナリは、それ自体が自己完結です（Python へのリンクはゼロ）。

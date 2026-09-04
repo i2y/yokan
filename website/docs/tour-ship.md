@@ -17,6 +17,27 @@ A type checker knows Python's types, not the dialect's boundary.
 `yokan check app.py` answers that half: it checks every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
 No compiler is started, so it is the check to run while editing.
 
+`check` also warns.
+A warning is not a refusal: the app translates, and something in it is still worth changing.
+
+```console
+$ yokan check app.py
+app.py:37:9: warning — these assignments make a reference cycle: b.parent → a.kid → b. The compiled run counts references and never frees a cycle (the CPython you develop on collects it), so write the reference that points back as `Weak[...]`.
+            b.parent = a
+            ^
+```
+
+Today's warnings are about memory.
+A cycle is never freed in the compiled run while the CPython you develop on collects it, so the two runs differ.
+No dump shows that difference, which makes it the one thing the gate cannot check for you.
+
+Two shapes are caught.
+One is the field types: strong references that close a loop through two or more model classes (`Kid.owner → Parent.kids → Kid`).
+The other is a handler that writes the round trip (`a.kid = b`, then `b.parent = a`).
+The second catches a model that references its own class, where the types alone cannot tell a ring from a list or a tree.
+
+`--strict` turns a warning into a failure.
+
 ## Headless runs and the gate
 
 Running without a window is where verification starts.
@@ -51,8 +72,8 @@ $ yokan build app.py --release --bundle --app   # runtime and all, inside the .a
 $ yokan build app.py --release --onefile    # single-file distribution
 ```
 
-The native build has one prerequisite.
-The Rust crates it compiles against live in the repository, so clone the repository and run `yokan` inside it (or point `PIXIE_REPO` at the checkout).
+The native build has one prerequisite: a Rust toolchain.
+The crates it compiles against live in the repository, and the first native build fetches the checkout matching your version into `~/.cache/yokan/` — inside a checkout it uses that one, and `PIXIE_REPO` points it anywhere else.
 The steps are collected on the [Installation](installation.md) page.
 
 The release binary of an app that uses no escapes is self-contained on its own (zero links to Python).

@@ -26,6 +26,7 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 どちらの半分も、リリースバイナリに Python を持ち込みません。
+どのモジュールが Python のどこまで届いているかは、関数の単位で[対応状況のページ](support.md)にあります（手で書かずに生成しています）。
 
 **Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
@@ -207,7 +208,7 @@ Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そ�
 
 ## CPython エスケープ
 
-ここまでの範囲の外の Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
+ここまでの範囲から外れる Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
 その関数は**本物の Python のまま**残ります。
 開発中はそのまま、リリース後は同梱または実行環境の CPython で実行されます（自己完結にするなら後述の `--bundle` / `--onefile`）。
 
