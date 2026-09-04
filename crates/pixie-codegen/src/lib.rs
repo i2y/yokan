@@ -7860,6 +7860,9 @@ pub struct WindowOpts {
     pub title: Option<String>,
     pub width: Option<f64>,
     pub height: Option<f64>,
+    /// The inset between the window and the app's tree. Absent keeps
+    /// the engine's 16 px; `0.0` lets an app paint to the edge.
+    pub padding: Option<f64>,
 }
 
 pub fn emit_program_with_window(
@@ -10626,7 +10629,11 @@ fn window_exprs() -> (String, String) {
             (Some(x), Some(y)) => format!("Some(({x:?}f64, {y:?}f64))"),
             _ => "None".to_string(),
         };
-        (title, win)
+        let pad = match w.padding {
+            Some(p) => format!("Some({p:?}f64)"),
+            None => "None".to_string(),
+        };
+        (title, format!("{win}, {pad}"))
     })
 }
 

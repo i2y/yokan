@@ -1699,3 +1699,20 @@ parallax layer is written out twice because a view's `for` walks a
 list; and there is no sound, because there is no audio here yet.
 Everything else is the game, including the numbers — a color is an
 index into Pyxel's own palette, declared in the file.
+
+## The window's own ring (2026-09-05)
+
+Every app's tree was drawn inside a 16 px inset the engine added and
+nothing could remove. It is a good default — a column of controls
+should not touch the window's edge, and no app should have to say so —
+but it was a default with no way out, which is a different thing from
+a decision. The two ported games showed what that costs: a canvas
+sized to its window landed 16 px right and down and lost the same
+strip off the other two sides.
+
+The inset is a number now: `run(view, …, padding=0.0)`, and
+`[window] padding` in a project's manifest for the compiled build. It
+keeps its 16 when nothing says otherwise, so every app that existed
+looks exactly as it did. It is window chrome rather than an element,
+so no dump moves with it — which also means the gate cannot check it,
+and only a window can.

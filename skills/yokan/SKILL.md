@@ -670,7 +670,9 @@ paragraphs; every element takes `tooltip="…"`.
 
 `run(view, title="OpsBoard", width=1100, height=820,
 on_start=boot)`. Title and size are baked into the binary; width
-and height come as a pair in logical pixels. `on_start` runs once
+and height come as a pair in logical pixels. `padding=` is the inset
+between the window and the tree (16 px unless set); `padding=0.0`
+paints to the window's edge, which is what a canvas app wants. `on_start` runs once
 after mount (a failure prints and the app opens) and is the one
 place for startup work — loading data, seeding the RNG.
 

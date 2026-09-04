@@ -3352,6 +3352,20 @@ class Translator:
                     raise Untranslatable(v, f"{kw.arg} takes a positive number literal")
                 self.window[kw.arg] = float(v.value)
                 continue
+            # The inset between the window and the app's tree. 16 px
+            # unless the app says otherwise, and `0.0` lets it paint to
+            # the edge — which is what a canvas that IS the app wants.
+            if kw.arg == "padding":
+                v = kw.value
+                if not (
+                    isinstance(v, ast.Constant)
+                    and type(v.value) in (int, float)
+                    and type(v.value) is not bool
+                    and v.value >= 0
+                ):
+                    raise Untranslatable(v, "padding takes a number literal of 0 or more")
+                self.window["padding"] = float(v.value)
+                continue
             if kw.arg == "on_start":
                 v = kw.value
                 if (
@@ -11774,6 +11788,8 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             window += f'title = "{tr.window["title"]}"\n'
         if "width" in tr.window:
             window += f'width = {tr.window["width"]}\nheight = {tr.window["height"]}\n'
+        if "padding" in tr.window:
+            window += f'padding = {tr.window["padding"]}\n'
     open(os.path.join(proj, "pixie.toml"), "w").write(
         f'[package]\nname = "{stem}"\nversion = "0.1.0"\n{window}\n[crates]\n' + "\n".join(crates) + "\n"
     )

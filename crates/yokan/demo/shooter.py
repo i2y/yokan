@@ -320,4 +320,13 @@ def view():
 
 
 if __name__ == "__main__":
-    run(view, title="Pyxel Shooter", width=480.0, height=640.0, on_start=Game.boot)
+    # `padding=0.0`: the canvas IS the app, so it paints to the
+    # window's edge rather than sitting inside the engine's ring.
+    run(
+        view,
+        title="Pyxel Shooter",
+        width=480.0,
+        height=640.0,
+        padding=0.0,
+        on_start=Game.boot,
+    )

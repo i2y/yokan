@@ -405,6 +405,7 @@ fn build_file(
             title: m.window.title.clone(),
             width: m.window.width,
             height: m.window.height,
+            padding: m.window.padding,
         })
         .unwrap_or_default();
     let code = match pixie_codegen::emit_program_with_window(

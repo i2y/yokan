@@ -41,7 +41,7 @@ fn counter_demo_checks_and_emits() {
         ".map_err(|e| Str::from(e.to_string()))",
         "Err(e) => {",
         "let __rt = Runtime::new(w);",
-        "pixie_engine_gpui::run_app(__rt, __view, &__title, None, None);",
+        "pixie_engine_gpui::run_app(__rt, __view, &__title, None, None, None);",
     ] {
         assert!(code.contains(needle), "generated code lacks `{needle}`");
     }
@@ -245,7 +245,7 @@ fn reload_emission_wires_rung2() {
         // The build delegation and the engine watch hookup.
         "pixie_interp::build_view(&__lv, &__interp_env(self), &__tables, w)",
         "pixie_engine_gpui::ReloadWatch",
-        "pixie_engine_gpui::run_app(__rt, __view, &__title, Some(__watch), None);",
+        "pixie_engine_gpui::run_app(__rt, __view, &__title, Some(__watch), None, None);",
     ] {
         assert!(code.contains(needle), "generated code lacks `{needle}`");
     }

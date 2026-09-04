@@ -226,4 +226,11 @@ def view():
 
 
 if __name__ == "__main__":
-    run(view, title="Pyxel Jump", width=640.0, height=480.0, on_start=Game.boot)
+    run(
+        view,
+        title="Pyxel Jump",
+        width=640.0,
+        height=480.0,
+        padding=0.0,
+        on_start=Game.boot,
+    )

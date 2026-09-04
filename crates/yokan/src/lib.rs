@@ -2149,7 +2149,7 @@ fn make_watch(path: PathBuf, shared: Rc<Shared>, hv: ErasedHandle) -> ReloadWatc
     }
 }
 
-#[pyfunction(signature = (view, state=None, title="yokan".to_string(), watch=true, theme=None, on_start=None, width=0.0, height=0.0))]
+#[pyfunction(signature = (view, state=None, title="yokan".to_string(), watch=true, theme=None, on_start=None, width=0.0, height=0.0, padding=None))]
 fn run(
     py: Python<'_>,
     view: Py<PyAny>,
@@ -2160,6 +2160,7 @@ fn run(
     on_start: Option<Py<PyAny>>,
     width: f64,
     height: f64,
+    padding: Option<f64>,
 ) -> PyResult<()> {
     // A reload re-exec of the app module must not start a second app.
     if RUNNING.swap(true, Ordering::SeqCst) {
@@ -2256,7 +2257,7 @@ fn run(
         // width/height come as a pair (the translator enforces it);
         // 0.0 = the engine default.
         let win = (width > 0.0 && height > 0.0).then_some((width, height));
-        run_app(rt, h, &title, watch_opt, win);
+        run_app(rt, h, &title, watch_opt, win, padding);
     });
     Ok(())
 }

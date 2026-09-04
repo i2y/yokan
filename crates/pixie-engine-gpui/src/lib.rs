@@ -102,6 +102,9 @@ struct Root<C: Component> {
     /// shortcuts are dispatched from here, so an app answers `cmd-s`
     /// without anything being focused first.
     root_focus: gpui::FocusHandle,
+    /// The inset between the window and the app's tree, in logical
+    /// pixels (`ROOT_PADDING` unless the app asked for another).
+    padding: f32,
 }
 
 /// What the canvases in one window keep between frames.
@@ -1206,11 +1209,18 @@ impl<C: Component> Render for Root<C> {
                     .bg(rgb(th.window_bg))
                     .text_color(rgb(th.text))
                     .child(
+                        // The ring the engine paints around the app's
+                        // tree. 16 px is right for an app made of
+                        // controls and wrong for one that IS a
+                        // picture — a canvas, a map, a video — so it
+                        // is a number the app sets rather than a fact
+                        // of the framework. It is window chrome, not
+                        // an element, so no dump changes with it.
                         div()
                             .flex()
                             .flex_col()
                             .gap_2()
-                            .p_4()
+                            .p(px(self.padding))
                             .size_full()
                             .child(body),
                     )
@@ -4354,12 +4364,16 @@ impl gpui::AssetSource for PixieAssets {
 /// Open a window on the view and run until close. `runtime` must wrap
 /// the World already holding the mounted view (the generated `main()`
 /// does the mounting and the wrapping).
+/// The inset every app gets unless it asks for another one.
+pub const ROOT_PADDING: f64 = 16.0;
+
 pub fn run_app<C: Component>(
     runtime: Runtime,
     view: Handle<C>,
     title: &str,
     watch: Option<ReloadWatch>,
     win: Option<(f64, f64)>,
+    padding: Option<f64>,
 ) {
     // Startup theme: `PIXIE_THEME=light` (anything else, or unset, is
     // dark — the palette the engine always had). It has to land BEFORE
@@ -4424,6 +4438,7 @@ pub fn run_app<C: Component>(
                         pumping: false,
                         images,
                         root_focus: cx.focus_handle(),
+                        padding: padding.unwrap_or(ROOT_PADDING) as f32,
                     })
                 },
             )

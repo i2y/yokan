@@ -539,10 +539,14 @@ def run(
     on_start: Optional[Callable[[], Any]] = None,
     width: float = 0.0,
     height: float = 0.0,
+    padding: Optional[float] = None,
 ) -> None:
     """width/height request the window size in logical pixels (as a
-    pair; 0 = the engine default). Compiled builds bake them via the
-    project's pixie.toml [window]; title crosses the same way."""
+    pair; 0 = the engine default). `padding` is the inset between the
+    window and the app's tree — 16 px unless you say otherwise, and
+    `0.0` lets the app paint to the window's edge, which is what a
+    canvas that IS the app wants. Compiled builds bake all of them via
+    the project's pixie.toml [window]; title crosses the same way."""
 
 def _headless(
     view: Callable[..., Any],

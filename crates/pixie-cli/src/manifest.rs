@@ -50,6 +50,9 @@ pub struct WindowSpec {
     pub title: Option<String>,
     pub width: Option<f64>,
     pub height: Option<f64>,
+    /// The inset between the window and the app's tree; absent keeps
+    /// the engine's own.
+    pub padding: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -227,6 +230,7 @@ fn parse(path: &Path) -> Result<Manifest, String> {
         };
         window.width = num("width")?;
         window.height = num("height")?;
+        window.padding = num("padding")?;
         if window.width.is_some() != window.height.is_some() {
             return Err("[window] width and height come as a pair".to_string());
         }
