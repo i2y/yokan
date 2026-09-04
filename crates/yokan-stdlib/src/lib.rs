@@ -3233,6 +3233,105 @@ pub fn py_abs_float(v: f64) -> f64 {
 }
 
 
+// ---- audio ----------------------------------------------------------
+// One device for the process, opened when the first sound plays and
+// held for the life of the run — dropping it would stop everything
+// mid-note. Sounds mix: each one gets its own player, and the finished
+// ones are swept the next time something plays.
+//
+// A SCRIPTED run is silent. A gate must not need a machine with
+// speakers, and a dump has no sound in it either way; both runs read
+// the same flag through this one implementation, so neither is louder
+// than the other. A machine with no audio device, or a file that
+// cannot be read, plays nothing rather than failing the app — the rule
+// a missing sprite already follows.
+
+#[cfg(feature = "audio")]
+struct Audio {
+    /// Kept alive: this IS the connection to the speakers.
+    _device: rodio::MixerDeviceSink,
+    mixer: rodio::mixer::Mixer,
+    playing: Vec<rodio::Player>,
+}
+
+#[cfg(feature = "audio")]
+static AUDIO: std::sync::LazyLock<std::sync::Mutex<Option<Audio>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+#[cfg(feature = "audio")]
+static AUDIO_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(feature = "audio")]
+fn silent_run() -> bool {
+    std::env::var("PIXIE_SCRIPT").is_ok()
+}
+
+#[cfg(feature = "audio")]
+pub fn audio_play(path: &str) -> i64 {
+    if silent_run() {
+        return 0;
+    }
+    let Ok(mut guard) = AUDIO.lock() else {
+        return 0;
+    };
+    if guard.is_none() {
+        if AUDIO_TRIED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return 0;
+        }
+        let Ok(device) = rodio::DeviceSinkBuilder::open_default_sink() else {
+            return 0;
+        };
+        let mixer = device.mixer().clone();
+        *guard = Some(Audio {
+            _device: device,
+            mixer,
+            playing: Vec::new(),
+        });
+    }
+    let Some(audio) = guard.as_mut() else {
+        return 0;
+    };
+    let Ok(file) = std::fs::File::open(path) else {
+        return 0;
+    };
+    let Ok(source) = rodio::Decoder::try_from(file) else {
+        return 0;
+    };
+    audio.playing.retain(|p| !p.empty());
+    let player = rodio::Player::connect_new(&audio.mixer);
+    player.append(source);
+    audio.playing.push(player);
+    0
+}
+
+#[cfg(feature = "audio")]
+pub fn audio_stop() -> i64 {
+    if silent_run() {
+        return 0;
+    }
+    let Ok(mut guard) = AUDIO.lock() else {
+        return 0;
+    };
+    if let Some(audio) = guard.as_mut() {
+        for p in audio.playing.drain(..) {
+            p.stop();
+        }
+    }
+    0
+}
+
+// Without the feature the two names still exist, because the door is
+// generated from the manifest and every name in it has to resolve.
+// They answer the way a machine with no speakers answers.
+#[cfg(not(feature = "audio"))]
+pub fn audio_play(_path: &str) -> i64 {
+    0
+}
+
+#[cfg(not(feature = "audio"))]
+pub fn audio_stop() -> i64 {
+    0
+}
+
 /// `quit()` — the app asks its window to close. A headless run has no
 /// window and ignores it, so a script's steps all still run and the
 /// two runs print the same dumps.

@@ -11,8 +11,10 @@ Pyxel's palette. The port follows it line by line: `pyxel.blt` becomes
 canvas background, and 12 still means the same color, because inside a
 canvas a color is an index into the palette this file declares.
 
-What is different, and why. The music and the sound effects are gone:
-there is no audio here yet. So is the gamepad. Everything else — the falling player, the floors
+What is different, and why. The music is gone, and the three sound
+effects are ours rather than Pyxel's: its sounds are written as MML
+for a chip it emulates, and `audio.play` takes a file, so the three
+WAVs in `assets/` were made for this port. So is the gamepad. Everything else — the falling player, the floors
 that drop away when you land on them, the fruit, the scrolling
 mountain, trees and two layers of cloud — is the game.
 
@@ -25,6 +27,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from yokan import (  # noqa: E402
+    audio,
     canvas,
     column,
     every,
@@ -40,6 +43,9 @@ WIDTH = 160
 HEIGHT = 120
 SKY = 12
 SHEET = "demo/assets/jump.png"
+LAND = "demo/assets/land.wav"
+FRUIT = "demo/assets/fruit.wav"
+FALL = "demo/assets/fall.wav"
 
 
 @value
@@ -122,6 +128,8 @@ class Game:
         if self.dy > 0:
             self.player_u = 16
         if self.py > HEIGHT:
+            if self.alive:
+                audio.play(FALL)
             self.alive = False
             if self.py > 600:
                 self.score = 0
@@ -155,6 +163,7 @@ class Game:
                     alive_ = False
                     score_ = score_ + 10
                     dy_ = -12
+                    audio.play(LAND)
             else:
                 y = y + 6
             x = x - 4
@@ -180,6 +189,7 @@ class Game:
                 alive_ = False
                 score_ = score_ + (kind + 1) * 100
                 dy_ = min(dy_, -8)
+                audio.play(FRUIT)
             x = x - 2
             if x < -40:
                 x = x + 240

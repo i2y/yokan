@@ -9,7 +9,10 @@ name = "yokan"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-yokan-stdlib = { path = "../yokan-stdlib" }
+# With sound: this crate IS the interpreted run, and an app being
+# developed has to hear what the compiled one will play. A compiled app
+# takes the feature only when it imports `audio`.
+yokan-stdlib = { path = "../yokan-stdlib", features = ["audio"] }
 pixie-kernel.workspace = true
 pixie-engine-gpui = { path = "../pixie-engine-gpui" }
 pyo3 = "0.26"

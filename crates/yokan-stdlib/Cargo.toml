@@ -31,3 +31,16 @@ rustpython-sre_engine = "0.5"
 # `str.capitalize` are the two that need it, and the table is
 # taken rather than written.
 unicode-case-mapping = "1"
+# Sound. Playback and WAV only: an app that plays a shot does not need
+# a format zoo linked into it, and the two runs share this one
+# implementation the way they share every other. OPTIONAL, because
+# linking a sound device costs about 1.3 MB of binary and an app that
+# never plays anything should not carry it — the translator turns the
+# feature on for an app that imports `audio`.
+rodio = { version = "0.22", default-features = false, features = ["playback", "wav"], optional = true }
+
+[features]
+# Sound. The functions exist either way — the standard library's door
+# is generated from one manifest, so every name in it has to resolve —
+# and without this they answer without playing.
+audio = ["dep:rodio"]

@@ -2725,6 +2725,18 @@ fn py_clipboard_get_text(py: Python<'_>) -> String {
 // The keyboard's state. No `detach`: these read a thread-local the
 // engine wrote on this same thread and answer immediately, so there
 // is nothing to wait for.
+// Opening a device is the platform's business and can take a moment,
+// so both of these release Python while they wait.
+#[pyfunction] #[pyo3(name = "play")]
+fn py_audio_play(py: Python<'_>, path: &str) -> i64 {
+    py.detach(|| yokan_stdlib::audio_play(path))
+}
+
+#[pyfunction] #[pyo3(name = "stop")]
+fn py_audio_stop(py: Python<'_>) -> i64 {
+    py.detach(yokan_stdlib::audio_stop)
+}
+
 #[pyfunction] #[pyo3(name = "down")]
 fn py_keys_down(key: &str) -> bool {
     yokan_stdlib::keys_down(key)
@@ -2958,6 +2970,10 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;
     m.add_submodule(&clipm)?;
+    let audiom = PyModule::new(m.py(), "audio")?;
+    audiom.add_function(wrap_pyfunction!(py_audio_play, &audiom)?)?;
+    audiom.add_function(wrap_pyfunction!(py_audio_stop, &audiom)?)?;
+    m.add_submodule(&audiom)?;
     let keysm = PyModule::new(m.py(), "keys")?;
     keysm.add_function(wrap_pyfunction!(py_keys_down, &keysm)?)?;
     keysm.add_function(wrap_pyfunction!(py_keys_pressed, &keysm)?)?;
@@ -2975,6 +2991,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sysmod.set_item("yokan.jsondoc", &jsonm)?;
     sysmod.set_item("yokan.clock", &clockm)?;
     sysmod.set_item("yokan.keys", &keysm)?;
+    sysmod.set_item("yokan.audio", &audiom)?;
     sysmod.set_item("yokan.strings", &stringsm)?;
     Ok(())
 }

@@ -637,6 +637,20 @@ class clipboard:
     @staticmethod
     def get_text() -> str: ...
 
+class audio:
+    """Sound. `play(path)` starts a WAV and returns at once; several
+    play together, and `stop()` ends them all.
+
+    A scripted run is silent — a gate must not need a machine with
+    speakers, and a dump has no sound in it — so this is one of the few
+    things only a window shows. A machine with no audio device, or a
+    file that cannot be read, plays nothing rather than failing the
+    app."""
+    @staticmethod
+    def play(path: str) -> int: ...
+    @staticmethod
+    def stop() -> int: ...
+
 class keys:
     """The keyboard as a device: not which chord was pressed, but
     which keys are down. Read them from a timer's tick — a view is

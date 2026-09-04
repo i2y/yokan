@@ -13,8 +13,11 @@ canvas a color is an index into the palette this file declares.
 
 What is different, and why. Speeds that were fractional (1.5 px a
 frame) are carried in tenths of a pixel and drawn whole, because a
-pixel grid has no half pixels. The music and the sound effects are
-gone: there is no audio here yet. So is the gamepad.
+pixel grid has no half pixels. The music is gone, and the two sound
+effects are ours rather than Pyxel's: its sounds are written as MML
+for a chip it emulates, and `audio.play` takes a file, so
+`assets/shot.wav` and `assets/blast.wav` were made for this port. So
+is the gamepad.
 Everything else — three scenes, a hundred parallax stars, the enemy
 that sways as it falls, rectangle collisions, expanding blasts — is
 the game.
@@ -28,6 +31,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from yokan import (  # noqa: E402
+    audio,
     canvas,
     circle,
     circle_outline,
@@ -75,6 +79,8 @@ BLAST_COLOR_IN = 7
 BLAST_COLOR_OUT = 10
 
 SHEET = "demo/assets/shooter.png"
+SHOT = "demo/assets/shot.wav"
+BLAST = "demo/assets/blast.wav"
 
 
 @value
@@ -209,6 +215,7 @@ class Game:
             self.bullets = self.bullets + [
                 Bullet(self.px + 3, self.py - 4)
             ]
+            audio.play(SHOT)
 
     def move_bullets(self) -> None:
         out: list[Bullet] = []
@@ -271,6 +278,7 @@ class Game:
                     Blast(e.x + 4, e.y + 4, BLAST_START_RADIUS)
                 ]
                 score_ = score_ + 10
+                audio.play(BLAST)
             elif (
                 self.px + PLAYER_WIDTH > e.x
                 and e.x + ENEMY_WIDTH > self.px
@@ -281,6 +289,7 @@ class Game:
                     Blast(self.px + 4, self.py + 4, BLAST_START_RADIUS)
                 ]
                 struck_player = True
+                audio.play(BLAST)
             else:
                 live_enemies = live_enemies + [e]
         live_bullets: list[Bullet] = []
