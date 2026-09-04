@@ -281,12 +281,6 @@ number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.se
 - **number_field / int_field**：型付きの数値。入力中は何も報告せず、`enter`、矢印キー、フィールドを離れることで確定します。テキストは Python の `float()` / `int()` の規則で読まれ、`min=` / `max=`（両方 0 なら範囲なし）に収められ、`step=` に吸着し、値が変わったときだけハンドラが走ります。数値でないテキストは捨てられ、フィールドはアプリの値に戻ります。スクリプトでは `input:<テキスト>` が一段で確定します。
 - **text_field**：値と `on_change=`。`multiline=True` にすると段落を入れるフィールドになります（折り返し、`enter` は送信ではなく改行、キャレットは表示行単位で動く）。`rows=` は見える行数です。
 
-どの要素も、次に挙げる共通のプロパティを同じ名前と同じ意味で取ります。要素の種類によって付けられたり付けられなかったりすることはありません。
-`tooltip="…"` はポインタを置いたときに一行を表示し、置かなくてもダンプには出るので、検証スクリプトからも見えます。
-`role=` は要素が自分で導く役割（スクリーンリーダーの "button"、"heading"、"list" など）を上書きし、`a11y_label=` は読み上げられる名前です。ヘッドレススクリプトの `a11y` ステップがその木を印字します（`demo/labels.py`）。checkbox、switch、progress は自分のラベルで名前が決まるので、`a11y_label=` は取りません。
-`disabled=True` は要素を薄くして無効にします。ウィンドウでは押せず、それを狙ったスクリプトのステップは受け付けられて何もせず、ダンプにその状態が出ます。
-`width=`、`height=`、`min_width=`、`max_width=` はどの要素にも大きさを与えます。自前の `width=` / `height=` を持つ要素（button、image、svg、text、チャート、progress）はそれをそのまま使います。
-`theme=`、`animate=` / `easing=` / `enter=` / `exit=`、`col_span=` / `row_span=` も同様にどの要素にも付き、前の節で示した要素に限りません（`demo/shared.py` は、以前は付けられなかった場所に一つずつ置いています）。
 
 タブの中身の切り替えは、`tab_bar` の下に普通の `if` / `elif` を書くだけです。
 

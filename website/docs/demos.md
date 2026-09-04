@@ -130,7 +130,7 @@ the initial state, right after launch.
 #### labels — the accessibility properties `role=` and `a11y_label=`, printed by a script's `a11y` step
 <img src="images/demos/labels.png" width="360">
 
-#### shared — the shared properties on elements that could not take them before: a themed spacer, an animated segmented, a field spanning two grid tracks, a link with a role, a divider with a tooltip, a disabled button and field, a sized column
+#### shared — the shared properties, one on each kind of element: a themed spacer, an animated segmented, a field spanning two grid tracks, a link with a role, a divider with a tooltip, a disabled button and field, a sized column
 <img src="images/demos/shared.png" width="360">
 
 ## The standard library

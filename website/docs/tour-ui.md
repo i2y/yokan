@@ -49,6 +49,16 @@ A handler and a cell live in the caller, so a component that takes one becomes a
 `local` identity is call-site based.
 Reorder the calls and the states swap along with them.
 
+## Shared properties
+
+Every element also takes these shared properties, under the same names and with the same meaning:
+
+- **`tooltip="…"`**: shows a line when the pointer rests there, and it is in the dump either way, so a verification script sees it.
+- **`role=` / `a11y_label=`**: `role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on), and `a11y_label=` is the name it is read by; a headless script's `a11y` step prints that tree (`demo/labels.py`). A `checkbox`, a `switch` and a `progress` are named by their own label, so they take no `a11y_label=`.
+- **`disabled=True`**: dims an element and makes it inert. The window does not press it, a script step aimed at it is accepted and does nothing, and the dump shows the state.
+- **`width=` / `height=` / `min_width=` / `max_width=`**: size it. An element with its own `width=` / `height=` (`button`, `image`, `svg`, `text`, the charts, `progress`) keeps those.
+- **`theme=`, `animate=` / `easing=` / `enter=` / `exit=`, `col_span=` / `row_span=`**: covered under [Styles and themes](#styles-and-themes), [Animation](#animation) and `grid` respectively (`demo/shared.py`).
+
 ## Styles and themes
 
 A style is a named dict, splatted onto an element with `**` (one per element).

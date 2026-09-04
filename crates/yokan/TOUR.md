@@ -28,19 +28,20 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 13. [Sum types and match](#sum-types-and-match)
 14. [Optional and Enum](#optional-and-enum)
 15. [Components](#components)
-16. [Styles and themes](#styles-and-themes)
-17. [Animation](#animation)
-18. [The window](#the-window)
-19. [Error handling](#error-handling)
-20. [The standard library](#the-standard-library)
-21. [Calling a Rust crate](#calling-a-rust-crate)
-22. [CPython escapes](#cpython-escapes)
-23. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
-24. [Working with type checkers](#working-with-type-checkers)
-25. [Headless runs and the gate](#headless-runs-and-the-gate)
-26. [Shipping](#shipping)
-27. [A real app](#a-real-app)
-28. [What does not work yet](#what-does-not-work-yet)
+16. [Shared properties](#shared-properties)
+17. [Styles and themes](#styles-and-themes)
+18. [Animation](#animation)
+19. [The window](#the-window)
+20. [Error handling](#error-handling)
+21. [The standard library](#the-standard-library)
+22. [Calling a Rust crate](#calling-a-rust-crate)
+23. [CPython escapes](#cpython-escapes)
+24. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
+25. [Working with type checkers](#working-with-type-checkers)
+26. [Headless runs and the gate](#headless-runs-and-the-gate)
+27. [Shipping](#shipping)
+28. [A real app](#a-real-app)
+29. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -311,12 +312,6 @@ number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.se
 - **number_field / int_field**: a typed number. Typing reports nothing; `enter`, an arrow key or leaving the field commits — the text is parsed with Python's `float()` / `int()` rules, clamped into `min=` / `max=` (both 0 = no range), snapped to `step=`, and the handler runs only when the value changed. Text that is not a number is dropped, and the field shows the app's value again. In scripts, `input:<text>` commits in one step.
 - **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
 
-Every element also takes the shared properties below, under the same names and with the same meaning; no element takes some of them and refuses others.
-`tooltip="…"` shows a line when the pointer rests there, and it is in the dump either way, so a verification script sees it.
-`role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on) and `a11y_label=` is the name it is read by; the `a11y` step of a headless script prints that tree (`demo/labels.py`). A checkbox, a switch and a progress bar are named by their own label, so they take no `a11y_label=`.
-`disabled=True` dims an element and makes it inert: the window does not press it, a script step aimed at it is accepted and does nothing, and the dump shows the state.
-`width=`, `height=`, `min_width=` and `max_width=` size any element; an element that has its own `width=` / `height=` (button, image, svg, text, the charts, progress) keeps them.
-`theme=`, `animate=` / `easing=` / `enter=` / `exit=`, and `col_span=` / `row_span=` likewise go on any element, not only the ones the earlier sections showed them on (`demo/shared.py` puts one of each where it could not go before).
 
 Switching tab content is a plain `if` / `elif` under the `tab_bar`.
 
@@ -783,6 +778,16 @@ A handler and a cell live in the caller, so a component that takes one becomes a
 
 `local` identity is call-site based.
 Reorder the calls and the states swap along with them.
+
+## Shared properties
+
+Every element also takes these shared properties, under the same names and with the same meaning:
+
+- **`tooltip="…"`**: shows a line when the pointer rests there, and it is in the dump either way, so a verification script sees it.
+- **`role=` / `a11y_label=`**: `role=` overrides the role an element derives (a screen reader's "button", "heading", "list" and so on), and `a11y_label=` is the name it is read by; a headless script's `a11y` step prints that tree (`demo/labels.py`). A `checkbox`, a `switch` and a `progress` are named by their own label, so they take no `a11y_label=`.
+- **`disabled=True`**: dims an element and makes it inert. The window does not press it, a script step aimed at it is accepted and does nothing, and the dump shows the state.
+- **`width=` / `height=` / `min_width=` / `max_width=`**: size it. An element with its own `width=` / `height=` (`button`, `image`, `svg`, `text`, the charts, `progress`) keeps those.
+- **`theme=`, `animate=` / `easing=` / `enter=` / `exit=`, `col_span=` / `row_span=`**: covered under [Styles and themes](#styles-and-themes), [Animation](#animation) and `grid` respectively (`demo/shared.py`).
 
 ## Styles and themes
 

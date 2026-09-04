@@ -128,7 +128,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが印字する
 <img src="screenshots/labels.png" width="360">
 
-#### shared — 以前は付けられなかった要素への共通プロパティ一式。theme 付きの spacer、animate 付きの segmented、grid の 2 トラックにまたがるフィールド、role 付きの link、tooltip 付きの divider、disabled のボタンとフィールド、幅を指定した列
+#### shared — 共通プロパティを要素の種類ごとに一つずつ。theme 付きの spacer、animate 付きの segmented、grid の 2 トラックにまたがるフィールド、role 付きの link、tooltip 付きの divider、disabled のボタンとフィールド、幅を指定した列
 <img src="screenshots/shared.png" width="360">
 
 ## 標準ライブラリ
