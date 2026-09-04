@@ -83,7 +83,17 @@ pub fn fire_due(w: &mut World) {
             }
         }
     }
+    let ticked = !due.is_empty();
     for cb in due {
         crate::contain("timer tick", || cb(w));
+    }
+    // The keys a tick saw are spent (`keys::end_tick`). Here, and only
+    // when a tick actually ran: a window pumps frames at the display's
+    // rate while a game ticks at thirty, so clearing them per FRAME
+    // would take a press away before the tick that was meant to read
+    // it. A script's `advance:` runs this same pass, which is what
+    // makes the two runs agree about a keystroke.
+    if ticked {
+        crate::keys::end_tick();
     }
 }

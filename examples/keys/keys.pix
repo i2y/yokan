@@ -9,6 +9,9 @@ store App {
   state count : Int = 0
   state saved : Int = 0
   state last : String = "-"
+  state moved : Int = 0
+  state fired : Int = 0
+  state lifted : Int = 0
 
   fn bump {
     count += 1
@@ -30,6 +33,29 @@ store App {
   fn typed(k: String) @key {
     last = k
   }
+
+  # The other question a keyboard answers: not "which chord was
+  # pressed" but "is left held right now". A tick reads it — a view
+  # never does, because a view is rebuilt on the framework's schedule
+  # and what it read would be a moment the app never chose.
+  #
+  # `pressed` is emptied by the tick that saw it, so `fired` counts
+  # taps, not frames: holding space is one shot, and a script's
+  # `keydown:space` between two `advance:` steps proves it.
+  fn tick @every(50) {
+    if Keys.down("left") {
+      moved -= 1
+    }
+    if Keys.down("right") {
+      moved += 1
+    }
+    if Keys.pressed("space") {
+      fired += 1
+    }
+    if Keys.released("space") {
+      lifted += 1
+    }
+  }
 }
 
 view Main {
@@ -37,6 +63,7 @@ view Main {
     spacing: 8
     padding: 12
     Text { text: "count=#{App.count} saved=#{App.saved} last=#{App.last}" }
+    Text { text: "moved=#{App.moved} fired=#{App.fired} lifted=#{App.lifted}" }
     Button { text: "+1"; onClick: App.bump() }
   }
 }

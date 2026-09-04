@@ -122,7 +122,12 @@ fn split_steps(script: &str) -> Vec<String> {
 /// numbering matches the window, but a person cannot press a
 /// disabled control and neither can a script; the dump shows the
 /// `Disabled[..]` wrapper, so the state itself is checked ·
-/// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape`) ·
+/// `key:<chord>` (a keystroke: `key:cmd-s`, `key:escape` — it
+/// delivers the chord AND taps the key, so an app reading the key
+/// state sees a press and a release) ·
+/// `keydown:<key>` / `keyup:<key>` (the two halves of that, for an app
+/// that asks whether a key is held: `keydown:left` delivers the chord
+/// too, and does not fail when nothing is bound to it) ·
 /// `menu:<item>` (pick a menu item by name) ·
 /// `file:<path>` (the answer the next file dialog gets) ·
 /// `drop:<path>` (a file dragged onto the window) ·
@@ -309,17 +314,41 @@ pub fn run<C: Component>(
                     }
                 }
             }
+        } else if let Some(key) = step.strip_prefix("keydown:") {
+            // A key held down, which a window says two things about:
+            // the chord reaches whatever declared it, and the key is
+            // now DOWN until a `keyup:` says otherwise. Unlike `key:`
+            // it does not fail when nothing is bound — an app that
+            // only reads the key state binds nothing and still
+            // presses keys.
+            crate::contain("key handler", || {
+                rt.with(|w: &mut World| {
+                    crate::keys::press(key, false);
+                    crate::keys::fire(w, key);
+                })
+            });
+        } else if let Some(key) = step.strip_prefix("keyup:") {
+            crate::keys::release(key);
         } else if let Some(chord) = step.strip_prefix("key:") {
             // A keystroke, spelled the way the platform spells it
             // (`cmd-s`, `shift-tab`); `+` reads the same. Nothing
             // bound to it is a script's typo, so it says so — the
             // rule `click` follows for a label no button carries.
+            //
+            // It is also a press and a release, because that is what
+            // a finger does: an app reading the key state sees the tap
+            // in the next tick, and no script step means less than the
+            // hardware does.
             let fired = crate::contain("key handler", || {
                 rt.with(|w: &mut World| crate::keys::fire(w, chord))
             });
             if !matches!(fired, Some(true)) {
                 panic!("no shortcut or key handler for `{chord}`");
             }
+            let tap = crate::keys::normalize(chord);
+            let key = tap.rsplit('-').next().unwrap_or(&tap).to_string();
+            crate::keys::press(&key, false);
+            crate::keys::release(&key);
         } else if let Some(path) = step.strip_prefix("drop:") {
             // A file dragged onto the window. The drag is the
             // platform's; what the app does with the path is the

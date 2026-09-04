@@ -390,6 +390,16 @@ fn tiers_agree_on_every_demo() {
             "examples/keys/keys.pix",
             "click:+1,click:+1,key:cmd-s,key:x,menu:Save,key:cmd-shift-r",
         ),
+        // The other half of a keyboard: the state of the keys, read by
+        // a tick rather than delivered to a handler. Held across two
+        // ticks moves twice; a press is spent by the tick that saw it,
+        // so holding space fires ONCE however many ticks pass — which
+        // is the whole contract, and it is checked in both tiers.
+        (
+            "examples/keys/keys.pix",
+            "keydown:left,advance:50,advance:50,keyup:left,dump,\
+             keydown:space,advance:50,advance:50,keyup:space,advance:50",
+        ),
         (
             "examples/genfs/genfs.pix",
             "click:round-trip,click:weigh,click:survey,click:clean,click:who",

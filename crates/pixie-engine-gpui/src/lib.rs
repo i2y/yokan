@@ -1065,6 +1065,12 @@ impl<C: Component> Render for Root<C> {
             .inputs
             .values()
             .any(|e| e.read(cx).focus_handle.is_focused(window));
+        // A key held while the app is switched away is never released
+        // by the platform, so it would stay down forever. Nothing is
+        // held while the window is not the active one.
+        if !window.is_window_active() {
+            pixie_kernel::keys::release_all();
+        }
         // With nothing focused there is no path for a key to travel,
         // so the root takes the focus and becomes the window's key
         // sink. A field that gets clicked takes it back.
@@ -1107,10 +1113,48 @@ impl<C: Component> Render for Root<C> {
                         if typing && !mods.platform && !mods.control {
                             return;
                         }
+                        // One keystroke says two things: the chord
+                        // reaches whatever declared it, and the key is
+                        // now DOWN for anything that asks. `is_held`
+                        // is the platform's auto-repeat, which holds
+                        // the key without pressing it again.
+                        pixie_kernel::keys::set_modifiers(
+                            mods.platform,
+                            mods.control,
+                            mods.alt,
+                            mods.shift,
+                        );
+                        pixie_kernel::keys::press(&ev.keystroke.key, ev.is_held);
                         root.apply(cx, move |w| {
                             pixie_kernel::keys::fire(w, &chord);
                         });
                     }))
+                    // A release is never swallowed by a focused field:
+                    // a key that went down must come up, or it would
+                    // stay down for the life of the window.
+                    .on_key_up(cx.listener(|_root: &mut Root<C>, ev: &gpui::KeyUpEvent, _window, _cx| {
+                        let mods = &ev.keystroke.modifiers;
+                        pixie_kernel::keys::set_modifiers(
+                            mods.platform,
+                            mods.control,
+                            mods.alt,
+                            mods.shift,
+                        );
+                        pixie_kernel::keys::release(&ev.keystroke.key);
+                    }))
+                    // The modifiers are a STATE the platform reports,
+                    // not key events, so `keys.down("shift")` has to
+                    // read them from here.
+                    .on_modifiers_changed(cx.listener(
+                        |_root: &mut Root<C>, ev: &gpui::ModifiersChangedEvent, _window, _cx| {
+                            pixie_kernel::keys::set_modifiers(
+                                ev.modifiers.platform,
+                                ev.modifiers.control,
+                                ev.modifiers.alt,
+                                ev.modifiers.shift,
+                            );
+                        },
+                    ))
                     .bg(rgb(th.window_bg))
                     .text_color(rgb(th.text))
                     .child(

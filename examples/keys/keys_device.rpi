@@ -1,0 +1,9 @@
+# The keyboard as a device: not a chord delivered to a handler, but
+# the state of the keys right now. Hand-written rather than generated
+# — three functions of the kernel's own.
+
+class Keys {
+  static fn down(key: String) Bool @rust("pixie_kernel::keys::down")
+  static fn pressed(key: String) Bool @rust("pixie_kernel::keys::pressed")
+  static fn released(key: String) Bool @rust("pixie_kernel::keys::released")
+}
