@@ -1504,6 +1504,17 @@ class Translator:
             "statics": {},         # @staticmethod -> the emitted static's name
         }
         field_tys = self.stores[node.name]["field_tys"]
+        # Every plain method's name is known before any body is read:
+        # Python does not care which of two methods is written first,
+        # and a store whose `tick` calls a `move` below it should not
+        # either. (A `@property` and a `@staticmethod` are taken in the
+        # loop below, which is also where their own names register.)
+        for m in methods:
+            plain = not [
+                d for d in m.decorator_list if isinstance(d, ast.Name)
+            ]
+            if plain:
+                self.stores[node.name]["method_names"].add(m.name)
         for m in methods:
             decos = [d.id if isinstance(d, ast.Name) else None for d in m.decorator_list]
             if "classmethod" in decos:
@@ -1540,6 +1551,10 @@ class Translator:
             prev_scope = self.model_scope
             prev_locals, prev_dead = self.handler_locals, self.dead_locals
             self.model_scope = (node.name, field_tys)
+            # A parameter shares the method's namespace with the
+            # fields, on the compiled side.
+            for p, _ty in params:
+                self._not_a_field(m, p, "parameter")
             self.handler_locals = set(p for p, _ in params)
             self.counter_locals = set()
             prev_typed = self.typed_locals
@@ -2041,6 +2056,10 @@ class Translator:
             prev_scope = self.model_scope
             prev_locals, prev_dead = self.handler_locals, self.dead_locals
             self.model_scope = (node.name, field_tys)
+            # A parameter shares the method's namespace with the
+            # fields, on the compiled side.
+            for p, _ty in params:
+                self._not_a_field(m, p, "parameter")
             self.handler_locals = set(p for p, _ in params)
             self.counter_locals = set()
             self.dead_locals = {}
@@ -2607,7 +2626,30 @@ class Translator:
                 f"the State here and the compiled app would read the state, so the "
                 f"two would print different things; rename the local (`{name}_`)",
             )
+        self._not_a_field(node, name, "local")
         return self._check_name(node, name, "local")
+
+    def _not_a_field(self, node, name: str, what: str):
+        """Inside a store or model method, a name that is also a field's
+        cannot be a local, a parameter or a loop variable.
+
+        Python keeps the two apart — `score` and `self.score` are
+        different names — but the compiled side reads a field by its
+        BARE name, so `score = score + 10` would write the local in one
+        run and the field in the other, and `self.score = score` would
+        be a no-op in one of them. The gate catches it only when a
+        script happens to score; the refusal catches it always."""
+        if self.model_scope is None:
+            return
+        owner, field_tys = self.model_scope[0], self.model_scope[1]
+        if name in field_tys:
+            raise Untranslatable(
+                node,
+                f"a {what} cannot take the field `{name}`'s name — the compiled side "
+                f"reads `{owner}`'s fields by their bare names, so the two runs would "
+                f"mean different things by `{name}`; rename it (`{name}_` reads the "
+                "same in Python)",
+            )
 
     def _check_name(self, node, name: str, what: str):
         if name in self.KEYWORDS:
@@ -5435,7 +5477,17 @@ class Translator:
                         node, "joining lists takes two lists of the same type — a state read, a field, a local, or a list literal"
                     )
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}[type(node.op)]
-            return f"{self.expr(node.left, ctx, param)} {op} {self.expr(node.right, ctx, param)}"
+            # Python's AST already decided what groups with what, so an
+            # operand that is itself an operation keeps its parentheses
+            # on the way out. Without them `s + (k + 1) * 100` is
+            # re-read as `s + k + 1 * 100`, which is a different number
+            # — and one no gate can catch when the two runs are the
+            # source and its translation.
+            def arg(side):
+                text = self.expr(side, ctx, param)
+                return f"({text})" if isinstance(side, ast.BinOp) else text
+
+            return f"{arg(node.left)} {op} {arg(node.right)}"
         if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
             # As a VALUE, Python's and/or answer an OPERAND by
             # truthiness; over bools that operand IS the && / ||
@@ -9269,6 +9321,7 @@ class Translator:
     def _for_body(self, stmt, var: str, head: str, param) -> list[str]:
         """The loop's body under its head, with the loop variable
         bound while the body is read and gone after it."""
+        self._not_a_field(stmt, var, "loop variable")
         self.handler_locals.add(var)
         # A loop variable is Int by construction (range) or the list's
         # element type — Int/String render in text holes.

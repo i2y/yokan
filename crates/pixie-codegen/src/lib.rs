@@ -4363,19 +4363,37 @@ fn lower_view_bool(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitErro
         // `open: name.prop` / `checked: name.prop` — a Bool prop /
         // state-cell read.
         ExprKind::Member { receiver, name } => {
-            let ExprKind::Ident(f) = &receiver.kind else {
-                return err(e.span, format!("`{key}:` must be a bool literal or a Bool property"));
-            };
-            let Some((class, handle)) = cx.handle_for(f) else {
-                return err(e.span, format!("`{f}` is not a view state field or global"));
-            };
-            let Some(p) = class.prop(&name.name) else {
-                return err(e.span, format!("no property `{}` on `{}`", name.name, class.name));
-            };
-            if p.ty != RustTy::Bool {
-                return err(e.span, format!("this {key} binding must be a Bool property"));
+            if let ExprKind::Ident(f) = &receiver.kind {
+                if let Some((class, handle)) = cx.handle_for(f) {
+                    let Some(p) = class.prop(&name.name) else {
+                        return err(
+                            e.span,
+                            format!("no property `{}` on `{}`", name.name, class.name),
+                        );
+                    };
+                    if p.ty != RustTy::Bool {
+                        return err(e.span, format!("this {key} binding must be a Bool property"));
+                    }
+                    return Ok(format!("{handle}.{}(w)", p.rust));
+                }
             }
-            Ok(format!("{handle}.{}(w)", p.rust))
+            // Through an OBJECT or a STRUCT, the way `lower_view_int`
+            // reaches one: `e.flip` on a repeater's row is how a view
+            // says "this one, mirrored".
+            match cx
+                .object_prop_read(receiver, &name.name)
+                .or_else(|| cx.struct_field_read(receiver, &name.name))
+            {
+                Some((read, RustTy::Bool)) => Ok(read),
+                Some(_) => err(
+                    e.span,
+                    format!("`{key}:` needs a Bool — this field is not one"),
+                ),
+                None => err(
+                    e.span,
+                    format!("`{key}:` must be a bool literal or a Bool property"),
+                ),
+            }
         }
         _ => err(e.span, format!("`{key}:` must be a bool literal or a Bool property")),
     }
@@ -4741,6 +4759,14 @@ fn lower_action_expr_inner(e: &Expr, cx: &ActionCtx) -> Result<String, EmitError
             // Through an OBJECT chain, the same reach a method body
             // has (§8.41's `object_prop_read`).
             if let Some((read, _)) = cx.view.object_prop_read(receiver, &name.name) {
+                return Ok(read);
+            }
+            // Through a STRUCT — a repeater's row, and the fields of a
+            // value the view can name. A condition in a view body is
+            // lowered through here, so `if f.alive` inside `for f in
+            // Store.things` had no way to read the row it is standing
+            // on.
+            if let Some((read, _)) = cx.view.struct_field_read(receiver, &name.name) {
                 return Ok(read);
             }
             err(e.span, "this member access is not lowerable in actions yet (M0)")
