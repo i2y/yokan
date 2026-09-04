@@ -53,10 +53,12 @@ from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
+
 def view():
     with column(spacing=12, padding=16):
         text(f"count: {count()}", size=34)
         button("+1", on_click=lambda: count.set(count() + 1))
+
 
 if __name__ == "__main__":
     run(view, title="counter")
@@ -169,11 +171,13 @@ Reference fields start at None ([] for lists) and get wired inside handlers.
 ```python
 from yokan import Weak, model, store
 
+
 @model
 class Node:
     label: str = "n"
     kid: Node | None = None
     parent: Weak[Node] = None      # the back reference does not own
+
 
 @store
 class Tree:
@@ -261,6 +265,7 @@ Pass the displayed value in from state; the handler receives **the one new value
 ```python
 from yokan import store
 
+
 @store
 class Settings:
     dark: bool = False
@@ -331,6 +336,7 @@ def announced(f):
 
     return wrapper
 
+
 @announced
 def save():
     fs.write_text(path, body())
@@ -344,6 +350,7 @@ The body of a def handler compiles with its real control flow.
 ```python
 def double(v: int) -> int:          # a pure helper becomes a native function
     return v * 2
+
 
 def tally():
     total.set(0)
@@ -537,6 +544,7 @@ picked.set(prices().get("apple", -1))  # read: default when missing
 if "cherry" in prices(): ...           # membership
 len(prices())                          # count
 
+
 def scan():
     for k in prices():                 # insertion order, as Python walks it
         last.set(k)
@@ -567,8 +575,10 @@ A tuple puts several values together as one, written and read the way Python wri
 pair: State[tuple[str, int]] = State(("momo", 4))
 rows: State[list[tuple[str, int]]] = State([])
 
+
 def measure(word: str) -> tuple[str, int]:
     return (word.upper(), len(word))
+
 
 def scan():
     label, n = measure("hello")          # unpacking
@@ -592,6 +602,7 @@ A field may hold another value class declared earlier (nested values).
 
 ```python
 from dataclasses import replace
+
 
 @value
 class Point:
@@ -633,11 +644,13 @@ A model that lists a Protocol with method stubs as a base implements it, and a h
 class Shape(Protocol):
     def area(self) -> float: ...
 
+
 @model
 class Circle(Shape):
     r: float = 1.0
     def area(self) -> float:
         return self.r * self.r * 3.0
+
 
 def area_of(s: Shape) -> float:
     return s.area()
@@ -677,8 +690,12 @@ Bundle value classes with a `type` alias and you have a set of alternatives — 
 ```python
 @value
 class Healthy: pass
+
+
 @value
 class Degraded: services: int
+
+
 @value
 class Outage: service: str
 
@@ -814,6 +831,7 @@ The value can be a literal or a state read, so an app can own its palette as sta
 ```python
 mode: State[str] = State("dark")
 
+
 def flip():
     if mode() == "dark":
         mode.set("light")
@@ -883,6 +901,7 @@ What it answers, how it fails and the wording of the error are all the same.
 import json, math, random, re, statistics
 from datetime import date, timedelta
 
+
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
     spread.set(statistics.stdev([1.5, 2.5, 4.75]))
@@ -891,6 +910,7 @@ def measure():
     doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
     due.set(date(2026, 1, 1) + timedelta(weeks=6))  # 2026-02-12, a Thursday
     mail.set(re.findall(r"\w+@[\w.]+", line())[0])   # a Match has no shape here
+
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # pure, so a view may ask
@@ -1038,6 +1058,7 @@ the outer one's field:
 class Span:          # twin of the crate's struct Span
     lo: int
     hi: int
+
 
 class Grade(Enum):   # twin of the crate's enum Grade
     Fine = 1

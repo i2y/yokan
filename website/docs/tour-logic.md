@@ -18,6 +18,7 @@ def announced(f):
 
     return wrapper
 
+
 @announced
 def save():
     fs.write_text(path, body())
@@ -31,6 +32,7 @@ The body of a def handler compiles with its real control flow.
 ```python
 def double(v: int) -> int:          # a pure helper becomes a native function
     return v * 2
+
 
 def tally():
     total.set(0)
@@ -224,6 +226,7 @@ picked.set(prices().get("apple", -1))  # read: default when missing
 if "cherry" in prices(): ...           # membership
 len(prices())                          # count
 
+
 def scan():
     for k in prices():                 # insertion order, as Python walks it
         last.set(k)
@@ -254,8 +257,10 @@ A tuple puts several values together as one, written and read the way Python wri
 pair: State[tuple[str, int]] = State(("momo", 4))
 rows: State[list[tuple[str, int]]] = State([])
 
+
 def measure(word: str) -> tuple[str, int]:
     return (word.upper(), len(word))
+
 
 def scan():
     label, n = measure("hello")          # unpacking

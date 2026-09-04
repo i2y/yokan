@@ -12,6 +12,7 @@ A field may hold another value class declared earlier (nested values).
 ```python
 from dataclasses import replace
 
+
 @value
 class Point:
     x: int
@@ -52,11 +53,13 @@ A model that lists a Protocol with method stubs as a base implements it, and a h
 class Shape(Protocol):
     def area(self) -> float: ...
 
+
 @model
 class Circle(Shape):
     r: float = 1.0
     def area(self) -> float:
         return self.r * self.r * 3.0
+
 
 def area_of(s: Shape) -> float:
     return s.area()
@@ -96,8 +99,12 @@ Bundle value classes with a `type` alias and you have a set of alternatives — 
 ```python
 @value
 class Healthy: pass
+
+
 @value
 class Degraded: services: int
+
+
 @value
 class Outage: service: str
 

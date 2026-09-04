@@ -36,6 +36,7 @@ What it answers, how it fails and the wording of the error are all the same.
 import json, math, random, re, statistics
 from datetime import date, timedelta
 
+
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
     spread.set(statistics.stdev([1.5, 2.5, 4.75]))
@@ -44,6 +45,7 @@ def measure():
     doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
     due.set(date(2026, 1, 1) + timedelta(weeks=6))  # 2026-02-12, a Thursday
     mail.set(re.findall(r"\w+@[\w.]+", line())[0])   # a Match has no shape here
+
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # pure, so a view may ask
@@ -191,6 +193,7 @@ the outer one's field:
 class Span:          # twin of the crate's struct Span
     lo: int
     hi: int
+
 
 class Grade(Enum):   # twin of the crate's enum Grade
     Fine = 1

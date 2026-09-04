@@ -20,6 +20,7 @@ def announced(f):
 
     return wrapper
 
+
 @announced
 def save():
     fs.write_text(path, body())
@@ -33,6 +34,7 @@ def ハンドラの中身は、if や for などの制御フローごとコン�
 ```python
 def double(v: int) -> int:          # 純粋ヘルパはネイティブの関数になる
     return v * 2
+
 
 def tally():
     total.set(0)
@@ -235,6 +237,7 @@ picked.set(prices().get("apple", -1))  # 読み: 無いときは default
 if "cherry" in prices(): ...           # 所属
 len(prices())                          # 件数
 
+
 def scan():
     for k in prices():                 # 挿入順、Python が回るのと同じ順
         last.set(k)
@@ -267,8 +270,10 @@ Python と同じ書き方で書き、同じ読み方で読みます。
 pair: State[tuple[str, int]] = State(("momo", 4))
 rows: State[list[tuple[str, int]]] = State([])
 
+
 def measure(word: str) -> tuple[str, int]:
     return (word.upper(), len(word))
+
 
 def scan():
     label, n = measure("hello")          # 分解

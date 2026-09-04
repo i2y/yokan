@@ -1,4 +1,5 @@
 ---
+title: "Write Python. Ship native."
 hide:
   - navigation
   - toc
@@ -54,10 +55,12 @@ from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
+
 def view():
     with column(spacing=12, padding=16):
         text(f"count: {count()}", size=34)
         button("+1", on_click=lambda: count.set(count() + 1))
+
 
 if __name__ == "__main__":
     run(view, title="counter")
@@ -72,7 +75,7 @@ if __name__ == "__main__":
 
 ![実行中のアプリのソースを編集すると、ティックを刻んだまま画面がその場で更新される](images/reload.gif)
 
-リリースは:
+配るときはこうします。
 
 ```console
 $ yokan build app.py --release

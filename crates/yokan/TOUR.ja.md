@@ -51,10 +51,12 @@ from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
+
 def view():
     with column(spacing=12, padding=16):
         text(f"count: {count()}", size=34)
         button("+1", on_click=lambda: count.set(count() + 1))
+
 
 if __name__ == "__main__":
     run(view, title="counter")
@@ -169,11 +171,13 @@ button("grow", on_click=lambda: left.grow(0.5))
 ```python
 from yokan import Weak, model, store
 
+
 @model
 class Node:
     label: str = "n"
     kid: Node | None = None
     parent: Weak[Node] = None      # 逆向きは所有しない
+
 
 @store
 class Tree:
@@ -262,6 +266,7 @@ if show():
 ```python
 from yokan import store
 
+
 @store
 class Settings:
     dark: bool = False
@@ -334,6 +339,7 @@ def announced(f):
 
     return wrapper
 
+
 @announced
 def save():
     fs.write_text(path, body())
@@ -347,6 +353,7 @@ def ハンドラの中身は、if や for などの制御フローごとコン�
 ```python
 def double(v: int) -> int:          # 純粋ヘルパはネイティブの関数になる
     return v * 2
+
 
 def tally():
     total.set(0)
@@ -549,6 +556,7 @@ picked.set(prices().get("apple", -1))  # 読み: 無いときは default
 if "cherry" in prices(): ...           # 所属
 len(prices())                          # 件数
 
+
 def scan():
     for k in prices():                 # 挿入順、Python が回るのと同じ順
         last.set(k)
@@ -581,8 +589,10 @@ Python と同じ書き方で書き、同じ読み方で読みます。
 pair: State[tuple[str, int]] = State(("momo", 4))
 rows: State[list[tuple[str, int]]] = State([])
 
+
 def measure(word: str) -> tuple[str, int]:
     return (word.upper(), len(word))
+
 
 def scan():
     label, n = measure("hello")          # 分解
@@ -607,6 +617,7 @@ Value クラスは不変なので、書き換えは `replace` で新しい値を
 
 ```python
 from dataclasses import replace
+
 
 @value
 class Point:
@@ -648,11 +659,13 @@ Protocol を基底に挙げたモデルがその実装になり、Protocol 型�
 class Shape(Protocol):
     def area(self) -> float: ...
 
+
 @model
 class Circle(Shape):
     r: float = 1.0
     def area(self) -> float:
         return self.r * self.r * 3.0
+
 
 def area_of(s: Shape) -> float:
     return s.area()
@@ -692,8 +705,12 @@ Value クラスを `type` エイリアスで束ねると、`match` で分岐で�
 ```python
 @value
 class Healthy: pass
+
+
 @value
 class Degraded: services: int
+
+
 @value
 class Outage: service: str
 
@@ -701,7 +718,7 @@ type Health = Healthy | Degraded | Outage
 
 health: State[Health] = State(Healthy())
 
-# ビューの中で:
+# ビューの中で
 match health():
     case Healthy():
         text("ALL SYSTEMS NOMINAL")
@@ -818,6 +835,7 @@ text(f"n={n()}", **chip)
 ```python
 mode: State[str] = State("dark")
 
+
 def flip():
     if mode() == "dark":
         mode.set("light")
@@ -891,6 +909,7 @@ except Exception as e:
 import json, math, random, re, statistics
 from datetime import date, timedelta
 
+
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
     spread.set(statistics.stdev([1.5, 2.5, 4.75]))
@@ -899,6 +918,7 @@ def measure():
     doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
     due.set(date(2026, 1, 1) + timedelta(weeks=6))  # 2026-02-12、木曜
     mail.set(re.findall(r"\w+@[\w.]+", line())[0])   # Match には形がありません
+
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # 純粋なのでビューからも呼べる
@@ -1042,6 +1062,7 @@ Result は try/except で受け、`f"{e}"` の文言まで両実行で一致し�
 class Span:          # crate の struct Span の双子
     lo: int
     hi: int
+
 
 class Grade(Enum):   # crate の enum Grade の双子
     Fine = 1

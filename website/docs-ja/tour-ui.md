@@ -85,6 +85,7 @@ text(f"n={n()}", **chip)
 ```python
 mode: State[str] = State("dark")
 
+
 def flip():
     if mode() == "dark":
         mode.set("light")

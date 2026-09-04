@@ -19,10 +19,12 @@ from yokan import State, button, column, run, text
 
 count: State[int] = State(0)
 
+
 def view():
     with column(spacing=12, padding=16):
         text(f"count: {count()}", size=34)
         button("+1", on_click=lambda: count.set(count() + 1))
+
 
 if __name__ == "__main__":
     run(view, title="counter")
@@ -137,11 +139,13 @@ button("grow", on_click=lambda: left.grow(0.5))
 ```python
 from yokan import Weak, model, store
 
+
 @model
 class Node:
     label: str = "n"
     kid: Node | None = None
     parent: Weak[Node] = None      # 逆向きは所有しない
+
 
 @store
 class Tree:
@@ -229,6 +233,7 @@ if show():
 
 ```python
 from yokan import store
+
 
 @store
 class Settings:

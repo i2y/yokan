@@ -12,6 +12,7 @@ Value クラスは不変なので、書き換えは `replace` で新しい値を
 ```python
 from dataclasses import replace
 
+
 @value
 class Point:
     x: int
@@ -52,11 +53,13 @@ Protocol を基底に挙げたモデルがその実装になり、Protocol 型�
 class Shape(Protocol):
     def area(self) -> float: ...
 
+
 @model
 class Circle(Shape):
     r: float = 1.0
     def area(self) -> float:
         return self.r * self.r * 3.0
+
 
 def area_of(s: Shape) -> float:
     return s.area()
@@ -96,8 +99,12 @@ Value クラスを `type` エイリアスで束ねると、`match` で分岐で�
 ```python
 @value
 class Healthy: pass
+
+
 @value
 class Degraded: services: int
+
+
 @value
 class Outage: service: str
 
@@ -105,7 +112,7 @@ type Health = Healthy | Degraded | Outage
 
 health: State[Health] = State(Healthy())
 
-# ビューの中で:
+# ビューの中で
 match health():
     case Healthy():
         text("ALL SYSTEMS NOMINAL")

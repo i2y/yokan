@@ -84,6 +84,7 @@ The value can be a literal or a state read, so an app can own its palette as sta
 ```python
 mode: State[str] = State("dark")
 
+
 def flip():
     if mode() == "dark":
         mode.set("light")
