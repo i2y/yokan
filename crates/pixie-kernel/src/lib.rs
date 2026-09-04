@@ -60,6 +60,7 @@ pub mod dialog;
 pub mod drop;
 pub mod keys;
 pub mod menu;
+pub mod quit;
 pub mod script;
 pub mod theme;
 pub mod timer;

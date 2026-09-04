@@ -1122,6 +1122,12 @@ impl<C: Component> Render for Root<C> {
         if !window.is_window_active() {
             pixie_kernel::keys::release_all();
         }
+        // An app that asked to close. Taken here because every state
+        // change reaches a frame, and taken ONCE — a second frame must
+        // not ask again.
+        if pixie_kernel::quit::take() {
+            cx.quit();
+        }
         // With nothing focused there is no path for a key to travel,
         // so the root takes the focus and becomes the window's key
         // sink. A field that gets clicked takes it back.

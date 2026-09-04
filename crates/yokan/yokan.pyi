@@ -530,6 +530,11 @@ def menu_item(menu: str, item: str, on_pick: Callable[[], Any]) -> None: ...
 # What happens to a file dragged onto the window: the handler receives
 # its path. A headless script drops one with `drop:<path>`.
 def on_file_drop(handler: Callable[[str], Any]) -> None: ...
+def quit() -> None:
+    """Ask the window to close. A handler asks and the window answers
+    on its next frame; a headless run has no window, so a script runs
+    its remaining steps and both runs print the same dumps."""
+
 def run(
     view: Callable[..., Any],
     state: Any = None,

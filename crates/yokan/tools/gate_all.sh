@@ -47,7 +47,7 @@ frame33="advance:33"
 burst="keydown:space,$frame33,keyup:space,$frame33,$frame33,$frame33,$frame33,$frame33"
 shoot="keydown:enter,$frame33,keyup:enter"
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do shoot="$shoot,$burst"; done
-gate shooter python3 yokan_gate.py gate demo/shooter.py --script "$shoot,dump"
+gate shooter python3 yokan_gate.py gate demo/shooter.py --script "$shoot,dump,keydown:q,$frame33,keyup:q,$frame33"
 fall=""
 for i in $(seq 1 120); do fall="$fall,$frame33"; done
 gate jump    python3 yokan_gate.py gate demo/jump.py --script "${fall#,},dump"

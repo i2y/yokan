@@ -654,6 +654,7 @@ class Translator:
         self.enum_bases = set()        # local names bound to enum.Enum
         self.view_bindings = {}        # view binding name -> pixty (if-let / case arms)
         self.in_canvas = False         # inside `with canvas(...)`: commands, not elements
+        self.view_counts = {}          # a view `for` over range(): name -> the literal it stands for
         self.unions = {}               # `type Shape = A | B` -> [variant struct names]
         self.union_of = {}             # variant struct -> union name
         self.stores = {}               # @ui.store name -> {"fields", "methods"}
@@ -3865,6 +3866,7 @@ class Translator:
             (None, "formatFloat", "v: Float, spec: String", "String", "py_format_float", "pure"),
             (None, "formatStr", "v: String, spec: String", "String", "py_format_str", "pure"),
             (None, "log", "msg: String", "Int", "log_line"),
+            (None, "quit", "", "Int", "quit_app"),
             (None, "abort", "msg: String", "Int", "py_abort"),
             (None, "listSortedStr", "xs: List<String>", "List<String>", "py_list_sorted_str", "pure"),
             (None, "listSortedInt", "xs: List<Int>", "List<Int>", "py_list_sorted_int", "pure"),
@@ -5034,6 +5036,11 @@ class Translator:
             if node.attr not in mfields:
                 raise Untranslatable(node, f"`{node.attr}` is not a field of {mn}")
             return f"{node.value.id}.{node.attr}"
+        # A view's `for` over a literal range is written out where it
+        # stands, so its variable IS a number by the time anything
+        # reads it.
+        if isinstance(node, ast.Name) and node.id in self.view_counts:
+            return str(self.view_counts[node.id])
         if isinstance(node, ast.Name) and node.id in self.view_bindings and ctx == "view":
             if self.text_hole and not self.in_wrapped_hole and self.view_bindings[node.id] in ("Float", "Bool"):
                 raise Untranslatable(node, 'a float or bool local has no text in a hole yet — write it to a State first and render `f"{r()}"`, or pin decimals with `.Nf`')
@@ -8136,6 +8143,21 @@ class Translator:
             return ["return"]
         if isinstance(stmt, ast.Return) and self.ret_ty is not None:
             return [f"return {self.expr(stmt.value, 'store', param)}"]
+        # `quit()` — close the window. A handler asks; the window
+        # answers on its next frame, and a headless run has no window
+        # to answer, so a script runs on and both runs dump the same.
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "quit")
+        ):
+            call = stmt.value
+            if call.args or call.keywords:
+                raise Untranslatable(call, "quit() takes nothing")
+            self.uses_stdlib = True
+            name = f"__q{len(self.handler_locals)}"
+            self.handler_locals.add(name)
+            return [f"var {name} = Py.quit()"]
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
@@ -8344,6 +8366,8 @@ class Translator:
         "Bool" / "String" / an enum name / None (unknown). Serves the
         operator rewrites, the text-hole renderers and the if/else
         local hoist."""
+        if isinstance(node, ast.Name) and node.id in self.view_counts:
+            return "Int"
         const = self._stdlib_const(node)
         if const is not None:
             return const[1]
@@ -10516,6 +10540,67 @@ class Translator:
         if not isinstance(target, ast.Name):
             raise Untranslatable(stmt.target, "a view's `for` binds one name")
         var = target.id
+        # `for i in range(2):` — written out where it stands, once per
+        # value. The compiled side repeats over a LIST, and there is no
+        # list here; what there is, is a count the translator can read,
+        # so the loop becomes the elements it would have produced. The
+        # bounds are literals for exactly that reason.
+        if (
+            isinstance(it, ast.Call)
+            and isinstance(it.func, ast.Name)
+            and it.func.id == "range"
+            and not it.keywords
+        ):
+            if index is not None:
+                raise Untranslatable(
+                    stmt.target,
+                    "`enumerate(range(...))` in a view says the index twice — the loop "
+                    "variable is already it",
+                )
+            bounds = []
+            for a in it.args:
+                neg = isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub)
+                c = a.operand if neg else a
+                if not (
+                    isinstance(c, ast.Constant)
+                    and isinstance(c.value, int)
+                    and not isinstance(c.value, bool)
+                ):
+                    raise Untranslatable(
+                        a,
+                        "a view's `for` over `range(...)` takes written-out bounds — the "
+                        "loop is written out too, so the count has to be known here; for "
+                        "a count that changes, walk a list",
+                    )
+                bounds.append(-c.value if neg else c.value)
+            if len(bounds) == 1:
+                lo, hi = 0, bounds[0]
+            elif len(bounds) == 2:
+                lo, hi = bounds
+            else:
+                raise Untranslatable(
+                    it, "a view's `for` over `range(...)` takes one or two bounds"
+                )
+            n = max(hi - lo, 0)
+            if n > 64:
+                raise Untranslatable(
+                    it,
+                    f"a view's `for` over a range is written out where it stands, so it "
+                    f"is capped at 64 elements — this one asks for {n}; walk a list "
+                    "instead",
+                )
+            lines = []
+            prev = self.view_counts.get(var)
+            try:
+                for v in range(lo, hi):
+                    self.view_counts[var] = v
+                    lines += self._block_stmts(stmt.body, indent)
+            finally:
+                if prev is None:
+                    self.view_counts.pop(var, None)
+                else:
+                    self.view_counts[var] = prev
+            return lines
         src = self._list_source(it, "view", None)
         if src is None:
             raise Untranslatable(

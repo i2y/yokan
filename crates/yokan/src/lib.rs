@@ -2697,6 +2697,11 @@ fn py_log(py: Python<'_>, msg: &str) -> i64 {
     py.detach(|| yokan_stdlib::log_line(msg))
 }
 
+#[pyfunction] #[pyo3(name = "quit")]
+fn py_quit() -> i64 {
+    yokan_stdlib::quit_app()
+}
+
 #[pyfunction] #[pyo3(name = "format_local_ms")]
 fn py_clock_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
     py.detach(|| yokan_stdlib::clock_format_local_ms(ms, fmt))
@@ -2948,6 +2953,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stringsm.add_function(wrap_pyfunction!(py_strings_to_float, &stringsm)?)?;
     m.add_submodule(&stringsm)?;
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
+    m.add_function(wrap_pyfunction!(py_quit, m)?)?;
     let clipm = PyModule::new(m.py(), "clipboard")?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;

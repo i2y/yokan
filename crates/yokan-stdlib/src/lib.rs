@@ -3233,6 +3233,14 @@ pub fn py_abs_float(v: f64) -> f64 {
 }
 
 
+/// `quit()` — the app asks its window to close. A headless run has no
+/// window and ignores it, so a script's steps all still run and the
+/// two runs print the same dumps.
+pub fn quit_app() -> i64 {
+    pixie_kernel::quit::request();
+    0
+}
+
 /// `log(msg)` — a line on stderr, from either run. stdout is where
 /// the headless dump lives, so a message that is not part of the
 /// screen does not go there.

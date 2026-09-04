@@ -14,12 +14,12 @@ canvas a color is an index into the palette this file declares.
 What is different, and why. Speeds that were fractional (1.5 px a
 frame) are carried in tenths of a pixel and drawn whole, because a
 pixel grid has no half pixels. The music and the sound effects are
-gone: there is no audio here yet. So are the gamepad and `pyxel.quit`.
+gone: there is no audio here yet. So is the gamepad.
 Everything else — three scenes, a hundred parallax stars, the enemy
 that sways as it falls, rectangle collisions, expanding blasts — is
 the game.
 
-Arrow keys move, space fires, enter starts and restarts.
+Arrow keys move, space fires, enter starts and restarts, q quits.
 """
 import os
 import random
@@ -36,6 +36,7 @@ from yokan import (  # noqa: E402
     keys,
     pixel,
     pixel_text,
+    quit,
     rect,
     run,
     sprite,
@@ -144,6 +145,8 @@ class Game:
         self.stars = out
 
     def tick(self) -> None:
+        if keys.pressed("q"):
+            quit()
         self.frame = self.frame + 1
         self.title_col = self.frame % 16
         Game.move_stars()
