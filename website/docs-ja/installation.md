@@ -65,6 +65,19 @@ $ yokan clean                                # キャッシュを捨てる
 `~/.cache/yokan/` の中身は、取り直しとビルドし直しで元に戻せるものだけです。
 だから状態が怪しくなったときは `clean` が出口になります。
 
+## エージェントに書かせる
+
+[`skills/yokan/SKILL.md`](https://github.com/i2y/yokan/blob/main/skills/yokan/SKILL.md) は、エージェントのために書いたガイドです。
+方言の全体と、拒否される書き方と、代わりに何を書くかが 1 ファイルに入っています。
+エージェントがスキルを探す場所に置いてください。Claude Code なら `~/.claude/skills/` です。
+
+```console
+$ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
+    https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
+```
+
+これを読んだエージェントは、境界をビルド時に見つけるのではなく、最初から内側で書きます。
+
 ## ビルドで何ができるか
 
 `@py` を使っていないアプリなら、実行ファイルに CPython は入りません。

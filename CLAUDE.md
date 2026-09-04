@@ -19,6 +19,9 @@ User-facing docs: `README.md` / `README.ja.md` (landing),
 `crates/yokan/TOUR*.md` (the language tour, one file per language
 on purpose), `website/` (the zensical site — the tour is split into
 six pages there), `docs/PIXIE.md` (the substrate, user-facing).
+`skills/yokan/SKILL.md` is the agent guide, at the repository root
+because that is where skill installers look for it; it is written
+for an agent about to write an app, and follows the tour.
 
 ## Where design truth lives
 

@@ -221,7 +221,8 @@ closing list honest until then.
 
 ## The agent guide follows the tour
 
-`skill/SKILL.md` is the guide an agent reads before writing an app.
+`skills/yokan/SKILL.md` is the guide an agent reads before writing
+an app.
 It had grown by appending a paragraph per feature, so it opened with
 dict state (which does not compile), said both that a bare float
 renders and that it needs `.Nf`, and both that an enum must be

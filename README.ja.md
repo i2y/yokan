@@ -114,6 +114,19 @@ $ yokan build app.py --release --onefile
 
 実測値（macOS/arm64、リリースビルド）：起動 4.7 ms、ライブリロード約 1 ms。サイズは上の配布の節の通りです。
 
+## エージェントに書かせる
+
+[`skills/yokan/SKILL.md`](skills/yokan/SKILL.md) は、エージェントのために書いたガイドです。
+方言の全体と、拒否される書き方と、代わりに何を書くかが 1 ファイルに入っています。
+エージェントがスキルを探す場所に置いてください。Claude Code なら `~/.claude/skills/` です。
+
+```console
+$ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
+    https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
+```
+
+これを読んだエージェントは、境界をビルド時に見つけるのではなく、最初から内側で書きます。
+
 ## もっと知る
 
 - [ドキュメントサイト](https://i2y.github.io/yokan/ja/) — インストール、言語ツアー、デモギャラリーをブラウザで（[English](https://i2y.github.io/yokan/)）

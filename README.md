@@ -141,6 +141,21 @@ $ yokan build app.py --release --onefile
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload;
 sizes as in the shipping paragraph above.
 
+## Writing Yokan with an agent
+
+[`skills/yokan/SKILL.md`](skills/yokan/SKILL.md) is a guide for an
+agent: the whole dialect in one file, with every refusal and what to
+write instead. Put it where your agent looks for skills — for Claude
+Code that is `~/.claude/skills/`:
+
+```console
+$ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
+    https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
+```
+
+An agent that has read it writes inside the boundary from the start,
+instead of finding it at build time.
+
 ## Learn more
 
 - [The documentation site](https://i2y.github.io/yokan/) —

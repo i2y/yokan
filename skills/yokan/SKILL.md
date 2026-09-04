@@ -11,8 +11,9 @@ as Python: while you develop, the whole app runs on real CPython
 with a state-preserving live reload; `yokan build` turns the same
 source into a machine-code executable; and `yokan gate` replays one
 interaction script against both runs and byte-compares the screens.
-What the subset cannot take is refused by name when you check,
-translate or build — behavior never changes silently. `yokan check
+What the subset cannot take is refused when you check, translate or
+build, with a message saying what and why — behavior never changes
+silently. `yokan check
 app.py` is the fast one: it prints the first refusal as
 `file:line:col: …` and says nothing when the app is inside the
 dialect. The closing section
@@ -69,7 +70,7 @@ $ yokan build app.py --release                    # ship: the native binary
   defs, `style()`, type aliases, literal constants, `every(...)`
   timers, the guard. A
   statement there (`count.set(5)`, `fs.write_text(...)`) is
-  refused by name; startup work goes in a def passed as
+  refused; startup work goes in a def passed as
   `run(view, on_start=setup)`. `every(1.0, tick)` IS a
   declaration and belongs there.
 - A literal constant (`LIMIT = 10`, `NAMES = ["a", "b"]`) is read
@@ -471,6 +472,10 @@ have to answer does not cross yet (`re.findall` with two groups).
 
 ## The standard library
 
+How far each module reaches into Python's, name by name, and which of
+the builtins are in: <https://i2y.github.io/yokan/support/>. It is
+generated from the manifest, so it is current by construction.
+
 Two layers, told apart by where the name comes from.
 
 **Python's own**: `import math`, `import random`, `import
@@ -520,7 +525,7 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   an `.app` bundle; dev and headless runs drop it quietly
 
 From Python's side: all of `math` but six members (`prod`,
-`sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each refused by name
+`sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each refused
 with its reason); `random`'s `seed`, `random`,
 `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`,
 `sample` (no `shuffle` — it reorders in place, and a list lives in a
@@ -536,7 +541,7 @@ From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`,
 `strftime` (the directives CPython defines itself), `weekday`,
 `timestamp`, `total_seconds`, arithmetic and comparison. An aware
 value, `datetime.time`, `replace`, `strptime`, a date in a container
-and a date as a helper parameter are refused by name. From `re`:
+and a date as a helper parameter are refused. From `re`:
 `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not
 None` as the test — the pattern is a LITERAL, compiled by CPython at
 translate time, and a `Match` used as a value is refused. From the
@@ -619,7 +624,7 @@ the window (script: `drop:<path>`), and `fs.open_dialog(title)` /
 
 A user decorator is folded into the function it decorates: the
 decorator is a def of one argument that returns it, or a wrapper
-that calls it once. Anything else is refused by name.
+that calls it once. Anything else is refused.
 
 `text_field(..., multiline=True, rows=3)` is a field that holds
 paragraphs; every element takes `tooltip="…"`.
@@ -641,6 +646,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no wi
 $ yokan gate app.py --script "click:+1,input:Momo" --release
 GATE OK — 2 dump lines identical in both runs
 $ yokan build app.py --release [--app] [--bundle | --onefile]
+$ yokan translate app.py                              # the .pix the build compiles
 $ yokan version                                       # package, checkout, build tree
 ```
 
@@ -671,7 +677,8 @@ transformations and misreports store methods; use pyright.
 
 ## What does not work yet
 
-Same list as the tour's closing section; each is refused by name.
+Same list as the tour's closing section; each is refused with its
+reason.
 
 - Iterating a dict in insertion order (compiled dicts are
   key-ordered): use `sorted(d())`.

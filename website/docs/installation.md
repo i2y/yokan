@@ -79,6 +79,21 @@ $ yokan clean                                # throw the cache away
 Everything under `~/.cache/yokan/` is one fetch and one build away,
 which is what makes `clean` the way out of a state you don't trust.
 
+## Writing Yokan with an agent
+
+[`skills/yokan/SKILL.md`](https://github.com/i2y/yokan/blob/main/skills/yokan/SKILL.md)
+is a guide for an agent: the whole dialect in one file, with every
+refusal and what to write instead. Put it where your agent looks for
+skills — for Claude Code that is `~/.claude/skills/`:
+
+```console
+$ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
+    https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
+```
+
+An agent that has read it writes inside the boundary from the start,
+instead of finding it at build time.
+
 ## What a build produces
 
 If the app uses no `@py` escapes, the executable contains no
