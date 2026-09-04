@@ -19,10 +19,17 @@ answers what CPython answers. So are `re` (the pattern is compiled by
 CPython while the app translates, and the shipped binary runs that
 array), `string`, `textwrap`, `bisect` and `heapq`.
 
+`collections` and `itertools` are Python's too, and the pieces of
+them that have a shape here are written out rather than called:
+`Counter` is the dict of counts, and `itertools`' combinators are
+what a `for` walks. The interpreted run is the real module, so the
+gate is comparing against CPython itself.
+
 `clock.format_ms` is UTC and `clock.format_local_ms` is the machine's
 own zone, from the same zone database in both runs. Python's own
 `time` is there too, for the clock itself.
 """
+import itertools
 import json
 import math
 import os
@@ -33,6 +40,7 @@ import string
 import sys
 import textwrap
 import time
+from collections import Counter
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -53,6 +61,11 @@ plan: State[str] = State("-")
 words: State[str] = State("-")
 doc: State[str] = State("-")
 scores: State[list[int]] = State([3, 5, 8])
+# momo and ada both land on two, and momo was seen first — which is
+# the order `most_common` puts them in, and where its second slot goes
+votes: State[list[str]] = State(["ivy", "momo", "ivy", "ada", "momo", "ivy", "ada"])
+tally: State[str] = State("-")
+runs: State[str] = State("-")
 
 
 def measure():
@@ -90,6 +103,42 @@ def roll():
     for _i in range(5):
         out = out + f"{random.randint(1, 6)}"
     rolls.set(f"{out} u={random.uniform(0.0, 1.0):.4f}")
+
+
+def count():
+    # A Counter is a dict of counts, keyed in first-seen order, and
+    # `most_common` orders by the count and keeps that order among
+    # equals — which is what CPython's does.
+    c = Counter(votes())
+    top = c.most_common(2)
+    board = ""
+    for name, n in top:
+        board = board + f"{name}:{n} "
+    tally.set(f"{board}of {c.total()} in {len(c)} names")
+
+
+def combine():
+    # Every one of these answers an iterator in Python, so a `for` is
+    # what walks them — the loop the translator writes is that walk.
+    totals = ""
+    for v in itertools.accumulate(scores()):
+        totals = totals + f"{v} "
+    steps = ""
+    for a, b in itertools.pairwise(scores()):
+        steps = steps + f"{b - a} "
+    both = ""
+    for a, b in itertools.combinations(votes()[:3], 2):
+        both = both + a[0] + b[0] + " "
+    order = ""
+    for a, b in itertools.permutations(votes()[:2], 2):
+        order = order + a[0] + b[0] + " "
+    grid = ""
+    for a, b in itertools.product(votes()[:2], scores()):
+        grid = grid + f"{a[0]}{b}"
+    long = 0
+    for w in itertools.chain(votes(), votes()[:2]):
+        long = long + len(w)
+    runs.set(f"{totals}| {steps}| {both}| {order}| {grid} {long}")
 
 
 def parse():
@@ -130,12 +179,17 @@ def view():
         text(f"rolls={rolls()}")
         text(f"tau={math.tau:.5f} floor={math.floor(hyp())}")
         text(f"doc={doc()}")
+        text(f"tally={tally()}")
+        text(f"runs={runs()}")
         with row(spacing=6):
             button("measure", on_click=measure)
             button("stats", on_click=summarize)
             button("due", on_click=schedule)
             button("sift", on_click=sift)
             button("roll", on_click=roll)
+        with row(spacing=6):
+            button("count", on_click=count)
+            button("combine", on_click=combine)
         with row(spacing=6):
             button("parse", on_click=parse)
             button("stamp", on_click=stamp)

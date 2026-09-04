@@ -494,6 +494,7 @@ class Translator:
         self.stdlib_names = {}       # `from math import sqrt` -> (module, name)
         self.dt_names = {}           # `from datetime import date` -> "date"
         self.tuple_parts = {}        # tuple struct name -> its part types
+        self.counter_locals = set()  # locals holding a Counter, not a plain dict
         self.dt_mods = {}            # `import datetime as dt` -> "datetime"
         self.dead_locals = {}          # name -> why it cannot be read here
         self.helpers = {}              # pure fn name -> (params, ret, body expr)
@@ -1394,6 +1395,7 @@ class Translator:
             prev_locals, prev_dead = self.handler_locals, self.dead_locals
             self.model_scope = (node.name, field_tys)
             self.handler_locals = set(p for p, _ in params)
+            self.counter_locals = set()
             prev_typed = self.typed_locals
             self.typed_locals = {p: t for p, t in params}
             self.dead_locals = {}
@@ -1701,6 +1703,7 @@ class Translator:
             prev_locals, prev_dead = self.handler_locals, self.dead_locals
             self.model_scope = (node.name, field_tys)
             self.handler_locals = set(p for p, _ in params)
+            self.counter_locals = set()
             self.dead_locals = {}
             try:
                 if m.name in trait_sigs:
@@ -1823,6 +1826,7 @@ class Translator:
             prev_scope, prev_locals, prev_typed = self.struct_self, self.handler_locals, self.typed_locals
             self.struct_self = sname
             self.handler_locals = set(p for p, _ in params)
+            self.counter_locals = set()
             self.typed_locals = {p: t for p, t in params}
             try:
                 body = self.expr(m.body[0].value, "store", None)
@@ -2142,6 +2146,7 @@ class Translator:
         bound_of = {v: t for v, t in bounds}
         self.helper_params = {p: (bound_of.get(t, t) if t in bound_of else t) for p, t in params}
         self.handler_locals = set(p for p, _ in params)
+        self.counter_locals = set()
         self.typed_locals = {p: t for p, t in params if t in ("Int", "Float", "String", "Bool") or t in self.structs or t in self.enums or t.startswith("List<")}
         self.dead_locals = {}
         prev_ret, self.ret_ty = self.ret_ty, ret
@@ -3513,6 +3518,56 @@ class Translator:
     # Python modules the dialect does not take, and why. Without the
     # reason a reader cannot tell whether to wait for it or write
     # around it.
+    # `collections` and `itertools` are in, member by member. What
+    # each one keeps out is a decision of its own, so it is named
+    # rather than left to the generic "Python's, and not in the
+    # dialect yet".
+    LOWERED_ABSENT = {
+        ("collections", "defaultdict"): (
+            "what a missing key answers is asked at the read here, not at the dict "
+            "(`d.get(key, default)`). `collections.Counter` counts, and grouping "
+            "writes the list back: `groups[k] = groups().get(k, []) + [x]`"
+        ),
+        ("collections", "deque"): (
+            "it appends and pops in place, and a list lives in a `State` here — "
+            "`xs.set(xs() + [x])` adds and `xs.set(xs()[1:])` drops the head"
+        ),
+        ("collections", "namedtuple"): (
+            "it builds a class while the app runs; a `@value` class says the same "
+            "thing with types, and `tuple[str, int]` is the anonymous form"
+        ),
+        ("collections", "OrderedDict"): (
+            "a dict here already remembers the order its keys went in, so this is "
+            "`dict` — what it adds beyond that (`move_to_end`, `popitem`) reorders "
+            "in place, which a `State` does not do"
+        ),
+        ("collections", "ChainMap"): (
+            "it is a view over dicts that stays live as they change, and a compiled "
+            "dict is a value — read the two with `.get(key, .get(key, default))`"
+        ),
+        ("itertools", "count"): "it never ends, so nothing can walk it to the end",
+        ("itertools", "cycle"): "it never ends, so nothing can walk it to the end",
+        ("itertools", "repeat"): (
+            "without a count it never ends; `for _ in range(n)` repeats a known "
+            "number of times"
+        ),
+        ("itertools", "islice"): (
+            "a slice is what it takes — `xs[a:b]` in a `for` says the same thing"
+        ),
+        ("itertools", "groupby"): (
+            "each group is an iterator of its own, and an iterator has no compiled "
+            "shape — sort by the key and start a new list when it changes"
+        ),
+        ("itertools", "tee"): (
+            "it splits one iterator into several, and what the dialect walks is a "
+            "list, which can be walked twice already"
+        ),
+        ("itertools", "batched"): (
+            "the last batch is shorter than the rest, so the tuples have no one "
+            "shape — walk `range(0, len(xs), n)` and slice"
+        ),
+    }
+
     PY_ABSENT = {
         "pathlib": "a `Path` would be a second value type carrying a string, and "
                    "every verb it offers is already `from yokan import fs` over the "
@@ -3520,10 +3575,6 @@ class Translator:
         "os": "what it answers is the machine's, not Python's — the parts a desktop "
               "app needs are `from yokan import fs` (files) and `import time` (the "
               "clock)",
-        "collections": "its types are generic containers, and how a generic crosses "
-                       "the Rust boundary is not decided yet",
-        "itertools": "it answers iterators, which have no compiled shape — a `for` "
-                     "loop and a list do the same work here",
         "decimal": "its arithmetic is a type of its own; `float` and the exact sums "
                    "in `statistics` are what the dialect has",
         "hashlib": "it answers bytes, and `bytes` is not in the dialect yet",
@@ -3584,7 +3635,15 @@ class Translator:
     # ones carrying a Python name are reached the way Python reaches
     # them, with `import math`.
     STDLIB_MODULES = tuple(m for _c, m, layer, _r in STDLIB if layer == "yokan")
-    PY_MODULES = tuple(m for _c, m, layer, _r in STDLIB if layer == "python")
+    # Two of Python's modules answer with SHAPE rather than arithmetic:
+    # a count, a pairing, a product. There is nothing for a Rust twin
+    # to compute, so the translator writes the loop each one stands
+    # for, and the gate compares it against CPython's own module —
+    # which is running on the other side.
+    PY_LOWERED = ("collections", "itertools")
+    PY_MODULES = (
+        tuple(m for _c, m, layer, _r in STDLIB if layer == "python") + PY_LOWERED
+    )
 
     @staticmethod
     def _stdlib_specs(spec):
@@ -4440,12 +4499,31 @@ class Translator:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("most_common", "total")
+        ):
+            cm = self._counter_recv(node.func.value, ctx, param)
+            if cm is not None:
+                return self._counter_method(node, cm, ctx, param)
+            cd = self._cell_read(node.func.value)
+            if self._map_source(node.func.value) is not None or (
+                cd is not None and (self._ty(cd) or "").startswith("Map<")
+            ):
+                raise Untranslatable(
+                    node,
+                    f"`.{node.func.attr}()` is a Counter's method, not a dict's — read it "
+                    "from what `collections.Counter(xs)` answers. A Counter kept in a "
+                    "`State` reads back as the dict it is, so take the counts out before "
+                    "storing it",
+                )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
             and node.func.attr == "get"
         ):
-            recv = None
+            recv = mty = None
             d9 = self._cell_read(node.func.value)
             if d9 is not None and self._ty(d9).startswith("Map<"):
-                recv = d9 if ctx == "store" else f"App.{d9}"
+                recv, mty = (d9 if ctx == "store" else f"App.{d9}"), self._ty(d9)
             elif (
                 isinstance(node.func.value, ast.Attribute)
                 and isinstance(node.func.value.value, ast.Name)
@@ -4453,6 +4531,7 @@ class Translator:
                 and self.stores[node.func.value.value.id]["field_tys"].get(node.func.value.attr, "").startswith("Map<")
             ):
                 recv = f"{node.func.value.value.id}.{node.func.value.attr}"
+                mty = self.stores[node.func.value.value.id]["field_tys"][node.func.value.attr]
             elif (
                 isinstance(node.func.value, ast.Attribute)
                 and isinstance(node.func.value.value, ast.Name)
@@ -4460,17 +4539,25 @@ class Translator:
                 and self.model_scope is not None
                 and self.model_scope[1].get(node.func.value.attr, "").startswith("Map<")
             ):
-                recv = node.func.value.attr
+                recv, mty = node.func.value.attr, self.model_scope[1][node.func.value.attr]
             elif (
                 isinstance(node.func.value, ast.Name)
                 and self.typed_locals.get(node.func.value.id, "").startswith("Map<")
             ):
-                recv = node.func.value.id
+                recv, mty = node.func.value.id, self.typed_locals[node.func.value.id]
+            elif (cg := self._counter_recv(node.func.value, ctx, param)) is not None:
+                recv, mty = cg, "Map<String, Int>"
             if recv is not None:
                 if len(node.args) != 2 or node.keywords:
                     raise Untranslatable(node, "a bare `d[k]` read raises KeyError in Python when the key is missing; read with `.get(key, default)`, which says what a missing key means")
                 key = self._dict_key(node.args[0], ctx, param)
-                dflt = self.expr(node.args[1], ctx, param)
+                vt = self._map_kv(mty)[1]
+                if isinstance(node.args[1], ast.List) and vt.startswith("List<"):
+                    # `d.get(k, [])` — the default a dict of lists is
+                    # read with, and what grouping is written over.
+                    dflt = self._list_literal(node.args[1], vt[5:-1])
+                else:
+                    dflt = self.expr(node.args[1], ctx, param)
                 return f"{recv}.getOr({key}, {dflt})"
         if (
             isinstance(node, ast.Subscript)
@@ -4786,6 +4873,8 @@ class Translator:
             return f"Helpers.{name}({args})"
         if isinstance(node, ast.Call) and self._stdlib_call(node.func) is not None:
             mod, fn = self._stdlib_call(node.func)
+            if mod in self.PY_LOWERED:
+                return self._lowered_call(node, mod, fn, ctx, param)
             if ctx == "view" and (mod, fn) not in self.STDLIB_PURE:
                 # A view stays pure, and pure is exactly what the
                 # manifest's column says: a function with no side
@@ -5136,9 +5225,13 @@ class Translator:
                 bare = f"Py.strContains({hay}, {needle})"
                 return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
             d = self._cell_read(node.comparators[0])
-            if d is None or not self._ty(d).startswith("Map<"):
-                raise Untranslatable(node, '`in` tests dict membership (`"k" in prices()`) — `in` over a list is not in the dialect yet')
-            recv = d if ctx == "store" else f"App.{d}"
+            if d is not None and self._ty(d).startswith("Map<"):
+                recv = d if ctx == "store" else f"App.{d}"
+            else:
+                m = self._map_source(node.comparators[0])
+                if m is None:
+                    raise Untranslatable(node, '`in` tests dict membership (`"k" in prices()`) — `in` over a list is not in the dialect yet')
+                recv = m[0]
             bare = f"{recv}.contains({self._dict_key(node.left, ctx, param)})"
             return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
         c = self._cell_read(node)
@@ -5894,6 +5987,303 @@ class Translator:
         self.pre_lines.append(f"var {out} = {code}.pickBy({keys}, {want_max})")
         return out
 
+    # ---- collections and itertools, written out ---------------------
+    # Both modules answer shape rather than arithmetic, so there is no
+    # Rust twin to call: the translator writes the loop each call
+    # stands for, and the interpreted run — which IS CPython's module
+    # — is what the gate compares it against.
+
+    ITERTOOLS = ("chain", "pairwise", "accumulate", "combinations", "permutations", "product")
+
+    def _lowered_refusal(self, node, mod, fn):
+        why = self.LOWERED_ABSENT.get((mod, fn))
+        if why:
+            raise Untranslatable(node, f"`{mod}.{fn}` is not in the dialect — {why}")
+        raise Untranslatable(node, self._absent(mod, fn))
+
+    def _lowered_call(self, node, mod, fn, ctx, param):
+        """`collections` and `itertools` at a call site."""
+        if (mod, fn) in self.LOWERED_ABSENT:
+            self._lowered_refusal(node, mod, fn)
+        if mod == "collections" and fn == "Counter":
+            return self._counter(node, ctx, param)
+        if mod == "itertools" and fn in self.ITERTOOLS:
+            raise Untranslatable(
+                node,
+                f"`itertools.{fn}(...)` answers an iterator, which is what a `for` walks "
+                f"(`for … in itertools.{fn}(…)`) — as a value it is not a list",
+            )
+        self._lowered_refusal(node, mod, fn)
+
+    def _counter(self, node, ctx, param):
+        """`Counter(xs)` — the counts, keyed in first-seen order, which
+        is the order a Counter answers its keys in."""
+        if node.keywords or len(node.args) != 1:
+            raise Untranslatable(
+                node,
+                "`Counter(xs)` counts a list here — the mapping and keyword forms build "
+                "a dict the app can write for itself",
+            )
+        if ctx != "store" or self.pre_lines is None:
+            raise Untranslatable(
+                node,
+                "`Counter(xs)` counts in a handler — a view reads a count that is "
+                "already made",
+            )
+        src = self._list_any(node.args[0], ctx, param)
+        if src is None:
+            raise Untranslatable(
+                node.args[0],
+                "`Counter(xs)` counts a list the dialect can name — a state read, a "
+                "field or a local",
+            )
+        code, el = src
+        if el != "String":
+            raise Untranslatable(
+                node.args[0],
+                f"`Counter(xs)` counts a list of str, because a dict here is keyed by "
+                f"str — this one holds {py_ty(el)}",
+            )
+        k = len(self.handler_locals)
+        m, e = f"__ct{k}", f"__ce{k}"
+        self.handler_locals.update({m, e})
+        self.typed_locals[m] = "Map<String, Int>"
+        self.counter_locals.add(m)
+        self.pre_lines += [
+            f"var {m} : Map<String, Int> = {{}}",
+            f"for {e} in {code} {{",
+            f"  {m}.insert({e}, {m}.getOr({e}, 0) + 1)",
+            "}",
+        ]
+        return m
+
+    def _is_counter(self, node) -> bool:
+        """Whether an expression IS a Counter — the shape alone, so it
+        can be asked before anything is written out."""
+        if isinstance(node, ast.Name):
+            return node.id in self.counter_locals
+        return (
+            isinstance(node, ast.Call)
+            and self._stdlib_call(node.func) == ("collections", "Counter")
+        )
+
+    def _counter_recv(self, node, ctx, param):
+        """The map an expression that IS a Counter reads as. A plain
+        dict is not one — it has no `.most_common` in Python either."""
+        if not self._is_counter(node):
+            return None
+        if isinstance(node, ast.Name):
+            return node.id
+        return self._counter(node, ctx, param)
+
+    def _counter_method(self, node, m, ctx, param):
+        """`.most_common()` and `.total()`. Counting orders by the
+        count and keeps first-seen order among equals, which is what
+        CPython's does — its sort is stable over the same insertion
+        order this map keeps."""
+        fn = node.func.attr
+        if ctx != "store" or self.pre_lines is None:
+            raise Untranslatable(
+                node, f"`.{fn}()` runs in a handler — a view reads what it made"
+            )
+        if fn == "total":
+            if node.args or node.keywords:
+                raise Untranslatable(node, "`.total()` takes no arguments")
+            self.uses_stdlib = True
+            return f"Py.listSumInt({m}.values())"
+        if node.keywords or len(node.args) > 1:
+            raise Untranslatable(
+                node, "`.most_common()` takes how many, or nothing for all of them"
+            )
+        pair = self._tuple_ty(["String", "Int"], node)
+        k = len(self.handler_locals)
+        ks, cs, order = f"__mk{k}", f"__mc{k}", f"__mo{k}"
+        out, e1, e2 = f"__mm{k}", f"__me{k}", f"__mf{k}"
+        self.handler_locals.update({ks, cs, order, out, e1, e2})
+        self.typed_locals[out] = f"List<{pair}>"
+        self.pre_lines += [
+            f"var {ks} = {m}.keys()",
+            f"var {cs} : List<Int> = []",
+            f"for {e1} in {ks} {{",
+            f"  {cs}.push({m}.getOr({e1}, 0))",
+            "}",
+            f"var {order} = {ks}.sortedBy({cs}, true)",
+            f"var {out} : List<{pair}> = []",
+            f"for {e2} in {order} {{",
+            f"  {out}.push({pair}({e2}, {m}.getOr({e2}, 0)))",
+            "}",
+        ]
+        if not node.args or (
+            isinstance(node.args[0], ast.Constant) and node.args[0].value is None
+        ):
+            return out
+        n, res = f"__mn{k}", f"__ms{k}"
+        self.handler_locals.update({n, res})
+        self.typed_locals[res] = f"List<{pair}>"
+        self.pre_lines += [
+            f"var {n} = {self.expr(node.args[0], ctx, param)}",
+            f"if {n} < 0 {{",
+            f"  {n} = 0",
+            "}",
+            f"var {res} = {out}.slice(0, {n})",
+        ]
+        return res
+
+    def _iter_list_arg(self, node, what, param):
+        """One list argument of an `itertools` call."""
+        src = self._list_any(node, "store", param)
+        if src is None:
+            raise Untranslatable(
+                node,
+                f"`{what}` takes a list the dialect can name — a state read, a field "
+                "or a local",
+            )
+        return src
+
+    def _itertools_list(self, it, param):
+        """The list an `itertools` call stands for, and the lines that
+        build it. Python's answer is a lazy iterator; where a `for` is
+        what walks it, the two are the same walk, which is why this is
+        the only place these are taken."""
+        if not (isinstance(it, ast.Call) and self._stdlib_call(it.func) is not None):
+            return None
+        mod, fn = self._stdlib_call(it.func)
+        if mod != "itertools":
+            return None
+        if fn not in self.ITERTOOLS:
+            self._lowered_refusal(it, mod, fn)
+        if it.keywords:
+            raise Untranslatable(it, f"`itertools.{fn}(...)` takes positional arguments")
+        what = f"itertools.{fn}"
+        k = len(self.handler_locals)
+        if fn == "chain":
+            if len(it.args) < 2:
+                raise Untranslatable(it, "`chain(a, b, …)` joins two lists or more")
+            srcs = [self._iter_list_arg(a, what, param) for a in it.args]
+            el = srcs[0][1]
+            for a, src in zip(it.args, srcs):
+                if src[1] != el:
+                    raise Untranslatable(
+                        a, f"`chain` joins lists of one type — this one holds {py_ty(src[1])}"
+                    )
+            code = srcs[0][0]
+            for src in srcs[1:]:
+                code = f"{code}.concat({src[0]})"
+            name = f"__ic{k}"
+            self.handler_locals.add(name)
+            self.typed_locals[name] = f"List<{el}>"
+            return ([f"var {name} = {code}"], name, el)
+        if fn == "product":
+            if len(it.args) != 2:
+                raise Untranslatable(
+                    it,
+                    "`product(a, b)` takes two lists here — `repeat=` and three lists "
+                    "or more are not in the dialect yet",
+                )
+            (ac, ael), (bc, bel) = (self._iter_list_arg(a, what, param) for a in it.args)
+            tup = self._tuple_ty([ael, bel], it)
+            xs, ys, out, i, j = f"__pa{k}", f"__pb{k}", f"__pp{k}", f"__pi{k}", f"__pj{k}"
+            self.handler_locals.update({xs, ys, out, i, j})
+            self.typed_locals[out] = f"List<{tup}>"
+            lines = [
+                f"var {xs} = {ac}",
+                f"var {ys} = {bc}",
+                f"var {out} : List<{tup}> = []",
+                f"for {i} in 0..{xs}.length {{",
+                f"  for {j} in 0..{ys}.length {{",
+                f"    {out}.push({tup}({xs}[{i}], {ys}[{j}]))",
+                "  }",
+                "}",
+            ]
+            return (lines, out, tup)
+        if len(it.args) != (2 if fn in ("combinations", "permutations") else 1):
+            raise Untranslatable(
+                it,
+                f"`{fn}(xs, r)` takes the list and how many to take"
+                if fn in ("combinations", "permutations")
+                else f"`{fn}(xs)` takes one list",
+            )
+        code, el = self._iter_list_arg(it.args[0], what, param)
+        if fn == "pairwise":
+            tup = self._tuple_ty([el, el], it)
+            xs, n, out, i = f"__wa{k}", f"__wn{k}", f"__wp{k}", f"__wi{k}"
+            self.handler_locals.update({xs, n, out, i})
+            self.typed_locals[out] = f"List<{tup}>"
+            lines = [
+                f"var {xs} = {code}",
+                f"var {n} = {xs}.length - 1",
+                f"if {n} < 0 {{",
+                f"  {n} = 0",
+                "}",
+                f"var {out} : List<{tup}> = []",
+                f"for {i} in 0..{n} {{",
+                f"  {out}.push({tup}({xs}[{i}], {xs}[{i} + 1]))",
+                "}",
+            ]
+            return (lines, out, tup)
+        if fn == "accumulate":
+            if el not in ("Int", "Float"):
+                raise Untranslatable(
+                    it.args[0],
+                    f"`accumulate(xs)` adds the elements up as it goes, so it takes a "
+                    f"list of int or float — this one holds {py_ty(el)}",
+                )
+            xs, out, acc, i = f"__aa{k}", f"__ao{k}", f"__as{k}", f"__ai{k}"
+            self.handler_locals.update({xs, out, acc, i})
+            self.typed_locals[out] = f"List<{el}>"
+            lines = [
+                f"var {xs} = {code}",
+                f"var {out} : List<{el}> = []",
+                f"var {acc} : {el} = {'0' if el == 'Int' else '0.0'}",
+                f"for {i} in 0..{xs}.length {{",
+                f"  if {i} == 0 {{",
+                f"    {acc} = {xs}[0]",
+                "  } else {",
+                f"    {acc} = {acc} + {xs}[{i}]",
+                "  }",
+                f"  {out}.push({acc})",
+                "}",
+            ]
+            return (lines, out, el)
+        r = self._int_index(it.args[1])
+        if r is None or r < 2:
+            raise Untranslatable(
+                it.args[1],
+                f"`{fn}(xs, r)` takes a literal r of two or more — r decides how many "
+                "parts each tuple has, and a tuple's shape is written out",
+            )
+        tup = self._tuple_ty([el] * r, it)
+        xs, out = f"__ka{k}", f"__ko{k}"
+        ix = [f"__k{k}_{d}" for d in range(r)]
+        self.handler_locals.update({xs, out, *ix})
+        self.typed_locals[out] = f"List<{tup}>"
+        lines = [
+            f"var {xs} = {code}",
+            f"var {out} : List<{tup}> = []",
+        ]
+        pad = ""
+        for d in range(r):
+            lo = "0" if fn == "permutations" or d == 0 else f"{ix[d - 1]} + 1"
+            lines.append(f"{pad}for {ix[d]} in {lo}..{xs}.length {{")
+            pad += "  "
+        if fn == "permutations" and r > 1:
+            # Distinct positions, in the order the nested walk reaches
+            # them — which is the lexicographic order Python promises.
+            guard = " && ".join(
+                f"{ix[d]} != {ix[e]}" for d in range(1, r) for e in range(d)
+            )
+            lines.append(f"{pad}if {guard} {{")
+            pad += "  "
+        args = ", ".join(f"{xs}[{v}]" for v in ix)
+        lines.append(f"{pad}{out}.push({tup}({args}))")
+        if fn == "permutations" and r > 1:
+            pad = pad[:-2]
+            lines.append(f"{pad}}}")
+        for _ in range(r):
+            pad = pad[:-2]
+            lines.append(f"{pad}}}")
+        return (lines, out, tup)
+
     def _dict_key(self, node, ctx, param) -> str:
         """A dict key: any str the app can name. A literal is written
         as itself (`"two words"` included), and a str-typed expression
@@ -5943,6 +6333,20 @@ class Translator:
                     for f, t, _d in self.models[mn]["fields"]:
                         if f == node.attr and t.startswith(("List<", "Map<")):
                             return f"{node.value.id}.{f}", t
+        # `d.get(k, [])` answers the list a dict of lists holds, which
+        # is what a grouping reads and writes back.
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and len(node.args) == 2
+            and not node.keywords
+        ):
+            m = self._map_source(node.func.value)
+            if m is not None:
+                vt = self._map_kv(m[1])[1]
+                if vt.startswith("List<"):
+                    return (self.expr(node, ctx, param), vt)
         # The container operations answer a list of the same element
         # type, so a local bound to one carries it: `back = xs[::-1]`
         # is a `list[T]` wherever `xs` was.
@@ -6334,6 +6738,8 @@ class Translator:
         ):
             tys = self.stores[node.value.id]["field_tys"]
             return (f"{node.value.id}.{node.attr}", tys[node.attr])
+        if isinstance(node, ast.Name) and self.typed_locals.get(node.id, "").startswith("Map<"):
+            return (node.id, self.typed_locals[node.id])
         return None
 
     @staticmethod
@@ -6371,10 +6777,16 @@ class Translator:
                     f"indexing a list in a view (`{src}`) is not in the dialect yet — a "
                     "row builder indexes its list (`list_view`), or hold the element in a State",
                 )
+            # The base of a chain, so the advice is a spelling that
+            # works: `xs = c.most_common(1)`, then `xs[0][0]`.
+            base = node.value
+            while isinstance(base, ast.Subscript):
+                base = base.value
             raise Untranslatable(
                 node,
                 f"`{src}` is not an indexed read the dialect knows yet — index a list "
-                f"through a local (`xs = {self._src(node.value)}`; `xs[0]`), with a literal index",
+                f"through a local (`xs = {self._src(base)}`, then `xs[0]`), with a "
+                "literal index",
             )
         key = node.slice.value
         if key not in self.state:
@@ -6477,6 +6889,7 @@ class Translator:
         self.row = None
         self.comp_params = None
         self.handler_locals = {n for n, _t, _v in extras}
+        self.counter_locals = set()
         self.typed_locals = {**prev_typed, **{n: t for n, t, _v in extras}}
         for n, t, _v in extras:
             if t == "Int":
@@ -6556,6 +6969,7 @@ class Translator:
 
         stmts = []
         self.handler_locals = set()
+        self.counter_locals = set()
         self.dead_locals = {}
         prev_pty = self.typed_locals.get(param) if param else None
         if param:
@@ -6565,6 +6979,7 @@ class Translator:
                 stmts += self._stmt(stmt, param)
         finally:
             self.handler_locals = set()
+            self.counter_locals = set()
             self.dead_locals = {}
             if param:
                 if prev_pty is None:
@@ -6700,6 +7115,7 @@ class Translator:
         prev_locals, prev_typed, prev_comp = self.handler_locals, self.typed_locals, self.comp_params
         if reads:
             self.handler_locals = set(prev_locals) | set(reads)
+            self.counter_locals = set()
             self.typed_locals = {**prev_typed, **{n: prev_comp[n] for n in reads}}
             self.comp_params = None
         try:
@@ -6902,6 +7318,12 @@ class Translator:
                 or vt.endswith("?")
             ):
                 self.typed_locals[name] = vt
+            # A Counter stays one through a binding, the way it does in
+            # Python — `.most_common` is its method, not a dict's.
+            if value in self.counter_locals:
+                self.counter_locals.add(name)
+            else:
+                self.counter_locals.discard(name)
             if name in self.handler_locals:
                 # Python locals are mutable; the binding was emitted
                 # as `var`, so a plain reassignment is exactly right.
@@ -7500,6 +7922,20 @@ class Translator:
         dt = self._dt_num_ty(node, ctx, param)
         if dt is not None:
             return dt
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and len(node.args) == 2
+            and not node.keywords
+        ):
+            # `d.get(k, default)` reads as what the dict holds.
+            m = self._map_source(node.func.value)
+            if m is not None:
+                vt = self._map_kv(m[1])[1]
+                return vt if vt in ("Int", "Float", "Bool", "String") else None
+            if self._is_counter(node.func.value):
+                return "Int"
         if isinstance(node, ast.Tuple) and isinstance(node.ctx, ast.Load):
             tys = [self._num_ty(e, ctx, param) for e in node.elts]
             if all(t is not None for t in tys) and len(tys) >= 2:
@@ -8167,7 +8603,7 @@ class Translator:
         repeater's own index; zip walks to the shorter list, as Python
         does."""
         names = stmt.target.elts
-        if len(names) != 2 or not all(isinstance(n, ast.Name) for n in names):
+        if len(names) < 2 or not all(isinstance(n, ast.Name) for n in names):
             raise Untranslatable(stmt.target, "a pair target binds two plain names (`for i, x in enumerate(xs)`)")
         a, b = names[0].id, names[1].id
         it = stmt.iter
@@ -8209,12 +8645,18 @@ class Translator:
                 row = f"__pr{len(self.handler_locals)}"
                 self.handler_locals.add(row)
                 head = [f"for {row} in {src0[0]} {{"]
-                binds = [(n, t) for n, t in zip([a, b], parts)]
+                binds = [(n.id, t) for n, t in zip(names, parts)]
                 for i, (n, _t) in enumerate(binds):
                     head.append(f"  var {n} = {row}.i{i}")
                 return self._pair_body(stmt, head, binds, param)
         if not (isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("enumerate", "zip")):
             raise Untranslatable(it, "a pair target walks enumerate() or zip()")
+        if len(names) != 2:
+            raise Untranslatable(
+                stmt.target,
+                f"`{it.func.id}()` binds two names — more than two come from a list of "
+                "tuples with that many parts",
+            )
         if it.func.id == "enumerate":
             if len(it.args) != 1:
                 raise Untranslatable(it, "enumerate() takes the list — a start value is not in the dialect yet")
@@ -8309,6 +8751,23 @@ class Translator:
     def _handler_for(self, stmt, param) -> list[str]:
         if stmt.orelse:
             raise Untranslatable(stmt, "for-else is not in the dialect yet")
+        built = self._itertools_list(stmt.iter, param)
+        if built is not None:
+            # The list is built first and then walked, so `break` leaves
+            # the loop the way Python's does.
+            lines, name, _el = built
+            stmt.iter = ast.copy_location(ast.Name(id=name, ctx=ast.Load()), stmt.iter)
+            return lines + self._handler_for(stmt, param)
+        if (
+            isinstance(stmt.iter, ast.Call)
+            and isinstance(stmt.iter.func, ast.Attribute)
+            and stmt.iter.func.attr == "most_common"
+            and self._is_counter(stmt.iter.func.value)
+        ):
+            # `for k, n in c.most_common()` — the ordering is written
+            # above the loop, which then walks the pairs.
+            name = self.expr(stmt.iter, "store", param)
+            stmt.iter = ast.copy_location(ast.Name(id=name, ctx=ast.Load()), stmt.iter)
         if isinstance(stmt.target, ast.Tuple):
             return self._pair_for(stmt, param)
         if not isinstance(stmt.target, ast.Name):
