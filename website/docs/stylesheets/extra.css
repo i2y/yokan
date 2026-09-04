@@ -116,39 +116,7 @@
   color: var(--yk-block);
 }
 
-/* ---- the three facts under the hero ------------------------------ */
-
-.yk-facts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: .8rem;
-  margin: 0 0 2.6rem;
-}
-
-.yk-facts > div {
-  padding: .95rem 1.1rem;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: .6rem;
-  background: var(--md-default-bg-color);
-}
-
-.yk-facts b {
-  display: block;
-  font-size: 1.25rem;
-  line-height: 1.2;
-  letter-spacing: -.01em;
-  color: var(--md-default-fg-color);
-}
-
-.yk-facts span {
-  display: block;
-  margin-top: .25rem;
-  font-size: .68rem;
-  color: var(--md-default-fg-color--light);
-}
-
 @media screen and (max-width: 44.9em) {
-  .yk-facts { grid-template-columns: 1fr; }
   .yk-hero { padding: 2rem 1.4rem 1.8rem; }
   .yk-hero h1 { font-size: 2.3rem; }
   .yk-hero__tag { font-size: 1.15rem; }

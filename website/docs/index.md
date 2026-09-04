@@ -28,11 +28,7 @@ can check</strong>, with <code>yokan gate</code>.
 </div>
 </div>
 
-<div class="yk-facts" markdown>
-<div><b>13.4 MB</b><span>a counter, shipped — no Python inside, millisecond startup</span></div>
-<div><b>~1 ms</b><span>edit, save, and the running window updates with its state intact</span></div>
-<div><b>Byte for byte</b><span>the gate replays your interactions through both runs and compares the screens</span></div>
-</div>
+## What it looks like
 
 ![OpsBoard, a dashboard demo written in Yokan](images/opsboard.png)
 
@@ -40,6 +36,10 @@ can check</strong>, with <code>yokan gate</code>.
 — a three-module dashboard: two stores, a sum-typed health model
 matched in the view, charts, a virtualized alert feed, theme flip.
 Written entirely in Python; ships as one native binary.*
+
+---
+
+## Write it, run it, ship it
 
 The smallest complete app:
 
@@ -83,19 +83,7 @@ millisecond startup. The person receiving it installs nothing.
 
 ---
 
-## The whole picture
-
-Your app is one Python file with two roads to run it.
-Both roads stand on the same Rust foundation — **pixie**, the
-substrate language Yokan compiles through; the `.pix` in the middle
-of the release road is its readable source, so you can open it and
-see what your app compiled to.
-
-![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
-
----
-
-## "But it worked on my machine" — removed by construction
+## "But it worked on my machine"
 
 Hand it a sequence of interactions and it replays them against the
 CPython run and the machine-code build, then byte-compares the
@@ -116,27 +104,21 @@ Yokan cannot do yet is listed, with reasons, in
 
 ---
 
-## Why Yokan?
+## The whole picture
+
+Your app is one Python file with two roads to run it.
+Both roads stand on the same Rust foundation — **pixie**, the
+substrate language Yokan compiles through; the `.pix` in the middle
+of the release road is its readable source, so you can open it and
+see what your app compiled to.
+
+![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
+
+---
+
+## What else is in it
 
 <div class="grid cards" markdown>
-
--   :material-check-decagram: __What you shipped is what you tested__
-
-    Replay your clicks and keystrokes through both the development
-    run and the built binary, and the screens are compared byte for
-    byte. Run it in CI and a difference fails the build.
-
--   :material-fire: __Hot reload with state__
-
-    `uv run app.py`, edit, save: the window updates in place and
-    your state survives — about 1 ms. The shape you know from
-    Flutter and Dart, with Python.
-
--   :material-package-variant-closed: __One file to hand over__
-
-    `--release` builds a native executable with no Python inside;
-    `--onefile` bundles CPython for `@py` apps (numpy included) —
-    either way, the receiver installs nothing.
 
 -   :material-language-python: __The rest of Python stays__
 
