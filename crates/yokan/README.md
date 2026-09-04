@@ -45,7 +45,7 @@ dumped to stdout, and `run()` returns. The step vocabulary is
 `advance:` `theme:` `a11y` `mem` `dump` (`@n` = the n-th match in
 tree order; `dump` prints the screen mid-script; `\,` is a comma
 inside text). In tests,
-`yokan._headless(view, state, script)` returns the dumps as a string.
+`yokan.headless(view, state, script)` returns the dumps as a string.
 Timers are skipped headless.
 
 ## Gate and ship

@@ -1769,3 +1769,22 @@ The two ported games use it. Pyxel writes its sounds as MML for the
 chip it emulates and `play` takes a file, so the five WAVs in the
 demos' assets were made for the ports rather than carried over — which
 is what the ports' own docstrings say.
+
+## The test entry point loses its underscore (2026-09-05)
+
+`_headless(view, state, script)` said "internal" in its name while the
+tour told people to call it from their tests. It is `headless` now.
+The old name still resolves, so a test written against it keeps
+running, and one call in this repository's own test uses it to keep
+that true.
+
+The tour gained the section the name was missing: an app is a Python
+module, so its tests are Python tests in whatever runner the author
+already uses, and `headless` answers the screen as text for them to
+assert on. What such a test checks is the development run; whether the
+shipped binary agrees is what `yokan gate` answers, and the two
+together are the whole claim.
+
+The substrate has tests of its own — `test fn`, `test "name"`,
+`suite`, four assertions, a fresh World each — and `pixie test` prints
+TAP. That was one word in a list of verbs; it is written out now.

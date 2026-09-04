@@ -706,8 +706,24 @@ Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
 `drop:<path>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`,
 `dump`. `@n` picks the n-th
 match in tree order; `dump` prints the screen mid-script; a comma
-in text is `\,`. From tests, `yokan._headless(view, None, script)`
-returns the same string. Apps with PEP 723 dependencies run the
+in text is `\,`.
+
+**Testing.** An app is a Python module, so its tests are Python tests
+in any runner. `yokan.headless(view, state, script)` runs the app
+against a script with no window and answers the screen as text; a test
+asserts on it. Handlers, store methods and value classes are ordinary
+Python and can be called directly.
+
+```python
+import app
+from yokan import headless
+
+def test_clicking_counts():
+    assert "count: 2" in headless(app.view, None, "click:+1,click:+1")
+```
+
+That checks the development run (CPython); whether the shipped binary
+agrees is `yokan gate`'s half. Apps with PEP 723 dependencies run the
 gate under `uv run --with <dep>`. Building needs a Rust toolchain;
 the checkout it compiles against is fetched into `~/.cache/yokan/`
 on first use (`PIXIE_REPO` overrides) and the build tree sits beside

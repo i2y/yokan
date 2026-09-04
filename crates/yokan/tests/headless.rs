@@ -24,7 +24,7 @@ def view(st):
         ui.text(f"typed: {st['q']}"),
     )
 
-out = ui._headless(view, s, "click:+1,click:+1,input:hello")
+out = ui.headless(view, s, "click:+1,click:+1,input:hello")
 "#;
         let m = pyo3::types::PyModule::from_code(py, code, c"headless_t.py", c"headless_t")
             .expect("python module ran");
@@ -62,7 +62,7 @@ def view2(st):
         ),
     )
 
-out2 = ui._headless(view2, s2, "click:go")
+out2 = ui.headless(view2, s2, "click:go")
 "#;
         let m2 = pyo3::types::PyModule::from_code(py, code2, c"headless_t2.py", c"headless_t2")
             .expect("task module ran");
@@ -85,7 +85,7 @@ def view3(st):
             ui.text("inner", color="#888")
         ui.row(ui.text("functional child"))
 
-out3 = ui._headless(view3, s3, "click:+1")
+out3 = ui.headless(view3, s3, "click:+1")
 "##;
         let m3 = pyo3::types::PyModule::from_code(py, code3, c"headless_t3.py", c"headless_t3")
             .expect("with module ran");
@@ -112,7 +112,7 @@ def view4():
         ui.text_field(label(), on_change=label.set)
         ui.text(f"L={label()}")
 
-out4 = ui._headless(view4, None, "click:+1,input:xyz")
+out4 = ui.headless(view4, None, "click:+1,input:xyz")
 "#;
         let m4 = pyo3::types::PyModule::from_code(py, code4, c"headless_t4.py", c"headless_t4")
             .expect("state module ran");
@@ -137,6 +137,7 @@ def view5():
         bump(1)
         bump(5)
 
+# The name before 0.3, kept so an existing test still runs.
 out5 = ui._headless(view5, None, "click:+1,click:+5,click:+1")
 "#;
         let m5 = pyo3::types::PyModule::from_code(py, code5, c"headless_t5.py", c"headless_t5")

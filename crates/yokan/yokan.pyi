@@ -82,7 +82,7 @@ class SharedPropsBase(TypedDict, total=False):
     # listItem, table, dialog, progress, slider, group, checkbox,
     # switch, comboBox, radioGroup, tabList); a state/store-field read
     # is resolved at run time instead, and falls back to the derived
-    # role when it does not name one of these. `a11y` in a `_headless`
+    # role when it does not name one of these. `a11y` in a `headless`
     # script prints the resulting tree.
     role: str
     # A line the window shows when the pointer rests on the element,
@@ -553,12 +553,19 @@ def run(
     canvas that IS the app wants. Compiled builds bake all of them via
     the project's pixie.toml [window]; title crosses the same way."""
 
-def _headless(
+def headless(
     view: Callable[..., Any],
     state: Any = None,
     script: str = "",
     on_start: Optional[Callable[[], Any]] = None,
-) -> str: ...
+) -> str:
+    """Run the app against a script with no window and answer the
+    screen as text: the dump before the steps, then the dump after.
+    This is what a unit test asserts on."""
+
+# The name it had before 0.3. Still resolves, so a test written
+# against it keeps running.
+_headless = headless
 
 class fs:
     """Files, from the bundled standard library. Interpreted and

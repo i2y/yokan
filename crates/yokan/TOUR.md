@@ -39,10 +39,11 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 24. [CPython escapes](#cpython-escapes)
 25. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
 26. [Working with type checkers](#working-with-type-checkers)
-27. [Headless runs and the gate](#headless-runs-and-the-gate)
-28. [Shipping](#shipping)
-29. [A real app](#a-real-app)
-30. [What does not work yet](#what-does-not-work-yet)
+27. [Testing](#testing)
+28. [Headless runs and the gate](#headless-runs-and-the-gate)
+29. [Shipping](#shipping)
+30. [A real app](#a-real-app)
+31. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -1264,6 +1265,39 @@ The second catches a model that references its own class, where the types alone 
 
 `--strict` turns a warning into a failure.
 
+## Testing
+
+An app is a Python module, so its tests are Python tests, in whatever runner you already use.
+`yokan.headless(view, state, script)` runs the app against a script with no window and answers the screen as text — the dump before the steps, then the dump after — and a test asserts on that.
+
+```python
+# test_app.py
+import app                       # the module; its run(...) is under __main__
+from yokan import headless
+
+
+def test_clicking_counts():
+    out = headless(app.view, None, "click:+1,click:+1")
+    assert "count: 2" in out
+
+
+def test_typing_greets():
+    out = headless(app.view, None, "input:Momo")
+    assert "Momo" in out
+```
+
+```console
+$ uv run --with pytest python -m pytest
+2 passed
+```
+
+The script vocabulary is the one in the next section, so anything a person can do to the app is something a test can do: click, type, press a key, drop a file, let a second pass with `advance:1000`.
+Handlers, store methods and value classes are ordinary Python too, so the parts that are only computation can be tested by calling them.
+
+What a test like this checks is the development run, which is CPython.
+Whether the shipped binary agrees is the other half, and that is what `yokan gate` answers — the same script through both runs, byte-compared.
+The two are complementary: a unit test says the app does the right thing, and the gate says the compiled app does the same thing.
+
 ## Headless runs and the gate
 
 Running without a window is where verification starts.
@@ -1276,7 +1310,7 @@ The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's colum
 `@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
 A comma inside text is written `\,` (`input:hello\, world`).
-The screen tree is dumped to stdout before and after the steps, and from tests `yokan._headless(view, state, script)` returns the same string.
+The screen tree is dumped to stdout before and after the steps, and from tests `yokan.headless(view, state, script)` returns the same string.
 
 The **gate** replays the same script against the development build and the shipped build, and diffs the dumps.
 

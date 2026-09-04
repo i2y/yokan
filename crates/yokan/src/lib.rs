@@ -2410,11 +2410,15 @@ fn value(py: Python<'_>, cls: Py<PyAny>) -> PyResult<Py<PyAny>> {
     Ok(out.unbind())
 }
 
-/// Test/CI entry: run the app headless against `script` and return
+/// Test entry: run the app headless against `script` and return
 /// "initial dump\nfinal dump" instead of printing. No window, no
 /// timers. Mirrors `run()`'s PIXIE_SCRIPT branch.
+///
+/// The name used to be `_headless`, which said "internal" while the
+/// tour told people to call it from their tests. Both resolve; the
+/// underscored one is kept so a test written against it still runs.
 #[pyfunction(signature = (view, state=None, script=String::new(), on_start=None))]
-fn _headless(
+fn headless(
     py: Python<'_>,
     view: Py<PyAny>,
     state: Option<Py<PyAny>>,
@@ -2916,7 +2920,12 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(menu_item, m)?)?;
     m.add_function(wrap_pyfunction!(on_file_drop, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
-    m.add_function(wrap_pyfunction!(_headless, m)?)?;
+    m.add_function(wrap_pyfunction!(headless, m)?)?;
+    // The name it had before 0.3: still here so an existing test runs.
+    m.add(
+        "_headless",
+        m.getattr("headless")?,
+    )?;
     let fs = PyModule::new(m.py(), "fs")?;
     fs.add_function(wrap_pyfunction!(py_fs_read_text, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_write_text, &fs)?)?;

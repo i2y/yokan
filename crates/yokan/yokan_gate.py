@@ -12394,7 +12394,7 @@ def tier_a(path: str, tr: "Translator", script: str) -> str:
             on_start = getattr(getattr(module, tr.on_start[1]), tr.on_start[2])
         else:
             on_start = getattr(module, tr.on_start[1])
-    return yokan._headless(getattr(module, tr.view.name), state, script, on_start=on_start)
+    return yokan.headless(getattr(module, tr.view.name), state, script, on_start=on_start)
 
 
 def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple[str, str]:

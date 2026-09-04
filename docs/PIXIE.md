@@ -53,6 +53,11 @@ cargo run -q -p pixie-cli -- install-runtime          # once per machine
 cargo run -q -p pixie-cli -- build examples/counter/counter.pix --run
 ```
 
+Tests are part of the language: `test fn doubleWorks { assert_eq(double(21), 42) }`,
+or `test "a free form name" { .. }`, grouped in `suite "name" { .. }`,
+with `assert_eq` / `assert_ne` / `assert_true` / `assert_false`. Each
+test runs against a fresh World, and `pixie test <file.pix>` prints TAP.
+
 Other verbs: `check` · `test` (TAP) · `fmt` · `watch` — edits to a view
 body or a style hot-reload the running window **in-process in about a
 millisecond** (state preserved), in the file you are editing or in one
