@@ -447,6 +447,16 @@ except Exception as e:
     status.set(f"offline: {e}")
 ```
 
+## Tuples
+
+A tuple is a value with a part per position: `State[tuple[str, int]]`,
+`list[tuple[str, int]]`, a parameter, a return. Written and read the
+way Python writes one — `(a, b)`, `t[0]` by a LITERAL position,
+`a, b = f()`, `for k, v in pairs`, `for k, v in d.items()`,
+`whole, rest = divmod(n, 3)`, `a, sep, b = s.partition("=")`,
+`m, e = math.frexp(x)`. Two parts or more. A tuple a Rust crate would
+have to answer does not cross yet (`re.findall` with two groups).
+
 ## The standard library
 
 Two layers, told apart by where the name comes from.

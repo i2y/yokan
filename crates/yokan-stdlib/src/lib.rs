@@ -178,6 +178,41 @@ pub fn math_pow(x: f64, y: f64) -> f64 {
     r
 }
 pub fn math_fabs(v: f64) -> f64 { v.abs() }
+
+/// `frexp` and `modf` answer a pair. A tuple crosses a binding as a
+/// struct the app declares, and these two are the whole reason it
+/// would have to — so each half is a function of its own and the
+/// translator puts the pair together, which is what `divmod` does.
+pub fn math_frexp_m(v: f64) -> f64 {
+    if v == 0.0 || !v.is_finite() {
+        return v;
+    }
+    let e = frexp_exp(v);
+    math_ldexp(v, -(e as i64))
+}
+pub fn math_frexp_e(v: f64) -> i64 {
+    if v == 0.0 || !v.is_finite() {
+        return 0;
+    }
+    i64::from(frexp_exp(v))
+}
+pub fn math_modf_frac(v: f64) -> f64 {
+    if v.is_infinite() {
+        return 0.0_f64.copysign(v);
+    }
+    if v.is_nan() {
+        return v;
+    }
+    // The fraction keeps the sign of the value, so `modf(-1.0)` is
+    // `-0.0` and not `0.0`.
+    (v - v.trunc()).copysign(v)
+}
+pub fn math_modf_int(v: f64) -> f64 {
+    if v.is_infinite() || v.is_nan() {
+        return v;
+    }
+    v.trunc()
+}
 pub fn math_floor(v: f64) -> i64 { float_to_int("floor", v.floor()) }
 pub fn math_ceil(v: f64) -> i64 { float_to_int("ceil", v.ceil()) }
 pub fn math_pi() -> f64 { std::f64::consts::PI }
@@ -409,9 +444,12 @@ fn frexp_exp(x: f64) -> i32 {
     if raw != 0 {
         return raw - 1022;
     }
-    // Subnormal: the leading one is somewhere in the mantissa.
+    // Subnormal: the leading one is somewhere in the mantissa. Its
+    // value is `m * 2**-1074`, and `m` carries `64 - leading_zeros`
+    // significant bits, so the exponent that puts the fraction in
+    // [0.5, 1) is `(64 - lz) - 1074`.
     let m = bits & 0x000f_ffff_ffff_ffff;
-    -1022 - (m.leading_zeros() as i32 - 11)
+    -1010 - m.leading_zeros() as i32
 }
 
 /// Two doubles whose sum is `a + b` exactly, for `|a| >= |b|`.
@@ -1171,6 +1209,49 @@ pub fn py_str_isspace(s: &str) -> bool {
 }
 pub fn py_str_isascii(s: &str) -> bool {
     s.is_ascii()
+}
+
+/// `partition` answers three pieces; each is a function of its own
+/// and the translator builds the tuple, so nothing new crosses.
+fn partition_at(s: &str, sep: &str, from_right: bool) -> Option<usize> {
+    assert!(!sep.is_empty(), "empty separator");
+    if from_right { s.rfind(sep) } else { s.find(sep) }
+}
+pub fn py_str_partition_before(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, false) {
+        Some(i) => s[..i].to_string(),
+        None => s.to_string(),
+    }
+}
+pub fn py_str_partition_sep(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, false) {
+        Some(_) => sep.to_string(),
+        None => String::new(),
+    }
+}
+pub fn py_str_partition_after(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, false) {
+        Some(i) => s[i + sep.len()..].to_string(),
+        None => String::new(),
+    }
+}
+pub fn py_str_rpartition_before(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, true) {
+        Some(i) => s[..i].to_string(),
+        None => String::new(),
+    }
+}
+pub fn py_str_rpartition_sep(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, true) {
+        Some(_) => sep.to_string(),
+        None => String::new(),
+    }
+}
+pub fn py_str_rpartition_after(s: &str, sep: &str) -> String {
+    match partition_at(s, sep, true) {
+        Some(i) => s[i + sep.len()..].to_string(),
+        None => s.to_string(),
+    }
 }
 
 pub fn py_str_removeprefix(s: &str, p: &str) -> String {

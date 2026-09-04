@@ -357,6 +357,100 @@ py_str_expandtabs s:a%0Ab%09c i:0 -> s:a%0Abc
 py_str_expandtabs s:a%0Ab%09c i:1 -> s:a%0Ab%20c
 py_str_expandtabs s:a%0Ab%09c i:4 -> s:a%0Ab%20%20%20c
 py_str_expandtabs s:a%0Ab%09c i:8 -> s:a%0Ab%20%20%20%20%20%20%20c
+math_frexp_m f:0000000000000000 -> f:0000000000000000
+math_frexp_e f:0000000000000000 -> i:0
+math_modf_frac f:0000000000000000 -> f:0000000000000000
+math_modf_int f:0000000000000000 -> f:0000000000000000
+math_frexp_m f:8000000000000000 -> f:8000000000000000
+math_frexp_e f:8000000000000000 -> i:0
+math_modf_frac f:8000000000000000 -> f:8000000000000000
+math_modf_int f:8000000000000000 -> f:8000000000000000
+math_frexp_m f:3ff0000000000000 -> f:3fe0000000000000
+math_frexp_e f:3ff0000000000000 -> i:1
+math_modf_frac f:3ff0000000000000 -> f:0000000000000000
+math_modf_int f:3ff0000000000000 -> f:3ff0000000000000
+math_frexp_m f:bff0000000000000 -> f:bfe0000000000000
+math_frexp_e f:bff0000000000000 -> i:1
+math_modf_frac f:bff0000000000000 -> f:8000000000000000
+math_modf_int f:bff0000000000000 -> f:bff0000000000000
+math_frexp_m f:3fe0000000000000 -> f:3fe0000000000000
+math_frexp_e f:3fe0000000000000 -> i:0
+math_modf_frac f:3fe0000000000000 -> f:3fe0000000000000
+math_modf_int f:3fe0000000000000 -> f:0000000000000000
+math_frexp_m f:4004000000000000 -> f:3fe4000000000000
+math_frexp_e f:4004000000000000 -> i:2
+math_modf_frac f:4004000000000000 -> f:3fe0000000000000
+math_modf_int f:4004000000000000 -> f:4000000000000000
+math_frexp_m f:7e37e43c8800759c -> f:3fe7e43c8800759c
+math_frexp_e f:7e37e43c8800759c -> i:997
+math_modf_frac f:7e37e43c8800759c -> f:0000000000000000
+math_modf_int f:7e37e43c8800759c -> f:7e37e43c8800759c
+math_frexp_m f:0000000000000001 -> f:3fe0000000000000
+math_frexp_e f:0000000000000001 -> i:-1073
+math_modf_frac f:0000000000000001 -> f:0000000000000001
+math_modf_int f:0000000000000001 -> f:0000000000000000
+math_frexp_m f:405edd2f1a9fbe77 -> f:3feedd2f1a9fbe77
+math_frexp_e f:405edd2f1a9fbe77 -> i:7
+math_modf_frac f:405edd2f1a9fbe77 -> f:3fdd2f1a9fbe7700
+math_modf_int f:405edd2f1a9fbe77 -> f:405ec00000000000
+math_frexp_m f:bfe8000000000000 -> f:bfe8000000000000
+math_frexp_e f:bfe8000000000000 -> i:0
+math_modf_frac f:bfe8000000000000 -> f:bfe8000000000000
+math_modf_int f:bfe8000000000000 -> f:8000000000000000
+math_frexp_m f:7ff0000000000000 -> f:7ff0000000000000
+math_frexp_e f:7ff0000000000000 -> i:0
+math_modf_frac f:7ff0000000000000 -> f:0000000000000000
+math_modf_int f:7ff0000000000000 -> f:7ff0000000000000
+math_frexp_m f:fff0000000000000 -> f:fff0000000000000
+math_frexp_e f:fff0000000000000 -> i:0
+math_modf_frac f:fff0000000000000 -> f:8000000000000000
+math_modf_int f:fff0000000000000 -> f:fff0000000000000
+math_frexp_m f:7ff8000000000000 -> f:7ff8000000000000
+math_frexp_e f:7ff8000000000000 -> i:0
+math_modf_frac f:7ff8000000000000 -> f:7ff8000000000000
+math_modf_int f:7ff8000000000000 -> f:7ff8000000000000
+py_str_partition_before s:key%3Dvalue%3Dmore s:%3D -> s:key
+py_str_partition_sep s:key%3Dvalue%3Dmore s:%3D -> s:%3D
+py_str_partition_after s:key%3Dvalue%3Dmore s:%3D -> s:value%3Dmore
+py_str_rpartition_before s:key%3Dvalue%3Dmore s:%3D -> s:key%3Dvalue
+py_str_rpartition_sep s:key%3Dvalue%3Dmore s:%3D -> s:%3D
+py_str_rpartition_after s:key%3Dvalue%3Dmore s:%3D -> s:more
+py_str_partition_before s:nosep s:%3D -> s:nosep
+py_str_partition_sep s:nosep s:%3D -> s:
+py_str_partition_after s:nosep s:%3D -> s:
+py_str_rpartition_before s:nosep s:%3D -> s:
+py_str_rpartition_sep s:nosep s:%3D -> s:
+py_str_rpartition_after s:nosep s:%3D -> s:nosep
+py_str_partition_before s:%3Dlead s:%3D -> s:
+py_str_partition_sep s:%3Dlead s:%3D -> s:%3D
+py_str_partition_after s:%3Dlead s:%3D -> s:lead
+py_str_rpartition_before s:%3Dlead s:%3D -> s:
+py_str_rpartition_sep s:%3Dlead s:%3D -> s:%3D
+py_str_rpartition_after s:%3Dlead s:%3D -> s:lead
+py_str_partition_before s:trail%3D s:%3D -> s:trail
+py_str_partition_sep s:trail%3D s:%3D -> s:%3D
+py_str_partition_after s:trail%3D s:%3D -> s:
+py_str_rpartition_before s:trail%3D s:%3D -> s:trail
+py_str_rpartition_sep s:trail%3D s:%3D -> s:%3D
+py_str_rpartition_after s:trail%3D s:%3D -> s:
+py_str_partition_before s: s:%3D -> s:
+py_str_partition_sep s: s:%3D -> s:
+py_str_partition_after s: s:%3D -> s:
+py_str_rpartition_before s: s:%3D -> s:
+py_str_rpartition_sep s: s:%3D -> s:
+py_str_rpartition_after s: s:%3D -> s:
+py_str_partition_before s:a--b s:-- -> s:a
+py_str_partition_sep s:a--b s:-- -> s:--
+py_str_partition_after s:a--b s:-- -> s:b
+py_str_rpartition_before s:a--b s:-- -> s:a
+py_str_rpartition_sep s:a--b s:-- -> s:--
+py_str_rpartition_after s:a--b s:-- -> s:b
+py_str_partition_before s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%E6%97%A5
+py_str_partition_sep s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%3D
+py_str_partition_after s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%E6%9C%AC
+py_str_rpartition_before s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%E6%97%A5
+py_str_rpartition_sep s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%3D
+py_str_rpartition_after s:%E6%97%A5%3D%E6%9C%AC s:%3D -> s:%E6%9C%AC
 py_str_strip_chars s:xxaxx s:x -> s:a
 py_str_lstrip_chars s:xxaxx s:x -> s:axx
 py_str_rstrip_chars s:xxaxx s:x -> s:xxa

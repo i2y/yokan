@@ -38,6 +38,7 @@ gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next mont
 gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 # The shared properties on every element; the middle steps are inert while locked.
 gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+gate pyops   python3 yokan_gate.py gate demo/pyops.py --script "click:crunch,click:walk,click:pairs,dump"
 gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
@@ -59,7 +60,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys|picker) continue;;
+    stdlib|files|webfetch|ledger|keys|picker|pyops) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     shared) continue;;
     app|csv_viewer)

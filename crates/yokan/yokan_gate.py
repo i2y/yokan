@@ -285,6 +285,12 @@ def _splice_call(body, name: str, inner: list):
     return out if done else None
 
 
+def _ty_slug(t: str) -> str:
+    """A pixie type as a piece of an identifier: `List<Int>` becomes
+    `ListInt`, so a tuple's struct can be named after its shape."""
+    return re.sub(r"[^A-Za-z0-9]", "", t)
+
+
 def py_ty(t) -> str:
     """The user-facing spelling of an internal type name: `Int` is
     `int`, `List<String>` is `list[str]`, `Int?` is `int | None`."""
@@ -303,7 +309,12 @@ def py_ty(t) -> str:
         # The datetime values carry a name of their own inside the
         # translator; the reader knows them by Python's.
         "Date": "date", "Datetime": "datetime", "Delta": "timedelta",
-    }.get(t, t)
+    }.get(t, _TUPLE_SPELLING.get(t, t))
+
+
+# Tuple structs, by the shape they were declared for, so a message
+# can say `tuple[str, int]` where the `.pix` says `TupStringInt`.
+_TUPLE_SPELLING: dict = {}
 
 
 class RawPix(str):
@@ -482,6 +493,7 @@ class Translator:
         self.py_imports = {}         # plain `import x` -> module name, for refusals
         self.stdlib_names = {}       # `from math import sqrt` -> (module, name)
         self.dt_names = {}           # `from datetime import date` -> "date"
+        self.tuple_parts = {}        # tuple struct name -> its part types
         self.dt_mods = {}            # `import datetime as dt` -> "datetime"
         self.dead_locals = {}          # name -> why it cannot be read here
         self.helpers = {}              # pure fn name -> (params, ret, body expr)
@@ -792,6 +804,18 @@ class Translator:
             return None
         if isinstance(ann, ast.Subscript) and isinstance(ann.value, ast.Name):
             base = ann.value.id
+            if base == "tuple":
+                elts = ann.slice.elts if isinstance(ann.slice, ast.Tuple) else [ann.slice]
+                if any(isinstance(e, ast.Constant) and e.value is Ellipsis for e in elts):
+                    raise Untranslatable(
+                        ann,
+                        "`tuple[T, ...]` is a sequence of one type, which is what "
+                        "`list[T]` is here — a tuple names its parts",
+                    )
+                tys = [self._pix_ty(e) for e in elts]
+                if any(t is None for t in tys):
+                    return None
+                return self._tuple_ty(tys, ann)
             if base == "list":
                 inner = self._dt_alone(self._pix_ty(ann.slice), ann)
                 return f"List<{inner}>" if inner else None
@@ -831,6 +855,16 @@ class Translator:
             ):
                 raise Untranslatable(node, f"a {ty} starts from one of its variants")
             return self._variant_ctor(node)
+        parts = self._tuple_of(ty)
+        if parts is not None:
+            # A tuple starts from a tuple, which is what it is written
+            # as — the struct behind it is the translator's business.
+            if not (isinstance(node, ast.Tuple) and len(node.elts) == len(parts)):
+                raise Untranslatable(
+                    node, f"a {py_ty(ty)} starts from a tuple of {len(parts)} values"
+                )
+            vals = [self._literal_of(e, t) for e, t in zip(node.elts, parts)]
+            return f"{ty}({', '.join(vals)})"
         if ty in self.structs:
             if not (
                 isinstance(node, ast.Call)
@@ -2217,6 +2251,20 @@ class Translator:
         "static", "true", "false", "nil", "state", "of",
     }
 
+    def _local_name(self, node, name: str):
+        """A local's name. It cannot be a state's: Python would shadow
+        the State object for the rest of the function, and the
+        compiled side reads the state — so the two runs would mean
+        different values by the same name."""
+        if name in self.cells:
+            raise Untranslatable(
+                node,
+                f"a local cannot take the state `{name}`'s name — Python would shadow "
+                f"the State here and the compiled app would read the state, so the "
+                f"two would print different things; rename the local (`{name}_`)",
+            )
+        return self._check_name(node, name, "local")
+
     def _check_name(self, node, name: str, what: str):
         if name in self.KEYWORDS:
             raise Untranslatable(
@@ -3115,6 +3163,12 @@ class Translator:
             ("perm", "perm", "n: Int, k: Int", "Int", "math_perm", "pure", "cpython"),
             ("gcd", "gcd", "a: Int, b: Int", "Int", "math_gcd", "pure", "cpython"),
             ("lcm", "lcm", "a: Int, b: Int", "Int", "math_lcm", "pure", "cpython"),
+            # `frexp` and `modf` answer a pair; each half is a static
+            # and the translator builds the tuple (`_tuple_call`).
+            ("frexp", "frexpM", "v: Float", "Float", "math_frexp_m", "pure", "cpython"),
+            (None, "frexpE", "v: Float", "Int", "math_frexp_e", "pure", "cpython"),
+            ("modf", "modfFrac", "v: Float", "Float", "math_modf_frac", "pure", "cpython"),
+            (None, "modfInt", "v: Float", "Float", "math_modf_int", "pure", "cpython"),
             ("fsum", "fsum", "xs: List<Float>", "Float", "math_fsum", "pure", "cpython"),
             ("dist", "dist", "p: List<Float>, q: List<Float>", "Float", "math_dist", "pure", "cpython"),
             # Values in Python, so the app reads them as values.
@@ -3437,6 +3491,12 @@ class Translator:
             (None, "strStripChars", "s: String, set: String", "String", "py_str_strip_chars", "pure"),
             (None, "strLstripChars", "s: String, set: String", "String", "py_str_lstrip_chars", "pure"),
             (None, "strRstripChars", "s: String, set: String", "String", "py_str_rstrip_chars", "pure"),
+            (None, "strPartitionBefore", "s: String, sep: String", "String", "py_str_partition_before", "pure"),
+            (None, "strPartitionSep", "s: String, sep: String", "String", "py_str_partition_sep", "pure"),
+            (None, "strPartitionAfter", "s: String, sep: String", "String", "py_str_partition_after", "pure"),
+            (None, "strRpartitionBefore", "s: String, sep: String", "String", "py_str_rpartition_before", "pure"),
+            (None, "strRpartitionSep", "s: String, sep: String", "String", "py_str_rpartition_sep", "pure"),
+            (None, "strRpartitionAfter", "s: String, sep: String", "String", "py_str_rpartition_after", "pure"),
         )),
     )
 
@@ -3509,8 +3569,6 @@ class Translator:
                           "`from yokan import jsondoc`",
         ("json", "dump"): "the dialect has no file objects — write "
                           "`fs.write_text(path, json.dumps(v))`",
-        ("math", "frexp"): "it answers a tuple, and a tuple has no compiled shape yet",
-        ("math", "modf"): "it answers a tuple, and a tuple has no compiled shape yet",
         ("math", "prod"): "it answers an int or a float depending on what the list "
                           "holds, so there is no one type to give it",
         ("math", "sumprod"): "it answers an int or a float depending on what the "
@@ -3669,8 +3727,9 @@ class Translator:
                     raise Untranslatable(
                         node,
                         f"this pattern has {ngroups} groups, and `re.findall` answers "
-                        "a tuple for each match then — a tuple has no compiled shape "
-                        "yet. Use one group, or none",
+                        "a tuple for each match then. A tuple is a value here, but one "
+                        "a Rust crate has to ANSWER does not cross the boundary yet. "
+                        "Use one group, or none",
                     )
                 subject = self.expr(node.args[1], ctx, param)
                 return f"Re.runFindall({self._int_list(codes)}, {subject}, {min(ngroups, 1)})"
@@ -4142,6 +4201,55 @@ class Translator:
         if const is not None:
             self.uses_stdlib = True
             return const[0]
+        # `divmod(a, b)` is the pair `(a // b, a % b)`, which is how
+        # Python defines it — no new crossing, just the two the
+        # dialect already has.
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "divmod"
+            and node.func.id not in self.defs
+        ):
+            if len(node.args) != 2 or node.keywords:
+                raise Untranslatable(node, "`divmod(a, b)` takes two numbers")
+            t = self._num_ty(node.args[0], ctx, param)
+            u = self._num_ty(node.args[1], ctx, param)
+            if t not in ("Int", "Float") or u not in ("Int", "Float"):
+                raise Untranslatable(node, "`divmod` takes two ints or two floats")
+            out = "Float" if "Float" in (t, u) else "Int"
+            name = self._tuple_ty([out, out], node)
+            self.uses_stdlib = True
+            with self._unwrapped():
+                a = self.expr(node.args[0], ctx, param)
+                b = self.expr(node.args[1], ctx, param)
+            suf = "Float" if out == "Float" else "Int"
+            return f"{name}(Py.floordiv{suf}({a}, {b}), Py.mod{suf}({a}, {b}))"
+        # The stdlib calls that answer a pair or a triple. Each part
+        # is a static of its own and the tuple is built here, so a
+        # tuple never has to cross the binding boundary.
+        tup = self._tuple_call(node, ctx, param)
+        if tup is not None:
+            return tup
+        # A tuple literal builds the struct its shape names.
+        if isinstance(node, ast.Tuple) and isinstance(node.ctx, ast.Load):
+            tys = [self._num_ty(e, ctx, param) for e in node.elts]
+            if any(t is None for t in tys):
+                bad = next(e for e, t in zip(node.elts, tys) if t is None)
+                raise Untranslatable(
+                    bad,
+                    "a tuple holds values whose type the compiled side can read — a "
+                    "state read, a field, a local or a literal",
+                )
+            name = self._tuple_ty(tys, node)
+            with self._unwrapped():
+                parts = [self.expr(e, ctx, param) for e in node.elts]
+            return f"{name}({', '.join(parts)})"
+        # `t[0]` — a part of a tuple, by a literal position.
+        if isinstance(node, ast.Subscript):
+            part = self._tuple_part(node, ctx, param)
+            if part is not None:
+                with self._unwrapped():
+                    return f"({self.expr(node.value, ctx, param)}).i{part[0]}"
         # `datetime` values: a construction, a class method, a method
         # on a value, or one of the value's parts.
         if isinstance(node, ast.Call):
@@ -5873,6 +5981,103 @@ class Translator:
         finally:
             self.in_wrapped_hole = prev
 
+    # A tuple is a value with a part for each position, which is what
+    # a struct is — so the translator declares one per SHAPE and the
+    # rest of the struct machinery (state types, fields, list
+    # elements, method returns) carries it unchanged. The shapes are
+    # bounded by what the app writes them out as.
+    TUPLE_PREFIX = "Tup"
+
+    def _tuple_ty(self, tys, node) -> str:
+        """The struct a tuple of these types is carried as, declared
+        on first use."""
+        for t in tys:
+            if t in self.DT_TYPES.values():
+                raise Untranslatable(
+                    node,
+                    f"a tuple holding a `{py_ty(t)}` is not in the dialect yet — that "
+                    "value is carried as a number, and a tuple would read as one",
+                )
+        name = self.TUPLE_PREFIX + "".join(_ty_slug(t) for t in tys)
+        if name not in self.structs:
+            if len(tys) < 2:
+                raise Untranslatable(node, "a tuple here has two parts or more")
+            self.structs[name] = [(f"i{i}", t, None) for i, t in enumerate(tys)]
+            self.tuple_parts[name] = tuple(tys)
+            _TUPLE_SPELLING[name] = f"tuple[{', '.join(py_ty(t) for t in tys)}]"
+        return name
+
+    # (module, name) or (None, str method) -> the parts, each as
+    # (static, type). Python answers a tuple; the dialect builds one
+    # out of the parts.
+    TUPLE_CALLS = {
+        ("math", "frexp"): (("Math.frexpM", "Float"), ("Math.frexpE", "Int")),
+        ("math", "modf"): (("Math.modfFrac", "Float"), ("Math.modfInt", "Float")),
+    }
+    TUPLE_STR_METHODS = {
+        "partition": (("Py.strPartitionBefore", "String"), ("Py.strPartitionSep", "String"),
+                      ("Py.strPartitionAfter", "String")),
+        "rpartition": (("Py.strRpartitionBefore", "String"), ("Py.strRpartitionSep", "String"),
+                       ("Py.strRpartitionAfter", "String")),
+    }
+
+    def _tuple_call_parts(self, node, ctx, param):
+        """The parts a call answers, when it answers a tuple, with the
+        arguments each part's static takes."""
+        if not isinstance(node, ast.Call) or node.keywords:
+            return None
+        f = node.func
+        if isinstance(f, ast.Attribute):
+            mf = self._stdlib_call(f)
+            if mf in self.TUPLE_CALLS and len(node.args) == 1:
+                return self.TUPLE_CALLS[mf], node.args
+            parts = self.TUPLE_STR_METHODS.get(f.attr)
+            if (
+                parts is not None
+                and len(node.args) == 1
+                and self._num_ty(f.value, ctx, param) == "String"
+            ):
+                return parts, [f.value, node.args[0]]
+        return None
+
+    def _tuple_call(self, node, ctx, param):
+        got = self._tuple_call_parts(node, ctx, param)
+        if got is None:
+            return None
+        parts, args = got
+        name = self._tuple_ty([t for _s, t in parts], node)
+        self.uses_stdlib = True
+        with self._unwrapped():
+            lowered = [self.expr(a, ctx, param) for a in args]
+        joined = ", ".join(lowered)
+        return f"{name}({', '.join(f'{st}({joined})' for st, _t in parts)})"
+
+    def _tuple_part(self, node, ctx, param):
+        """`(i, type)` for `t[0]` on a tuple, or None. A tuple is
+        indexed by a literal position, because that is what gives the
+        part its type — Python's own tuples are typed that way too."""
+        if not isinstance(node, ast.Subscript):
+            return None
+        parts = self._tuple_of(self._num_ty(node.value, ctx, param))
+        if parts is None:
+            return None
+        i = self._int_index(node.slice)
+        if i is None:
+            raise Untranslatable(
+                node.slice,
+                "a tuple is indexed by a literal position — its parts have types of "
+                "their own, so a computed index has no one type",
+            )
+        if i < 0:
+            i += len(parts)
+        if not 0 <= i < len(parts):
+            raise Untranslatable(node.slice, f"this tuple has {len(parts)} parts")
+        return (i, parts[i])
+
+    def _tuple_of(self, ty):
+        """The part types, when `ty` is a tuple; None otherwise."""
+        return self.tuple_parts.get(ty)
+
     def _dt_alone(self, inner, ann):
         """A datetime value stands on its own for now: it is carried
         as an integer, and a container of them would read as a
@@ -6392,11 +6597,45 @@ class Translator:
         if (
             isinstance(stmt, ast.Assign)
             and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Tuple)
+            and all(isinstance(t, ast.Name) for t in stmt.targets[0].elts)
+        ):
+            # `a, b = expr` — the parts of a tuple, each under its own
+            # name. The tuple itself is bound first, because the value
+            # is read once in Python too.
+            names = [t.id for t in stmt.targets[0].elts]
+            parts = self._tuple_of(self._num_ty(stmt.value, "store", param))
+            if parts is None:
+                raise Untranslatable(
+                    stmt.value,
+                    "`a, b = ...` unpacks a tuple the compiled side can read — a "
+                    "state read, a field, a local, a tuple literal or a call that "
+                    "answers one",
+                )
+            if len(names) != len(parts):
+                raise Untranslatable(
+                    stmt.targets[0],
+                    f"this tuple has {len(parts)} parts and {len(names)} names",
+                )
+            for n in names:
+                self._local_name(stmt.targets[0], n)
+            tmp = f"__up{len(self.handler_locals)}"
+            self.handler_locals.add(tmp)
+            lines = [f"var {tmp} = {self.expr(stmt.value, 'store', param)}"]
+            for i, (n, t) in enumerate(zip(names, parts)):
+                lines.append(
+                    f"{n} = {tmp}.i{i}" if n in self.handler_locals else f"var {n} = {tmp}.i{i}"
+                )
+                self.handler_locals.add(n)
+                self.typed_locals[n] = t
+            return lines
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
             and isinstance(stmt.targets[0], ast.Name)
         ):
             name = stmt.targets[0].id
-            if name not in self.cells:
-                self._check_name(stmt.targets[0], name, "local")
+            self._local_name(stmt.targets[0], name)
             if isinstance(stmt.value, ast.List) and name not in self.cells:
                 raise Untranslatable(
                     stmt,
@@ -7025,6 +7264,31 @@ class Translator:
         dt = self._dt_num_ty(node, ctx, param)
         if dt is not None:
             return dt
+        if isinstance(node, ast.Tuple) and isinstance(node.ctx, ast.Load):
+            tys = [self._num_ty(e, ctx, param) for e in node.elts]
+            if all(t is not None for t in tys) and len(tys) >= 2:
+                return self._tuple_ty(tys, node)
+            return None
+        got = self._tuple_call_parts(node, ctx, param)
+        if got is not None:
+            return self._tuple_ty([t for _s, t in got[0]], node)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "divmod"
+            and node.func.id not in self.defs
+            and len(node.args) == 2
+        ):
+            t = self._num_ty(node.args[0], ctx, param)
+            u = self._num_ty(node.args[1], ctx, param)
+            if t in ("Int", "Float") and u in ("Int", "Float"):
+                out = "Float" if "Float" in (t, u) else "Int"
+                return self._tuple_ty([out, out], node)
+            return None
+        if isinstance(node, ast.Subscript):
+            part = self._tuple_part(node, ctx, param)
+            if part is not None:
+                return part[1]
         # `random.choice(xs)` reads as whatever the list holds.
         if isinstance(node, ast.Call):
             mf = self._stdlib_call(node.func)
@@ -7675,13 +7939,44 @@ class Translator:
             isinstance(it, ast.Call)
             and isinstance(it.func, ast.Attribute)
             and it.func.attr == "items"
+            and not it.args
+            and not it.keywords
             and self._map_source(it.func.value) is not None
         ):
-            raise Untranslatable(
-                it,
-                "dict `.items()` binds a pair, which has no compiled shape yet — walk "
-                "the dict for its keys and read `d().get(k, default)` inside the loop",
-            )
+            # `for k, v in d.items()`. A map answers its keys and its
+            # values in one order, so the pair is read off the two
+            # lists rather than built — which is also why no default
+            # is needed for a missing key.
+            msrc, mty = self._map_source(it.func.value)
+            kt, vt = self._map_kv(mty)
+            j = len(self.handler_locals)
+            ks, vs, i = f"__ik{j}", f"__iv{j}", f"__ii{j}"
+            self.handler_locals.update({ks, vs, i})
+            lines = [
+                f"var {ks} = {msrc}.keys()",
+                f"var {vs} = {msrc}.values()",
+                f"for {i} in 0..{ks}.length {{",
+                f"  var {a} = {ks}[{i}]",
+                f"  var {b} = {vs}[{i}]",
+            ]
+            return self._pair_body(stmt, lines, [(a, kt), (b, vt)], param)
+        src0 = self._list_source(it, "store", param)
+        if src0 is not None and src0[1].startswith("List<"):
+            parts = self._tuple_of(src0[1][5:-1])
+            if parts is not None:
+                # `for a, b in pairs` — the parts under their own
+                # names, which is what the loop reads in Python too.
+                if len(names) != len(parts):
+                    raise Untranslatable(
+                        stmt.target, f"these tuples have {len(parts)} parts"
+                    )
+                row = f"__pr{len(self.handler_locals)}"
+                self.handler_locals.add(row)
+                head = [f"for {row} in {src0[0]} {{"]
+                binds = [(n, t) for n, t in zip([a, b], parts)]
+                for i, (n, _t) in enumerate(binds):
+                    head.append(f"  var {n} = {row}.i{i}")
+                return self._pair_body(stmt, head, binds, param)
         if not (isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("enumerate", "zip")):
             raise Untranslatable(it, "a pair target walks enumerate() or zip()")
         if it.func.id == "enumerate":
@@ -7713,6 +8008,11 @@ class Translator:
                 f"  var {b} = {right[0]}[{i}]",
             ]
             binds = [(a, left[1]), (b, right[1])]
+        return self._pair_body(stmt, lines, binds, param)
+
+    def _pair_body(self, stmt, lines, binds, param) -> list[str]:
+        """The body of a two-name loop, with both names bound while it
+        is read and gone after it."""
         prev = {nm: self.typed_locals.get(nm) for nm, _t in binds}
         for nm, t in binds:
             self.handler_locals.add(nm)

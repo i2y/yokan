@@ -3,7 +3,8 @@
 # ///
 """Python-semantics operations, gated: `/` `//` `%` `**`, bare
 float/bool/enum text, negative indexing, dict iteration (the keys
-in the order they went in, the values, and sorted()),
+in the order they went in, the values, `.items()`, and sorted()),
+tuples (a literal, a part, unpacking, a pair loop, a tuple return),
 if/else locals that outlive the branch, @value, list-typed store
 method parameters. The interpreted run uses the real
 operators and str(); the compiled run reproduces CPython's results
@@ -42,6 +43,8 @@ mood: State[Mood] = State(Mood.HAPPY)
 grade: State[str] = State("-")
 last_key: State[str] = State("-")
 walked: State[str] = State("-")
+paired: State[str] = State("-")
+sized: State[tuple[str, int]] = State(("-", 0))
 spend: State[int] = State(0)
 tail: State[str] = State("-")
 pt: State[Point] = State(Point(3, 4))
@@ -81,6 +84,22 @@ def crunch():
     grade.set(verdict)
 
 
+def measure(word: str) -> tuple[str, int]:
+    return (word.upper(), len(word))
+
+
+def pairs():
+    # A dict walks as pairs, a tuple comes back from a helper, and
+    # `divmod` answers the two numbers Python says it does.
+    s = ""
+    for k, v in prices().items():
+        s = s + f"{k[0]}{v}"
+    label, n = measure("momo")
+    whole, rest = divmod(len(s), 3)
+    sized.set((label, n))
+    paired.set(f"{s} {label}{n} {whole}r{rest} {sized()[1]}")
+
+
 def walk():
     for k in sorted(prices()):
         last_key.set(k)
@@ -111,10 +130,12 @@ def view():
         text(f"grade = {grade()}  doubled = {p2() * 2 + 1}")
         text(f"last key = {last_key()}  tail = {tail()}")
         text(f"walked = {walked()}  spend = {spend()}")
+        text(f"paired = {paired()}")
         text(f"bag = {Bag.joined}")
         with row(spacing=6):
             button("crunch", on_click=crunch)
             button("walk", on_click=walk)
+            button("pairs", on_click=pairs)
 
 
 if __name__ == "__main__":

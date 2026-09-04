@@ -22,24 +22,25 @@ Yokan のアプリは普通の Python ファイルです。
 7. [文字列](#文字列)
 8. [リスト、チャート、仮想化リスト](#リストチャート仮想化リスト)
 9. [辞書](#辞書)
-10. [Value クラスとインターフェース](#value-クラスとインターフェース)
-11. [メモリ管理](#メモリ管理)
-12. [直和型と match](#直和型と-match)
-13. [Optional と Enum](#optional-と-enum)
-14. [コンポーネント](#コンポーネント)
-15. [スタイルとテーマ](#スタイルとテーマ)
-16. [アニメーション](#アニメーション)
-17. [ウィンドウ](#ウィンドウ)
-18. [エラー処理](#エラー処理)
-19. [標準ライブラリ](#標準ライブラリ)
-20. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
-21. [CPython エスケープ](#cpython-エスケープ)
-22. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
-23. [型チェッカーとの併用](#型チェッカーとの併用)
-24. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
-25. [リリース](#リリース)
-26. [本格アプリの例](#本格アプリの例)
-27. [今できないこと](#今できないこと)
+10. [タプル](#タプル)
+11. [Value クラスとインターフェース](#value-クラスとインターフェース)
+12. [メモリ管理](#メモリ管理)
+13. [直和型と match](#直和型と-match)
+14. [Optional と Enum](#optional-と-enum)
+15. [コンポーネント](#コンポーネント)
+16. [スタイルとテーマ](#スタイルとテーマ)
+17. [アニメーション](#アニメーション)
+18. [ウィンドウ](#ウィンドウ)
+19. [エラー処理](#エラー処理)
+20. [標準ライブラリ](#標準ライブラリ)
+21. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
+22. [CPython エスケープ](#cpython-エスケープ)
+23. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
+24. [型チェッカーとの併用](#型チェッカーとの併用)
+25. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
+26. [リリース](#リリース)
+27. [本格アプリの例](#本格アプリの例)
+28. [今できないこと](#今できないこと)
 
 ## 最小のアプリ
 
@@ -544,8 +545,32 @@ def scan():
 コンパイル後の辞書はキーを入れた順を覚えているので、回すと Python と同じ順に並びます。
 素の `d[k]` 読みは断られます。
 無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
-`.items()` も断られます。
-二つの名前を一度に束ねる形にはまだコンパイル後の姿がないので、キーを回してループの中で値を読みます。
+`.items()` は対で回ります。順序は同じ挿入順です。
+
+## タプル
+
+タプルは位置ごとに部分を持つ値で、Python と同じ書き方で書き、同じ読み方で読みます。
+
+```python
+pair: State[tuple[str, int]] = State(("momo", 4))
+rows: State[list[tuple[str, int]]] = State([])
+
+def measure(word: str) -> tuple[str, int]:
+    return (word.upper(), len(word))
+
+def scan():
+    label, n = measure("hello")          # 分解
+    first = pair()[0]                    # 位置はリテラル
+    whole, rest = divmod(n, 3)
+    for name, count in rows():           # 行ごとに対
+        total.set(total() + count)
+    for key, value in prices().items():  # 辞書も対で回る
+        seen.set(seen() + key)
+```
+
+部分はそれぞれ自分の型を持つので、位置はリテラルで書きます。
+計算した位置だと型が一つに決まりません。
+部分は二つ以上で、同じ形を state にもフィールドにもリストの要素にも引数にも返り値にも置けます。
 
 ## Value クラスとインターフェース
 
@@ -862,7 +887,7 @@ def view():
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
 
 Python 側がどこまで届くかは次のとおりです。
-`math` は八つを除いて全部で、除いた八つはそれぞれ理由を名指しして断ります（`frexp` と `modf` はタプルを返す、`prod` と `sumprod` はリストの中身によって int か float かが変わる、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算している）。
+`math` は六つを除いて全部で、除いた六つはそれぞれ理由を名指しして断ります（`prod` と `sumprod` はリストの中身によって int か float かが変わる、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算している）。
 `random` からは `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
 `statistics` からは `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev` で、受けるのは `list[float]` だけです。
 `json` からは `dumps` で、既定値のまま、キーワード引数は取りません。
@@ -1171,16 +1196,15 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - 同じ要素オブジェクトを**二回置くこと**。一度置いた要素は使い切りで、二か所には置けません。
 - **`T | None` を返すメソッド**。ストアとモデルのメソッドはスカラー、リスト、Value クラス、Enum を返せますが、Optional の返り値はまだありません。
 - **ローカルの辞書**と、注釈のないローカルのリスト（`out: list[str] = []` と書けば、コンパイル側が要素の型を読めます）。
-- **方言に形のないものを返す str のメソッド**：`.partition()` と `.rpartition()`（タプル）、`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。使えるのは `.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
+- **方言に形のないものを返す str のメソッド**：`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
-- **辞書の `.items()` の反復**。二つの名前を一度に束ねる形にはまだコンパイル後の姿がないためです。キーを回して、ループの中で `d().get(k, default)` を読みます。キーの反復と `.values()` は入っていて、どちらも Python と同じ挿入順です。
 - **一部の制御構文**：入れ子の def（クロージャにはコンパイル後の形がありません。ヘルパはモジュールレベルに書きます）と、ビューの中の条件式（ビューでは要素を `if` で分けます）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
-- **`tuple` と `set`**。tuple にはまだコンパイル後の形がなく、Python の set の反復順はコンパイル側で再現できないため、並べ替えずに断ります。今日は `list` がどちらも代わりになります。
+- **`set`**。Python の set の反復順はコンパイル側で再現できないため、並べ替えずに断ります。`list` で足ります。タプルは入りました（[タプル](#タプル)）。ただし形を書き下した場合だけで、Rust crate が**返す**タプルはまだ越えられません。`re.findall` が群二つ以上を断るのはそのためです。
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
 - **Yokan 自身のモジュールでは**：ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード。
-- **Python のモジュールでは**：`math` の八つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。`re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。後者は `@py` を教えます。小物のモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。理由を名指しして断るモジュール：`pathlib`、`os`、`collections`、`itertools`、`decimal`、`hashlib`、`base64`、`zoneinfo`。
+- **Python のモジュールでは**：`math` の六つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。`re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。後者は `@py` を教えます。小物のモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。理由を名指しして断るモジュール：`pathlib`、`os`、`collections`、`itertools`、`decimal`、`hashlib`、`base64`、`zoneinfo`。
 - **新しい要素の周辺**。表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。チャートにはホバーでの読み取りと凡例がありません。`select` はキーボードで操作できません。ツールチップの表示はスクリプトからホバーで確かめられません（文字列自体はダンプに出ます）。いずれもヘッドレスの検証にまだ無い動詞を待っています。
 - **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
 - **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。

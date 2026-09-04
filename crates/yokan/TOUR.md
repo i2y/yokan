@@ -24,24 +24,25 @@ The sections below will not repeat this.
 7. [Strings](#strings)
 8. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
 9. [Dicts](#dicts)
-10. [Value classes and interfaces](#value-classes-and-interfaces)
-11. [Memory](#memory)
-12. [Sum types and match](#sum-types-and-match)
-13. [Optional and Enum](#optional-and-enum)
-14. [Components](#components)
-15. [Styles and themes](#styles-and-themes)
-16. [Animation](#animation)
-17. [The window](#the-window)
-18. [Error handling](#error-handling)
-19. [The standard library](#the-standard-library)
-20. [Calling a Rust crate](#calling-a-rust-crate)
-21. [CPython escapes](#cpython-escapes)
-22. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
-23. [Working with type checkers](#working-with-type-checkers)
-24. [Headless runs and the gate](#headless-runs-and-the-gate)
-25. [Shipping](#shipping)
-26. [A real app](#a-real-app)
-27. [What does not work yet](#what-does-not-work-yet)
+10. [Tuples](#tuples)
+11. [Value classes and interfaces](#value-classes-and-interfaces)
+12. [Memory](#memory)
+13. [Sum types and match](#sum-types-and-match)
+14. [Optional and Enum](#optional-and-enum)
+15. [Components](#components)
+16. [Styles and themes](#styles-and-themes)
+17. [Animation](#animation)
+18. [The window](#the-window)
+19. [Error handling](#error-handling)
+20. [The standard library](#the-standard-library)
+21. [Calling a Rust crate](#calling-a-rust-crate)
+22. [CPython escapes](#cpython-escapes)
+23. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
+24. [Working with type checkers](#working-with-type-checkers)
+25. [Headless runs and the gate](#headless-runs-and-the-gate)
+26. [Shipping](#shipping)
+27. [A real app](#a-real-app)
+28. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -532,7 +533,31 @@ def scan():
 
 A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
 Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
-`.items()` is refused too — binding two names at once has no compiled shape yet, so walk the keys and read the value inside the loop.
+`.items()` walks the pairs, in the same insertion order.
+
+## Tuples
+
+A tuple is a value with a part for each position, written and read the way Python writes one.
+
+```python
+pair: State[tuple[str, int]] = State(("momo", 4))
+rows: State[list[tuple[str, int]]] = State([])
+
+def measure(word: str) -> tuple[str, int]:
+    return (word.upper(), len(word))
+
+def scan():
+    label, n = measure("hello")          # unpacking
+    first = pair()[0]                    # a part, by a literal position
+    whole, rest = divmod(n, 3)
+    for name, count in rows():           # a pair per row
+        total.set(total() + count)
+    for key, value in prices().items():  # and a dict walks as pairs
+        seen.set(seen() + key)
+```
+
+The parts have types of their own, so a tuple is indexed by a literal position: a computed index would have no one type to be.
+Two parts or more, and the same shape can be a state, a field, a list's element, a parameter and a return.
 
 ## Value classes and interfaces
 
@@ -853,7 +878,7 @@ Call them from handlers (views stay pure).
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
 
-How far the Python half reaches: all of `math` except eight members, each refused by name with its reason (`frexp` and `modf` answer tuples; `prod` and `sumprod` answer an int or a float depending on the list; `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform).
+How far the Python half reaches: all of `math` except six members, each refused by name with its reason (`prod` and `sumprod` answer an int or a float depending on the list; `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform).
 From `random`: `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
 From `statistics`: `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]` — CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so a list of ints has no one type here and is refused.
 From `json`: `dumps`, with CPython's defaults and no keyword arguments.
@@ -1163,16 +1188,15 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - Placing the same element object **twice**. Constructors consume their children.
 - **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
 - **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
-- **str methods that answer something the dialect has no shape for**: `.partition()` and `.rpartition()` (tuples), `.encode()` (bytes), `.format()` and `.translate()` (a template or a table built at run time), `.casefold()` (its mapping expands `ß` to `ss`, which is a different Unicode table from the one the case methods use). What is in: `.upper()`, `.lower()`, `.title()`, `.capitalize()`, `.swapcase()`, `.strip()` / `.lstrip()` / `.rstrip()` (with or without a set of characters), `.split()`, `.splitlines()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.rfind()`, `.index()`, `.rindex()`, `.count()`, `.zfill()`, `.ljust()`, `.rjust()`, `.center()`, `.expandtabs()`, `.removeprefix()`, `.removesuffix()`, the `.is…()` family, `len(s)`, `s[i]`, `s[a:b]` and `in`.
+- **str methods that answer something the dialect has no shape for**: `.encode()` (bytes), `.format()` and `.translate()` (a template or a table built at run time), `.casefold()` (its mapping expands `ß` to `ss`, which is a different Unicode table from the one the case methods use). What is in: `.partition()`, `.rpartition()`, `.upper()`, `.lower()`, `.title()`, `.capitalize()`, `.swapcase()`, `.strip()` / `.lstrip()` / `.rstrip()` (with or without a set of characters), `.split()`, `.splitlines()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.rfind()`, `.index()`, `.rindex()`, `.count()`, `.zfill()`, `.ljust()`, `.rjust()`, `.center()`, `.expandtabs()`, `.removeprefix()`, `.removesuffix()`, the `.is…()` family, `len(s)`, `s[i]`, `s[a:b]` and `in`.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
-- **Iterating a dict's `.items()`.** Binding two names at once has no compiled shape yet; walk the dict for its keys and read `d().get(k, default)` inside the loop. Walking the keys, and `.values()`, are in — both in insertion order, as Python walks them.
 - **Some control flow**: nested defs (a closure has no compiled shape — define helpers at module level) and a conditional expression in a view (branch the elements with `if` there).
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
-- **`tuple` and `set`.** A tuple has no compiled shape yet; a Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered. A `list` covers both today.
+- **`set`.** A Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered; a `list` covers it. A tuple is in — see [Tuples](#tuples) — but only where its shape is written out: a tuple that a Rust crate would have to answer is not carried yet, which is why `re.findall` still refuses a pattern with two groups or more.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In Yokan's own modules**: file metadata (size, times) and copying or renaming, and streaming or binary downloads.
-- **In Python's modules**: eight members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: an aware value (`timezone`, `tzinfo`), `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused by name, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `collections`, `itertools`, `decimal`, `hashlib`, `base64`, `zoneinfo`.
+- **In Python's modules**: six members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: an aware value (`timezone`, `tzinfo`), `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused by name, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `collections`, `itertools`, `decimal`, `hashlib`, `base64`, `zoneinfo`.
 - **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no hover readout and no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.

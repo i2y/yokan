@@ -1,6 +1,6 @@
 # Flow and data
 
-The [tour](tour.md) continues: what handlers can do, arithmetic with CPython's meaning, lists, charts and dicts.
+The [tour](tour.md) continues: what handlers can do, arithmetic with CPython's meaning, lists, charts, dicts and tuples.
 
 ## Handlers and control flow
 
@@ -222,5 +222,28 @@ def scan():
 
 A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
 Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
-`.items()` is refused too — binding two names at once has no compiled shape yet, so walk the keys and read the value inside the loop.
+`.items()` walks the pairs, in the same insertion order.
 
+## Tuples
+
+A tuple is a value with a part for each position, written and read the way Python writes one.
+
+```python
+pair: State[tuple[str, int]] = State(("momo", 4))
+rows: State[list[tuple[str, int]]] = State([])
+
+def measure(word: str) -> tuple[str, int]:
+    return (word.upper(), len(word))
+
+def scan():
+    label, n = measure("hello")          # unpacking
+    first = pair()[0]                    # a part, by a literal position
+    whole, rest = divmod(n, 3)
+    for name, count in rows():           # a pair per row
+        total.set(total() + count)
+    for key, value in prices().items():  # and a dict walks as pairs
+        seen.set(seen() + key)
+```
+
+The parts have types of their own, so a tuple is indexed by a literal position: a computed index would have no one type to be.
+Two parts or more, and the same shape can be a state, a field, a list's element, a parameter and a return.

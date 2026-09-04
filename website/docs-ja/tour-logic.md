@@ -1,6 +1,6 @@
 # 制御フローとデータ
 
-[ツアー](tour.md)の続きです。ハンドラに書けること、CPython と同じ意味の算術、リスト、チャート、辞書を見ます。
+[ツアー](tour.md)の続きです。ハンドラに書けること、CPython と同じ意味の算術、リスト、チャート、辞書、タプルを見ます。
 
 ## ハンドラと制御フロー
 
@@ -232,6 +232,29 @@ def scan():
 コンパイル後の辞書はキーを入れた順を覚えているので、回すと Python と同じ順に並びます。
 素の `d[k]` 読みは断られます。
 無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
-`.items()` も断られます。
-二つの名前を一度に束ねる形にはまだコンパイル後の姿がないので、キーを回してループの中で値を読みます。
+`.items()` は対で回ります。順序は同じ挿入順です。
 
+## タプル
+
+タプルは位置ごとに部分を持つ値で、Python と同じ書き方で書き、同じ読み方で読みます。
+
+```python
+pair: State[tuple[str, int]] = State(("momo", 4))
+rows: State[list[tuple[str, int]]] = State([])
+
+def measure(word: str) -> tuple[str, int]:
+    return (word.upper(), len(word))
+
+def scan():
+    label, n = measure("hello")          # 分解
+    first = pair()[0]                    # 位置はリテラル
+    whole, rest = divmod(n, 3)
+    for name, count in rows():           # 行ごとに対
+        total.set(total() + count)
+    for key, value in prices().items():  # 辞書も対で回る
+        seen.set(seen() + key)
+```
+
+部分はそれぞれ自分の型を持つので、位置はリテラルで書きます。
+計算した位置だと型が一つに決まりません。
+部分は二つ以上で、同じ形を state にもフィールドにもリストの要素にも引数にも返り値にも置けます。

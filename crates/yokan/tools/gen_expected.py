@@ -550,6 +550,19 @@ class _SmallTwin:
     heapq_nsmallest = staticmethod(heapq.nsmallest)
     heapq_nlargest = staticmethod(heapq.nlargest)
 
+    # The halves of the calls that answer a tuple: each is a static
+    # of its own here, and the translator builds the tuple.
+    math_frexp_m = staticmethod(lambda v: math.frexp(v)[0])
+    math_frexp_e = staticmethod(lambda v: math.frexp(v)[1])
+    math_modf_frac = staticmethod(lambda v: math.modf(v)[0])
+    math_modf_int = staticmethod(lambda v: math.modf(v)[1])
+    py_str_partition_before = staticmethod(lambda s, sep: s.partition(sep)[0])
+    py_str_partition_sep = staticmethod(lambda s, sep: s.partition(sep)[1])
+    py_str_partition_after = staticmethod(lambda s, sep: s.partition(sep)[2])
+    py_str_rpartition_before = staticmethod(lambda s, sep: s.rpartition(sep)[0])
+    py_str_rpartition_sep = staticmethod(lambda s, sep: s.rpartition(sep)[1])
+    py_str_rpartition_after = staticmethod(lambda s, sep: s.rpartition(sep)[2])
+
     py_str_title = staticmethod(str.title)
     py_str_capitalize = staticmethod(str.capitalize)
     py_str_swapcase = staticmethod(str.swapcase)
@@ -622,6 +635,17 @@ def cases_small():
     yield from (("py_str_splitlines", (t,)) for t in ("a\nb", "a\r\nb", "a\n", "", "\n", "a\u2028b"))
     for t in ("a\tb", "\tx", "ab\tc\td", "a\nb\tc"):
         yield from (("py_str_expandtabs", (t, n)) for n in (0, 1, 4, 8))
+    for v in (0.0, -0.0, 1.0, -1.0, 0.5, 2.5, 1e300, 5e-324, 123.456, -0.75,
+              math.inf, -math.inf, math.nan):
+        yield ("math_frexp_m", (v,))
+        yield ("math_frexp_e", (v,))
+        yield ("math_modf_frac", (v,))
+        yield ("math_modf_int", (v,))
+    for t, sep in (("key=value=more", "="), ("nosep", "="), ("=lead", "="),
+                   ("trail=", "="), ("", "="), ("a--b", "--"), ("\u65e5=\u672c", "=")):
+        for fn in ("py_str_partition_before", "py_str_partition_sep", "py_str_partition_after",
+                   "py_str_rpartition_before", "py_str_rpartition_sep", "py_str_rpartition_after"):
+            yield (fn, (t, sep))
     for t, cs in (("xxaxx", "x"), ("  a  ", " "), ("aabbaa", "ab"), ("abc", "z"), ("", "x")):
         yield ("py_str_strip_chars", (t, cs))
         yield ("py_str_lstrip_chars", (t, cs))

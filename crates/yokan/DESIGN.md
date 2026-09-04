@@ -1220,3 +1220,36 @@ and about a hundred characters make that distinction. The table is
 taken from a crate rather than written. `casefold` is refused for the
 other half of the same fact — its mapping expands `ß` to `ss` and
 needs the full case-folding table, which `lower()` does not.
+
+## A tuple is a value with a part per position
+
+Python's iteration idioms are tuple-shaped — `dict.items()`,
+`enumerate`, `zip`, a function answering two things, `divmod`,
+`str.partition`, `math.frexp` — so a subset without tuples breaks at
+the place people write most. A tuple is now a value: the translator
+declares a struct per SHAPE and everything the struct machinery
+already carried (a state, a field, a list's element, a parameter, a
+return) carries it unchanged. The shapes are bounded by what the app
+writes out, so no combination is invented that nobody asked for.
+
+`t[0]` takes a literal position, because the parts have types of
+their own and a computed index would have no one type to be. Two
+parts or more. `a, b = expr` binds the value once and then its parts,
+which is the order Python reads it in.
+
+A stdlib call that answers a tuple does not answer one: each part is
+a static of its own and the translator puts the pair together. That
+is exactly what `divmod` is in Python (`(a // b, a % b)`), and it
+means nothing new has to cross the crate boundary for `frexp`,
+`modf`, `partition` or `rpartition`. What a Rust crate would have to
+ANSWER as a tuple still does not cross, which is why `re.findall`
+keeps refusing a pattern with two groups or more.
+
+## A local cannot take a state's name
+
+Writing `q = 5` in a handler where `q` is a `State` shadows the State
+object for the rest of the function in Python, while the compiled
+side reads the state — so a later `f"{q}"` printed two different
+things. It was silent until a tuple unpacking put a common name like
+`q` on the left. It is refused now, in both the plain assignment and
+the unpacking, and the message names the rename.
