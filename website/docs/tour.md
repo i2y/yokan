@@ -185,13 +185,17 @@ def view():
 ```
 
 The element catalog: `text`, `link`, `button`, `text_field`, `number_field`, `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`, `divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
-`grid(columns=, rows=)` lays equal tracks, and a button inside spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py` is the keypad on one grid).
-`data_table` draws the table itself: its first `row` child is the header, later `row` children are data rows shaded in alternation, and the columns line up when the cells of one column carry the same `grow` share (`demo/table.py`, where `align="right"` sets the numbers on their column's edge).
-`spacer()` takes the space its row or column has left (`grow=` shares it between several), and `divider()` draws a rule across its parent — vertical inside a row, horizontal elsewhere.
-`link("Docs", "https://…")` is a line of text that opens the URL in the browser; a headless `click:` on it is accepted and opens nothing.
+
+- **grid**: `columns=` / `rows=` lay equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
+- **data_table**: the first `row` child is the header, the rest are data rows shaded in alternation. Columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
+- **spacer**: takes the space its row or column has left; `grow=` shares it between several.
+- **divider**: a rule across its parent — vertical inside a row, horizontal elsewhere.
+- **link**: `link("Docs", "https://…")` opens the URL in the browser. A headless `click:` on it is accepted and opens nothing.
 
 `text` carries typography and a box of its own.
-`bold=`, `italic=`, `mono=` and `underline=` are the typography; `wrap="nowrap"` or `wrap="ellipsis"` (with a `width=` to clip against) and `max_lines=` control the wrapping; `background=`, `padding=` and `border_radius=` paint a box behind the text, which is how a status pill is written (`demo/badges.py`).
+The typography is `bold=`, `italic=`, `mono=` and `underline=`.
+The wrapping is `wrap="nowrap"` or `wrap="ellipsis"` (with a `width=` to clip against) and `max_lines=`.
+The box is `background=`, `padding=` and `border_radius=`, which is how a status pill is written (`demo/badges.py`).
 Each of these takes what a style value takes anywhere else — a literal or a state read — so a pill's background can follow state.
 
 The samples import elements bare — `from yokan import button, column, run, …`.

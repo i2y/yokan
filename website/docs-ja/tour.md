@@ -184,15 +184,17 @@ def view():
 ```
 
 要素カタログ：`text`、`link`、`button`、`text_field`、`number_field`、`int_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`segmented`、`column`、`row`、`grid`、`stack`、`spacer`、`divider`、`list_view`、`table`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
-`grid(columns=, rows=)` は等分のトラックを敷き、中のボタンは `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py` が grid 一枚のキーパッドです）。
-`data_table` は表そのものを描き、中の最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になります。
-列は、同じ列のセルに同じ `grow` を与えると揃います（`demo/table.py` では数値の列に `align="right"` を指定しています）。
-`spacer()` は行や列の余った幅を引き受けます（`grow=` で複数に分け合えます）。
-`divider()` は親を横切る罫線で、行の中では縦線、それ以外では横線になります。
-`link("Docs", "https://…")` はクリックでその URL をブラウザで開く一行のテキストです。ヘッドレス実行の `click:` は受け付けられますが、何も開きません。
+
+- **grid**：`columns=` / `rows=` が等分のトラックを敷き、中の要素は `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py`）。
+- **data_table**：最初の `row` がヘッダー行、以降が交互に色の付くデータ行。同じ列のセルに同じ `grow` を与えると列が揃います（`demo/table.py`）。
+- **spacer**：行や列の余った幅を引き受けます。`grow=` で複数に分け合えます。
+- **divider**：親を横切る罫線。行の中では縦線、それ以外では横線です。
+- **link**：`link("Docs", "https://…")` はクリックで URL をブラウザで開く一行のテキストです。ヘッドレス実行では `click:` を受けても何も開きません。
 
 `text` には文字の体裁と、自分の箱を持たせられます。
-`bold=`、`italic=`、`mono=`、`underline=` が体裁、`wrap="nowrap"` か `wrap="ellipsis"`（切り詰めの基準になる `width=` と組で）と `max_lines=` が折り返し、`background=`、`padding=`、`border_radius=` がテキストの背後の箱です。状態を示すピルはこの箱で書きます（`demo/badges.py`）。
+体裁は `bold=`、`italic=`、`mono=`、`underline=`。
+折り返しは `wrap="nowrap"` か `wrap="ellipsis"`（切り詰めの基準になる `width=` と組で）と `max_lines=`。
+箱は `background=`、`padding=`、`border_radius=` で、状態を示すピルはこれで書きます（`demo/badges.py`）。
 どれも他の場所のスタイル値と同じもの（リテラルか状態の読み出し）を取るので、ピルの背景を状態に追従させられます。
 
 サンプルは要素を裸で import します（`from yokan import button, column, run, …`）。
