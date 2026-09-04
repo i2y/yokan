@@ -159,4 +159,4 @@ publish version:
     gh release create v{{version}} --latest --title "Yokan {{version}}" \
         --notes "See the commits since the previous tag." \
         {{wheels}}/yokan-{{version}}-*.whl
-    @echo "released {{version}}"
+    echo "released {{version}}"
