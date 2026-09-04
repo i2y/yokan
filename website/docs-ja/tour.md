@@ -183,13 +183,17 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-要素カタログ：`text`、`link`、`button`、`text_field`、`number_field`、`int_field`、`checkbox`、`switch`、`slider`、`select`、`radio_group`、`tab_bar`、`segmented`、`column`、`row`、`grid`、`stack`、`spacer`、`divider`、`list_view`、`table`、`scroll_view`、`h_scroll_view`、`data_table`、`modal`、`image`、`svg`、`bar_chart`、`line_chart`、`progress`、`spinner`。
+要素は用途で分かれます。
 
-- **grid**：`columns=` / `rows=` が等分のトラックを敷き、中の要素は `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py`）。
-- **data_table**：最初の `row` がヘッダー行、以降が交互に色の付くデータ行。同じ列のセルに同じ `grow` を与えると列が揃います（`demo/table.py`）。
-- **spacer**：行や列の余った幅を引き受けます。`grow=` で複数に分け合えます。
-- **divider**：親を横切る罫線。行の中では縦線、それ以外では横線です。
-- **link**：`link("Docs", "https://…")` はクリックで URL をブラウザで開く一行のテキストです。ヘッドレス実行では `click:` を受けても何も開きません。
+- **並べる**：`column`、`row`、`grid`、`stack`（子を重ねる）、`spacer`、`divider`。
+  `grid(columns=, rows=)` は等分のトラックを敷き、中の要素は `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py`）。
+  `spacer()` は余った幅を引き受け（`grow=` で分け合えます）、`divider()` は親を横切る罫線です（行の中では縦線）。
+- **入力**：`button` と[フォーム部品](#フォーム部品)。
+- **見せる**：`text`、`link`、`image`、`svg`、`progress`、`spinner`、`bar_chart`、`line_chart`。
+  `link("Docs", "https://…")` はクリックで URL をブラウザで開きます（ヘッドレス実行では `click:` を受けても開きません）。
+- **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
+  `data_table` は最初の `row` がヘッダー行、以降が交互に色の付くデータ行で、同じ列のセルに同じ `grow` を与えると列が揃います（`demo/table.py`）。
+- **重ねる**：`modal`。
 
 `text` には文字の体裁と、自分の箱を持たせられます。
 体裁は `bold=`、`italic=`、`mono=`、`underline=`。

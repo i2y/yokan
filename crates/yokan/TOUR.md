@@ -215,13 +215,17 @@ def view():
             button("clear", on_click=lambda: name.set(""))
 ```
 
-The element catalog: `text`, `link`, `button`, `text_field`, `number_field`, `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`, `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`, `divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`, `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`, `progress`, `spinner`.
+The elements, by what they are for:
 
-- **grid**: `columns=` / `rows=` lay equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
-- **data_table**: the first `row` child is the header, the rest are data rows shaded in alternation. Columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
-- **spacer**: takes the space its row or column has left; `grow=` shares it between several.
-- **divider**: a rule across its parent — vertical inside a row, horizontal elsewhere.
-- **link**: `link("Docs", "https://…")` opens the URL in the browser. A headless `click:` on it is accepted and opens nothing.
+- **Arranging**: `column`, `row`, `grid`, `stack` (children on top of each other), `spacer`, `divider`.
+  `grid(columns=, rows=)` lays equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
+  `spacer()` takes the space its row or column has left (`grow=` shares it between several); `divider()` draws a rule across its parent, vertical inside a row.
+- **Input**: `button`, and the [form controls](#form-controls).
+- **Showing**: `text`, `link`, `image`, `svg`, `progress`, `spinner`, `bar_chart`, `line_chart`.
+  `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
+- **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
+  `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
+- **Layering**: `modal`.
 
 `text` carries typography and a box of its own.
 The typography is `bold=`, `italic=`, `mono=` and `underline=`.
