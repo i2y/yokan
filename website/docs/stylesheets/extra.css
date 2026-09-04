@@ -140,10 +140,12 @@
   max-width: 100%;
 }
 
-/* A picture the page sized itself keeps that size; only the ones
-   written plainly get capped, so a tall app window does not fill the
-   first screen. */
-.md-typeset img[src*="images/"]:not(.yk-hero__mark):not([width]) {
+/* A picture the page sized itself keeps that size, and so does the
+   diagram; only a plainly written app window gets capped, so a tall
+   one does not fill the first screen. Both are excluded here rather
+   than overridden below, because a `:not()` more raises specificity
+   and an override loses to it. */
+.md-typeset img[src*="images/"]:not(.yk-hero__mark):not([width]):not([src*="architecture"]) {
   max-height: 26rem;
   width: auto;
 }
@@ -156,12 +158,8 @@
 /* A paragraph holding nothing but a picture centres it. */
 .md-typeset p:has(> img:only-child) { text-align: center; }
 
-/* The diagram is the page's one wide picture: it takes the column,
-   with no height cap. The `:not()` is there to match the rule above
-   in specificity — without it the 26rem cap wins and the diagram
-   shrinks to two thirds. */
-.md-typeset img[src*="architecture"]:not(.yk-hero__mark) {
-  max-height: none;
+/* The diagram is the page's one wide picture: it takes the column. */
+.md-typeset img[src*="architecture"] {
   width: 100%;
   padding: .8rem;
 }
