@@ -777,20 +777,471 @@ pub fn json_has(src: &str, path: &str) -> bool {
 
 // ---- time -----------------------------------------------------------
 
-pub fn time_now_ms() -> i64 {
+/// Python's `time`, as a twin. There is nothing for a ground-truth
+/// table to say about a clock — the answer is the machine's, and the
+/// two runs read it at different moments — so what a twin owes here
+/// is the unit and the reference point CPython documents, and the
+/// gate holds an app that displays one to a fixed input instead.
+fn epoch_nanos() -> i128 {
     match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(d) => d.as_millis() as i64,
+        Ok(d) => d.as_nanos() as i128,
         Err(e) => panic!("time: clock before epoch: {e}"),
+    }
+}
+
+pub fn time_time() -> f64 {
+    epoch_nanos() as f64 / 1e9
+}
+
+pub fn time_time_ns() -> i64 {
+    epoch_nanos() as i64
+}
+
+/// `monotonic` and `perf_counter` are both "the highest-resolution
+/// clock that cannot go backwards" here, as they are on most
+/// platforms; CPython documents the reference point of either as
+/// undefined, so only differences mean anything.
+fn since_start() -> std::time::Duration {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed()
+}
+
+pub fn time_monotonic() -> f64 {
+    since_start().as_secs_f64()
+}
+
+pub fn time_monotonic_ns() -> i64 {
+    since_start().as_nanos() as i64
+}
+
+pub fn time_perf_counter() -> f64 {
+    time_monotonic()
+}
+
+pub fn time_perf_counter_ns() -> i64 {
+    time_monotonic_ns()
+}
+
+/// `time.sleep(secs)` — seconds as a float, and a negative one is an
+/// error rather than a no-op, which is CPython's call.
+pub fn time_sleep(secs: f64) {
+    assert!(!(secs < 0.0), "sleep length must be non-negative");
+    if secs > 0.0 && secs.is_finite() {
+        std::thread::sleep(std::time::Duration::from_secs_f64(secs));
     }
 }
 
 /// UTC strftime of a millisecond timestamp — deterministic for a
 /// fixed input, which is what a gate script feeds it.
-pub fn time_format_ms(ms: i64, fmt: &str) -> String {
+pub fn clock_format_ms(ms: i64, fmt: &str) -> String {
     match chrono::DateTime::from_timestamp_millis(ms) {
         Some(dt) => dt.format(fmt).to_string(),
-        None => panic!("time: `{ms}` is out of range"),
+        None => panic!("clock: `{ms}` is out of range"),
     }
+}
+
+// ---- datetime -------------------------------------------------------
+// Python's `datetime`, as a twin, carried as integers: a `date` is
+// its ordinal (0001-01-01 is 1, which is what `toordinal` answers), a
+// `datetime` is microseconds from that same origin, and a
+// `timedelta` is microseconds. Comparison is then integer
+// comparison, ordering included, and nothing new has to cross the
+// binding boundary.
+//
+// Naive only. An aware datetime carries a zone, and a zone is what
+// §2.1 of the plan keeps out until it can be read from the OS on
+// both sides; `timezone` and `tzinfo` are refused by name meanwhile.
+
+const DAY_US: i64 = 86_400_000_000;
+/// Python's `date.max.toordinal()` — the calendar stops at 9999.
+const ORD_MAX: i64 = 3_652_059;
+
+fn ordinal_to_date(ord: i64) -> chrono::NaiveDate {
+    assert!(
+        (1..=ORD_MAX).contains(&ord),
+        "date value out of range"
+    );
+    chrono::NaiveDate::from_num_days_from_ce_opt(ord as i32).expect("checked range")
+}
+
+fn date_to_ordinal(d: chrono::NaiveDate) -> i64 {
+    i64::from(chrono::Datelike::num_days_from_ce(&d))
+}
+
+/// A datetime's day and its microseconds within that day. The
+/// remainder is Euclidean so a value before the origin cannot happen
+/// — the origin IS the minimum.
+fn split_datetime(us: i64) -> (i64, i64) {
+    assert!(us >= 0 && us < ORD_MAX * DAY_US + DAY_US, "date value out of range");
+    (us.div_euclid(DAY_US) + 1, us.rem_euclid(DAY_US))
+}
+
+pub fn date_new(y: i64, m: i64, d: i64) -> i64 {
+    let bad = |what: &str, lo: i64, hi: i64, got: i64| -> ! {
+        panic!("{what} must be in {lo}..{hi}, not {got}")
+    };
+    if !(1..=9999).contains(&y) {
+        bad("year", 1, 9999, y);
+    }
+    if !(1..=12).contains(&m) {
+        bad("month", 1, 12, m);
+    }
+    match chrono::NaiveDate::from_ymd_opt(y as i32, m as u32, d as u32) {
+        Some(x) => date_to_ordinal(x),
+        // CPython names the month's own last day, which takes the
+        // leap year into account for it.
+        None => {
+            let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+            let last = chrono::NaiveDate::from_ymd_opt(ny as i32, nm as u32, 1)
+                .and_then(|f| f.pred_opt())
+                .map(|f| i64::from(chrono::Datelike::day(&f)))
+                .unwrap_or(31);
+            panic!("day {d} must be in range 1..{last} for month {m} in year {y}")
+        }
+    }
+}
+
+pub fn date_today() -> i64 {
+    date_to_ordinal(chrono::Local::now().date_naive())
+}
+
+pub fn date_from_iso(s: &str) -> i64 {
+    match chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        Ok(d) => date_to_ordinal(d),
+        Err(_) => panic!("Invalid isoformat string: '{s}'"),
+    }
+}
+
+pub fn date_isoformat(ord: i64) -> String {
+    let d = ordinal_to_date(ord);
+    format!("{}", d.format("%Y-%m-%d"))
+}
+
+pub fn date_year(ord: i64) -> i64 {
+    i64::from(chrono::Datelike::year(&ordinal_to_date(ord)))
+}
+pub fn date_month(ord: i64) -> i64 {
+    i64::from(chrono::Datelike::month(&ordinal_to_date(ord)))
+}
+pub fn date_day(ord: i64) -> i64 {
+    i64::from(chrono::Datelike::day(&ordinal_to_date(ord)))
+}
+/// Monday is 0, the way Python counts it.
+pub fn date_weekday(ord: i64) -> i64 {
+    i64::from(chrono::Datelike::weekday(&ordinal_to_date(ord)).num_days_from_monday())
+}
+pub fn date_isoweekday(ord: i64) -> i64 {
+    date_weekday(ord) + 1
+}
+pub fn date_toordinal(ord: i64) -> i64 {
+    ordinal_to_date(ord);
+    ord
+}
+pub fn date_from_ordinal(ord: i64) -> i64 {
+    ordinal_to_date(ord);
+    ord
+}
+pub fn date_strftime(ord: i64, fmt: &str) -> String {
+    py_strftime(ordinal_to_date(ord).and_hms_opt(0, 0, 0).expect("midnight"), fmt)
+}
+/// `str(date)` is its isoformat.
+pub fn date_str(ord: i64) -> String {
+    date_isoformat(ord)
+}
+
+/// `date + timedelta` adds whole DAYS: the delta normalizes first, so
+/// twenty-five hours is one day, as it is in Python.
+pub fn date_add_delta(ord: i64, us: i64) -> i64 {
+    let out = ord + delta_days(us);
+    assert!((1..=ORD_MAX).contains(&out), "date value out of range");
+    out
+}
+pub fn date_sub_delta(ord: i64, us: i64) -> i64 {
+    date_add_delta(ord, -us)
+}
+pub fn date_sub_date(a: i64, b: i64) -> i64 {
+    (a - b) * DAY_US
+}
+
+pub fn datetime_new(y: i64, m: i64, d: i64, h: i64, mi: i64, s: i64, us: i64) -> i64 {
+    let ord = date_new(y, m, d);
+    for (what, v, hi) in [("hour", h, 23), ("minute", mi, 59), ("second", s, 59), ("microsecond", us, 999_999)] {
+        assert!(
+            (0..=hi).contains(&v),
+            "{what} must be in 0..{hi}, not {v}"
+        );
+    }
+    (ord - 1) * DAY_US + h * 3_600_000_000 + mi * 60_000_000 + s * 1_000_000 + us
+}
+
+pub fn datetime_now() -> i64 {
+    let now = chrono::Local::now().naive_local();
+    naive_to_micros(now)
+}
+
+fn naive_to_micros(t: chrono::NaiveDateTime) -> i64 {
+    use chrono::Timelike;
+    let ord = date_to_ordinal(t.date());
+    (ord - 1) * DAY_US
+        + i64::from(t.hour()) * 3_600_000_000
+        + i64::from(t.minute()) * 60_000_000
+        + i64::from(t.second()) * 1_000_000
+        + i64::from(t.nanosecond() % 1_000_000_000) / 1_000
+}
+
+fn micros_to_naive(us: i64) -> chrono::NaiveDateTime {
+    let (ord, rest) = split_datetime(us);
+    ordinal_to_date(ord)
+        .and_hms_micro_opt(
+            (rest / 3_600_000_000) as u32,
+            (rest / 60_000_000 % 60) as u32,
+            (rest / 1_000_000 % 60) as u32,
+            (rest % 1_000_000) as u32,
+        )
+        .expect("in range")
+}
+
+/// A naive datetime is local time, which is what CPython assumes when
+/// it turns one into a timestamp — both runs read the same zone.
+pub fn datetime_timestamp(us: i64) -> f64 {
+    use chrono::TimeZone;
+    let naive = micros_to_naive(us);
+    match chrono::Local.from_local_datetime(&naive).earliest() {
+        Some(t) => t.timestamp() as f64 + (us % 1_000_000) as f64 / 1e6,
+        None => panic!("timestamp: {} has no local time", datetime_isoformat(us)),
+    }
+}
+
+pub fn datetime_from_timestamp(secs: f64) -> i64 {
+    use chrono::TimeZone;
+    assert!(secs.is_finite(), "timestamp out of range");
+    // Python rounds the fraction to the nearest microsecond.
+    let whole = secs.floor();
+    let frac = ((secs - whole) * 1e6).round() as i64;
+    let (whole, frac) = if frac == 1_000_000 { (whole + 1.0, 0) } else { (whole, frac) };
+    match chrono::Local.timestamp_opt(whole as i64, 0).earliest() {
+        Some(t) => naive_to_micros(t.naive_local()) + frac,
+        None => panic!("timestamp out of range"),
+    }
+}
+
+pub fn datetime_from_iso(s: &str) -> i64 {
+    let t = s.replacen('T', " ", 1);
+    for fmt in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%d %H:%M", "%Y-%m-%d"] {
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&t, fmt) {
+            return naive_to_micros(dt);
+        }
+        if fmt == "%Y-%m-%d" {
+            if let Ok(d) = chrono::NaiveDate::parse_from_str(&t, fmt) {
+                return (date_to_ordinal(d) - 1) * DAY_US;
+            }
+        }
+    }
+    panic!("Invalid isoformat string: '{s}'")
+}
+
+fn datetime_body(us: i64, sep: &str) -> String {
+    let t = micros_to_naive(us);
+    let head = t.format(&format!("%Y-%m-%d{sep}%H:%M:%S")).to_string();
+    let frac = us % 1_000_000;
+    if frac == 0 { head } else { format!("{head}.{frac:06}") }
+}
+pub fn datetime_isoformat(us: i64) -> String {
+    datetime_body(us, "T")
+}
+/// `str(datetime)` is its isoformat with a space where the T is.
+pub fn datetime_str(us: i64) -> String {
+    datetime_body(us, " ")
+}
+
+pub fn datetime_date(us: i64) -> i64 {
+    split_datetime(us).0
+}
+pub fn datetime_year(us: i64) -> i64 {
+    date_year(datetime_date(us))
+}
+pub fn datetime_month(us: i64) -> i64 {
+    date_month(datetime_date(us))
+}
+pub fn datetime_day(us: i64) -> i64 {
+    date_day(datetime_date(us))
+}
+pub fn datetime_hour(us: i64) -> i64 {
+    split_datetime(us).1 / 3_600_000_000
+}
+pub fn datetime_minute(us: i64) -> i64 {
+    split_datetime(us).1 / 60_000_000 % 60
+}
+pub fn datetime_second(us: i64) -> i64 {
+    split_datetime(us).1 / 1_000_000 % 60
+}
+pub fn datetime_microsecond(us: i64) -> i64 {
+    split_datetime(us).1 % 1_000_000
+}
+pub fn datetime_weekday(us: i64) -> i64 {
+    date_weekday(datetime_date(us))
+}
+pub fn datetime_isoweekday(us: i64) -> i64 {
+    date_weekday(datetime_date(us)) + 1
+}
+pub fn datetime_toordinal(us: i64) -> i64 {
+    datetime_date(us)
+}
+pub fn datetime_strftime(us: i64, fmt: &str) -> String {
+    py_strftime(micros_to_naive(us), fmt)
+}
+pub fn datetime_add_delta(us: i64, d: i64) -> i64 {
+    let out = us.checked_add(d).unwrap_or_else(|| panic!("result out of range"));
+    split_datetime(out);
+    out
+}
+pub fn datetime_sub_delta(us: i64, d: i64) -> i64 {
+    datetime_add_delta(us, -d)
+}
+pub fn datetime_sub_datetime(a: i64, b: i64) -> i64 {
+    a - b
+}
+/// `datetime.combine(date, midnight)` in the one shape the dialect
+/// has: a date read as a datetime.
+pub fn datetime_of_date(ord: i64) -> i64 {
+    ordinal_to_date(ord);
+    (ord - 1) * DAY_US
+}
+
+pub fn delta_new(days: i64, seconds: i64, micros: i64, millis: i64, minutes: i64, hours: i64, weeks: i64) -> i64 {
+    let over = || -> ! { panic!("timedelta out of the 64-bit microsecond range") };
+    let mul = |a: i64, b: i64| a.checked_mul(b).unwrap_or_else(|| over());
+    let add = |a: i64, b: i64| a.checked_add(b).unwrap_or_else(|| over());
+    let mut out = mul(days + weeks * 7, DAY_US);
+    out = add(out, mul(hours, 3_600_000_000));
+    out = add(out, mul(minutes, 60_000_000));
+    out = add(out, mul(seconds, 1_000_000));
+    out = add(out, mul(millis, 1_000));
+    add(out, micros)
+}
+
+/// `timedelta` normalizes to days, seconds and microseconds with the
+/// last two non-negative, so a negative delta is a negative day count
+/// plus a positive remainder — which is why `str(timedelta(days=-1,
+/// hours=2))` reads "-1 day, 2:00:00".
+pub fn delta_days(us: i64) -> i64 {
+    us.div_euclid(DAY_US)
+}
+pub fn delta_seconds(us: i64) -> i64 {
+    us.rem_euclid(DAY_US) / 1_000_000
+}
+pub fn delta_microseconds(us: i64) -> i64 {
+    us.rem_euclid(DAY_US) % 1_000_000
+}
+pub fn delta_total_seconds(us: i64) -> f64 {
+    us as f64 / 1e6
+}
+pub fn delta_str(us: i64) -> String {
+    let (days, rest) = (delta_days(us), us.rem_euclid(DAY_US));
+    let (h, m, s, frac) = (
+        rest / 3_600_000_000,
+        rest / 60_000_000 % 60,
+        rest / 1_000_000 % 60,
+        rest % 1_000_000,
+    );
+    let mut out = String::new();
+    if days != 0 {
+        out.push_str(&format!("{days} day{}, ", if days.abs() == 1 { "" } else { "s" }));
+    }
+    out.push_str(&format!("{h}:{m:02}:{s:02}"));
+    if frac != 0 {
+        out.push_str(&format!(".{frac:06}"));
+    }
+    out
+}
+pub fn delta_add(a: i64, b: i64) -> i64 {
+    a.checked_add(b).unwrap_or_else(|| panic!("result out of range"))
+}
+pub fn delta_sub(a: i64, b: i64) -> i64 {
+    a.checked_sub(b).unwrap_or_else(|| panic!("result out of range"))
+}
+pub fn delta_mul(a: i64, n: i64) -> i64 {
+    a.checked_mul(n).unwrap_or_else(|| panic!("result out of range"))
+}
+pub fn delta_neg(a: i64) -> i64 {
+    -a
+}
+pub fn delta_abs(a: i64) -> i64 {
+    a.abs()
+}
+
+const WDAY_SHORT: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WDAY_LONG: [&str; 7] = [
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+];
+const MON_SHORT: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+const MON_LONG: [&str; 12] = [
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+];
+
+/// `strftime`, written out rather than handed to a C library: the
+/// directives CPython gives a meaning of its own, with the month and
+/// day names of the C locale. `%c`, `%x`, `%X` and the platform
+/// extensions (`%-d`) are refused, because what they answer is the
+/// machine's business and not Python's.
+fn py_strftime(t: chrono::NaiveDateTime, fmt: &str) -> String {
+    use chrono::{Datelike, Timelike};
+    let d = t.date();
+    let wd = d.weekday().num_days_from_monday() as usize;
+    let mut out = String::new();
+    let mut cs = fmt.chars().peekable();
+    while let Some(c) = cs.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        let Some(k) = cs.next() else {
+            panic!("stray %% in format string");
+        };
+        match k {
+            'Y' => out.push_str(&format!("{:04}", d.year())),
+            'y' => out.push_str(&format!("{:02}", d.year() % 100)),
+            'm' => out.push_str(&format!("{:02}", d.month())),
+            'd' => out.push_str(&format!("{:02}", d.day())),
+            'H' => out.push_str(&format!("{:02}", t.hour())),
+            'M' => out.push_str(&format!("{:02}", t.minute())),
+            'S' => out.push_str(&format!("{:02}", t.second())),
+            'f' => out.push_str(&format!("{:06}", t.nanosecond() / 1_000)),
+            'j' => out.push_str(&format!("{:03}", d.ordinal())),
+            'a' => out.push_str(WDAY_SHORT[wd]),
+            'A' => out.push_str(WDAY_LONG[wd]),
+            'b' => out.push_str(MON_SHORT[d.month0() as usize]),
+            'B' => out.push_str(MON_LONG[d.month0() as usize]),
+            'p' => out.push_str(if t.hour() < 12 { "AM" } else { "PM" }),
+            'I' => {
+                let h = t.hour() % 12;
+                out.push_str(&format!("{:02}", if h == 0 { 12 } else { h }));
+            }
+            // Python counts the week from Sunday for %U and from
+            // Monday for %W, and both give 00 to the days before the
+            // first such weekday of the year.
+            'w' => out.push_str(&((wd + 1) % 7).to_string()),
+            'U' | 'W' => {
+                let first = if k == 'U' {
+                    (d.ordinal() as i32 - 1 - (wd as i32 + 1) % 7 + 7) / 7
+                } else {
+                    (d.ordinal() as i32 - 1 - wd as i32 + 7) / 7
+                };
+                out.push_str(&format!("{first:02}"));
+            }
+            // Naive here, so the zone is empty rather than absent.
+            'z' | 'Z' => {}
+            '%' => out.push('%'),
+            other => panic!(
+                "`%{other}` is not a format code the dialect takes — the platform decides \
+                 what it means, and the two runs would not agree"
+            ),
+        }
+    }
+    out
 }
 
 // ---- strings --------------------------------------------------------
@@ -813,13 +1264,6 @@ pub fn notify_send(title: &str, body: &str) {
 /// Sleep for `ms` milliseconds and answer 0. Both doors release
 /// before they call it: the interpreted one detaches from Python, and
 /// the compiled one is awaited, which puts it on the engine's pool.
-pub fn time_sleep_ms(ms: i64) -> i64 {
-    if ms > 0 {
-        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
-    }
-    0
-}
-
 /// Total float parse: the value or the default, never an error.
 pub fn strings_to_float(s: &str, default: f64) -> f64 {
     s.trim().parse::<f64>().unwrap_or(default)
@@ -2678,19 +3122,19 @@ pub fn json_bools(xs: Vec<bool>) -> Vec<String> {
 /// runs read the same zone database and print the same string; a
 /// verification script that wants a fixed answer uses `format_ms`,
 /// which is UTC.
-pub fn time_format_local_ms(ms: i64, fmt: &str) -> String {
+pub fn clock_format_local_ms(ms: i64, fmt: &str) -> String {
     match chrono::DateTime::from_timestamp_millis(ms) {
         Some(dt) => dt.with_timezone(&chrono::Local).format(fmt).to_string(),
-        None => panic!("time: `{ms}` is out of range"),
+        None => panic!("clock: `{ms}` is out of range"),
     }
 }
 
 /// The machine's offset from UTC, in minutes, at that instant.
-pub fn time_local_offset_minutes(ms: i64) -> i64 {
+pub fn clock_local_offset_minutes(ms: i64) -> i64 {
     use chrono::Offset;
     match chrono::DateTime::from_timestamp_millis(ms) {
         Some(dt) => (dt.with_timezone(&chrono::Local).offset().fix().local_minus_utc() / 60) as i64,
-        None => panic!("time: `{ms}` is out of range"),
+        None => panic!("clock: `{ms}` is out of range"),
     }
 }
 

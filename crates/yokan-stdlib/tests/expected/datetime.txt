@@ -1,0 +1,358 @@
+# CPython 3.14.2 — printed by tools/gen_expected.py, not by hand.
+date_new i:1 i:1 i:1 -> i:1
+date_isoformat i:1 -> s:0001-01-01
+date_str i:1 -> s:0001-01-01
+date_year i:1 -> i:1
+date_month i:1 -> i:1
+date_day i:1 -> i:1
+date_weekday i:1 -> i:0
+date_isoweekday i:1 -> i:1
+date_strftime i:1 s:%25Y-%25m-%25d -> s:0001-01-01
+date_strftime i:1 s:%25y%25m%25d -> s:010101
+date_strftime i:1 s:%25a%20%25A -> s:Mon%20Monday
+date_strftime i:1 s:%25b%20%25B -> s:Jan%20January
+date_strftime i:1 s:%25j -> s:001
+date_strftime i:1 s:%25w -> s:1
+date_strftime i:1 s:%25U -> s:00
+date_strftime i:1 s:%25W -> s:01
+date_strftime i:1 s:%25%25 -> s:%25
+date_strftime i:1 s:x%25Yx -> s:x0001x
+date_from_iso s:0001-01-01 -> i:1
+datetime_of_date i:1 -> i:0
+date_new i:1970 i:1 i:1 -> i:719163
+date_isoformat i:719163 -> s:1970-01-01
+date_str i:719163 -> s:1970-01-01
+date_year i:719163 -> i:1970
+date_month i:719163 -> i:1
+date_day i:719163 -> i:1
+date_weekday i:719163 -> i:3
+date_isoweekday i:719163 -> i:4
+date_strftime i:719163 s:%25Y-%25m-%25d -> s:1970-01-01
+date_strftime i:719163 s:%25y%25m%25d -> s:700101
+date_strftime i:719163 s:%25a%20%25A -> s:Thu%20Thursday
+date_strftime i:719163 s:%25b%20%25B -> s:Jan%20January
+date_strftime i:719163 s:%25j -> s:001
+date_strftime i:719163 s:%25w -> s:4
+date_strftime i:719163 s:%25U -> s:00
+date_strftime i:719163 s:%25W -> s:00
+date_strftime i:719163 s:%25%25 -> s:%25
+date_strftime i:719163 s:x%25Yx -> s:x1970x
+date_from_iso s:1970-01-01 -> i:719163
+datetime_of_date i:719163 -> i:62135596800000000
+date_new i:2000 i:2 i:29 -> i:730179
+date_isoformat i:730179 -> s:2000-02-29
+date_str i:730179 -> s:2000-02-29
+date_year i:730179 -> i:2000
+date_month i:730179 -> i:2
+date_day i:730179 -> i:29
+date_weekday i:730179 -> i:1
+date_isoweekday i:730179 -> i:2
+date_strftime i:730179 s:%25Y-%25m-%25d -> s:2000-02-29
+date_strftime i:730179 s:%25y%25m%25d -> s:000229
+date_strftime i:730179 s:%25a%20%25A -> s:Tue%20Tuesday
+date_strftime i:730179 s:%25b%20%25B -> s:Feb%20February
+date_strftime i:730179 s:%25j -> s:060
+date_strftime i:730179 s:%25w -> s:2
+date_strftime i:730179 s:%25U -> s:09
+date_strftime i:730179 s:%25W -> s:09
+date_strftime i:730179 s:%25%25 -> s:%25
+date_strftime i:730179 s:x%25Yx -> s:x2000x
+date_from_iso s:2000-02-29 -> i:730179
+datetime_of_date i:730179 -> i:63087379200000000
+date_new i:2026 i:9 i:4 -> i:739863
+date_isoformat i:739863 -> s:2026-09-04
+date_str i:739863 -> s:2026-09-04
+date_year i:739863 -> i:2026
+date_month i:739863 -> i:9
+date_day i:739863 -> i:4
+date_weekday i:739863 -> i:4
+date_isoweekday i:739863 -> i:5
+date_strftime i:739863 s:%25Y-%25m-%25d -> s:2026-09-04
+date_strftime i:739863 s:%25y%25m%25d -> s:260904
+date_strftime i:739863 s:%25a%20%25A -> s:Fri%20Friday
+date_strftime i:739863 s:%25b%20%25B -> s:Sep%20September
+date_strftime i:739863 s:%25j -> s:247
+date_strftime i:739863 s:%25w -> s:5
+date_strftime i:739863 s:%25U -> s:35
+date_strftime i:739863 s:%25W -> s:35
+date_strftime i:739863 s:%25%25 -> s:%25
+date_strftime i:739863 s:x%25Yx -> s:x2026x
+date_from_iso s:2026-09-04 -> i:739863
+datetime_of_date i:739863 -> i:63924076800000000
+date_new i:9999 i:12 i:31 -> i:3652059
+date_isoformat i:3652059 -> s:9999-12-31
+date_str i:3652059 -> s:9999-12-31
+date_year i:3652059 -> i:9999
+date_month i:3652059 -> i:12
+date_day i:3652059 -> i:31
+date_weekday i:3652059 -> i:4
+date_isoweekday i:3652059 -> i:5
+date_strftime i:3652059 s:%25Y-%25m-%25d -> s:9999-12-31
+date_strftime i:3652059 s:%25y%25m%25d -> s:991231
+date_strftime i:3652059 s:%25a%20%25A -> s:Fri%20Friday
+date_strftime i:3652059 s:%25b%20%25B -> s:Dec%20December
+date_strftime i:3652059 s:%25j -> s:365
+date_strftime i:3652059 s:%25w -> s:5
+date_strftime i:3652059 s:%25U -> s:52
+date_strftime i:3652059 s:%25W -> s:52
+date_strftime i:3652059 s:%25%25 -> s:%25
+date_strftime i:3652059 s:x%25Yx -> s:x9999x
+date_from_iso s:9999-12-31 -> i:3652059
+datetime_of_date i:3652059 -> i:315537811200000000
+date_new i:2024 i:2 i:29 -> i:738945
+date_isoformat i:738945 -> s:2024-02-29
+date_str i:738945 -> s:2024-02-29
+date_year i:738945 -> i:2024
+date_month i:738945 -> i:2
+date_day i:738945 -> i:29
+date_weekday i:738945 -> i:3
+date_isoweekday i:738945 -> i:4
+date_strftime i:738945 s:%25Y-%25m-%25d -> s:2024-02-29
+date_strftime i:738945 s:%25y%25m%25d -> s:240229
+date_strftime i:738945 s:%25a%20%25A -> s:Thu%20Thursday
+date_strftime i:738945 s:%25b%20%25B -> s:Feb%20February
+date_strftime i:738945 s:%25j -> s:060
+date_strftime i:738945 s:%25w -> s:4
+date_strftime i:738945 s:%25U -> s:08
+date_strftime i:738945 s:%25W -> s:09
+date_strftime i:738945 s:%25%25 -> s:%25
+date_strftime i:738945 s:x%25Yx -> s:x2024x
+date_from_iso s:2024-02-29 -> i:738945
+datetime_of_date i:738945 -> i:63844761600000000
+date_new i:1999 i:12 i:31 -> i:730119
+date_isoformat i:730119 -> s:1999-12-31
+date_str i:730119 -> s:1999-12-31
+date_year i:730119 -> i:1999
+date_month i:730119 -> i:12
+date_day i:730119 -> i:31
+date_weekday i:730119 -> i:4
+date_isoweekday i:730119 -> i:5
+date_strftime i:730119 s:%25Y-%25m-%25d -> s:1999-12-31
+date_strftime i:730119 s:%25y%25m%25d -> s:991231
+date_strftime i:730119 s:%25a%20%25A -> s:Fri%20Friday
+date_strftime i:730119 s:%25b%20%25B -> s:Dec%20December
+date_strftime i:730119 s:%25j -> s:365
+date_strftime i:730119 s:%25w -> s:5
+date_strftime i:730119 s:%25U -> s:52
+date_strftime i:730119 s:%25W -> s:52
+date_strftime i:730119 s:%25%25 -> s:%25
+date_strftime i:730119 s:x%25Yx -> s:x1999x
+date_from_iso s:1999-12-31 -> i:730119
+datetime_of_date i:730119 -> i:63082195200000000
+date_new i:2026 i:1 i:1 -> i:739617
+date_isoformat i:739617 -> s:2026-01-01
+date_str i:739617 -> s:2026-01-01
+date_year i:739617 -> i:2026
+date_month i:739617 -> i:1
+date_day i:739617 -> i:1
+date_weekday i:739617 -> i:3
+date_isoweekday i:739617 -> i:4
+date_strftime i:739617 s:%25Y-%25m-%25d -> s:2026-01-01
+date_strftime i:739617 s:%25y%25m%25d -> s:260101
+date_strftime i:739617 s:%25a%20%25A -> s:Thu%20Thursday
+date_strftime i:739617 s:%25b%20%25B -> s:Jan%20January
+date_strftime i:739617 s:%25j -> s:001
+date_strftime i:739617 s:%25w -> s:4
+date_strftime i:739617 s:%25U -> s:00
+date_strftime i:739617 s:%25W -> s:00
+date_strftime i:739617 s:%25%25 -> s:%25
+date_strftime i:739617 s:x%25Yx -> s:x2026x
+date_from_iso s:2026-01-01 -> i:739617
+datetime_of_date i:739617 -> i:63902822400000000
+date_new i:2026 i:13 i:1 -> !ValueError:month%20must%20be%20in%201..12%2C%20not%2013
+date_new i:2026 i:2 i:30 -> !ValueError:day%2030%20must%20be%20in%20range%201..28%20for%20month%202%20in%20year%202026
+date_new i:0 i:1 i:1 -> !ValueError:year%20must%20be%20in%201..9999%2C%20not%200
+date_new i:10000 i:1 i:1 -> !ValueError:year%20must%20be%20in%201..9999%2C%20not%2010000
+date_from_iso s:nonsense -> !ValueError:Invalid%20isoformat%20string%3A%20%27nonsense%27
+datetime_new i:2026 i:9 i:4 i:13 i:5 i:6 i:789012 -> i:63924123906789012
+datetime_isoformat i:63924123906789012 -> s:2026-09-04T13%3A05%3A06.789012
+datetime_str i:63924123906789012 -> s:2026-09-04%2013%3A05%3A06.789012
+datetime_date i:63924123906789012 -> i:739863
+datetime_year i:63924123906789012 -> i:2026
+datetime_month i:63924123906789012 -> i:9
+datetime_day i:63924123906789012 -> i:4
+datetime_hour i:63924123906789012 -> i:13
+datetime_minute i:63924123906789012 -> i:5
+datetime_second i:63924123906789012 -> i:6
+datetime_microsecond i:63924123906789012 -> i:789012
+datetime_weekday i:63924123906789012 -> i:4
+datetime_strftime i:63924123906789012 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:2026-09-04T13%3A05%3A06
+datetime_strftime i:63924123906789012 s:%25H%3A%25M -> s:13%3A05
+datetime_strftime i:63924123906789012 s:%25f -> s:789012
+datetime_strftime i:63924123906789012 s:%25p%20%25I -> s:PM%2001
+datetime_strftime i:63924123906789012 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Friday%2C%2004%20September%202026
+datetime_from_iso s:2026-09-04T13%3A05%3A06.789012 -> i:63924123906789012
+datetime_new i:1 i:1 i:1 i:0 i:0 i:0 i:0 -> i:0
+datetime_isoformat i:0 -> s:0001-01-01T00%3A00%3A00
+datetime_str i:0 -> s:0001-01-01%2000%3A00%3A00
+datetime_date i:0 -> i:1
+datetime_year i:0 -> i:1
+datetime_month i:0 -> i:1
+datetime_day i:0 -> i:1
+datetime_hour i:0 -> i:0
+datetime_minute i:0 -> i:0
+datetime_second i:0 -> i:0
+datetime_microsecond i:0 -> i:0
+datetime_weekday i:0 -> i:0
+datetime_strftime i:0 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:0001-01-01T00%3A00%3A00
+datetime_strftime i:0 s:%25H%3A%25M -> s:00%3A00
+datetime_strftime i:0 s:%25f -> s:000000
+datetime_strftime i:0 s:%25p%20%25I -> s:AM%2012
+datetime_strftime i:0 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Monday%2C%2001%20January%200001
+datetime_from_iso s:0001-01-01T00%3A00%3A00 -> i:0
+datetime_new i:2026 i:1 i:1 i:0 i:0 i:0 i:0 -> i:63902822400000000
+datetime_isoformat i:63902822400000000 -> s:2026-01-01T00%3A00%3A00
+datetime_str i:63902822400000000 -> s:2026-01-01%2000%3A00%3A00
+datetime_date i:63902822400000000 -> i:739617
+datetime_year i:63902822400000000 -> i:2026
+datetime_month i:63902822400000000 -> i:1
+datetime_day i:63902822400000000 -> i:1
+datetime_hour i:63902822400000000 -> i:0
+datetime_minute i:63902822400000000 -> i:0
+datetime_second i:63902822400000000 -> i:0
+datetime_microsecond i:63902822400000000 -> i:0
+datetime_weekday i:63902822400000000 -> i:3
+datetime_strftime i:63902822400000000 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:2026-01-01T00%3A00%3A00
+datetime_strftime i:63902822400000000 s:%25H%3A%25M -> s:00%3A00
+datetime_strftime i:63902822400000000 s:%25f -> s:000000
+datetime_strftime i:63902822400000000 s:%25p%20%25I -> s:AM%2012
+datetime_strftime i:63902822400000000 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Thursday%2C%2001%20January%202026
+datetime_from_iso s:2026-01-01T00%3A00%3A00 -> i:63902822400000000
+datetime_new i:2026 i:6 i:30 i:23 i:59 i:59 i:999999 -> i:63918460799999999
+datetime_isoformat i:63918460799999999 -> s:2026-06-30T23%3A59%3A59.999999
+datetime_str i:63918460799999999 -> s:2026-06-30%2023%3A59%3A59.999999
+datetime_date i:63918460799999999 -> i:739797
+datetime_year i:63918460799999999 -> i:2026
+datetime_month i:63918460799999999 -> i:6
+datetime_day i:63918460799999999 -> i:30
+datetime_hour i:63918460799999999 -> i:23
+datetime_minute i:63918460799999999 -> i:59
+datetime_second i:63918460799999999 -> i:59
+datetime_microsecond i:63918460799999999 -> i:999999
+datetime_weekday i:63918460799999999 -> i:1
+datetime_strftime i:63918460799999999 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:2026-06-30T23%3A59%3A59
+datetime_strftime i:63918460799999999 s:%25H%3A%25M -> s:23%3A59
+datetime_strftime i:63918460799999999 s:%25f -> s:999999
+datetime_strftime i:63918460799999999 s:%25p%20%25I -> s:PM%2011
+datetime_strftime i:63918460799999999 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Tuesday%2C%2030%20June%202026
+datetime_from_iso s:2026-06-30T23%3A59%3A59.999999 -> i:63918460799999999
+datetime_new i:9999 i:12 i:31 i:23 i:59 i:59 i:999999 -> i:315537897599999999
+datetime_isoformat i:315537897599999999 -> s:9999-12-31T23%3A59%3A59.999999
+datetime_str i:315537897599999999 -> s:9999-12-31%2023%3A59%3A59.999999
+datetime_date i:315537897599999999 -> i:3652059
+datetime_year i:315537897599999999 -> i:9999
+datetime_month i:315537897599999999 -> i:12
+datetime_day i:315537897599999999 -> i:31
+datetime_hour i:315537897599999999 -> i:23
+datetime_minute i:315537897599999999 -> i:59
+datetime_second i:315537897599999999 -> i:59
+datetime_microsecond i:315537897599999999 -> i:999999
+datetime_weekday i:315537897599999999 -> i:4
+datetime_strftime i:315537897599999999 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:9999-12-31T23%3A59%3A59
+datetime_strftime i:315537897599999999 s:%25H%3A%25M -> s:23%3A59
+datetime_strftime i:315537897599999999 s:%25f -> s:999999
+datetime_strftime i:315537897599999999 s:%25p%20%25I -> s:PM%2011
+datetime_strftime i:315537897599999999 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Friday%2C%2031%20December%209999
+datetime_from_iso s:9999-12-31T23%3A59%3A59.999999 -> i:315537897599999999
+datetime_new i:2026 i:9 i:4 i:0 i:30 i:0 i:1 -> i:63924078600000001
+datetime_isoformat i:63924078600000001 -> s:2026-09-04T00%3A30%3A00.000001
+datetime_str i:63924078600000001 -> s:2026-09-04%2000%3A30%3A00.000001
+datetime_date i:63924078600000001 -> i:739863
+datetime_year i:63924078600000001 -> i:2026
+datetime_month i:63924078600000001 -> i:9
+datetime_day i:63924078600000001 -> i:4
+datetime_hour i:63924078600000001 -> i:0
+datetime_minute i:63924078600000001 -> i:30
+datetime_second i:63924078600000001 -> i:0
+datetime_microsecond i:63924078600000001 -> i:1
+datetime_weekday i:63924078600000001 -> i:4
+datetime_strftime i:63924078600000001 s:%25Y-%25m-%25dT%25H%3A%25M%3A%25S -> s:2026-09-04T00%3A30%3A00
+datetime_strftime i:63924078600000001 s:%25H%3A%25M -> s:00%3A30
+datetime_strftime i:63924078600000001 s:%25f -> s:000001
+datetime_strftime i:63924078600000001 s:%25p%20%25I -> s:AM%2012
+datetime_strftime i:63924078600000001 s:%25A%2C%20%25d%20%25B%20%25Y -> s:Friday%2C%2004%20September%202026
+datetime_from_iso s:2026-09-04T00%3A30%3A00.000001 -> i:63924078600000001
+datetime_new i:2026 i:9 i:4 i:24 i:0 i:0 i:0 -> !ValueError:hour%20must%20be%20in%200..23%2C%20not%2024
+datetime_new i:2026 i:9 i:4 i:0 i:0 i:0 i:1000000 -> !ValueError:microsecond%20must%20be%20in%200..999999%2C%20not%201000000
+datetime_from_iso s:2026-09-04 -> i:63924076800000000
+datetime_from_iso s:2026-09-04%2013%3A05%3A06 -> i:63924123906000000
+datetime_from_iso s:2026-09-04T13%3A05 -> i:63924123900000000
+datetime_from_iso s:not%20a%20date -> !ValueError:Invalid%20isoformat%20string%3A%20%27not%20a%20date%27
+delta_new i:0 i:0 i:0 i:0 i:0 i:0 i:0 -> i:0
+delta_days i:0 -> i:0
+delta_seconds i:0 -> i:0
+delta_microseconds i:0 -> i:0
+delta_total_seconds i:0 -> f:0000000000000000
+delta_str i:0 -> s:0%3A00%3A00
+delta_new i:1 i:0 i:0 i:0 i:0 i:0 i:0 -> i:86400000000
+delta_days i:86400000000 -> i:1
+delta_seconds i:86400000000 -> i:0
+delta_microseconds i:86400000000 -> i:0
+delta_total_seconds i:86400000000 -> f:40f5180000000000
+delta_str i:86400000000 -> s:1%20day%2C%200%3A00%3A00
+delta_new i:-1 i:0 i:0 i:0 i:0 i:2 i:0 -> i:-79200000000
+delta_days i:-79200000000 -> i:-1
+delta_seconds i:-79200000000 -> i:7200
+delta_microseconds i:-79200000000 -> i:0
+delta_total_seconds i:-79200000000 -> f:c0f3560000000000
+delta_str i:-79200000000 -> s:-1%20day%2C%202%3A00%3A00
+delta_new i:0 i:1 i:0 i:0 i:0 i:0 i:0 -> i:1000000
+delta_days i:1000000 -> i:0
+delta_seconds i:1000000 -> i:1
+delta_microseconds i:1000000 -> i:0
+delta_total_seconds i:1000000 -> f:3ff0000000000000
+delta_str i:1000000 -> s:0%3A00%3A01
+delta_new i:0 i:0 i:1 i:0 i:0 i:0 i:0 -> i:1
+delta_days i:1 -> i:0
+delta_seconds i:1 -> i:0
+delta_microseconds i:1 -> i:1
+delta_total_seconds i:1 -> f:3eb0c6f7a0b5ed8d
+delta_str i:1 -> s:0%3A00%3A00.000001
+delta_new i:2 i:0 i:5 i:0 i:0 i:0 i:0 -> i:172800000005
+delta_days i:172800000005 -> i:2
+delta_seconds i:172800000005 -> i:0
+delta_microseconds i:172800000005 -> i:5
+delta_total_seconds i:172800000005 -> f:4105180000029f17
+delta_str i:172800000005 -> s:2%20days%2C%200%3A00%3A00.000005
+delta_new i:0 i:0 i:0 i:1500 i:0 i:0 i:0 -> i:1500000
+delta_days i:1500000 -> i:0
+delta_seconds i:1500000 -> i:1
+delta_microseconds i:1500000 -> i:500000
+delta_total_seconds i:1500000 -> f:3ff8000000000000
+delta_str i:1500000 -> s:0%3A00%3A01.500000
+delta_new i:0 i:0 i:0 i:0 i:90 i:0 i:0 -> i:5400000000
+delta_days i:5400000000 -> i:0
+delta_seconds i:5400000000 -> i:5400
+delta_microseconds i:5400000000 -> i:0
+delta_total_seconds i:5400000000 -> f:40b5180000000000
+delta_str i:5400000000 -> s:1%3A30%3A00
+delta_new i:0 i:0 i:0 i:0 i:0 i:0 i:2 -> i:1209600000000
+delta_days i:1209600000000 -> i:14
+delta_seconds i:1209600000000 -> i:0
+delta_microseconds i:1209600000000 -> i:0
+delta_total_seconds i:1209600000000 -> f:4132750000000000
+delta_str i:1209600000000 -> s:14%20days%2C%200%3A00%3A00
+delta_new i:-3 i:-30 i:-7 i:0 i:0 i:0 i:0 -> i:-259230000007
+delta_days i:-259230000007 -> i:-4
+delta_seconds i:-259230000007 -> i:86369
+delta_microseconds i:-259230000007 -> i:999993
+delta_total_seconds i:-259230000007 -> f:c10fa4f00003ab86
+delta_str i:-259230000007 -> s:-4%20days%2C%2023%3A59%3A29.999993
+date_add_delta i:739863 i:0 -> i:739863
+datetime_add_delta i:63924123906789012 i:0 -> i:63924123906789012
+date_add_delta i:739863 i:86400000000 -> i:739864
+datetime_add_delta i:63924123906789012 i:86400000000 -> i:63924210306789012
+date_add_delta i:739863 i:-86400000000 -> i:739862
+datetime_add_delta i:63924123906789012 i:-86400000000 -> i:63924037506789012
+date_add_delta i:739863 i:90000000000 -> i:739864
+datetime_add_delta i:63924123906789012 i:90000000000 -> i:63924213906789012
+date_add_delta i:739863 i:1 -> i:739863
+datetime_add_delta i:63924123906789012 i:1 -> i:63924123906789013
+date_add_delta i:739863 i:-1 -> i:739862
+datetime_add_delta i:63924123906789012 i:-1 -> i:63924123906789011
+date_add_delta i:739863 i:5400000000 -> i:739863
+datetime_add_delta i:63924123906789012 i:5400000000 -> i:63924129306789012
+date_sub_date i:739863 i:739617 -> i:21254400000000
+date_sub_date i:739617 i:739863 -> i:-21254400000000
+datetime_sub_datetime i:63924123906789012 i:63924076800000000 -> i:47106789012
+date_add_delta i:3652059 i:86400000000 -> !OverflowError:date%20value%20out%20of%20range

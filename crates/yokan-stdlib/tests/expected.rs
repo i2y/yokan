@@ -425,3 +425,58 @@ fn json_matches_cpython() {
         _ => None,
     });
 }
+
+/// `datetime` in the integers the dialect carries it as: a date is
+/// its ordinal, a datetime is microseconds from the same origin, a
+/// timedelta is microseconds. Naive only — an aware datetime carries
+/// a zone, which is what the plan keeps out for now.
+#[test]
+fn datetime_matches_cpython() {
+    check(include_str!("expected/datetime.txt"), "datetime", |fname, a| {
+        let n1 = |g: fn(i64) -> i64| Some(V::I(g(a[0].i())));
+        let s1 = |g: fn(i64) -> String| Some(V::S(g(a[0].i())));
+        let n2 = |g: fn(i64, i64) -> i64| Some(V::I(g(a[0].i(), a[1].i())));
+        match fname {
+            "date_new" => Some(V::I(date_new(a[0].i(), a[1].i(), a[2].i()))),
+            "date_from_iso" => Some(V::I(date_from_iso(&a[0].s()))),
+            "date_isoformat" => s1(date_isoformat),
+            "date_str" => s1(date_str),
+            "date_year" => n1(date_year),
+            "date_month" => n1(date_month),
+            "date_day" => n1(date_day),
+            "date_weekday" => n1(date_weekday),
+            "date_isoweekday" => n1(date_isoweekday),
+            "date_strftime" => Some(V::S(date_strftime(a[0].i(), &a[1].s()))),
+            "date_add_delta" => n2(date_add_delta),
+            "date_sub_date" => n2(date_sub_date),
+            "datetime_new" => Some(V::I(datetime_new(
+                a[0].i(), a[1].i(), a[2].i(), a[3].i(), a[4].i(), a[5].i(), a[6].i(),
+            ))),
+            "datetime_from_iso" => Some(V::I(datetime_from_iso(&a[0].s()))),
+            "datetime_isoformat" => s1(datetime_isoformat),
+            "datetime_str" => s1(datetime_str),
+            "datetime_date" => n1(datetime_date),
+            "datetime_year" => n1(datetime_year),
+            "datetime_month" => n1(datetime_month),
+            "datetime_day" => n1(datetime_day),
+            "datetime_hour" => n1(datetime_hour),
+            "datetime_minute" => n1(datetime_minute),
+            "datetime_second" => n1(datetime_second),
+            "datetime_microsecond" => n1(datetime_microsecond),
+            "datetime_weekday" => n1(datetime_weekday),
+            "datetime_strftime" => Some(V::S(datetime_strftime(a[0].i(), &a[1].s()))),
+            "datetime_add_delta" => n2(datetime_add_delta),
+            "datetime_sub_datetime" => n2(datetime_sub_datetime),
+            "datetime_of_date" => n1(datetime_of_date),
+            "delta_new" => Some(V::I(delta_new(
+                a[0].i(), a[1].i(), a[2].i(), a[3].i(), a[4].i(), a[5].i(), a[6].i(),
+            ))),
+            "delta_days" => n1(delta_days),
+            "delta_seconds" => n1(delta_seconds),
+            "delta_microseconds" => n1(delta_microseconds),
+            "delta_total_seconds" => Some(V::F(delta_total_seconds(a[0].i()))),
+            "delta_str" => s1(delta_str),
+            _ => None,
+        }
+    });
+}

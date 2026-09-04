@@ -8,7 +8,7 @@ import random
 from dataclasses import dataclass
 
 from yokan import State, store  # noqa: E402
-from yokan import time
+from yokan import clock
 
 BASE_MS = 1767225600000  # 2026-01-01 00:00 UTC — the mock clock's epoch
 
@@ -76,7 +76,7 @@ class Metrics:
 
     def tick(self) -> None:
         self.ticks += 1
-        self.clock = time.format_ms(1767225600000 + self.ticks * 60000, "%H:%M")
+        self.clock = clock.format_ms(1767225600000 + self.ticks * 60000, "%H:%M")
         self.api_r = 900 + random.randint(0, 300)
         self.web_r = 600 + random.randint(0, 250)
         self.worker_r = 200 + random.randint(0, 120)
@@ -125,7 +125,7 @@ class Alerts:
         self.info_n = 0
 
     def emit_tick(self, tick_no: int) -> None:
-        stamp = time.format_ms(1767225600000 + tick_no * 60000, "%H:%M")
+        stamp = clock.format_ms(1767225600000 + tick_no * 60000, "%H:%M")
         roll = random.randint(0, 9)
         if roll < 2:
             self.crit_rows = self.crit_rows + ["🔴 " + stamp + "  p95 breach on api — circuit breaker armed"]

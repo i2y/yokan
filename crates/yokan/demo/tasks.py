@@ -11,6 +11,7 @@ clickable while the work runs — and `on_done` lands the result.
 """
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -23,7 +24,6 @@ from yokan import (  # noqa: E402
     spinner,
     task,
     text,
-    time,
 )
 
 busy: State[bool] = State(False)
@@ -32,7 +32,7 @@ n: State[int] = State(0)
 
 
 def slow_work() -> int:
-    time.sleep_ms(1500)
+    time.sleep(1.5)
     return 1_500
 
 

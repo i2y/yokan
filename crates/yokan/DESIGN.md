@@ -1138,3 +1138,39 @@ rule now asks whether the shape is a value rather than whether it is
 scalar. The same conversions the method side uses carry the list
 across, so the two sides speak one vocabulary. That is what lets a
 composing writer run in a text hole rather than only in a handler.
+
+## `datetime` as integers, and `time` split from `clock`
+
+The last two names Yokan had borrowed from Python are given back.
+Reading the clock is `import time` — `time`, `time_ns`, `monotonic`,
+`perf_counter`, `sleep` — and what stays on Yokan's side is the
+machine's own zone, under `clock`, because Python reaches that only
+through `localtime` and a struct. A clock is the one thing a
+ground-truth table cannot pin down: the answer is the machine's, and
+the two runs read it at different moments, so what a twin owes here
+is the unit and the reference point CPython documents.
+
+`datetime` is in, naive, as `date`, `datetime` and `timedelta`. Each
+is carried as an integer — a date is its ordinal, a datetime and a
+timedelta are microseconds — so comparison is integer comparison,
+ordering included, and nothing new has to cross the binding boundary.
+What the app writes as a method or an attribute is a static over that
+integer, and a default is folded to the integer at translate time,
+since the translator runs on the same CPython it could simply ask.
+The plan had suggested a struct or an integer; the integer is what
+made ordering free.
+
+`strftime` is written out rather than handed to a C library. CPython
+passes most directives to the platform, so the ones with a meaning of
+its own are what the dialect takes — `%Y %m %d %H %M %S %f %j %a %A
+%b %B %p %I %w %U %W %%`, with the month and day names of the C
+locale — and `%c`, `%x`, `%X` and `%-d` are refused, because what
+they answer is the machine's business and the two runs would not
+agree on it.
+
+What is refused, each by name: an aware value (`timezone`, `tzinfo`),
+`datetime.time`, `replace`, `strptime`, a date inside a list or a
+dict, and a date as a helper's parameter. The container one is the
+representation showing through — a list of dates would read as a list
+of numbers wherever the translator did not follow — and it is refused
+rather than half-carried.

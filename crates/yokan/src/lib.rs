@@ -2506,30 +2506,23 @@ fn py_sqlite_query_text_or(
 }
 
 
-#[pyfunction] #[pyo3(name = "now_ms")]
-fn py_time_now_ms() -> i64 { yokan_stdlib::time_now_ms() }
 #[pyfunction] #[pyo3(name = "format_ms")]
-fn py_time_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
-    py.detach(|| yokan_stdlib::time_format_ms(ms, fmt))
+fn py_clock_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
+    py.detach(|| yokan_stdlib::clock_format_ms(ms, fmt))
 }
 #[pyfunction] #[pyo3(name = "log")]
 fn py_log(py: Python<'_>, msg: &str) -> i64 {
     py.detach(|| yokan_stdlib::log_line(msg))
 }
 
-#[pyfunction] #[pyo3(name = "sleep_ms")]
-fn py_time_sleep_ms(py: Python<'_>, ms: i64) -> i64 {
-    py.detach(|| yokan_stdlib::time_sleep_ms(ms))
-}
-
 #[pyfunction] #[pyo3(name = "format_local_ms")]
-fn py_time_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
-    py.detach(|| yokan_stdlib::time_format_local_ms(ms, fmt))
+fn py_clock_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
+    py.detach(|| yokan_stdlib::clock_format_local_ms(ms, fmt))
 }
 
 #[pyfunction] #[pyo3(name = "local_offset_minutes")]
-fn py_time_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
-    py.detach(|| yokan_stdlib::time_local_offset_minutes(ms))
+fn py_clock_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
+    py.detach(|| yokan_stdlib::clock_local_offset_minutes(ms))
 }
 
 #[pyfunction] #[pyo3(name = "set_text")]
@@ -2748,19 +2741,17 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;
     m.add_submodule(&clipm)?;
-    let timem = PyModule::new(m.py(), "time")?;
-    timem.add_function(wrap_pyfunction!(py_time_now_ms, &timem)?)?;
-    timem.add_function(wrap_pyfunction!(py_time_format_ms, &timem)?)?;
-    timem.add_function(wrap_pyfunction!(py_time_sleep_ms, &timem)?)?;
-    timem.add_function(wrap_pyfunction!(py_time_format_local_ms, &timem)?)?;
-    timem.add_function(wrap_pyfunction!(py_time_local_offset_minutes, &timem)?)?;
-    m.add_submodule(&timem)?;
+    let clockm = PyModule::new(m.py(), "clock")?;
+    clockm.add_function(wrap_pyfunction!(py_clock_format_ms, &clockm)?)?;
+    clockm.add_function(wrap_pyfunction!(py_clock_format_local_ms, &clockm)?)?;
+    clockm.add_function(wrap_pyfunction!(py_clock_local_offset_minutes, &clockm)?)?;
+    m.add_submodule(&clockm)?;
     let sysmod = m.py().import("sys")?.getattr("modules")?;
     sysmod.set_item("yokan.fs", &fs)?;
     sysmod.set_item("yokan.sqlite", &sqlite)?;
     sysmod.set_item("yokan.http", &http)?;
     sysmod.set_item("yokan.jsondoc", &jsonm)?;
-    sysmod.set_item("yokan.time", &timem)?;
+    sysmod.set_item("yokan.clock", &clockm)?;
     sysmod.set_item("yokan.strings", &stringsm)?;
     Ok(())
 }

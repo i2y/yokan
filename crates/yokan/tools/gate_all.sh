@@ -38,7 +38,7 @@ gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next mont
 gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 # The shared properties on every element; the middle steps are inert while locked.
 gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
-gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:roll,click:parse,click:stamp,click:write,dump,click:write list,dump"
+gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:roll,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
 # Fixture- and dependency-carrying gates.

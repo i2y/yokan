@@ -25,13 +25,14 @@ except Exception as e:
 
 It comes in two halves, told apart by where the name comes from.
 
-**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`.
+**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`.
 During development the app imports CPython's module and CPython runs it.
 The shipped binary calls a twin written against CPython's semantics, and a table of answers CPython itself printed holds the twin to it, function by function and error by error.
-`math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs; `json.dumps` writes what CPython writes, down to the `", "` between the parts and the `\uXXXX` escapes.
+`math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs; `json.dumps` writes what CPython writes, down to the `", "` between the parts and the `\uXXXX` escapes; a `date` adds a `timedelta`, subtracts another date and formats itself the way Python's does.
 
 ```python
 import json, math, random, statistics
+from datetime import date, timedelta
 
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
@@ -39,6 +40,7 @@ def measure():
     random.seed(42)
     roll.set(random.randint(1, 6))
     doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
+    due.set(date(2026, 1, 1) + timedelta(weeks=6))  # 2026-02-12, a Thursday
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # pure, so a view may ask
@@ -47,7 +49,7 @@ def view():
 `math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
 An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
 
-**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, jsondoc, time, strings, clipboard, notify`.
+**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
@@ -57,7 +59,7 @@ Call them from handlers (views stay pure).
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
 - **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
 - **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — reads into a JSON document by a dotted path like `"items.0.title"`, which Python's `json` has no verb for. Writing is Python's `json.dumps`.
-- **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
+- **clock**: `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)` — the machine's zone, which Python's `time` reaches only through a struct. Reading the clock is Python's `time`, and calendar work is Python's `datetime`.
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
@@ -66,6 +68,8 @@ How far the Python half reaches: all of `math` except eight members, each refuse
 From `random`: `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
 From `statistics`: `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]` — CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so a list of ints has no one type here and is refused.
 From `json`: `dumps`, with CPython's defaults and no keyword arguments.
+From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
+From `datetime`: `date`, `datetime` and `timedelta`, all of them naive — construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
 
 Every sqlite call takes one more argument, a list of values to bind:
 

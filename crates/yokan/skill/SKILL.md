@@ -452,14 +452,15 @@ except Exception as e:
 Two layers, told apart by where the name comes from.
 
 **Python's own**: `import math`, `import random`, `import
-statistics`, `import json`, written as Python writes them. Development imports
+statistics`, `import json`, `import datetime`, `import time`, written
+as Python writes them. Development imports
 CPython's module; the shipped binary calls a twin held to CPython by
 a table CPython printed, error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
 generator on, so it stays in a handler. Seed it and the two runs walk
 one sequence.
 
-**Yokan's own**: `from yokan import fs, sqlite, http, jsondoc, time,
+**Yokan's own**: `from yokan import fs, sqlite, http, jsondoc, clock,
 strings, clipboard, notify`. One implementation in Rust serves both
 runs; the shipped binary needs no Python. Call it from handlers only.
 
@@ -483,9 +484,10 @@ runs; the shipped binary needs no Python. Call it from handlers only.
 - **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` /
   `length` / `has` by dotted path (`"items.0.title"`) — the read
   Python's `json` has no verb for. Writing is `json.dumps`.
-- **time**: `now_ms()`, `format_ms(ms, "%Y-%m-%d")` (UTC; pass a
-  fixed ms in verification scripts), `format_local_ms(ms, fmt)`
-  (the machine's zone), `local_offset_minutes(ms)`
+- **clock**: `format_ms(ms, "%Y-%m-%d")` (UTC; pass a fixed ms in
+  verification scripts), `format_local_ms(ms, fmt)` (the machine's
+  zone), `local_offset_minutes(ms)`. Reading the clock is Python's
+  `time`; calendar work is Python's `datetime`.
 - **strings**: `to_int(s, default)` / `to_float(s, default)`
 - **clipboard**: `set_text(s)` / `get_text()` — a window shares it
   with every other application, a headless run keeps it to itself,
@@ -503,6 +505,14 @@ refused by name with its reason); `random`'s `seed`, `random`,
 `json.dumps` with CPython's defaults (no keyword arguments, and
 `json.loads` refused — read with `jsondoc` instead). A dumped literal
 nests to any depth; a value the app is holding reaches one level.
+From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`,
+`perf_counter`, `perf_counter_ns`, `sleep`. From `datetime`: `date`,
+`datetime` and `timedelta`, all naive — construction, `today` /
+`now` / `fromisoformat` / `fromtimestamp`, the parts, `isoformat`,
+`strftime` (the directives CPython defines itself), `weekday`,
+`timestamp`, `total_seconds`, arithmetic and comparison. An aware
+value, `datetime.time`, `replace`, `strptime`, a date in a container
+and a date as a helper parameter are refused by name.
 
 Determinism is the rule underneath: fixed times, seeded randomness
 (`random.seed(n)` in `on_start` or a reset handler so scripts

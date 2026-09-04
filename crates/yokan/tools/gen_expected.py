@@ -30,6 +30,7 @@ the platform's libm rather than from IEEE-754, so CPython and the
 twin agree exactly on this machine but a table is read on others.
 """
 
+import datetime as _dt
 import json
 import math
 import os
@@ -276,8 +277,150 @@ def cases_json():
     ))
 
 
+# `datetime` values are carried as integers, so the table asks for
+# the integers: a date is its ordinal, a datetime is microseconds from
+# the same origin, a timedelta is microseconds. The generator does the
+# same conversion CPython would, which is why the module here is a
+# stand-in rather than `datetime` itself.
+DAY_US = 86_400_000_000
+
+
+def _ord(d):
+    return d.toordinal()
+
+
+def _us(t):
+    return (t.toordinal() - 1) * DAY_US + (
+        t.hour * 3_600_000_000 + t.minute * 60_000_000 + t.second * 1_000_000 + t.microsecond
+    )
+
+
+def _td(t):
+    return t.days * DAY_US + t.seconds * 1_000_000 + t.microseconds
+
+
+class _DatetimeTwin:
+    """What the twins answer, in the integers they answer it in."""
+
+    __name__ = "datetime"
+
+    date_new = staticmethod(lambda y, m, d: _ord(_dt.date(y, m, d)))
+    date_from_iso = staticmethod(lambda s: _ord(_dt.date.fromisoformat(s)))
+    date_isoformat = staticmethod(lambda o: _dt.date.fromordinal(o).isoformat())
+    date_str = staticmethod(lambda o: str(_dt.date.fromordinal(o)))
+    date_year = staticmethod(lambda o: _dt.date.fromordinal(o).year)
+    date_month = staticmethod(lambda o: _dt.date.fromordinal(o).month)
+    date_day = staticmethod(lambda o: _dt.date.fromordinal(o).day)
+    date_weekday = staticmethod(lambda o: _dt.date.fromordinal(o).weekday())
+    date_isoweekday = staticmethod(lambda o: _dt.date.fromordinal(o).isoweekday())
+    date_strftime = staticmethod(lambda o, f: _dt.date.fromordinal(o).strftime(f))
+    date_add_delta = staticmethod(
+        lambda o, us: _ord(_dt.date.fromordinal(o) + _dt.timedelta(microseconds=us))
+    )
+    date_sub_date = staticmethod(
+        lambda a, b: _td(_dt.date.fromordinal(a) - _dt.date.fromordinal(b))
+    )
+
+    datetime_new = staticmethod(lambda y, m, d, h, mi, s, us: _us(_dt.datetime(y, m, d, h, mi, s, us)))
+    datetime_from_iso = staticmethod(lambda s: _us(_dt.datetime.fromisoformat(s)))
+    datetime_isoformat = staticmethod(lambda u: _dtof(u).isoformat())
+    datetime_str = staticmethod(lambda u: str(_dtof(u)))
+    datetime_date = staticmethod(lambda u: _ord(_dtof(u).date()))
+    datetime_year = staticmethod(lambda u: _dtof(u).year)
+    datetime_month = staticmethod(lambda u: _dtof(u).month)
+    datetime_day = staticmethod(lambda u: _dtof(u).day)
+    datetime_hour = staticmethod(lambda u: _dtof(u).hour)
+    datetime_minute = staticmethod(lambda u: _dtof(u).minute)
+    datetime_second = staticmethod(lambda u: _dtof(u).second)
+    datetime_microsecond = staticmethod(lambda u: _dtof(u).microsecond)
+    datetime_weekday = staticmethod(lambda u: _dtof(u).weekday())
+    datetime_strftime = staticmethod(lambda u, f: _dtof(u).strftime(f))
+    datetime_add_delta = staticmethod(lambda u, d: _us(_dtof(u) + _dt.timedelta(microseconds=d)))
+    datetime_sub_datetime = staticmethod(lambda a, b: _td(_dtof(a) - _dtof(b)))
+    datetime_of_date = staticmethod(lambda o: _us(_dt.datetime.combine(_dt.date.fromordinal(o), _dt.time())))
+
+    delta_new = staticmethod(
+        lambda d, s, us, ms, mi, h, w: _td(
+            _dt.timedelta(days=d, seconds=s, microseconds=us, milliseconds=ms,
+                          minutes=mi, hours=h, weeks=w)
+        )
+    )
+    delta_days = staticmethod(lambda u: _dt.timedelta(microseconds=u).days)
+    delta_seconds = staticmethod(lambda u: _dt.timedelta(microseconds=u).seconds)
+    delta_microseconds = staticmethod(lambda u: _dt.timedelta(microseconds=u).microseconds)
+    delta_total_seconds = staticmethod(lambda u: _dt.timedelta(microseconds=u).total_seconds())
+    delta_str = staticmethod(lambda u: str(_dt.timedelta(microseconds=u)))
+
+
+def _dtof(us):
+    return _dt.datetime.fromordinal(us // DAY_US + 1) + _dt.timedelta(microseconds=us % DAY_US)
+
+
+def cases_datetime():
+    """`date`, `datetime` and `timedelta` in the integers the dialect
+    carries them as. Naive only: an aware datetime carries a zone, and
+    a zone is what the plan keeps out until both runs read it from the
+    same place."""
+    dates = ((1, 1, 1), (1970, 1, 1), (2000, 2, 29), (2026, 9, 4), (9999, 12, 31),
+             (2024, 2, 29), (1999, 12, 31), (2026, 1, 1))
+    for y, m, d in dates:
+        yield ("date_new", (y, m, d))
+        o = _ord(_dt.date(y, m, d))
+        for fn in ("date_isoformat", "date_str", "date_year", "date_month", "date_day",
+                   "date_weekday", "date_isoweekday"):
+            yield (fn, (o,))
+        for f in ("%Y-%m-%d", "%y%m%d", "%a %A", "%b %B", "%j", "%w", "%U", "%W", "%%", "x%Yx"):
+            yield ("date_strftime", (o, f))
+        yield ("date_from_iso", (_dt.date(y, m, d).isoformat(),))
+        yield ("datetime_of_date", (o,))
+    yield from (("date_new", args) for args in ((2026, 13, 1), (2026, 2, 30), (0, 1, 1), (10000, 1, 1)))
+    yield ("date_from_iso", ("nonsense",))
+
+    times = ((2026, 9, 4, 13, 5, 6, 789012), (1, 1, 1, 0, 0, 0, 0),
+             (2026, 1, 1, 0, 0, 0, 0), (2026, 6, 30, 23, 59, 59, 999999),
+             (9999, 12, 31, 23, 59, 59, 999999), (2026, 9, 4, 0, 30, 0, 1))
+    for args in times:
+        yield ("datetime_new", args)
+        u = _us(_dt.datetime(*args))
+        for fn in ("datetime_isoformat", "datetime_str", "datetime_date", "datetime_year",
+                   "datetime_month", "datetime_day", "datetime_hour", "datetime_minute",
+                   "datetime_second", "datetime_microsecond", "datetime_weekday"):
+            yield (fn, (u,))
+        for f in ("%Y-%m-%dT%H:%M:%S", "%H:%M", "%f", "%p %I", "%A, %d %B %Y"):
+            yield ("datetime_strftime", (u, f))
+        yield ("datetime_from_iso", (_dt.datetime(*args).isoformat(),))
+    yield ("datetime_new", (2026, 9, 4, 24, 0, 0, 0))
+    yield ("datetime_new", (2026, 9, 4, 0, 0, 0, 1000000))
+    yield from (("datetime_from_iso", (s,)) for s in
+                ("2026-09-04", "2026-09-04 13:05:06", "2026-09-04T13:05", "not a date"))
+
+    deltas = ((0, 0, 0, 0, 0, 0, 0), (1, 0, 0, 0, 0, 0, 0), (-1, 0, 0, 0, 0, 2, 0),
+              (0, 1, 0, 0, 0, 0, 0), (0, 0, 1, 0, 0, 0, 0), (2, 0, 5, 0, 0, 0, 0),
+              (0, 0, 0, 1500, 0, 0, 0), (0, 0, 0, 0, 90, 0, 0), (0, 0, 0, 0, 0, 0, 2),
+              (-3, -30, -7, 0, 0, 0, 0))
+    for args in deltas:
+        yield ("delta_new", args)
+        u = _td(_dt.timedelta(days=args[0], seconds=args[1], microseconds=args[2],
+                              milliseconds=args[3], minutes=args[4], hours=args[5], weeks=args[6]))
+        for fn in ("delta_days", "delta_seconds", "delta_microseconds",
+                   "delta_total_seconds", "delta_str"):
+            yield (fn, (u,))
+
+    # Arithmetic across the three.
+    o = _ord(_dt.date(2026, 9, 4))
+    u = _us(_dt.datetime(2026, 9, 4, 13, 5, 6, 789012))
+    for d in (0, DAY_US, -DAY_US, 25 * 3_600_000_000, 1, -1, 90 * 60_000_000):
+        yield ("date_add_delta", (o, d))
+        yield ("datetime_add_delta", (u, d))
+    yield ("date_sub_date", (o, _ord(_dt.date(2026, 1, 1))))
+    yield ("date_sub_date", (_ord(_dt.date(2026, 1, 1)), o))
+    yield ("datetime_sub_datetime", (u, _us(_dt.datetime(2026, 9, 4, 0, 0, 0, 0))))
+    yield ("date_add_delta", (_ord(_dt.date(9999, 12, 31)), DAY_US))
+
+
 MODULES = {
     "math": (math, cases_math),
+    "datetime": (_DatetimeTwin, cases_datetime),
     "random": (random, cases_random),
     "statistics": (statistics, cases_statistics),
     "json": (json, cases_json),

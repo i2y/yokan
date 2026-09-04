@@ -153,7 +153,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### reader — http + jsondoc のフィードリーダー
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — Python の `math`、`random`、`statistics`、`json` と、Yokan の jsondoc、time
+#### stdlib — Python の `math`、`random`、`statistics`、`json`、`datetime`、`time` と、Yokan の jsondoc、clock
 <img src="images/demos/stdlib.png" width="360">
 
 #### dice — Python の `random`。種を撒けば両実行で同じ列

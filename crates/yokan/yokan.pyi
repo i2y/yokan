@@ -611,9 +611,10 @@ class jsondoc:
     @staticmethod
     def has(src: str, path: str) -> bool: ...
 
-class time:
-    @staticmethod
-    def now_ms() -> int: ...
+# The machine's own zone, which Python's `time` reaches only through
+# `localtime` and a struct. Reading the clock itself is Python's
+# `time`, and calendar work is Python's `datetime`.
+class clock:
     # UTC.
     @staticmethod
     def format_ms(ms: int, fmt: str) -> str: ...
@@ -622,8 +623,4 @@ class time:
     def format_local_ms(ms: int, fmt: str) -> str: ...
     @staticmethod
     def local_offset_minutes(ms: int) -> int: ...
-    # Blocks the caller. Inside `task(...)` the compiled run awaits it,
-    # so the window keeps drawing while it waits.
-    @staticmethod
-    def sleep_ms(ms: int) -> int: ...
 

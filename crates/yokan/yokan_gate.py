@@ -14,8 +14,9 @@ the .py line, never silently degrade.
 """
 
 import argparse
-import copy
 import ast
+import contextlib
+import copy
 import re
 import importlib
 import importlib.util
@@ -297,7 +298,12 @@ def py_ty(t) -> str:
     m = re.fullmatch(r"Map<(\w+), (.+)>", t)
     if m:
         return f"dict[{py_ty(m.group(1))}, {py_ty(m.group(2))}]"
-    return {"Int": "int", "Float": "float", "String": "str", "Bool": "bool"}.get(t, t)
+    return {
+        "Int": "int", "Float": "float", "String": "str", "Bool": "bool",
+        # The datetime values carry a name of their own inside the
+        # translator; the reader knows them by Python's.
+        "Date": "date", "Datetime": "datetime", "Delta": "timedelta",
+    }.get(t, t)
 
 
 class RawPix(str):
@@ -472,6 +478,8 @@ class Translator:
         self.stdlib_mods = {}        # local name -> stdlib module ("fs", ...)
         self.py_imports = {}         # plain `import x` -> module name, for refusals
         self.stdlib_names = {}       # `from math import sqrt` -> (module, name)
+        self.dt_names = {}           # `from datetime import date` -> "date"
+        self.dt_mods = {}            # `import datetime as dt` -> "datetime"
         self.dead_locals = {}          # name -> why it cannot be read here
         self.helpers = {}              # pure fn name -> (params, ret, body expr)
         self.helper_params = None      # param name -> pix type while inside one
@@ -546,6 +554,11 @@ class Translator:
             for a in node.names:
                 if a.name == "yokan":
                     self.ui = a.asname or "yokan"
+                elif a.name == "datetime":
+                    # `import datetime` — its VALUES are the module,
+                    # so what the scanner binds is the name a
+                    # `datetime.date` annotation is read through.
+                    self.dt_mods[a.asname or a.name] = a.name
                 elif a.name in self.PY_MODULES:
                     # `import math` — Python's own module. The
                     # interpreted run IS CPython, so this import is
@@ -573,6 +586,17 @@ class Translator:
             for a in node.names:
                 if a.name == "Enum":
                     self.enum_bases.add(a.asname or "Enum")
+        elif isinstance(node, ast.ImportFrom) and node.module == "datetime":
+            for a in node.names:
+                if a.name in self.DT_TYPES:
+                    self.dt_names[a.asname or a.name] = a.name
+                else:
+                    raise Untranslatable(
+                        node,
+                        f"`datetime.{a.name}` is not in the dialect — it takes `date`, "
+                        "`datetime` and `timedelta`, all of them naive: a zone is read "
+                        "from the machine, and the two runs have to agree on it first",
+                    )
         elif isinstance(node, ast.ImportFrom) and node.module in self.PY_MODULES:
             # `from math import sqrt` — the name is bound on its own,
             # which is how Python binds it.
@@ -680,6 +704,9 @@ class Translator:
                     if isinstance(a, ast.Call) and a is not init:
                         raise Untranslatable(a, "a value-class state starts from a literal construction (`State(Point(0, 0))`)")
                 return (sl.id, self._struct_ctor(sl.id, init, "store", None))
+            if isinstance(sl, ast.Name) and self._dt_ty(sl) is not None:
+                dt = self._dt_ty(sl)
+                return (dt, self._literal_of(call.args[0], dt))
             if isinstance(sl, ast.Name):
                 ty = {"int": "Int", "str": "String", "bool": "Bool", "float": "Float"}.get(sl.id)
                 if ty is None:
@@ -695,7 +722,7 @@ class Translator:
                 and sl.value.id == "list"
                 and isinstance(sl.slice, ast.Name)
             ):
-                inner = self._pix_ty(sl.slice)
+                inner = self._dt_alone(self._pix_ty(sl.slice), ann)
                 if inner is None:
                     raise Untranslatable(ann, f"list[{self._src(sl.slice)}] is not a state type — list elements are int, float, str, bool, a value class, an Enum, or a list or dict of those")
                 field = (f"List<{inner}>", self._list_literal(call.args[0], inner))
@@ -708,10 +735,10 @@ class Translator:
                 and isinstance(sl.slice.elts[0], ast.Name)
                 and isinstance(sl.slice.elts[1], ast.Name)
             ):
-                key = self._pix_ty(sl.slice.elts[0])
+                key = self._dt_alone(self._pix_ty(sl.slice.elts[0]), ann)
                 if key not in ("String", "Int"):
                     raise Untranslatable(ann, "a dict keys by str or int")
-                inner = self._pix_ty(sl.slice.elts[1])
+                inner = self._dt_alone(self._pix_ty(sl.slice.elts[1]), ann)
                 if inner is None:
                     raise Untranslatable(ann, f"dict[{self._src(sl.slice.elts[0])}, {self._src(sl.slice.elts[1])}] is not a state type — dict values are int, float, str, bool, a value class, an Enum, or a list or dict of those")
                 field = (f"Map<{key}, {inner}>", self._dict_literal(call.args[0], inner))
@@ -745,6 +772,9 @@ class Translator:
                 ann = ast.parse(ann.value, mode="eval").body
             except SyntaxError:
                 return None
+        dt = self._dt_ty(ann)
+        if dt is not None:
+            return dt
         if isinstance(ann, ast.Name):
             t = self.HELPER_TY.get(ann.id)
             if t:
@@ -754,21 +784,21 @@ class Translator:
             return None
         if isinstance(ann, ast.BinOp) and isinstance(ann.op, ast.BitOr):
             if isinstance(ann.right, ast.Constant) and ann.right.value is None:
-                inner = self._pix_ty(ann.left)
+                inner = self._dt_alone(self._pix_ty(ann.left), ann)
                 return f"{inner}?" if inner and not inner.endswith("?") else None
             return None
         if isinstance(ann, ast.Subscript) and isinstance(ann.value, ast.Name):
             base = ann.value.id
             if base == "list":
-                inner = self._pix_ty(ann.slice)
+                inner = self._dt_alone(self._pix_ty(ann.slice), ann)
                 return f"List<{inner}>" if inner else None
             if (
                 base == "dict"
                 and isinstance(ann.slice, ast.Tuple)
                 and len(ann.slice.elts) == 2
             ):
-                k = self._pix_ty(ann.slice.elts[0])
-                v = self._pix_ty(ann.slice.elts[1])
+                k = self._dt_alone(self._pix_ty(ann.slice.elts[0]), ann)
+                v = self._dt_alone(self._pix_ty(ann.slice.elts[1]), ann)
                 if k in ("String", "Int") and v:
                     return f"Map<{k}, {v}>"
         return None
@@ -777,6 +807,11 @@ class Translator:
         """The pixie literal a default writes, for any type `_pix_ty`
         reads. A container's items go through the same door, so a list
         of value classes and a dict of lists need no special case."""
+        if ty in self.DT_TYPES.values():
+            # A datetime default is a declaration, so it is folded to
+            # the integer the value is carried as — the translator
+            # runs on the same CPython, so it can simply ask.
+            return str(self._dt_const(node, ty))
         if ty.endswith("?"):
             if isinstance(node, ast.Constant) and node.value is None:
                 return "nil"
@@ -1477,6 +1512,9 @@ class Translator:
             if got != base:
                 raise Untranslatable(default, f"the default is {self._py_ty(got)}, the annotation says `{base} | None`")
             return f"{base}?", lit
+        if isinstance(ann, ast.Name) and self._dt_ty(ann) is not None:
+            dt = self._dt_ty(ann)
+            return dt, self._literal_of(default, dt)
         if isinstance(ann, ast.Name):
             ty = self.HELPER_TY.get(ann.id)
             if ty is None:
@@ -3154,12 +3192,85 @@ class Translator:
             ("stdev", "stdev", "xs: List<Float>", "Float", "statistics_stdev", "pure", "cpython"),
             ("pstdev", "pstdev", "xs: List<Float>", "Float", "statistics_pstdev", "pure", "cpython"),
         )),
-        ("Time", "time", "yokan", (
-            ("now_ms", "nowMs", "", "Int", "time_now_ms"),
-            ("format_ms", "formatMs", "ms: Int, fmt: String", "String", "time_format_ms"),
-            ("sleep_ms", "sleepMs", "ms: Int", "Int", "time_sleep_ms"),
-            ("format_local_ms", "formatLocalMs", "ms: Int, fmt: String", "String", "time_format_local_ms"),
-            ("local_offset_minutes", "localOffsetMinutes", "ms: Int", "Int", "time_local_offset_minutes"),
+        # Python's `time`. A clock is the one thing a ground-truth
+        # table cannot pin down — the answer is the machine's, and the
+        # two runs read it at different moments — so what a twin owes
+        # here is the unit and the reference point CPython documents.
+        ("Time", "time", "python", (
+            ("time", "time", "", "Float", "time_time", "cpython"),
+            ("time_ns", "timeNs", "", "Int", "time_time_ns", "cpython"),
+            ("monotonic", "monotonic", "", "Float", "time_monotonic", "cpython"),
+            ("monotonic_ns", "monotonicNs", "", "Int", "time_monotonic_ns", "cpython"),
+            ("perf_counter", "perfCounter", "", "Float", "time_perf_counter", "cpython"),
+            ("perf_counter_ns", "perfCounterNs", "", "Int", "time_perf_counter_ns", "cpython"),
+            ("sleep", "sleep", "secs: Float", "", "time_sleep", "cpython"),
+        )),
+        # Yokan's own clock: the machine's own zone, which Python's
+        # `time` reaches only through `localtime` and a struct. Named
+        # `clock` because Yokan's modules do not carry a Python
+        # module's name.
+        ("Clock", "clock", "yokan", (
+            ("format_ms", "formatMs", "ms: Int, fmt: String", "String", "clock_format_ms"),
+            ("format_local_ms", "formatLocalMs", "ms: Int, fmt: String", "String", "clock_format_local_ms"),
+            ("local_offset_minutes", "localOffsetMinutes", "ms: Int", "Int", "clock_local_offset_minutes"),
+        )),
+        # Python's `datetime`, carried as integers: a date is its
+        # ordinal, a datetime is microseconds from the same origin,
+        # a timedelta is microseconds. Comparison is then integer
+        # comparison and nothing new crosses the boundary; what the
+        # app writes as a method or an attribute is a static over
+        # that integer (`DT_ATTRS` and `DT_METHODS`).
+        ("Dt", None, None, (
+            (None, "dateNew", "y: Int, m: Int, d: Int", "Int", "date_new", "pure", "cpython"),
+            (None, "dateToday", "", "Int", "date_today", "pure", "cpython"),
+            (None, "dateFromIso", "s: String", "Int", "date_from_iso", "pure", "cpython"),
+            (None, "dateFromOrdinal", "n: Int", "Int", "date_from_ordinal", "pure", "cpython"),
+            (None, "dateIsoformat", "o: Int", "String", "date_isoformat", "pure", "cpython"),
+            (None, "dateStr", "o: Int", "String", "date_str", "pure", "cpython"),
+            (None, "dateYear", "o: Int", "Int", "date_year", "pure", "cpython"),
+            (None, "dateMonth", "o: Int", "Int", "date_month", "pure", "cpython"),
+            (None, "dateDay", "o: Int", "Int", "date_day", "pure", "cpython"),
+            (None, "dateWeekday", "o: Int", "Int", "date_weekday", "pure", "cpython"),
+            (None, "dateIsoweekday", "o: Int", "Int", "date_isoweekday", "pure", "cpython"),
+            (None, "dateToordinal", "o: Int", "Int", "date_toordinal", "pure", "cpython"),
+            (None, "dateStrftime", "o: Int, fmt: String", "String", "date_strftime", "pure", "cpython"),
+            (None, "dateAddDelta", "o: Int, us: Int", "Int", "date_add_delta", "pure", "cpython"),
+            (None, "dateSubDelta", "o: Int, us: Int", "Int", "date_sub_delta", "pure", "cpython"),
+            (None, "dateSubDate", "a: Int, b: Int", "Int", "date_sub_date", "pure", "cpython"),
+            (None, "datetimeNew", "y: Int, m: Int, d: Int, h: Int, mi: Int, s: Int, us: Int", "Int", "datetime_new", "pure", "cpython"),
+            (None, "datetimeNow", "", "Int", "datetime_now", "pure", "cpython"),
+            (None, "datetimeFromIso", "s: String", "Int", "datetime_from_iso", "pure", "cpython"),
+            (None, "datetimeFromTimestamp", "secs: Float", "Int", "datetime_from_timestamp", "pure", "cpython"),
+            (None, "datetimeOfDate", "o: Int", "Int", "datetime_of_date", "pure", "cpython"),
+            (None, "datetimeIsoformat", "u: Int", "String", "datetime_isoformat", "pure", "cpython"),
+            (None, "datetimeStr", "u: Int", "String", "datetime_str", "pure", "cpython"),
+            (None, "datetimeDate", "u: Int", "Int", "datetime_date", "pure", "cpython"),
+            (None, "datetimeYear", "u: Int", "Int", "datetime_year", "pure", "cpython"),
+            (None, "datetimeMonth", "u: Int", "Int", "datetime_month", "pure", "cpython"),
+            (None, "datetimeDay", "u: Int", "Int", "datetime_day", "pure", "cpython"),
+            (None, "datetimeHour", "u: Int", "Int", "datetime_hour", "pure", "cpython"),
+            (None, "datetimeMinute", "u: Int", "Int", "datetime_minute", "pure", "cpython"),
+            (None, "datetimeSecond", "u: Int", "Int", "datetime_second", "pure", "cpython"),
+            (None, "datetimeMicrosecond", "u: Int", "Int", "datetime_microsecond", "pure", "cpython"),
+            (None, "datetimeWeekday", "u: Int", "Int", "datetime_weekday", "pure", "cpython"),
+            (None, "datetimeIsoweekday", "u: Int", "Int", "datetime_isoweekday", "pure", "cpython"),
+            (None, "datetimeToordinal", "u: Int", "Int", "datetime_toordinal", "pure", "cpython"),
+            (None, "datetimeTimestamp", "u: Int", "Float", "datetime_timestamp", "pure", "cpython"),
+            (None, "datetimeStrftime", "u: Int, fmt: String", "String", "datetime_strftime", "pure", "cpython"),
+            (None, "datetimeAddDelta", "u: Int, d: Int", "Int", "datetime_add_delta", "pure", "cpython"),
+            (None, "datetimeSubDelta", "u: Int, d: Int", "Int", "datetime_sub_delta", "pure", "cpython"),
+            (None, "datetimeSubDatetime", "a: Int, b: Int", "Int", "datetime_sub_datetime", "pure", "cpython"),
+            (None, "deltaNew", "days: Int, seconds: Int, micros: Int, millis: Int, minutes: Int, hours: Int, weeks: Int", "Int", "delta_new", "pure", "cpython"),
+            (None, "deltaDays", "u: Int", "Int", "delta_days", "pure", "cpython"),
+            (None, "deltaSeconds", "u: Int", "Int", "delta_seconds", "pure", "cpython"),
+            (None, "deltaMicroseconds", "u: Int", "Int", "delta_microseconds", "pure", "cpython"),
+            (None, "deltaTotalSeconds", "u: Int", "Float", "delta_total_seconds", "pure", "cpython"),
+            (None, "deltaStr", "u: Int", "String", "delta_str", "pure", "cpython"),
+            (None, "deltaAdd", "a: Int, b: Int", "Int", "delta_add", "pure", "cpython"),
+            (None, "deltaSub", "a: Int, b: Int", "Int", "delta_sub", "pure", "cpython"),
+            (None, "deltaMul", "a: Int, n: Int", "Int", "delta_mul", "pure", "cpython"),
+            (None, "deltaNeg", "a: Int", "Int", "delta_neg", "pure", "cpython"),
+            (None, "deltaAbs", "a: Int", "Int", "delta_abs", "pure", "cpython"),
         )),
         ("Py", None, None, (
             (None, "floatRepr", "v: Float", "String", "py_float_repr", "pure"),
@@ -3242,6 +3353,7 @@ class Translator:
     # calling.
     STDLIB_SPLIT = {
         "json": "the reads by dotted path are `from yokan import jsondoc`",
+        "time": "the machine's own zone is `from yokan import clock`",
     }
 
     # What a module carrying a Python name leaves out, and why. A
@@ -3488,6 +3600,199 @@ class Translator:
             return (func.value.attr, func.attr)
         return None
 
+    DT_ORIGIN_US = 0
+
+    def _dt_const(self, node, ty: str) -> int:
+        """A datetime literal as the integer it is carried as. Only a
+        constructor over literals counts — a declaration is a value,
+        not a computation."""
+        import datetime as _dt  # noqa: PLC0415
+
+        src = self._src(node)
+        try:
+            env = {"date": _dt.date, "datetime": _dt.datetime, "timedelta": _dt.timedelta}
+            for local, real in self.dt_names.items():
+                env[local] = getattr(_dt, real)
+            for local in self.dt_mods:
+                env[local] = _dt
+            v = eval(compile(ast.Expression(node), "<default>", "eval"), {"__builtins__": {}}, env)
+        except Exception:
+            raise Untranslatable(
+                node,
+                f"`{src}` is not a {py_ty(ty)} the compiled side can start from — a "
+                "default is a construction over literals (`date(2026, 1, 1)`)",
+            ) from None
+        day = 86_400_000_000
+        if ty == "Date" and isinstance(v, _dt.date) and not isinstance(v, _dt.datetime):
+            return v.toordinal()
+        if ty == "Datetime" and isinstance(v, _dt.datetime):
+            return (v.toordinal() - 1) * day + (
+                v.hour * 3_600_000_000 + v.minute * 60_000_000
+                + v.second * 1_000_000 + v.microsecond
+            )
+        if ty == "Delta" and isinstance(v, _dt.timedelta):
+            return v.days * day + v.seconds * 1_000_000 + v.microseconds
+        raise Untranslatable(node, f"`{src}` is not a {py_ty(ty)}")
+
+    def _dt_num_ty(self, node, ctx, param):
+        """What a datetime expression reads as, without emitting it."""
+        if isinstance(node, ast.Call):
+            f = node.func
+            ty = self._dt_target(f)
+            if ty is not None:
+                return self.DT_CTORS.get((ty, None), (None, None, None))[2]
+            if isinstance(f, ast.Attribute):
+                owner = self._dt_target(f.value)
+                if owner is not None:
+                    return self.DT_CTORS.get((owner, f.attr), (None, None, None))[2]
+                recv = self._num_ty(f.value, ctx, param)
+                if recv in self.DT_TYPES.values():
+                    entry = self.DT_METHODS.get((recv, f.attr))
+                    return entry[2] if entry else None
+            return None
+        if isinstance(node, ast.Attribute):
+            recv = self._num_ty(node.value, ctx, param)
+            if recv in self.DT_TYPES.values():
+                entry = self.DT_ATTRS.get((recv, node.attr))
+                return entry[1] if entry else None
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
+            lt = self._num_ty(node.left, ctx, param)
+            if lt in self.DT_TYPES.values():
+                rt = self._num_ty(node.right, ctx, param)
+                return self._dt_binop_kind(lt, rt, node.op)[1]
+        return None
+
+    @staticmethod
+    def _dt_binop_kind(lt, rt, op):
+        """(static, result type) for arithmetic between two datetime
+        values, or (None, None) when the pair has no meaning."""
+        add = isinstance(op, ast.Add)
+        if lt == "Date" and rt == "Delta":
+            return (("Dt.dateAddDelta" if add else "Dt.dateSubDelta"), "Date")
+        if lt == "Datetime" and rt == "Delta":
+            return (("Dt.datetimeAddDelta" if add else "Dt.datetimeSubDelta"), "Datetime")
+        if lt == "Date" and rt == "Date" and not add:
+            return ("Dt.dateSubDate", "Delta")
+        if lt == "Datetime" and rt == "Datetime" and not add:
+            return ("Dt.datetimeSubDatetime", "Delta")
+        if lt == "Delta" and rt == "Delta" and not isinstance(op, ast.Mult):
+            return (("Dt.deltaAdd" if add else "Dt.deltaSub"), "Delta")
+        if lt == "Delta" and rt == "Int" and isinstance(op, ast.Mult):
+            return ("Dt.deltaMul", "Delta")
+        return (None, None)
+
+    def _dt_target(self, node):
+        """The dialect type a name or attribute chain refers to, when
+        the app is naming the TYPE rather than a value: `date`,
+        `datetime.datetime`, `timedelta`."""
+        return self._dt_ty(node)
+
+    def _dt_call(self, node, ctx, param):
+        """`date(2026, 9, 4)`, `datetime.now()`, `d.isoformat()` and
+        the rest. Answers the `.pix` expression, or None when this is
+        not a datetime call at all."""
+        f = node.func
+        # A constructor: the callee names the type.
+        ty = self._dt_target(f)
+        if ty is not None:
+            return self._dt_construct(node, ty, None, ctx, param)
+        if isinstance(f, ast.Attribute):
+            # A class method: `date.today()`, `datetime.fromisoformat(s)`.
+            owner = self._dt_target(f.value)
+            if owner is not None:
+                return self._dt_construct(node, owner, f.attr, ctx, param)
+            # A method on a value.
+            recv_ty = self._num_ty(f.value, ctx, param)
+            if recv_ty in self.DT_TYPES.values():
+                entry = self.DT_METHODS.get((recv_ty, f.attr))
+                if entry is None:
+                    have = sorted(m for (t, m) in self.DT_METHODS if t == recv_ty)
+                    raise Untranslatable(
+                        node,
+                        f"`{py_ty(recv_ty)}.{f.attr}()` is not in the dialect — it has "
+                        + ", ".join(have),
+                    )
+                static, extra, _ret = entry
+                if len(node.args) != len(extra) or node.keywords:
+                    raise Untranslatable(
+                        node, f"`{f.attr}()` takes {len(extra)} argument(s) here"
+                    )
+                self.uses_stdlib = True
+                with self._unwrapped():
+                    args = [self.expr(f.value, ctx, param)]
+                    args += [self.expr(a, ctx, param) for a in node.args]
+                return f"{static}({', '.join(args)})"
+        return None
+
+    def _dt_construct(self, node, ty, method, ctx, param):
+        """A call on the TYPE: the constructor, or one of the class
+        methods that answer a value."""
+        entry = self.DT_CTORS.get((ty, method))
+        if entry is None:
+            have = sorted(m for (t, m) in self.DT_CTORS if t == ty and m)
+            raise Untranslatable(
+                node,
+                f"`{py_ty(ty)}.{method}()` is not in the dialect — it has "
+                + (", ".join(have) or "no class methods"),
+            )
+        static, (lo, hi), _ret = entry
+        self.uses_stdlib = True
+        if ty == "Delta" and method is None:
+            # `timedelta` is all keyword arguments with defaults, so
+            # the seven are filled in the order the twin takes them.
+            given = {k.arg: k.value for k in node.keywords if k.arg}
+            if len(node.args) > 1 or any(k.arg is None for k in node.keywords):
+                raise Untranslatable(node, "`timedelta` takes its parts by keyword (`timedelta(days=1)`)")
+            if node.args:
+                given.setdefault("days", node.args[0])
+            unknown = sorted(set(given) - set(self.DT_DELTA_ARGS))
+            if unknown:
+                raise Untranslatable(
+                    node,
+                    f"`timedelta` has no `{unknown[0]}` — it takes "
+                    + ", ".join(self.DT_DELTA_ARGS),
+                )
+            with self._unwrapped():
+                parts = [
+                    self.expr(given[k], ctx, param) if k in given else "0"
+                    for k in self.DT_DELTA_ARGS
+                ]
+            return f"{static}({', '.join(parts)})"
+        if node.keywords:
+            raise Untranslatable(node, f"`{py_ty(ty)}` takes its arguments by position here")
+        if not lo <= len(node.args) <= hi:
+            want = str(lo) if lo == hi else f"{lo} to {hi}"
+            raise Untranslatable(node, f"this takes {want} argument(s)")
+        with self._unwrapped():
+            args = [self.expr(a, ctx, param) for a in node.args]
+        # `datetime(y, m, d)` fills the clock with midnight.
+        args += ["0"] * (hi - len(args))
+        return f"{static}({', '.join(args)})"
+
+    def _dt_attr(self, node, ctx, param):
+        """`d.year` and its siblings — a value in Python, so a value
+        here, over a static."""
+        if not isinstance(node, ast.Attribute):
+            return None
+        recv_ty = self._num_ty(node.value, ctx, param)
+        if recv_ty not in self.DT_TYPES.values():
+            return None
+        entry = self.DT_ATTRS.get((recv_ty, node.attr))
+        if entry is None:
+            if (recv_ty, node.attr) in self.DT_METHODS:
+                raise Untranslatable(
+                    node, f"`{node.attr}` is a method here — write `{node.attr}()`"
+                )
+            have = sorted(a for (t, a) in self.DT_ATTRS if t == recv_ty)
+            raise Untranslatable(
+                node,
+                f"`{py_ty(recv_ty)}.{node.attr}` is not in the dialect — it has "
+                + ", ".join(have),
+            )
+        self.uses_stdlib = True
+        with self._unwrapped():
+            return f"{entry[0]}({self.expr(node.value, ctx, param)})"
+
     def _stdlib_const(self, node):
         """`math.pi` and its four siblings: a VALUE in Python, so the
         app reads it as one. Answers the `.pix` spelling and its type,
@@ -3563,6 +3868,15 @@ class Translator:
         if const is not None:
             self.uses_stdlib = True
             return const[0]
+        # `datetime` values: a construction, a class method, a method
+        # on a value, or one of the value's parts.
+        if isinstance(node, ast.Call):
+            dt = self._dt_call(node, ctx, param)
+            if dt is not None:
+                return dt
+        dta = self._dt_attr(node, ctx, param)
+        if dta is not None:
+            return dta
         if isinstance(node, ast.Attribute) and node.attr in ("name", "value"):
             meta = self._enum_meta(node, ctx, param)
             if meta is not None:
@@ -4238,6 +4552,20 @@ class Translator:
             )
         if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
             lt0 = self._num_ty(node.left, ctx, param)
+            if lt0 in self.DT_TYPES.values():
+                rt0 = self._num_ty(node.right, ctx, param)
+                static, _out = self._dt_binop_kind(lt0, rt0, node.op)
+                if static is None:
+                    raise Untranslatable(
+                        node,
+                        f"`{py_ty(lt0)}` and `{py_ty(rt0)}` do not combine that way — a "
+                        "date takes a timedelta, two dates make one, and a timedelta "
+                        "scales by an int",
+                    )
+                self.uses_stdlib = True
+                a = self.expr(node.left, ctx, param)
+                b = self.expr(node.right, ctx, param)
+                return f"{static}({a}, {b})"
             if lt0 is not None and lt0 in self.structs:
                 dunder = {ast.Add: "__add__", ast.Sub: "__sub__", ast.Mult: "__mul__"}[type(node.op)]
                 entry = self.struct_methods.get(lt0, {}).get(dunder)
@@ -4491,6 +4819,18 @@ class Translator:
                     node,
                     f"`{self._src(node)}` is not a comparison the dialect knows — the "
                     "comparisons are ==, !=, <, <=, >, >=",
+                )
+            # A date, a datetime and a timedelta are all carried as
+            # integers, so nothing would stop the compiled side from
+            # comparing two of different kinds. Python refuses that,
+            # and so does this.
+            lt = self._num_ty(node.left, ctx, param)
+            rt = self._num_ty(node.comparators[0], ctx, param)
+            if (lt in self.DT_TYPES.values() or rt in self.DT_TYPES.values()) and lt != rt:
+                raise Untranslatable(
+                    node,
+                    f"`{py_ty(lt)}` and `{py_ty(rt)}` do not compare — Python refuses "
+                    "the pair too",
                 )
             left = self.expr(node.left, ctx, param)
             right = self.expr(node.comparators[0], ctx, param)
@@ -5124,6 +5464,114 @@ class Translator:
             return self.comp_locals[name]
         return self.cells.get(name)
 
+    # Python's `datetime` values, carried as integers: a date is its
+    # ordinal, a datetime is microseconds from the same origin, a
+    # timedelta is microseconds. Comparison is then integer
+    # comparison and nothing new crosses; what the app writes as a
+    # method or an attribute is a static over that integer.
+    DT_TYPES = {"date": "Date", "datetime": "Datetime", "timedelta": "Delta"}
+    DT_PIX = {"Date": "Int", "Datetime": "Int", "Delta": "Int"}
+
+    # (type, name) -> the static, and what it answers.
+    DT_ATTRS = {
+        ("Date", "year"): ("Dt.dateYear", "Int"),
+        ("Date", "month"): ("Dt.dateMonth", "Int"),
+        ("Date", "day"): ("Dt.dateDay", "Int"),
+        ("Datetime", "year"): ("Dt.datetimeYear", "Int"),
+        ("Datetime", "month"): ("Dt.datetimeMonth", "Int"),
+        ("Datetime", "day"): ("Dt.datetimeDay", "Int"),
+        ("Datetime", "hour"): ("Dt.datetimeHour", "Int"),
+        ("Datetime", "minute"): ("Dt.datetimeMinute", "Int"),
+        ("Datetime", "second"): ("Dt.datetimeSecond", "Int"),
+        ("Datetime", "microsecond"): ("Dt.datetimeMicrosecond", "Int"),
+        ("Delta", "days"): ("Dt.deltaDays", "Int"),
+        ("Delta", "seconds"): ("Dt.deltaSeconds", "Int"),
+        ("Delta", "microseconds"): ("Dt.deltaMicroseconds", "Int"),
+    }
+
+    # (type, name) -> the static, its extra parameter types, and what
+    # it answers. The receiver is always the first argument.
+    DT_METHODS = {
+        ("Date", "isoformat"): ("Dt.dateIsoformat", (), "String"),
+        ("Date", "weekday"): ("Dt.dateWeekday", (), "Int"),
+        ("Date", "isoweekday"): ("Dt.dateIsoweekday", (), "Int"),
+        ("Date", "toordinal"): ("Dt.dateToordinal", (), "Int"),
+        ("Date", "strftime"): ("Dt.dateStrftime", ("String",), "String"),
+        ("Datetime", "isoformat"): ("Dt.datetimeIsoformat", (), "String"),
+        ("Datetime", "date"): ("Dt.datetimeDate", (), "Date"),
+        ("Datetime", "weekday"): ("Dt.datetimeWeekday", (), "Int"),
+        ("Datetime", "isoweekday"): ("Dt.datetimeIsoweekday", (), "Int"),
+        ("Datetime", "toordinal"): ("Dt.datetimeToordinal", (), "Int"),
+        ("Datetime", "timestamp"): ("Dt.datetimeTimestamp", (), "Float"),
+        ("Datetime", "strftime"): ("Dt.datetimeStrftime", ("String",), "String"),
+        ("Delta", "total_seconds"): ("Dt.deltaTotalSeconds", (), "Float"),
+    }
+
+    # `date(...)`, `datetime.now()` and the rest: what the app calls
+    # on the TYPE rather than on a value.
+    DT_CTORS = {
+        ("Date", None): ("Dt.dateNew", (3, 3), "Date"),
+        ("Date", "today"): ("Dt.dateToday", (0, 0), "Date"),
+        ("Date", "fromisoformat"): ("Dt.dateFromIso", (1, 1), "Date"),
+        ("Date", "fromordinal"): ("Dt.dateFromOrdinal", (1, 1), "Date"),
+        ("Datetime", None): ("Dt.datetimeNew", (3, 7), "Datetime"),
+        ("Datetime", "now"): ("Dt.datetimeNow", (0, 0), "Datetime"),
+        ("Datetime", "fromisoformat"): ("Dt.datetimeFromIso", (1, 1), "Datetime"),
+        ("Datetime", "fromtimestamp"): ("Dt.datetimeFromTimestamp", (1, 1), "Datetime"),
+        ("Datetime", "combine"): ("Dt.datetimeOfDate", (1, 1), "Datetime"),
+        ("Delta", None): ("Dt.deltaNew", (0, 0), "Delta"),
+    }
+    # `timedelta`'s parameters, in the order `delta_new` takes them.
+    DT_DELTA_ARGS = ("days", "seconds", "microseconds", "milliseconds",
+                     "minutes", "hours", "weeks")
+
+    # How each value renders in a text hole and under `str()`.
+    DT_SHOW = {"Date": "Dt.dateStr", "Datetime": "Dt.datetimeStr", "Delta": "Dt.deltaStr"}
+
+    @classmethod
+    def pix(cls, ty: str) -> str:
+        """The pixie type a dialect type is carried as."""
+        return cls.DT_PIX.get(ty, ty)
+
+    @contextlib.contextmanager
+    def _unwrapped(self):
+        """Inside a static's argument list, an expression is a VALUE
+        and not text — the same window `Py.floatRepr` opens around a
+        float hole."""
+        prev = self.in_wrapped_hole
+        self.in_wrapped_hole = True
+        try:
+            yield
+        finally:
+            self.in_wrapped_hole = prev
+
+    def _dt_alone(self, inner, ann):
+        """A datetime value stands on its own for now: it is carried
+        as an integer, and a container of them would read as a
+        container of ints wherever the translator did not follow."""
+        if inner in self.DT_TYPES.values():
+            raise Untranslatable(
+                ann,
+                f"a container of `{py_ty(inner)}` is not in the dialect yet — a "
+                "datetime value is carried as a number, and a list of them would "
+                "read as a list of numbers; keep the parts you need instead",
+            )
+        return inner
+
+    def _dt_ty(self, ann):
+        """`date`, `datetime.datetime` and the rest, as a dialect type
+        name. Only the names the file actually imported count, so an
+        app with its own `date` class keeps it."""
+        if isinstance(ann, ast.Name):
+            return self.DT_TYPES.get(self.dt_names.get(ann.id, ""))
+        if (
+            isinstance(ann, ast.Attribute)
+            and isinstance(ann.value, ast.Name)
+            and self.dt_mods.get(ann.value.id) == "datetime"
+        ):
+            return self.DT_TYPES.get(ann.attr)
+        return None
+
     def _map_source(self, node):
         """A dict a loop can walk: a state read, a store field, or a
         model's own field. Answers the `.pix` spelling and the map's
@@ -5655,6 +6103,7 @@ class Translator:
                 or vt in self.models
                 or vt in self.structs
                 or vt in self.enums
+                or vt in self.DT_TYPES.values()
                 or vt.startswith("Map<")
                 or vt.startswith("List<")
                 or vt.endswith("?")
@@ -6245,6 +6694,9 @@ class Translator:
         const = self._stdlib_const(node)
         if const is not None:
             return const[1]
+        dt = self._dt_num_ty(node, ctx, param)
+        if dt is not None:
+            return dt
         # `random.choice(xs)` reads as whatever the list holds.
         if isinstance(node, ast.Call):
             mf = self._stdlib_call(node.func)
@@ -6394,7 +6846,12 @@ class Translator:
             c = self._cell_read(node)
             if c is not None:
                 t = self._ty(c)
-                if t in ("Int", "Float", "Bool", "String") or t in self.enums or t in self.structs:
+                if (
+                    t in ("Int", "Float", "Bool", "String")
+                    or t in self.enums
+                    or t in self.structs
+                    or t in self.DT_TYPES.values()
+                ):
                     return t
                 return None
         if isinstance(node, ast.Subscript) and self._num_ty(node.value, ctx, param) == "String":
@@ -6418,7 +6875,13 @@ class Translator:
             if t is None and self.helper_params is not None:
                 t = self.helper_params.get(node.id)
             if t in ("Int", "Float", "Bool", "String") or (
-                t is not None and (t in self.enums or t in self.structs or t in self.models)
+                t is not None
+                and (
+                    t in self.enums
+                    or t in self.structs
+                    or t in self.models
+                    or t in self.DT_TYPES.values()
+                )
             ):
                 return t
             if node.id in self.nonneg_loop_vars:
@@ -6454,7 +6917,9 @@ class Translator:
             if s9 is not None:
                 for f, t, _ in self.structs[s9]:
                     if f == node.attr and (
-                        t in ("Int", "Float", "Bool", "String") or t in self.structs
+                        t in ("Int", "Float", "Bool", "String")
+                        or t in self.structs
+                        or t in self.DT_TYPES.values()
                     ):
                         return t
                 return None
@@ -6464,7 +6929,10 @@ class Translator:
                 t = self.model_scope[1].get(node.attr)
             elif node.value.id in self.stores:
                 t = self.stores[node.value.id]["field_tys"].get(node.attr)
-            if t in ("Int", "Float", "Bool", "String") or (t is not None and (t in self.enums or t in self.structs)):
+            if t in ("Int", "Float", "Bool", "String") or (
+                t is not None
+                and (t in self.enums or t in self.structs or t in self.DT_TYPES.values())
+            ):
                 return t
             return None
         return None
@@ -6492,6 +6960,13 @@ class Translator:
                     return "Py.boolRepr(" + self.expr(node, ctx, param) + ")"
                 finally:
                     self.in_wrapped_hole = False
+            if t in self.DT_SHOW:
+                # `str(date)` is its isoformat, and `str(datetime)`
+                # the same with a space where the T is — the twin
+                # renders it, so the two runs print one string.
+                self.uses_stdlib = True
+                with self._unwrapped():
+                    return f"{self.DT_SHOW[t]}(" + self.expr(node, ctx, param) + ")"
             if t is not None and t in self.enums:
                 self.enum_text_used.add(t)
                 return f"PyText.enumStr{t}(" + self.expr(node, ctx, param) + ")"
@@ -8278,7 +8753,7 @@ class Translator:
             self.in_slotted_comp = prev_slotted
         sig = comp if not params else f"{comp}({', '.join(f'{n}: {t}' for n, t in params)})"
         lines = [f"view {sig} {{"]
-        lines += [f"  state {ln} : {lt} = {ll}" for ln, lt, ll in locals_]
+        lines += [f"  state {ln} : {self.pix(lt)} = {ll}" for ln, lt, ll in locals_]
         lines += body + ["}"]
         self.components[pyname] = (comp, params, lines)
         return self.components[pyname]
@@ -8552,7 +9027,7 @@ class Translator:
         for sname, info in sorted(self.stores.items()):
             out.append(f"store {sname} {{")
             for f, ty, lit in info["fields"]:
-                out.append(f"  state {f} : {ty} = {lit}")
+                out.append(f"  state {f} : {self.pix(ty)} = {lit}")
             for lines in info["methods"]:
                 out.append("")
                 out += lines
@@ -8561,7 +9036,7 @@ class Translator:
         if self.state or self.handlers or self.model_instances:
             out.append("store App {")
             for k, (ty, lit) in self.state.items():
-                out.append(f"  state {k} : {ty} = {lit}")
+                out.append(f"  state {k} : {self.pix(ty)} = {lit}")
             for iname, mname in self.model_instances.items():
                 out.append(f"  state {iname} : {mname} = {mname}()")
             for name, param, stmts in self.handlers:
