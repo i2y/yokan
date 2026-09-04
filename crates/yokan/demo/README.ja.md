@@ -123,10 +123,10 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 <img src="screenshots/canvas.png" width="360">
 
 #### shooter — Pyxel のシューティングの例を移植。三つの場面、視差で流れる100個の星、揺れながら落ちてくる敵、矩形の当たり判定、広がる爆発をキャンバスの上で
-<img src="screenshots/shooter.png" width="360">
+<img src="screenshots/shooter.gif" width="240">
 
 #### jump — Pyxel のジャンプゲームを移植。重力、乗ると落ちていく床、果物、そしてそれぞれの速さで流れる山と木と二層の雲
-<img src="screenshots/jump.png" width="360">
+<img src="screenshots/jump.gif" width="320">
 
 #### charts — 0 の線の下に垂れる負の値、固定した範囲、グリッド線付きの軸、色の異なる二つの系列
 <img src="screenshots/charts.png" width="360">

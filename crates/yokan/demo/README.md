@@ -126,10 +126,10 @@ the initial state, right after launch.
 <img src="screenshots/canvas.png" width="360">
 
 #### shooter — Pyxel's shoot-'em-up example, ported: three scenes, a hundred parallax stars, enemies that sway as they fall, rectangle collisions and expanding blasts, all on the canvas
-<img src="screenshots/shooter.png" width="360">
+<img src="screenshots/shooter.gif" width="240">
 
 #### jump — Pyxel's jump game, ported: gravity, floors that drop away when you land on them, fruit, and a mountain, trees and two cloud layers scrolling at their own speeds
-<img src="screenshots/jump.png" width="360">
+<img src="screenshots/jump.gif" width="320">
 
 #### charts — negative values below the zero line, a pinned range, an axis with gridlines, and two series with their own colors
 <img src="screenshots/charts.png" width="360">

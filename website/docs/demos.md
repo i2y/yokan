@@ -3154,7 +3154,7 @@ the initial state, right after launch.
 <!-- source -->
 
 #### shooter — Pyxel's shoot-'em-up example, ported: three scenes, a hundred parallax stars, enemies that sway as they fall, rectangle collisions and expanding blasts, all on the canvas
-<img src="images/demos/shooter.png" width="360">
+<img src="images/demos/shooter.gif" width="240">
 
 <!-- source -->
 ??? note "shooter.py"
@@ -3499,7 +3499,7 @@ the initial state, right after launch.
 <!-- source -->
 
 #### jump — Pyxel's jump game, ported: gravity, floors that drop away when you land on them, fruit, and a mountain, trees and two cloud layers scrolling at their own speeds
-<img src="images/demos/jump.png" width="360">
+<img src="images/demos/jump.gif" width="320">
 
 <!-- source -->
 ??? note "jump.py"

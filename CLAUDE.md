@@ -143,7 +143,12 @@ Run these from `crates/yokan/` (they also work via
   build immediately before running.
 - Gallery screenshots (`demo/screenshots/`, mirrored under
   `website/*/images/demos/`) show the state right after launch —
-  refresh them when a demo's initial screen changes.
+  refresh them when a demo's initial screen changes. The two games
+  carry a GIF of play instead, recorded from the window with
+  `screencapture -v -V<secs> -l<window id>` and cut to the canvas with
+  ffmpeg; nothing can type into a window here, so the shooter's was
+  recorded from a scratch copy whose player sweeps and fires on a
+  timer.
 
 ## Conventions and constraints
 
