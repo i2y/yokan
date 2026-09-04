@@ -248,7 +248,7 @@ for w in words():
 
 ## Tuples
 
-A tuple is a value with a part for each position, written and read the way Python writes one.
+A tuple puts several values together as one, written and read the way Python writes one.
 
 ```python
 pair: State[tuple[str, int]] = State(("momo", 4))

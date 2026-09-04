@@ -102,8 +102,9 @@ An int state checks the 64-bit integer range on every write, so a number that pa
 
 ### Stores
 
-A **store** (`@store`) is a singleton with fields and methods.
-The decorator returns the instance, so the class name itself is the store.
+A **store** (`@store`) holds fields and methods together.
+There is one instance of it, and the class name is that instance: `Cart.add(...)` calls, `Cart.total` reads.
+An app can have as many stores as it likes, and they can call each other's methods (`demo/stores.py`).
 
 ```python
 @store
@@ -565,7 +566,7 @@ for w in words():
 
 ## Tuples
 
-A tuple is a value with a part for each position, written and read the way Python writes one.
+A tuple puts several values together as one, written and read the way Python writes one.
 
 ```python
 pair: State[tuple[str, int]] = State(("momo", 4))

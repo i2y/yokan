@@ -260,7 +260,8 @@ for w in words():
 
 ## タプル
 
-タプルは位置ごとに部分を持つ値で、Python と同じ書き方で書き、同じ読み方で読みます。
+タプルは、いくつかの値を一つにまとめたものです。
+Python と同じ書き方で書き、同じ読み方で読みます。
 
 ```python
 pair: State[tuple[str, int]] = State(("momo", 4))
