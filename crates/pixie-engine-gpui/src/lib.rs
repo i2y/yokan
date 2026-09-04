@@ -120,6 +120,93 @@ struct CanvasState {
     sprites: raster::Sprites,
 }
 
+/// The first canvas in a tree, drawn as a PNG — for a run with no
+/// window at all.
+///
+/// The dump already says what a frame IS, command by command, and
+/// that is what the gate compares. This answers the other question,
+/// the one a person or an agent asks while building something: what
+/// does it LOOK like. `scale` overrides the canvas's own (0 keeps it),
+/// so a 160x120 grid can come back big enough to read.
+pub fn canvas_png(el: &Element, scale: i64) -> Option<Vec<u8>> {
+    let (width, height, own_scale, background, palette, ops) = find_canvas(el)?;
+    let spec = raster::Spec {
+        w: width,
+        h: height,
+        scale: if scale > 0 { scale } else { own_scale.max(1) },
+        bg: background,
+        palette: palette
+            .iter()
+            .map(|c| {
+                let rgba = parse_color(c).unwrap_or(gpui::Rgba {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 1.0,
+                    a: 1.0,
+                });
+                [
+                    (rgba.b * 255.0).round() as u8,
+                    (rgba.g * 255.0).round() as u8,
+                    (rgba.r * 255.0).round() as u8,
+                    0xff,
+                ]
+            })
+            .collect(),
+        ops,
+        dpr: 1,
+    };
+    let mut sprites = raster::Sprites::default();
+    raster::png(&spec, &mut sprites, resolve_asset)
+}
+
+/// The first `Canvas` in tree order, or nothing.
+#[allow(clippy::type_complexity)]
+fn find_canvas(
+    el: &Element,
+) -> Option<(i64, i64, i64, i64, List<Str>, Vec<pixie_kernel::Op>)> {
+    if let Element::Canvas {
+        width,
+        height,
+        scale,
+        background,
+        palette,
+        ops,
+    } = el
+    {
+        return Some((
+            *width,
+            *height,
+            *scale,
+            *background,
+            palette.clone(),
+            ops.clone(),
+        ));
+    }
+    children_of(el).into_iter().flatten().find_map(find_canvas)
+}
+
+/// Every child a tree walk should follow, for the canvas hunt above.
+fn children_of(el: &Element) -> Option<std::slice::Iter<'_, Element>> {
+    match el {
+        Element::Column { children, .. }
+        | Element::Row { children, .. }
+        | Element::Grid { children, .. }
+        | Element::GridCell { children, .. }
+        | Element::Anim { children, .. }
+        | Element::Semantics { children, .. }
+        | Element::Tooltip { children, .. }
+        | Element::Disabled { children }
+        | Element::Sized { children, .. }
+        | Element::Themed { children, .. }
+        | Element::ListView { children, .. }
+        | Element::ScrollView { children, .. }
+        | Element::Modal { children, .. }
+        | Element::Table { children, .. } => Some(children.iter()),
+        Element::Stack(cs) | Element::HScrollView(cs) | Element::DataTable(cs) => Some(cs.iter()),
+        _ => None,
+    }
+}
+
 /// `PIXIE_TRACE_FRAMES=1`: one line a second saying how many frames the
 /// window painted and how many of them rebuilt the element tree. The
 /// two used to be the same number for any app with a timer.

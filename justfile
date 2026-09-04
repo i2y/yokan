@@ -42,6 +42,15 @@ dev-so:
 check app:
     cd {{pkg}} && uv run yokan_gate.py check {{app}}
 
+# The fast half of the loop: no compiler, no window, about a second.
+# `--frames` writes a PNG of each step's canvas.
+#
+# Run one app and print the screen it draws.
+show app script='' frames='':
+    cd {{pkg}} && uv run yokan_gate.py show {{app}} \
+        {{ if script == '' { '' } else { '--script "' + script + '"' } }} \
+        {{ if frames == '' { '' } else { '--frames ' + frames } }}
+
 # Run one app headless through both runs and byte-compare the screens.
 gate app script='':
     cd {{pkg}} && uv run yokan_gate.py gate {{app}} {{ if script == '' { '' } else { '--script "' + script + '"' } }}

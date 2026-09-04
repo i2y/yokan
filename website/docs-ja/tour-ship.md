@@ -47,6 +47,26 @@ app.py:37:9: warning — these assignments make a reference cycle: b.parent → 
 `yokan.headless(view, state, script)` はウィンドウを出さずにスクリプトを流し、画面をテキストで返します（ステップ前のダンプと、ステップ後のダンプ）。
 テストはその文字列を検査します。
 
+編集の合間には、同じ実行をコマンド行から呼べます。
+絵も残せます。
+
+```console
+$ yokan show app.py --script "keydown:left,advance:33,advance:33" --frames shots/ --scale 3
+Column[Canvas(160x120, scale=4, bg=#000000)[
+  Sprite(assets/sheet.png, 0,0 8x8 at 54,100)
+  PixelText(4, 4, "SCORE 0", #eeeeee)
+]]
+
+3 frames in shots/
+```
+
+先に拒否を見るので、書き間違いはコンパイルを待たずに1秒で返ります。
+ウィンドウは開かず画面を印字し、`--frames` を付けると各ステップのキャンバスを PNG で残します。
+ffmpeg があれば `--gif` で1本にまとめます。
+画面装置を使わないので、ssh 越しでも CI でも動き、描くのはウィンドウと同じラスタライザです。
+これが往復の速いほうで、遅いほうが `yokan gate` です。
+出荷する実行と一致することを証明するのは、そちらの仕事です。
+
 ```python
 # test_app.py
 import app                       # モジュール。run(...) は __main__ の下なので import では開かない

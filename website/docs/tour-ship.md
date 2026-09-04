@@ -43,6 +43,22 @@ The second catches a model that references its own class, where the types alone 
 An app is a Python module, so its tests are Python tests, in whatever runner you already use.
 `yokan.headless(view, state, script)` runs the app against a script with no window and answers the screen as text — the dump before the steps, then the dump after — and a test asserts on that.
 
+Between edits, `yokan show` is the same run from the command line, and it can leave a picture behind.
+
+```console
+$ yokan show app.py --script "keydown:left,advance:33,advance:33" --frames shots/ --scale 3
+Column[Canvas(160x120, scale=4, bg=#000000)[
+  Sprite(assets/sheet.png, 0,0 8x8 at 54,100)
+  PixelText(4, 4, "SCORE 0", #eeeeee)
+]]
+
+3 frames in shots/
+```
+
+It refuses first (so a mistake costs a second, not a compile), runs without a window, prints the screen, and with `--frames` writes a PNG of each step's canvas — `--gif` assembles those into one file if ffmpeg is around.
+No display is involved, so it works over ssh and in CI, and what it draws is the same rasterizer the window uses.
+That is the fast half of the loop; `yokan gate` is the slow half, and it is the one that proves the shipped run agrees.
+
 ```python
 # test_app.py
 import app                       # the module; its run(...) is under __main__

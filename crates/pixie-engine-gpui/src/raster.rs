@@ -248,6 +248,45 @@ pub fn render(
     sprites: &mut Sprites,
     resolve: fn(&str) -> PathBuf,
 ) -> Option<Arc<RenderImage>> {
+    let buf = paint(spec, sprites, resolve)?;
+    Some(Arc::new(RenderImage::new(smallvec::smallvec![
+        image::Frame::new(buf)
+    ])))
+}
+
+/// The same frame as a PNG. A run with no window has the whole screen
+/// as a value already (that is what the dump prints); this is the same
+/// frame for eyes rather than for a diff — a person's, or an agent's.
+pub fn png(spec: &Spec, sprites: &mut Sprites, resolve: fn(&str) -> PathBuf) -> Option<Vec<u8>> {
+    let buf = paint(spec, sprites, resolve)?;
+    let (w, h) = (buf.width(), buf.height());
+    // The buffer is BGRA, which is what `RenderImage` holds; a PNG is
+    // RGBA, so the two ends of each pixel swap back.
+    let rgba: Vec<u8> = buf
+        .into_raw()
+        .chunks(4)
+        .flat_map(|c| [c[2], c[1], c[0], c[3]])
+        .collect();
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::write_buffer_with_format(
+        &mut out,
+        &rgba,
+        w,
+        h,
+        image::ExtendedColorType::Rgba8,
+        image::ImageFormat::Png,
+    )
+    .ok()?;
+    Some(out.into_inner())
+}
+
+/// The frame itself: BGRA at `scale * dpr`, before anything decides
+/// what to do with it.
+fn paint(
+    spec: &Spec,
+    sprites: &mut Sprites,
+    resolve: fn(&str) -> PathBuf,
+) -> Option<image::RgbaImage> {
     if spec.w <= 0 || spec.h <= 0 {
         return None;
     }
@@ -352,9 +391,7 @@ pub fn render(
             }
         }
     }
-    Some(Arc::new(RenderImage::new(smallvec::smallvec![
-        image::Frame::new(expand(&s, spec.scale.max(1) * spec.dpr.max(1))?)
-    ])))
+    expand(&s, spec.scale.max(1) * spec.dpr.max(1))
 }
 
 /// Nearest-neighbor, by construction: every virtual pixel becomes a

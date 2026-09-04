@@ -2213,8 +2213,8 @@ fn run(
             install_timers(&rt);
             install_keys(&rt);
             install_menu_items(&rt);
-        install_drops(&rt);
             install_drops(&rt);
+            install_frames();
             rt.with(drain_spawns);
             if let Some(f) = &on_start {
                 Python::attach(|py| {
@@ -2410,6 +2410,38 @@ fn value(py: Python<'_>, cls: Py<PyAny>) -> PyResult<Py<PyAny>> {
     Ok(out.unbind())
 }
 
+/// `YOKAN_FRAMES=<dir>`: leave a PNG of each step's canvas there,
+/// numbered in the order the steps ran.
+///
+/// A headless run already prints what a frame IS — the dump, command
+/// by command, which is what the gate compares. This answers the
+/// other question, the one asked while something is being built: what
+/// does it look like. No window is involved, so it works over ssh, in
+/// CI, and while the screen is locked.
+fn install_frames() {
+    let Ok(dir) = std::env::var("YOKAN_FRAMES") else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    // `YOKAN_FRAME_SCALE` draws the grid bigger than the app asks, so
+    // a 160x120 canvas comes back readable without the app changing.
+    let scale: i64 = std::env::var("YOKAN_FRAME_SCALE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    let n = std::cell::Cell::new(0usize);
+    pixie_kernel::frames::install(Box::new(move |el: &Element| {
+        let Some(png) = pixie_engine_gpui::canvas_png(el, scale) else {
+            return;
+        };
+        let i = n.get();
+        n.set(i + 1);
+        let _ = std::fs::write(format!("{dir}/{i:04}.png"), png);
+    }));
+}
+
 /// Test entry: run the app headless against `script` and return
 /// "initial dump\nfinal dump" instead of printing. No window, no
 /// timers. Mirrors `run()`'s PIXIE_SCRIPT branch.
@@ -2467,6 +2499,7 @@ fn headless(
         let mut tree = rt.with(|w| pixie_kernel::build_prepared(w, h));
         pixie_kernel::script::anim_settle(&rt, h, &mut tree);
         let first = rt.with(|w| tree.dump(w));
+        install_frames();
         let last = pixie_kernel::script::run(&rt, h, &mut tree, &script);
         format!("{first}\n{last}")
     });

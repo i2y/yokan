@@ -692,6 +692,8 @@ place for startup work — loading data, seeding the RNG.
 ```console
 $ yokan init app.py                                   # the smallest app, ready to gate
 $ yokan check app.py [--strict]                       # refusals and warnings, no compiler
+$ yokan show app.py --script "click:+1" --frames shots/ --scale 3
+                                                      # run it, print the screen, draw each frame
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no window
 $ yokan gate app.py --script "click:+1,input:Momo" --release
 GATE OK — 2 dump lines identical in both runs
@@ -732,6 +734,14 @@ it, so an upgrade compiles what changed rather than the engine again.
 clean` drops the cache; `translate` works anywhere. `--app`
 makes `dist/<Title>.app` (a `<stem>.png` beside the file becomes
 the icon); it excludes `--onefile`.
+
+**The loop.** `check` (a second, no compiler) → `show` (a second, no
+window: the screen as text, and with `--frames` a PNG of each step's
+canvas that you can open and look at) → `gate` (a compile, and the
+proof that the shipped run agrees). Work in the first two and reach
+for the third when the change is done. `show --frames` is how a canvas
+app is checked at all: the dump says what a frame IS, command by
+command, and the PNG says what it looks like.
 
 Verify headless first; then run windowed once and look at it — the
 gate proves the two runs agree, not that the window looks right.

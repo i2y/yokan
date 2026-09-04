@@ -12397,6 +12397,57 @@ def tier_a(path: str, tr: "Translator", script: str) -> str:
     return yokan.headless(getattr(module, tr.view.name), state, script, on_start=on_start)
 
 
+def do_show(args, tr: "Translator") -> None:
+    """`show` — the fast half of the loop: what does this app do?
+
+    The app is checked (that already happened, or we would not be
+    here), run without a window against the script, and the screen is
+    printed as it is at the start and after every step that asks. With
+    `--frames` it also leaves a picture of each frame behind, which is
+    what a canvas app needs and what no dump can answer.
+
+    The slow half is `gate`, which compiles and proves the shipped run
+    agrees. This one starts no compiler, so it answers in about a
+    second and can be run on every edit."""
+    if args.frames:
+        os.environ["YOKAN_FRAMES"] = os.path.abspath(args.frames)
+    if args.scale:
+        os.environ["YOKAN_FRAME_SCALE"] = str(args.scale)
+    out = tier_a(args.app, tr, args.script)
+    print(out.rstrip("\n"))
+    if not args.frames:
+        return
+    shots = sorted(
+        f for f in os.listdir(args.frames) if f.endswith(".png")
+    )
+    if not shots:
+        print(
+            "\n(no frames: this app paints no canvas, or the script took no step)",
+            file=sys.stderr,
+        )
+        return
+    print(f"\n{len(shots)} frames in {args.frames}/", file=sys.stderr)
+    if not args.gif:
+        return
+    if shutil.which("ffmpeg") is None:
+        print("(--gif needs ffmpeg; the frames are there to assemble)", file=sys.stderr)
+        return
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-framerate", "15",
+         "-i", os.path.join(args.frames, "%04d.png"),
+         "-vf", "palettegen=stats_mode=full", os.path.join(args.frames, "palette.png")],
+        check=True,
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-framerate", "15",
+         "-i", os.path.join(args.frames, "%04d.png"),
+         "-i", os.path.join(args.frames, "palette.png"),
+         "-lavfi", "paletteuse=dither=none", args.gif],
+        check=True,
+    )
+    print(f"{args.gif}", file=sys.stderr)
+
+
 def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple[str, str]:
     cmd = ["cargo", "run", "-q", "-p", "pixie-cli", "--", "build", pix_path]
     if release:
@@ -12707,8 +12758,8 @@ def do_clean() -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["init", "check", "translate", "gate", "build",
-                                     "sync", "add", "version", "clean"])
+    ap.add_argument("mode", choices=["init", "check", "show", "translate", "gate",
+                                     "build", "sync", "add", "version", "clean"])
     ap.add_argument("app", nargs="?", default=None,
                     help="the app; `init` defaults it to app.py")
     ap.add_argument("extra", nargs="*",
@@ -12729,6 +12780,12 @@ def main():
                     help="build only: wrap the artifact as a macOS .app bundle in <app>/dist/")
     ap.add_argument("--bundle", action="store_true",
                     help="ship a python-build-standalone runtime next to the binary (@ui.py apps)")
+    ap.add_argument("--frames", default=None,
+                    help="show only: write a PNG of each step's canvas into this directory")
+    ap.add_argument("--gif", default=None,
+                    help="show only: assemble those frames into a GIF (needs ffmpeg)")
+    ap.add_argument("--scale", type=int, default=0,
+                    help="show only: draw the canvas at this many pixels per virtual one (0 = the app's own)")
     args = ap.parse_args()
 
     if args.mode == "init":
@@ -12777,6 +12834,10 @@ def main():
         # Silent means the app is in the dialect. A warning above says
         # the app translates but something in it is worth changing —
         # it costs nothing to run, so it goes out on every mode.
+        return
+
+    if args.mode == "show":
+        do_show(args, tr)
         return
 
     if args.mode == "translate":

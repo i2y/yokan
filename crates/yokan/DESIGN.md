@@ -1788,3 +1788,33 @@ together are the whole claim.
 The substrate has tests of its own — `test fn`, `test "name"`,
 `suite`, four assertions, a fresh World each — and `pixie test` prints
 TAP. That was one word in a list of verbs; it is written out now.
+
+## The screen, without a screen (2026-09-05)
+
+A headless run has always had the whole screen as a value: that is
+what the dump prints, and it is what the gate compares. For a canvas
+that answers one question and not the other. `Rect(2, 2, 12, 6,
+#89b4fa)` says exactly what was painted and nothing about whether it
+looks right, and until now the only way to see a frame was to open a
+window and photograph it — which needs a display, an unlocked screen,
+and a person.
+
+The rasterizer was already in the tree and already the one the window
+uses. What was missing was a way to reach it from a run with no
+window. The kernel now holds a frame SINK — it cannot draw, since
+drawing lives in the engine — and the script harness hands it each
+step's screen; whoever links a rasterizer installs one. With
+`YOKAN_FRAMES` set, the interpreted run writes a PNG per step.
+
+`yokan show app.py --script … --frames shots/` is that as a command:
+refuse first, run without a window, print the screen, draw every
+frame, and assemble a GIF if ffmpeg is around. No display is involved,
+so it works over ssh and in CI, and the pixels are the window's own.
+
+It is the fast half of a loop whose slow half already existed. `check`
+answers in a second and names what to write instead; `show` answers in
+a second and says what the app does and what it looks like; `gate`
+compiles and proves the shipped run agrees. Someone building an app
+lives in the first two. That is as true of a person as of an agent
+writing the app for one — and an agent had, until now, no way to see
+what it had drawn.

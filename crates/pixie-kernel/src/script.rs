@@ -462,6 +462,9 @@ pub fn run<C: Component>(
         }
         flush(rt, view, tree);
         settle(rt, view, tree);
+        // Whoever can draw gets this step's screen (`frames`); with
+        // nobody listening this is one `is_none`.
+        crate::frames::emit(tree);
     }
     if !timed {
         anim_settle(rt, view, tree);

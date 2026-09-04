@@ -58,6 +58,7 @@ pub mod anim;
 pub mod clipboard;
 pub mod dialog;
 pub mod drop;
+pub mod frames;
 pub mod keys;
 pub mod menu;
 pub mod quit;
