@@ -22,7 +22,7 @@ from yokan import (
     store,
     text,
 )
-from yokan import http, json  # noqa: E402
+from yokan import http, jsondoc  # noqa: E402
 
 
 @py
@@ -64,9 +64,9 @@ class Feed:
     def refresh(self, src: str) -> None:
         self.rows = []
         self.total_points = 0
-        for i in range(json.length(src, "items")):
-            self.rows = self.rows + [json.get_text(src, f"items.{i}.title")]
-            self.total_points += json.get_int(src, f"items.{i}.points")
+        for i in range(jsondoc.length(src, "items")):
+            self.rows = self.rows + [jsondoc.get_text(src, f"items.{i}.title")]
+            self.total_points += jsondoc.get_int(src, f"items.{i}.points")
 
 
 def start():

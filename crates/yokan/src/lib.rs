@@ -2583,55 +2583,10 @@ fn py_fs_app_dir(py: Python<'_>, name: &str) -> String {
 /// translator reads it from the annotation; both land on the same
 /// stdlib writer, which is what makes the two runs print one string.
 /// Bools are looked at before ints because a Python bool IS an int.
-#[pyfunction] #[pyo3(name = "dumps")]
-fn py_json_dumps(v: &Bound<'_, PyAny>) -> PyResult<String> {
-    use pyo3::types::{PyBool, PyDict as PyDictT, PyList};
-    if v.is_instance_of::<PyBool>() {
-        return Ok(yokan_stdlib::json_dumps_bool(v.extract()?));
-    }
-    if let Ok(n) = v.extract::<i64>() {
-        return Ok(yokan_stdlib::json_dumps_int(n));
-    }
-    if let Ok(f) = v.extract::<f64>() {
-        return Ok(yokan_stdlib::json_dumps_float(f));
-    }
-    if let Ok(t) = v.extract::<String>() {
-        return Ok(yokan_stdlib::json_dumps_str(&t));
-    }
-    if v.is_instance_of::<PyList>() {
-        if let Ok(xs) = v.extract::<Vec<bool>>() {
-            return Ok(yokan_stdlib::json_dumps_list_bool(xs));
-        }
-        if let Ok(xs) = v.extract::<Vec<i64>>() {
-            return Ok(yokan_stdlib::json_dumps_list_int(xs));
-        }
-        if let Ok(xs) = v.extract::<Vec<f64>>() {
-            return Ok(yokan_stdlib::json_dumps_list_float(xs));
-        }
-        if let Ok(xs) = v.extract::<Vec<String>>() {
-            return Ok(yokan_stdlib::json_dumps_list_str(xs));
-        }
-    }
-    if v.is_instance_of::<PyDictT>() {
-        use std::collections::HashMap;
-        if let Ok(m) = v.extract::<HashMap<String, bool>>() {
-            return Ok(yokan_stdlib::json_dumps_map_bool(m));
-        }
-        if let Ok(m) = v.extract::<HashMap<String, i64>>() {
-            return Ok(yokan_stdlib::json_dumps_map_int(m));
-        }
-        if let Ok(m) = v.extract::<HashMap<String, f64>>() {
-            return Ok(yokan_stdlib::json_dumps_map_float(m));
-        }
-        if let Ok(m) = v.extract::<HashMap<String, String>>() {
-            return Ok(yokan_stdlib::json_dumps_map_str(m));
-        }
-    }
-    Err(pyo3::exceptions::PyTypeError::new_err(
-        "json.dumps writes a str, int, float, bool, a list of one of those, \
-         or a dict with str keys and one of those as values",
-    ))
-}
+// `json.dumps` has no door here either: an app writes
+// `import json`, and the interpreted run is CPython. What stays
+// on this side is `jsondoc`, the dotted-path reads Python's
+// `json` does not have.
 
 #[pymodule]
 pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2773,14 +2728,13 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_submodule(&http)?;
     // `from yokan import fs` works by attribute; this makes the
     // dotted forms (`import yokan.fs` etc.) resolve too.
-    let jsonm = PyModule::new(m.py(), "json")?;
+    let jsonm = PyModule::new(m.py(), "jsondoc")?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_text, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_int, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_float, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_get_bool, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_length, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_has, &jsonm)?)?;
-    jsonm.add_function(wrap_pyfunction!(py_json_dumps, &jsonm)?)?;
     m.add_submodule(&jsonm)?;
     let notifym = PyModule::new(m.py(), "notify")?;
     notifym.add_function(wrap_pyfunction!(py_notify_send, &notifym)?)?;
@@ -2805,7 +2759,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sysmod.set_item("yokan.fs", &fs)?;
     sysmod.set_item("yokan.sqlite", &sqlite)?;
     sysmod.set_item("yokan.http", &http)?;
-    sysmod.set_item("yokan.json", &jsonm)?;
+    sysmod.set_item("yokan.jsondoc", &jsonm)?;
     sysmod.set_item("yokan.time", &timem)?;
     sysmod.set_item("yokan.strings", &stringsm)?;
     Ok(())

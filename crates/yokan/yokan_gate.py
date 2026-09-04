@@ -587,10 +587,12 @@ class Translator:
                     if a.name == "fs":
                         self.fs_name = a.asname or "fs"
                 elif a.name in self.PY_MODULES:
+                    also = self.STDLIB_SPLIT.get(a.name)
                     raise Untranslatable(
                         node,
                         f"`{a.name}` is Python's module, not Yokan's — write "
-                        f"`import {a.name}` and call it as Python does",
+                        f"`import {a.name}` and call it as Python does"
+                        + (f", and {also}" if also else ""),
                     )
                 else:
                     # `from yokan import State, store, value, ...`
@@ -3077,28 +3079,34 @@ class Translator:
             ("inf", "inf", "", "Float", "math_inf", "pure", "cpython", "const"),
             ("nan", "nan", "", "Float", "math_nan", "pure", "cpython", "const"),
         )),
-        ("Json", "json", "yokan", (
+        # Yokan's own reads into a JSON document by dotted path.
+        # Python's `json` has no such thing, and Yokan's modules do
+        # not carry a Python module's name, so this one is `jsondoc`.
+        ("Jsondoc", "jsondoc", "yokan", (
             ("get_text", "getText", "src: String, path: String", "String", "json_get_text", "pure"),
             ("get_int", "getInt", "src: String, path: String", "Int", "json_get_int", "pure"),
             ("get_float", "getFloat", "src: String, path: String", "Float", "json_get_float", "pure"),
             ("get_bool", "getBool", "src: String, path: String", "Bool", "json_get_bool", "pure"),
             ("length", "length", "src: String, path: String", "Int", "json_length", "pure"),
             ("has", "has", "src: String, path: String", "Bool", "json_has", "pure"),
-            # No door line of its own: the writer follows the
-            # value's type, and `_json_dumps` picks it.
-            ("dumps", "dumps", "v: Any", "String", None, "pure"),
-            (None, "dumpsStr", "v: String", "String", "json_dumps_str", "pure"),
-            (None, "dumpsInt", "v: Int", "String", "json_dumps_int", "pure"),
-            (None, "dumpsFloat", "v: Float", "String", "json_dumps_float", "pure"),
-            (None, "dumpsBool", "v: Bool", "String", "json_dumps_bool", "pure"),
-            (None, "dumpsListStr", "xs: List<String>", "String", "json_dumps_list_str", "pure"),
-            (None, "dumpsListInt", "xs: List<Int>", "String", "json_dumps_list_int", "pure"),
-            (None, "dumpsListFloat", "xs: List<Float>", "String", "json_dumps_list_float", "pure"),
-            (None, "dumpsListBool", "xs: List<Bool>", "String", "json_dumps_list_bool", "pure"),
-            (None, "dumpsMapStr", "m: Map<String, String>", "String", "json_dumps_map_str", "pure"),
-            (None, "dumpsMapInt", "m: Map<String, Int>", "String", "json_dumps_map_int", "pure"),
-            (None, "dumpsMapFloat", "m: Map<String, Float>", "String", "json_dumps_map_float", "pure"),
-            (None, "dumpsMapBool", "m: Map<String, Bool>", "String", "json_dumps_map_bool", "pure"),
+        )),
+        # Python's `json.dumps`. The pieces compose — a value renders
+        # to its text and a container joins texts — so a document
+        # nests without a writer per shape; `_json_dumps` walks the
+        # value and emits the composition.
+        ("Json", "json", "python", (
+            ("dumps", "dumps", "v: Any", "String", None, "pure", "cpython"),
+            (None, "text", "v: String", "String", "json_text", "pure", "cpython"),
+            (None, "int_", "v: Int", "String", "json_int", "pure", "cpython"),
+            (None, "float_", "v: Float", "String", "json_float", "pure", "cpython"),
+            (None, "bool_", "v: Bool", "String", "json_bool", "pure", "cpython"),
+            (None, "null", "", "String", "json_null", "pure", "cpython"),
+            (None, "array", "parts: List<String>", "String", "json_array", "pure", "cpython"),
+            (None, "object", "keys: List<String>, parts: List<String>", "String", "json_object", "pure", "cpython"),
+            (None, "texts", "xs: List<String>", "List<String>", "json_texts", "pure", "cpython"),
+            (None, "ints", "xs: List<Int>", "List<String>", "json_ints", "pure", "cpython"),
+            (None, "floats", "xs: List<Float>", "List<String>", "json_floats", "pure", "cpython"),
+            (None, "bools", "xs: List<Bool>", "List<String>", "json_bools", "pure", "cpython"),
         )),
         ("Strings", "strings", "yokan", (
             ("to_int", "toInt", "s: String, default: Int", "Int", "strings_to_int", "pure"),
@@ -3228,10 +3236,26 @@ class Translator:
     (STDLIB_CALLS, STDLIB_RET, FALLIBLE, STDLIB_PURE, STDLIB_CONSTS,
      STDLIB_PICKS) = _stdlib_tables(STDLIB)
 
+    # A module that was Yokan's and is now Python's, where only PART
+    # of it went: the refusal has to say where the rest is, or a
+    # reader follows it to a module that does not have what they were
+    # calling.
+    STDLIB_SPLIT = {
+        "json": "the reads by dotted path are `from yokan import jsondoc`",
+    }
+
     # What a module carrying a Python name leaves out, and why. A
     # refusal that only says "not in the dialect" tells the reader
     # nothing about whether to wait for it or write around it.
     STDLIB_ABSENT = {
+        ("json", "loads"): "it answers a value whose shape is only known at run "
+                           "time — read what you need out of the text with "
+                           "`from yokan import jsondoc` and its dotted paths",
+        ("json", "load"): "the dialect has no file objects — read the text with "
+                          "`fs.read_text` and take what you need with "
+                          "`from yokan import jsondoc`",
+        ("json", "dump"): "the dialect has no file objects — write "
+                          "`fs.write_text(path, json.dumps(v))`",
         ("math", "frexp"): "it answers a tuple, and a tuple has no compiled shape yet",
         ("math", "modf"): "it answers a tuple, and a tuple has no compiled shape yet",
         ("math", "prod"): "it answers an int or a float depending on what the list "
@@ -3265,9 +3289,15 @@ class Translator:
     def _stdlib_pick(self, node, mod, fn, spec):
         """The spelling this call site named, by how many arguments it
         gave."""
+        if node.keywords:
+            raise Untranslatable(
+                node,
+                f"`{mod}.{fn}` takes its arguments by position here — a keyword "
+                "argument on a standard-library call is not in the dialect yet",
+            )
         cands = self._stdlib_specs(spec)
         for c in cands:
-            if len(node.args) == c[2] and not node.keywords:
+            if len(node.args) == c[2]:
                 return c
         arities = " or ".join(str(c[2]) for c in cands)
         raise Untranslatable(node, f"`{mod}.{fn}` takes {arities} argument(s)")
@@ -3329,42 +3359,64 @@ class Translator:
         rest = [self.expr(a, ctx, param) for a in node.args[1:]]
         return f"Random.{fn}{suffix}({', '.join([code, *rest])})"
 
+    JSON_SCALAR = {"String": "text", "Int": "int_", "Float": "float_", "Bool": "bool_"}
+    JSON_EACH = {"String": "texts", "Int": "ints", "Float": "floats", "Bool": "bools"}
+
     def _json_dumps(self, node, ctx, param):
-        """`json.dumps(v)` — the writer follows the value's type, one
-        static per shape. The interpreted door reads the same type at
-        run time, so the two runs print one string."""
-        arg = node.args[0]
-        if isinstance(arg, (ast.List, ast.Dict)):
-            items = arg.elts if isinstance(arg, ast.List) else arg.values
-            # an empty container writes the same text whichever writer
-            # takes it, so the str one stands in
-            el = (self._num_ty(items[0], ctx, param) or "?") if items else "String"
-            suffix = self.LIST_SUFFIX.get(el)
-            if suffix is None:
-                raise Untranslatable(arg, self._dumps_msg(el))
-            kind = "List" if isinstance(arg, ast.List) else "Map"
-            ty = f"List<{el}>" if kind == "List" else f"Map<String, {el}>"
-            return f"Json.dumps{kind}{suffix}({self._literal_of(arg, ty)})"
+        """`json.dumps(v)` — the text of the value, composed.
+
+        A value renders to its own text and a container joins texts,
+        so a literal nests as deep as it likes without a writer per
+        shape. A value the app is HOLDING renders through the typed
+        list and map writers, which reach one level; deeper than that
+        needs a walk at run time, and is refused by name."""
+        return self._json_value(node.args[0], ctx, param)
+
+    def _json_value(self, arg, ctx, param) -> str:
+        """One value's JSON text. Recursive on literals."""
+        if isinstance(arg, ast.Constant) and arg.value is None:
+            return "Json.null()"
+        if isinstance(arg, ast.List):
+            parts = [self._json_value(e, ctx, param) for e in arg.elts]
+            return f"Json.array([{', '.join(parts)}])"
+        if isinstance(arg, ast.Dict):
+            keys = []
+            for k in arg.keys:
+                if not (isinstance(k, ast.Constant) and type(k.value) is str):
+                    raise Untranslatable(
+                        k if k is not None else arg,
+                        "a JSON object is keyed by str literals here",
+                    )
+                keys.append(f'"{esc(k.value)}"')
+            parts = [self._json_value(v, ctx, param) for v in arg.values]
+            return f"Json.object([{', '.join(keys)}], [{', '.join(parts)}])"
+        # A container the app is holding: its elements render through
+        # one call, so this works in a view as well as a handler.
         src = self._list_source(arg, ctx, param)
         if src is not None and src[1].startswith(("List<", "Map<")):
             ty = src[1]
-            kind = "List" if ty.startswith("List<") else "Map"
-            el = ty[5:-1] if kind == "List" else ty.split(", ", 1)[1][:-1]
-            suffix = self.LIST_SUFFIX.get(el)
-            if suffix is None or (kind == "Map" and not ty.startswith("Map<String, ")):
+            if ty.startswith("List<"):
+                each = self.JSON_EACH.get(ty[5:-1])
+                if each is None:
+                    raise Untranslatable(arg, self._dumps_msg(ty))
+                return f"Json.array(Json.{each}({src[0]}))"
+            if not ty.startswith("Map<String, "):
                 raise Untranslatable(arg, self._dumps_msg(ty))
-            return f"Json.dumps{kind}{suffix}({src[0]})"
-        el = self._num_ty(arg, ctx, param)
-        suffix = self.LIST_SUFFIX.get(el)
-        if suffix is None:
-            raise Untranslatable(arg, self._dumps_msg(el))
-        return f"Json.dumps{suffix}({self.expr(arg, ctx, param)})"
+            each = self.JSON_EACH.get(ty[len("Map<String, "):-1])
+            if each is None:
+                raise Untranslatable(arg, self._dumps_msg(ty))
+            return f"Json.object({src[0]}.keys(), Json.{each}({src[0]}.values()))"
+        scalar = self.JSON_SCALAR.get(self._num_ty(arg, ctx, param))
+        if scalar is None:
+            raise Untranslatable(arg, self._dumps_msg(self._num_ty(arg, ctx, param)))
+        return f"Json.{scalar}({self.expr(arg, ctx, param)})"
 
     @staticmethod
     def _dumps_msg(got):
         return (
-            "`json.dumps(v)` writes a str, int, float, bool, a list of one of those, "
-            f"or a dict with str keys — this one is {py_ty(got)}"
+            "`json.dumps(v)` writes a str, int, float, bool, None, a list or a "
+            "str-keyed dict of those, and nests as deep as the value is written "
+            f"out — a value the app is holding reaches one level. This one is {py_ty(got)}"
         )
 
     def _check_crate_structs(self, node, crate, entry):

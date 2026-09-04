@@ -151,10 +151,10 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### webfetch — yokan.http。GET、ヘッダ、POST、ステータス（@py のフィクスチャサーバを両実行に立てるので、ゲートはネットワーク不要）
 <img src="screenshots/webfetch.png" width="360">
 
-#### reader — http + json のフィードリーダー
+#### reader — http + jsondoc のフィードリーダー
 <img src="screenshots/reader.png" width="360">
 
-#### stdlib — Python の `math`、`random`、`statistics` と、Yokan の json、time
+#### stdlib — Python の `math`、`random`、`statistics`、`json` と、Yokan の jsondoc、time
 <img src="screenshots/stdlib.png" width="360">
 
 #### dice — Python の `random`。種を撒けば両実行で同じ列

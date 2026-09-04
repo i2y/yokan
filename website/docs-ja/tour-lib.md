@@ -26,19 +26,20 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 
-**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`）。
+**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは CPython の意味に合わせて書いた双子を呼び、CPython 自身が出力した正解表が、関数ごと、エラーごとに双子を縛ります。
-`math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始めます。
+`math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書きます。
 
 ```python
-import math, random, statistics
+import json, math, random, statistics
 
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
     spread.set(statistics.stdev([1.5, 2.5, 4.75]))
     random.seed(42)
     roll.set(random.randint(1, 6))
+    doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # 純粋なのでビューからも呼べる
@@ -49,7 +50,7 @@ def view():
 種を撒いていない生成器が繰り返せないのは Python と同じです。
 種を撒けば、gate が両方の実行を一つの列に縛れます。
 
-**Yokan 自身のモジュール**は、デスクトップで必要になる、Python に答えのないものです（`from yokan import fs, sqlite, http, json, time, strings, clipboard, notify`）。
+**Yokan 自身のモジュール**は、デスクトップで必要になる、Python に答えのないものです（`from yokan import fs, sqlite, http, jsondoc, time, strings, clipboard, notify`）。
 どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
 リリースバイナリに Python は要りません。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
@@ -58,7 +59,7 @@ def view():
   それと、プラットフォーム自身のパネルである `open_dialog(title)` と `save_dialog(name)`。返るのはパスで、取り消されたときは `""` です。ダイアログは人を待つので `task(...)` の中で呼びます。検証スクリプトは `file:<path>` で答えます。
 - **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
 - **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
-- **json**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has`（`"items.0.title"` のようなドットパスで引く）と `dumps(value)`（str、int、float、bool、そのいずれかのリスト、str をキーとする dict を書き出す。dict はキー順）
+- **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。Python の `json` にこの動詞はありません。書き出しは Python の `json.dumps` です
 - **time**：`now_ms`、`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`、`sleep_ms(ms)`（呼び出し側を止めます。`task` の中ならコンパイル済みの実行は `await` します）
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
@@ -68,6 +69,7 @@ Python 側がどこまで届くかは次のとおりです。
 `math` は八つを除いて全部で、除いた八つはそれぞれ理由を名指しして断ります（`frexp` と `modf` はタプルを返す、`prod` と `sumprod` はリストの中身によって int か float かが変わる、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算している）。
 `random` からは `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
 `statistics` からは `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev` で、受けるのは `list[float]` だけです。
+`json` からは `dumps` で、既定値のまま、キーワード引数は取りません。
 CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、int のリストには一つの型が決まらず、断ります。
 
 sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。

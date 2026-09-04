@@ -4019,6 +4019,12 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
         // non-value shapes excluded it is exactly as view-safe as a
         // local `static fn` (§8.54). Fallible or non-value shapes
         // fall through to the rejection below.
+        //
+        // A `List<T>` counts as a value shape here: it carries no
+        // World handle and a view already reads list props for its
+        // repeaters and its charts. That is what lets a composing
+        // static (a JSON writer joining rendered parts) run in a hole
+        // rather than only in a handler.
         ExprKind::MethodCall {
             receiver,
             method,
@@ -4029,10 +4035,8 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
             if cx.bindings.get(r.as_str()).is_some_and(|bc| {
                 bc.statics.get(&method.name).is_some_and(|bf| {
                     !bf.fallible
-                        && matches!(bf.ret, RustTy::Int | RustTy::Float | RustTy::Bool | RustTy::Str)
-                        && bf.params.iter().all(|t| {
-                            matches!(t, RustTy::Int | RustTy::Float | RustTy::Bool | RustTy::Str)
-                        })
+                        && view_value_shape(&bf.ret)
+                        && bf.params.iter().all(view_value_shape)
                 })
             })) =>
         {
@@ -4048,6 +4052,16 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
                 let v = lower_view_display_inner(a, cx)?;
                 lowered.push(match ty {
                     RustTy::Str => format!("({v}).as_str()"),
+                    // A list crosses as an owned `Vec` of the Rust
+                    // element type, the same conversion the method
+                    // side uses — one vocabulary either side of the
+                    // boundary (§8.73).
+                    RustTy::List(inner) => {
+                        let Some(conv) = binding_arg_elem_conv(inner, cx.enums, cx.structs) else {
+                            return err(a.span, "a list of this element type cannot cross a binding");
+                        };
+                        format!("({v}).iter().map({conv}).collect::<Vec<_>>()")
+                    }
                     _ => v,
                 });
             }
@@ -4056,6 +4070,17 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
                 RustTy::Int => format!("(({call}) as i64)"),
                 RustTy::Float => format!("(({call}) as f64)"),
                 RustTy::Str => format!("Str::from({call})"),
+                RustTy::List(_) => {
+                    // `let` rather than a closure, for the reason
+                    // `RetConv::Expr` gives: a closure parameter has
+                    // no type here and rustc refuses (E0282).
+                    let conv = ret_expr_of(&bf.ret, "__v", cx.enums, cx.structs, &mut Vec::new())
+                        .ok_or_else(|| EmitError {
+                            span: e.span,
+                            message: "a list of this element type cannot cross a binding".into(),
+                        })?;
+                    format!("{{ let __v = {call}; {conv} }}")
+                }
                 _ => call,
             })
         }
@@ -4097,6 +4122,16 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
             })
         }
         _ => err(e.span, "this expression is not lowerable in views yet (M0)"),
+    }
+}
+
+/// The shapes a pure binding static may take and answer inside a
+/// view: values, never a World handle, and never a fallible result.
+fn view_value_shape(t: &RustTy) -> bool {
+    match t {
+        RustTy::Int | RustTy::Float | RustTy::Bool | RustTy::Str => true,
+        RustTy::List(inner) => view_value_shape(inner),
+        _ => false,
     }
 }
 

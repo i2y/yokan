@@ -813,19 +813,20 @@ except Exception as e:
 
 It comes in two halves, told apart by where the name comes from.
 
-**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`.
+**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`.
 During development the app imports CPython's module and CPython runs it.
 The shipped binary calls a twin written against CPython's semantics, and a table of answers CPython itself printed holds the twin to it, function by function and error by error.
-`math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs.
+`math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs; `json.dumps` writes what CPython writes, down to the `", "` between the parts and the `\uXXXX` escapes.
 
 ```python
-import math, random, statistics
+import json, math, random, statistics
 
 def measure():
     hyp.set(math.sqrt(3.0 * 3.0 + 4.0 * 4.0))     # 5.0
     spread.set(statistics.stdev([1.5, 2.5, 4.75]))
     random.seed(42)
     roll.set(random.randint(1, 6))
+    doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # pure, so a view may ask
@@ -834,7 +835,7 @@ def view():
 `math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
 An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
 
-**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, json, time, strings, clipboard, notify`.
+**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, jsondoc, time, strings, clipboard, notify`.
 Each one calls the same function, implemented in Rust, during development and after shipping alike.
 The shipped binary needs no Python.
 Call them from handlers (views stay pure).
@@ -843,7 +844,7 @@ Call them from handlers (views stay pure).
   — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
 - **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
-- **json**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` (looked up by dotted paths like `"items.0.title"`), and `dumps(value)`, which writes a str, int, float, bool, a list of one of those, or a dict with str keys — a dict in key order
+- **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — reads into a JSON document by a dotted path like `"items.0.title"`, which Python's `json` has no verb for. Writing is Python's `json.dumps`.
 - **time**: `now_ms`, `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)`, `sleep_ms(ms)` (blocking; inside `task` the compiled run awaits it)
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
@@ -852,6 +853,7 @@ Call them from handlers (views stay pure).
 How far the Python half reaches: all of `math` except eight members, each refused by name with its reason (`frexp` and `modf` answer tuples; `prod` and `sumprod` answer an int or a float depending on the list; `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform).
 From `random`: `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
 From `statistics`: `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]` — CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so a list of ints has no one type here and is refused.
+From `json`: `dumps`, with CPython's defaults and no keyword arguments.
 
 Every sqlite call takes one more argument, a list of values to bind:
 
@@ -1162,8 +1164,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **`tuple` and `set`.** A tuple has no compiled shape yet; a Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered. A `list` covers both today.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
-- **In Yokan's own modules**: reading a time back from text, file metadata (size, times) and copying or renaming, streaming or binary downloads, and nested json writing (a value inside a written dict or list is a str, int, float or bool).
-- **In Python's modules**: eight members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). The rest of Python's library is not in the dialect yet: `json`, `datetime` and `re` are the next ones in.
+- **In Yokan's own modules**: reading a time back from text, file metadata (size, times) and copying or renaming, and streaming or binary downloads.
+- **In Python's modules**: eight members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. The rest of Python's library is not in the dialect yet: `datetime` and `re` are the next ones in.
 - **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no hover readout and no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.

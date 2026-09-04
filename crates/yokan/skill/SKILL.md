@@ -452,14 +452,14 @@ except Exception as e:
 Two layers, told apart by where the name comes from.
 
 **Python's own**: `import math`, `import random`, `import
-statistics`, written as Python writes them. Development imports
+statistics`, `import json`, written as Python writes them. Development imports
 CPython's module; the shipped binary calls a twin held to CPython by
 a table CPython printed, error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
 generator on, so it stays in a handler. Seed it and the two runs walk
 one sequence.
 
-**Yokan's own**: `from yokan import fs, sqlite, http, json, time,
+**Yokan's own**: `from yokan import fs, sqlite, http, jsondoc, time,
 strings, clipboard, notify`. One implementation in Rust serves both
 runs; the shipped binary needs no Python. Call it from handlers only.
 
@@ -480,10 +480,9 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   `get_text_with(url, headers)` / `post_text(url, body[,
   content_type])` / `post_text_or` / `status(url)` (synchronous;
   inside `task` the compiled run awaits it)
-- **json**: `get_text` / `get_int` / `get_float` / `get_bool` /
-  `length` / `has` by dotted path (`"items.0.title"`), and
-  `dumps(value)` for a str, int, float, bool, a list of one of
-  those, or a str-keyed dict (written in key order)
+- **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` /
+  `length` / `has` by dotted path (`"items.0.title"`) — the read
+  Python's `json` has no verb for. Writing is `json.dumps`.
 - **time**: `now_ms()`, `format_ms(ms, "%Y-%m-%d")` (UTC; pass a
   fixed ms in verification scripts), `format_local_ms(ms, fmt)`
   (the machine's zone), `local_offset_minutes(ms)`
@@ -500,7 +499,10 @@ refused by name with its reason); `random`'s `seed`, `random`,
 `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`,
 `sample` (no `shuffle` — it reorders in place, and a list lives in a
 `State`); `statistics`' `mean`, `fmean`, `median`, `mode`,
-`variance`, `pvariance`, `stdev`, `pstdev` over `list[float]`.
+`variance`, `pvariance`, `stdev`, `pstdev` over `list[float]`; and
+`json.dumps` with CPython's defaults (no keyword arguments, and
+`json.loads` refused — read with `jsondoc` instead). A dumped literal
+nests to any depth; a value the app is holding reaches one level.
 
 Determinism is the rule underneath: fixed times, seeded randomness
 (`random.seed(n)` in `on_start` or a reset handler so scripts

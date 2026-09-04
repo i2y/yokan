@@ -153,10 +153,10 @@ the initial state, right after launch.
 #### webfetch — yokan.http: GET, headers, POST, status (an @py fixture server runs in both runs, so the gate needs no network)
 <img src="images/demos/webfetch.png" width="360">
 
-#### reader — an http + json feed reader
+#### reader — an http + jsondoc feed reader
 <img src="images/demos/reader.png" width="360">
 
-#### stdlib — Python's `math`, `random` and `statistics`, and Yokan's json and time
+#### stdlib — Python's `math`, `random`, `statistics` and `json`, and Yokan's jsondoc and time
 <img src="images/demos/stdlib.png" width="360">
 
 #### dice — Python's `random`: seed it and both runs draw the same sequence

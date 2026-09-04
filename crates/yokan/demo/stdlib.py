@@ -9,11 +9,14 @@ module; the shipped binary calls a twin written against it, and a
 table of answers CPython printed holds the twin to CPython. Seed the
 generator and the two runs walk the same sequence.
 
-`json` and `time` are Yokan's own: one Rust implementation both runs
-call. json reads a path out of a document and writes a value back;
+`json.dumps` is Python's too, and writes what CPython writes: keys in
+the order they went in, `", "` between the parts, non-ASCII escaped.
+Reading a path out of a document is Yokan's own, under `jsondoc`,
+because Python's `json` has no such thing;
 `time.format_ms` is UTC and `time.format_local_ms` is the machine's
 own zone, from the same zone database in both runs.
 """
+import json
 import math
 import os
 import random
@@ -23,7 +26,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from yokan import button, column, row, run, State, text  # noqa: E402
-from yokan import json, time  # noqa: E402
+from yokan import jsondoc, time  # noqa: E402
 
 hyp: State[float] = State(0.0)
 spread: State[str] = State("-")
@@ -57,8 +60,8 @@ def roll():
 
 
 def parse():
-    who.set(json.get_text('{"name": "momo", "scores": [3, 5, 8]}', "name"))
-    score.set(json.get_int('{"name": "momo", "scores": [3, 5, 8]}', "scores.2"))
+    who.set(jsondoc.get_text('{"name": "momo", "scores": [3, 5, 8]}', "name"))
+    score.set(jsondoc.get_int('{"name": "momo", "scores": [3, 5, 8]}', "scores.2"))
 
 
 def stamp():
@@ -67,8 +70,8 @@ def stamp():
 
 
 def write():
-    # the writer follows the value's type; a map is written in key order
-    doc.set(json.dumps({"name": "momo", "team": "yokan"}))
+    # A literal nests as deep as it is written out.
+    doc.set(json.dumps({"name": "momo", "team": "yokan", "tags": ["a", "b"]}))
 
 
 def write_list():

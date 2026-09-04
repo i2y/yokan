@@ -176,11 +176,13 @@ Run these from `crates/yokan/` (they also work via
   compiled run links. This is what makes the gate meaningful.
   Blocking stdlib pyfunctions must `py.detach` around the wait.
 - **Two layers, told apart by the name.** Python's own modules
-  (`import math`, `random`, `statistics`) are a twin arrangement: the
-  interpreted run is CPython's module, the compiled run a twin
-  written against it. Yokan's own (`fs`, `sqlite`, `http`, `json`,
-  `time`, `strings`, `clipboard`, `notify`) keep "one implementation,
-  both runs", and never reuse a Python module's name.
+  (`import math`, `random`, `statistics`, `json`) are a twin
+  arrangement: the interpreted run is CPython's module, the compiled
+  run a twin written against it. Yokan's own (`fs`, `sqlite`, `http`,
+  `jsondoc`, `time`, `strings`, `clipboard`, `notify`) keep "one
+  implementation, both runs", and never reuse a Python module's name
+  — which is why the JSON path reads are `jsondoc`, and why `time`
+  becomes `clock` when it splits.
 - **Where the name is Python's, CPython is the specification.** The
   gate proves the two runs agree, never that they agree with Python
   — a function wrong the same way in both passes it. A function

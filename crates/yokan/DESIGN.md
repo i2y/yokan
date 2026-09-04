@@ -1100,3 +1100,41 @@ to survive one: a twin that stops its statement arrives there as
 pyo3's `PanicException`, and printing one resumes the panic — which
 is exactly how a failing handler reaches its containment, and exactly
 what took the process down when a view had none of its own.
+
+## `json.dumps` is Python's; the path reads are `jsondoc`
+
+The module split rather than moved. Writing a value as JSON is
+`json.dumps`, so it went to Python's side and now writes what CPython
+writes: `", "` and `": "` between the parts, non-ASCII as `\uXXXX`
+with a surrogate pair past the basic plane, floats through Python's
+repr, `NaN` and `Infinity` where JSON has no syntax, and keys in the
+order they went into the dict — which the dict only started
+remembering when its map became insertion-ordered. serde_json is
+close and none of those, so the writer is written out.
+
+Reading a value out of a document by a dotted path is not something
+Python's `json` does at all, and Yokan's modules do not carry a
+Python module's name, so that half is `jsondoc`. `json.loads` is
+refused with `jsondoc` in the message: what it answers has no shape
+until it runs, and a typed subset cannot name that.
+
+The twelve writers this replaces were one per value shape, and they
+could not nest — the shape of `dict[str, list[int]]` had no writer
+and never would, because the shapes multiply. The pieces compose
+instead: a value renders to its text, and a container joins texts. A
+literal nests as deep as it is written out, and a value the app is
+holding renders through one call per container, which reaches a
+level. The memo that planned this proposed a `Json` enum crossing
+the binding boundary; payload-carrying enums do not cross yet, and
+composition needs no new crossing.
+
+## A pure static over lists is view-safe too
+
+A view could call a binding static whose parameters and return were
+scalars, and not one that took a list. Nothing about a `List<T>`
+makes it less safe there — it carries no World handle, and a view
+already reads list props for its repeaters and its charts — so the
+rule now asks whether the shape is a value rather than whether it is
+scalar. The same conversions the method side uses carry the list
+across, so the two sides speak one vocabulary. That is what lets a
+composing writer run in a text hole rather than only in a handler.

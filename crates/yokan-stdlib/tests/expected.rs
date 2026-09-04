@@ -23,6 +23,8 @@ enum V {
     B(bool),
     S(String),
     L(Vec<V>),
+    /// An object, in the order its keys went in.
+    O(Vec<(String, V)>),
     /// What a function answers when it answers nothing.
     Unit,
     /// What CPython raised: the class, and the message it carried.
@@ -46,6 +48,18 @@ impl V {
         match self {
             V::L(xs) => xs.iter().map(|x| x.f()).collect(),
             other => panic!("wanted a list of floats, table says {other:?}"),
+        }
+    }
+    fn s(&self) -> String {
+        match self {
+            V::S(x) => x.clone(),
+            other => panic!("wanted a str argument, table says {other:?}"),
+        }
+    }
+    fn b(&self) -> bool {
+        match self {
+            V::B(x) => *x,
+            other => panic!("wanted a bool argument, table says {other:?}"),
         }
     }
     fn list(&self) -> &[V] {
@@ -72,12 +86,48 @@ fn unquote(s: &str) -> String {
     String::from_utf8(out).expect("utf-8")
 }
 
+/// Split on commas at depth zero — a list inside a list carries
+/// commas of its own.
+fn split_top(body: &str) -> Vec<&str> {
+    let (mut out, mut depth, mut start) = (Vec::new(), 0i32, 0usize);
+    for (i, c) in body.char_indices() {
+        match c {
+            '[' | '{' => depth += 1,
+            ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&body[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&body[start..]);
+    out
+}
+
 fn parse(cell: &str) -> V {
     if let Some(body) = cell.strip_prefix('[').and_then(|c| c.strip_suffix(']')) {
         if body.is_empty() {
             return V::L(Vec::new());
         }
-        return V::L(body.split(',').map(parse).collect());
+        return V::L(split_top(body).into_iter().map(parse).collect());
+    }
+    if let Some(body) = cell.strip_prefix('{').and_then(|c| c.strip_suffix('}')) {
+        if body.is_empty() {
+            return V::O(Vec::new());
+        }
+        return V::O(
+            split_top(body)
+                .into_iter()
+                .map(|pair| {
+                    let (k, v) = pair.split_once('=').expect("key=value");
+                    match parse(k) {
+                        V::S(k) => (k, parse(v)),
+                        other => panic!("an object key is a str, table says {other:?}"),
+                    }
+                })
+                .collect(),
+        );
     }
     if let Some(rest) = cell.strip_prefix('!') {
         let (class, msg) = rest.split_once(':').unwrap_or((rest, ""));
@@ -331,4 +381,47 @@ fn statistics_matches_cpython() {
             }))
         },
     );
+}
+
+
+/// `json.dumps` with CPython's defaults. The writers compose the way
+/// the translator composes them: a value renders to its text, a
+/// container joins texts. A list of one scalar type goes through the
+/// `_each` writer, which is the path a list the app is HOLDING takes.
+fn json_render(v: &V) -> String {
+    match v {
+        V::Unit => json_null(),
+        V::B(b) => json_bool(*b),
+        V::I(n) => json_int(*n),
+        V::F(f) => json_float(*f),
+        V::S(s) => json_text(s),
+        V::L(xs) => json_array(match xs.first() {
+            Some(V::I(_)) if xs.iter().all(|x| matches!(x, V::I(_))) => {
+                json_ints(xs.iter().map(|x| x.i()).collect())
+            }
+            Some(V::F(_)) if xs.iter().all(|x| matches!(x, V::F(_))) => {
+                json_floats(xs.iter().map(|x| x.f()).collect())
+            }
+            Some(V::S(_)) if xs.iter().all(|x| matches!(x, V::S(_))) => {
+                json_texts(xs.iter().map(|x| x.s()).collect())
+            }
+            Some(V::B(_)) if xs.iter().all(|x| matches!(x, V::B(_))) => {
+                json_bools(xs.iter().map(|x| x.b()).collect())
+            }
+            _ => xs.iter().map(json_render).collect(),
+        }),
+        V::O(pairs) => json_object(
+            pairs.iter().map(|(k, _)| k.clone()).collect(),
+            pairs.iter().map(|(_, v)| json_render(v)).collect(),
+        ),
+        V::Raise(..) => unreachable!("an expected value, not an error"),
+    }
+}
+
+#[test]
+fn json_matches_cpython() {
+    check(include_str!("expected/json.txt"), "json", |fname, a| match fname {
+        "dumps" => Some(V::S(json_render(&a[0]))),
+        _ => None,
+    });
 }

@@ -594,7 +594,10 @@ def style(**kwargs: Any) -> dict[str, Any]: ...
 # `math`, `random` and `statistics` are Python's own — write
 # `import math`, and a type checker reads typeshed's stub for it.
 
-class json:
+# Reads into a JSON document by dotted path ("items.0.title").
+# Python's `json` has none of these, and `json.dumps` is Python's own
+# — write `import json` for it.
+class jsondoc:
     @staticmethod
     def get_text(src: str, path: str) -> str: ...
     @staticmethod
@@ -607,10 +610,6 @@ class json:
     def length(src: str, path: str) -> int: ...
     @staticmethod
     def has(src: str, path: str) -> bool: ...
-    # Writes a str, int, float, bool, a list of one of those, or a
-    # dict with str keys. A dict is written in key order.
-    @staticmethod
-    def dumps(value: Any) -> str: ...
 
 class time:
     @staticmethod

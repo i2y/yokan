@@ -2568,60 +2568,108 @@ pub fn fs_app_dir(name: &str) -> String {
 // Python dict has insertion order; writing by key is the one both can
 // agree on, and it is the rule dict iteration already follows here.
 
-pub fn json_dumps_str(v: &str) -> String {
-    serde_json::Value::String(v.to_string()).to_string()
+// ---- json.dumps: the writer CPython is -------------------------------
+// Python's `json.dumps`, as a twin. serde_json is close and not the
+// same: it separates with `,` and `:` where CPython uses `", "` and
+// `": "`, it leaves non-ASCII alone where CPython escapes it, it
+// refuses NaN where CPython writes one, and it formats floats its own
+// way. So the writer is written out.
+//
+// The pieces compose: a value is rendered to its text, and a
+// container joins texts. That is what lets a document nest without a
+// writer per shape — the twelve shape-specific ones this replaces
+// could not nest at all.
+
+/// A JSON string literal, with `ensure_ascii` — CPython's default.
+/// Everything outside printable ASCII becomes `\uXXXX`, and a
+/// character past the basic plane becomes the surrogate pair its
+/// UTF-16 encoding is.
+pub fn json_text(v: &str) -> String {
+    let mut out = String::with_capacity(v.len() + 2);
+    out.push('"');
+    for c in v.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            ' '..='~' => out.push(c),
+            _ => {
+                let mut buf = [0u16; 2];
+                for unit in c.encode_utf16(&mut buf) {
+                    out.push_str(&format!("\\u{unit:04x}"));
+                }
+            }
+        }
+    }
+    out.push('"');
+    out
 }
 
-pub fn json_dumps_int(v: i64) -> String {
+pub fn json_int(v: i64) -> String {
     v.to_string()
 }
 
-pub fn json_dumps_float(v: f64) -> String {
-    serde_json::Value::from(v).to_string()
+/// CPython writes a float as `repr` does, and writes the three values
+/// JSON has no syntax for as `NaN`, `Infinity` and `-Infinity`.
+pub fn json_float(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".to_string();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
+    }
+    py_float_repr(v)
 }
 
-pub fn json_dumps_bool(v: bool) -> String {
+pub fn json_bool(v: bool) -> String {
     if v { "true" } else { "false" }.to_string()
 }
 
-pub fn json_dumps_list_str(xs: Vec<String>) -> String {
-    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::String).collect()).to_string()
+pub fn json_null() -> String {
+    "null".to_string()
 }
 
-pub fn json_dumps_list_int(xs: Vec<i64>) -> String {
-    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+/// Already-rendered elements as an array.
+pub fn json_array(parts: Vec<String>) -> String {
+    format!("[{}]", parts.join(", "))
 }
 
-pub fn json_dumps_list_float(xs: Vec<f64>) -> String {
-    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::from).collect()).to_string()
+/// Keys and already-rendered values as an object, in the order given
+/// — which is the order the keys went into the dict, since that is
+/// what a map answers here.
+pub fn json_object(keys: Vec<String>, parts: Vec<String>) -> String {
+    assert!(
+        keys.len() == parts.len(),
+        "json: {} keys against {} values",
+        keys.len(),
+        parts.len()
+    );
+    let body: Vec<String> = keys
+        .iter()
+        .zip(parts.iter())
+        .map(|(k, v)| format!("{}: {v}", json_text(k)))
+        .collect();
+    format!("{{{}}}", body.join(", "))
 }
 
-pub fn json_dumps_list_bool(xs: Vec<bool>) -> String {
-    serde_json::Value::Array(xs.into_iter().map(serde_json::Value::Bool).collect()).to_string()
+/// Each element of a list of scalars, rendered. Four functions rather
+/// than one because the crossing is typed; what they answer is the
+/// same `List<String>` the containers above take, so they compose.
+pub fn json_texts(xs: Vec<String>) -> Vec<String> {
+    xs.iter().map(|x| json_text(x)).collect()
 }
-
-fn dumps_map(mut pairs: Vec<(String, serde_json::Value)>) -> String {
-    // Sorted here rather than left to the map: serde_json's `Map` is a
-    // BTreeMap only while nothing in the crate graph asks it to
-    // preserve insertion order, and key order is the answer either way.
-    pairs.sort_by(|a, b| a.0.cmp(&b.0));
-    serde_json::Value::Object(pairs.into_iter().collect()).to_string()
+pub fn json_ints(xs: Vec<i64>) -> Vec<String> {
+    xs.into_iter().map(json_int).collect()
 }
-
-pub fn json_dumps_map_str(m: std::collections::HashMap<String, String>) -> String {
-    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect())
+pub fn json_floats(xs: Vec<f64>) -> Vec<String> {
+    xs.into_iter().map(json_float).collect()
 }
-
-pub fn json_dumps_map_int(m: std::collections::HashMap<String, i64>) -> String {
-    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
-}
-
-pub fn json_dumps_map_float(m: std::collections::HashMap<String, f64>) -> String {
-    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
-}
-
-pub fn json_dumps_map_bool(m: std::collections::HashMap<String, bool>) -> String {
-    dumps_map(m.into_iter().map(|(k, v)| (k, serde_json::Value::Bool(v))).collect())
+pub fn json_bools(xs: Vec<bool>) -> Vec<String> {
+    xs.into_iter().map(json_bool).collect()
 }
 
 // ---- time: the machine's own zone -----------------------------------

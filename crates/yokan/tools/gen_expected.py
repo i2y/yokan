@@ -23,13 +23,14 @@ Rows read `name arg… -> result`, values tagged by type:
     i:-12   an int          s:hello        a str (percent-escaped)
     f:hex   a double        !Name:message  the exception CPython raised
     b:0     a bool          [f:..,f:..]    a list
-    u:      None
+    u:      None            {s:k=i:1,..}   an object, in order
 
 `~>` in place of `->` means "within one ulp": the answer comes from
 the platform's libm rather than from IEEE-754, so CPython and the
 twin agree exactly on this machine but a table is read on others.
 """
 
+import json
 import math
 import os
 import random
@@ -235,10 +236,51 @@ def cases_statistics():
         yield from ((fn, (xs,)) for xs in sets)
 
 
+def cases_json():
+    """`json.dumps` with CPython's defaults, which is the only shape
+    the dialect takes: `ensure_ascii=True`, `", "` and `": "` between
+    the parts, keys in the order they went in.
+
+    The strings are chosen for the escaping: the two characters JSON
+    names, the control characters with short escapes, one without,
+    DEL, Latin-1, a CJK character, and one past the basic plane, which
+    CPython writes as the surrogate pair its UTF-16 encoding is.
+    """
+    texts = (
+        "", "plain", 'a"b', "back\\slash", "tab\there", "nl\n", "cr\r",
+        "\b\f", "bell\x07", "del\x7f", "\u00fcn\u00efcode", "\u65e5\u672c\u8a9e",
+        "\U0001f600", "\u2028", "  spaced  ",
+    )
+    yield from (("dumps", (t,)) for t in texts)
+    yield from (("dumps", (v,)) for v in (0, 1, -1, 2**62, -(2**62)))
+    yield from (("dumps", (v,)) for v in (0.0, -0.0, 1.0, 0.1, 1e300, 1e16, 2.5,
+                                          math.inf, -math.inf, math.nan))
+    yield from (("dumps", (v,)) for v in (True, False, None))
+    # Lists of one scalar type, the shape a held `list[...]` takes.
+    yield from (("dumps", (xs,)) for xs in (
+        [], [1, 2, 3], [1.5, 2.5], ["a", 'q"q'], [True, False],
+        [0.1, 0.2, 0.3], ["\u65e5"],
+    ))
+    # Objects, in the order the keys went in — not sorted.
+    yield from (("dumps", (d,)) for d in (
+        {}, {"b": 1, "a": 2}, {"z": "last", "a": "first"},
+        {"k": 1.5}, {"t": True}, {"q\"q": 1},
+    ))
+    # Nested, which a literal reaches to any depth.
+    yield from (("dumps", (v,)) for v in (
+        {"user": {"name": "momo", "tags": ["a", "b"], "n": 3},
+         "ok": True, "score": 1.5, "extra": None},
+        [[1, 2], [3]],
+        [{"a": [1]}, {}],
+        {"deep": {"deeper": {"deepest": [1, {"x": None}]}}},
+    ))
+
+
 MODULES = {
     "math": (math, cases_math),
     "random": (random, cases_random),
     "statistics": (statistics, cases_statistics),
+    "json": (json, cases_json),
 }
 
 
@@ -255,6 +297,8 @@ def enc(v) -> str:
         return "s:" + urllib.parse.quote(v, safe="")
     if isinstance(v, (list, tuple)):
         return "[" + ",".join(enc(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ",".join(f"{enc(k)}={enc(x)}" for k, x in v.items()) + "}"
     if v is None:
         return "u:"
     raise SystemExit(f"no encoding for {v!r} ({type(v).__name__})")
