@@ -37,6 +37,9 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
+# Previous / next links at the foot of every page, so the tour reads
+# in order without going back to the sidebar.
+features = ["navigation.footer"]
 logo = "images/logo.svg"
 favicon = "images/favicon.png"
 language = "ja"
