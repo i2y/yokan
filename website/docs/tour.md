@@ -9,9 +9,10 @@ What Yokan cannot do yet is collected, with reasons, in
 
 A Yokan app is an ordinary Python file.
 During development it runs on real CPython; when you ship, the same source compiles to a native binary.
-And the **gate** replays the same interaction script against both the development build and the shipped build and byte-diffs the results, verifying per app that the two behave the same.
-Everything this tour calls "compiled" has passed that check.
-The sections below will not repeat this.
+
+Whether those two behave the same is something you can check, with `yokan gate`.
+It replays a script of clicks and keystrokes through both and compares the screens byte for byte; [Headless runs and the gate](tour-ship.md#headless-runs-and-the-gate) covers it.
+Every feature this tour calls "compiled" has been through it, and the sections below will not say so again.
 
 ## The smallest app
 
