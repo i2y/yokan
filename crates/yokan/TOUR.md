@@ -859,6 +859,7 @@ except Exception as e:
 ## The standard library
 
 It comes in two halves, told apart by where the name comes from.
+Neither half puts Python in the shipped binary.
 
 **Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`, `import collections`, `import itertools`.
 During development the app imports CPython's module and CPython runs it.
@@ -887,7 +888,9 @@ An unseeded generator is as unrepeatable here as it is in Python — seed it and
 
 **Yokan's own modules** cover files, a database, the network, the clipboard and notifications: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
 Python can do most of this too, through `pathlib`, `sqlite3` and `urllib`.
-What differs here is that there is one implementation: both runs call the same Rust function, so they cannot disagree about it, and the shipped binary needs no Python.
+What differs is how many implementations there are.
+`math` and `re` are CPython's modules during development and Rust twins after shipping — two implementations, which is what the tables of CPython's answers are for.
+These call the same Rust function in both runs, so there is nothing for the two to disagree about.
 None of them uses a Python module's name, because a Python name is a promise that CPython decides the answers.
 Reading a JSON document by a dotted path is `jsondoc`, not `json`, and the machine's own time zone is `clock`, not `time`.
 Call them from handlers (views stay pure).

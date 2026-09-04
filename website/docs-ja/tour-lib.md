@@ -25,6 +25,7 @@ except Exception as e:
 
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
+どちらの半分も、リリースバイナリに Python を持ち込みません。
 
 **Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
@@ -57,9 +58,10 @@ def view():
 **Yokan 自身のモジュール**が受け持つのは、ファイル、データベース、ネットワーク、クリップボード、通知です。
 `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify` と書いて読み込みます。
 同じことは Python でもできます（`pathlib`、`sqlite3`、`urllib`）。
-違うのは、実装が一つしかないことです。
-開発中の実行もリリース後の実行も Rust の同じ関数を呼ぶので、二つの実行が食い違いません。
-リリースバイナリに Python も要りません。
+違うのは、実装がいくつあるかです。
+`math` や `re` は、開発中は CPython のモジュールが動き、リリース後は Rust の双子が動きます。
+実装が二つあるので、CPython の答えを並べた表で縛ります。
+こちらはどちらの実行も Rust の同じ関数を呼ぶので、食い違う余地がありません。
 これらに Python のモジュール名は使いません。
 Python の名前が付いていることは、CPython の答えに合わせるという約束だからです。
 JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
