@@ -1540,3 +1540,98 @@ because the question tends to be asked when something is already
 wrong. `yokan clean` drops the
 cache, which is safe to offer precisely because everything in it is
 one fetch and one build away.
+
+## The drawing surface, and the keyboard as a device (2026-09-04)
+
+Two things the catalog could not do: paint a grid of pixels, and
+answer "is that key held right now". Both are what a game needs, and
+neither is only for games — the first is every chart nobody wants to
+write as a chart, the second is every app with a direct manipulation
+in it.
+
+**A canvas, and commands that are not elements.** `Canvas` carries a
+virtual size, an integer `scale` (how many logical pixels each virtual
+one takes), a palette and a list of drawing commands: pixel, line,
+rect, its outline, circle, its outline, triangle, its outline, sprite
+and text. A command is a separate kind of thing from an element, and
+that was the decision with the most consequences. As elements they
+would each take the universal riders — a rectangle that can be
+disabled, a sprite with a tooltip — and every walker in the runtime
+would grow an arm for something it can never mean. As their own
+values they are pure data: nothing to click, nothing to key, nothing
+for the accessibility walk to describe, and the whole frame fits in
+the dump.
+
+**Inside a canvas a color is a number.** It is an index into the
+palette the app declares, and the palette is required. The
+alternative was to accept hex strings and theme tokens as well, and it
+was refused for the shape it would give the app rather than for the
+work: a frame writes a hundred colors, and two spellings for every one
+of them is a worse interface than a table with sixteen rows. An index
+past the end paints the last color rather than nothing, so an
+off-by-one is visible; a canvas with an empty palette paints magenta,
+which is what a missing color looks like everywhere else in graphics.
+Coordinates are integers, because a pixel grid has no half pixels.
+
+**The dump is one command per line.** Everything else in the element
+tree dumps on a single line, and stays that way. A frame is hundreds
+of commands, and a failing gate reports a difference by printing the
+line it is on — so a frame on one line would print two twenty-kilobyte
+lines and say nothing. One command per line makes that report a diff.
+The colors are printed resolved, so a palette change is visible in the
+comparison.
+
+**The engine paints it itself.** Every other element hands gpui
+elements and lets it lay them out; a canvas is rasterized here,
+command by command, into a buffer and handed over as one image. Its
+paths are antialiased and its image sampler interpolates, and dot art
+must be neither, so the buffer is built at the display's own
+resolution — virtual size times the scale times the device factor,
+each virtual pixel a square of identical device pixels — where there
+is nothing left to interpolate. Each canvas keeps its last image,
+keyed by where it sits in the tree, and rebuilds only when the
+commands, the palette or the display change; a replaced image is
+handed back to the window, because the texture atlas keys on the image
+and would otherwise hold every frame ever painted. Sprite sheets are
+decoded by the rasterizer rather than through the asset cache, which
+answers a frame later than a rasterizer can wait; a sheet that is not
+there paints nothing, since a placeholder box in the middle of a frame
+is worse than a hole. The text is drawn in a 4x6 font this repository
+owns, so a drawing surface does not depend on an asset to write a
+score.
+
+**A chord is a message; a key is a device.** `shortcut` and `on_key`
+deliver a chord to a handler and are over. A game asks a different
+question, and the answer is not app state: it belongs to the keyboard,
+which is one device per process — exactly the shape the clipboard
+already has here. So the key state lives beside it, held, pressed and
+released, and the three reads are ordinary functions with no World in
+reach, which is what lets one implementation serve the interpreted and
+the compiled run.
+
+The sets hold bare keys, not chords: `left` is held whether or not
+shift is down with it, which is what the question means, and the
+modifiers answer under their own names. What is pressed and what is
+released are spent by the tick that saw them — not by the frame,
+because a window pumps frames at the display's rate while a game ticks
+at thirty, and clearing per frame would take a press away before the
+tick meant to read it. So a tick sees every press since the previous
+tick and never sees one twice, in a window and under a script's
+`advance:` alike, because both run the same timer pass. The platform's
+auto-repeat holds a key down without pressing it again, and a key held
+while the app is switched away is released rather than left down
+forever.
+
+A script presses one with `keydown:` and lets go with `keyup:`;
+`key:<chord>` keeps delivering its chord and now also taps the key,
+so no scripted step means less than the hardware does. None of this
+is in the dump — what an app DID with the keys is, which is the thing
+worth comparing.
+
+What is not here yet: sound, closing a window from the app, the
+mouse, tilemaps, a camera offset, and a canvas that sizes itself to
+its box (the painted size would then depend on the window, which the
+dump cannot see, so the scale is a number the app declares). What a
+canvas paints is not readable by assistive technology either — the
+canvas reports as an image, and a label is the honest way to say what
+is on it.

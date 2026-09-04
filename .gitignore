@@ -26,6 +26,7 @@ docs/WIDGET_FLEET.local.md
 docs/STDLIB_COMPAT.local.md
 crates/yokan/BACKLOG.local.md
 crates/yokan/tools/probe_dialect.local.py
+docs/SHOWCASE_PORTS.local.md
 
 # The Japanese docs tree gets its stylesheet copied in by website/build.sh.
 website/docs-ja/stylesheets/
