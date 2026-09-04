@@ -50,9 +50,10 @@ def view():
 `math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
 An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
 
-**Yokan's own modules**, for what Python has no answer to on a desktop: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
-Each one calls the same function, implemented in Rust, during development and after shipping alike.
-The shipped binary needs no Python.
+**Yokan's own modules**, for the desktop verbs — files, a database, the network, the clipboard, notifications: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
+Python reaches most of these too, through `pathlib`, `sqlite3` and `urllib`.
+Here they are written once, in Rust, and both runs call that one implementation, so the two cannot disagree about them and the shipped binary needs no Python.
+Their names are Yokan's and never Python's, so nothing here claims to be a module it is not — which is why reading a path out of a JSON document is `jsondoc`, and the machine's own zone is `clock`.
 Call them from handlers (views stay pure).
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)

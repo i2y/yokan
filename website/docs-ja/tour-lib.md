@@ -54,9 +54,13 @@ def view():
 種を撒いていない生成器が繰り返せないのは Python と同じです。
 種を撒けば、gate が両方の実行を一つの列に縛れます。
 
-**Yokan 自身のモジュール**は、デスクトップで必要になる、Python に答えのないものです（`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`）。
-どれも Rust で実装された同じ関数を、開発中もリリース後も呼びます。
-リリースバイナリに Python は要りません。
+**Yokan 自身のモジュール**は、デスクトップの動詞です（ファイル、データベース、ネットワーク、クリップボード、通知）。
+`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify` と書いて呼びます。
+その多くは Python にもあります（`pathlib`、`sqlite3`、`urllib`）。
+ここでは Rust で一度だけ書き、両方の実行がその一つを呼びます。
+二つの実行が食い違いようがなく、リリースバイナリに Python も要りません。
+名前は Yokan のもので、Python のモジュール名は名乗りません。
+別のものが同じ名前を名乗らないようにするためで、JSON 文書からパスで読むのが `jsondoc`、機械自身のゾーンが `clock` なのはそのためです。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
 - **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
