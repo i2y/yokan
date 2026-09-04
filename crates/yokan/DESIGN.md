@@ -1645,3 +1645,57 @@ dump cannot see, so the scale is a number the app declares). What a
 canvas paints is not readable by assistive technology either — the
 canvas reports as an image, and a label is the honest way to say what
 is on it.
+
+## What a game found (2026-09-04)
+
+Two of Pyxel's example games — a shoot-'em-up and a jump game, both
+MIT — were ported to the dialect as the first apps written against the
+canvas. A port is a good test because nobody chose it to fit: it is
+three hundred lines of someone else's Python, and every line either
+compiles or names what it needs. Three things it found, in order of
+seriousness.
+
+**Parentheses were dropped.** `score + (kind + 1) * 100` was emitted as
+`score + kind + 1 * 100`, which is a different number. The translator
+walked Python's own syntax tree — where the grouping is already
+decided — and wrote the operands back without it, so the result was
+re-read with plain left-to-right precedence. This is the one kind of
+bug the gate cannot catch on its own: the interpreted run IS the
+Python, the compiled run is the translation, and a translation that
+silently means something else is exactly what a gate compares — but
+only if the script reaches the line. The jump game's script scored a
+fruit and printed 102 where CPython printed 300. An operand that is
+itself an operation now keeps its parentheses.
+
+**A local could quietly become a field.** In a store method the
+compiled side reads a field by its bare name, so a local called
+`score` beside a field called `score` is two different names in the
+two runs: Python's `self.score = score` writes the field, and the
+translation wrote a name to itself. Both ports had one, written
+without a thought, because it is how Python is written. It is refused
+now — a local, a parameter or a loop variable may not take a field's
+name, with the message naming the rename — which is the same rule a
+local that shadows a `State` already followed. Renaming behind the
+app's back was the alternative, and it was rejected: the fix has to
+show up in the source, where the reader can see which name means
+which thing.
+
+**A store method could not call a sibling defined after it.** Method
+names were registered as their bodies were read, so `tick` calling a
+`move` written below it was "not a method of store Game". Python does
+not care about the order, and now neither does this: the names are all
+known before any body is walked.
+
+Two more reaches, both the same gap in different places: a view could
+not read a repeater row's field in a condition (`if fruit.alive`) or
+in a boolean property (`flip_x=enemy.flip`). Both now read the row
+they are standing on, the way the text and the numbers already did.
+
+The ports themselves are `demo/shooter.py` and `demo/jump.py`. What
+had to change from the originals is small and it is written at the top
+of each file: fractional speeds are carried in tenths of a pixel
+because a canvas has whole pixels; `for i in range(2)` around a
+parallax layer is written out twice because a view's `for` walks a
+list; and there is no sound, because there is no audio here yet.
+Everything else is the game, including the numbers — a color is an
+index into Pyxel's own palette, declared in the file.

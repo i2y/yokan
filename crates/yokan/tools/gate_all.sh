@@ -38,6 +38,19 @@ gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next mont
 # The canvas, and the keyboard as a device: the frame is in the dump one
 # command per line, and the keys steer the ball through the tick.
 gate canvas  python3 yokan_gate.py gate demo/canvas.py --script "click:seed,dump,keydown:left,advance:50,advance:50,keyup:left,dump,keydown:space,advance:50,advance:50,keyup:space,advance:50"
+# The two ports, played frame by frame. Each script reaches the part
+# that SCORES, because a game whose score never moves has most of its
+# arithmetic unchecked: the shooter fires twelve times from the title
+# screen through a kill, and the jump game falls onto a floor and eats
+# a fruit.
+frame33="advance:33"
+burst="keydown:space,$frame33,keyup:space,$frame33,$frame33,$frame33,$frame33,$frame33"
+shoot="keydown:enter,$frame33,keyup:enter"
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do shoot="$shoot,$burst"; done
+gate shooter python3 yokan_gate.py gate demo/shooter.py --script "$shoot,dump"
+fall=""
+for i in $(seq 1 120); do fall="$fall,$frame33"; done
+gate jump    python3 yokan_gate.py gate demo/jump.py --script "${fall#,},dump"
 gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 # The shared properties on every element; the middle steps are inert while locked.
 gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
@@ -71,7 +84,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
-    canvas) continue;;
+    canvas|shooter|jump) continue;;
     shared) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
