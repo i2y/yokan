@@ -237,6 +237,15 @@ A compiled dict remembers the order its keys went in, so a walk visits them in t
 Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
 `.items()` walks the pairs, in the same insertion order.
 
+A dict of lists groups, with the empty list as what a missing key means:
+
+```python
+groups: State[dict[str, list[str]]] = State({})
+
+for w in words():
+    groups[w[0]] = groups().get(w[0], []) + [w]
+```
+
 ## Tuples
 
 A tuple is a value with a part for each position, written and read the way Python writes one.

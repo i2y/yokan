@@ -157,7 +157,7 @@ the initial state, right after launch.
 #### reader — an http + jsondoc feed reader
 <img src="screenshots/reader.png" width="360">
 
-#### stdlib — Python's `math`, `random`, `statistics`, `json`, `datetime`, `time` and `re`, and Yokan's jsondoc and clock
+#### stdlib — Python's `math`, `random`, `statistics`, `json`, `datetime`, `time`, `re`, `collections` and `itertools`, and Yokan's jsondoc and clock
 <img src="screenshots/stdlib.png" width="360">
 
 #### dice — Python's `random`: seed it and both runs draw the same sequence

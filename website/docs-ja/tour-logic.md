@@ -251,6 +251,16 @@ def scan():
 無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
 `.items()` は対で回ります。順序は同じ挿入順です。
 
+リストを値に持つ辞書でグループ分けができます。
+キーが無いときの意味は、空のリストです。
+
+```python
+groups: State[dict[str, list[str]]] = State({})
+
+for w in words():
+    groups[w[0]] = groups().get(w[0], []) + [w]
+```
+
 ## タプル
 
 タプルは位置ごとに部分を持つ値で、Python と同じ書き方で書き、同じ読み方で読みます。

@@ -1294,3 +1294,51 @@ written — and shows up the moment the result is indexed or measured.
 It is now what Python says it is: a `for` iterable. Where a list is
 wanted the spelling is `xs[::-1]`, which is a list in Python too, and
 the refusal for the old shape names it.
+
+## Two of Python's modules are written out, not called
+
+`collections` and `itertools` answer shape rather than arithmetic: a
+count, a pairing, a product. There is nothing for a Rust twin to
+compute — what they need is a loop, and the dialect can write loops.
+So the translator writes the loop each call stands for, and the
+interpreted run, which is CPython's own module, is what the gate
+compares it against. That is a stronger check than a table of
+answers, not a weaker one: the real module is running on the other
+side of every comparison.
+
+This is where the tuples and the generic containers were leading. A
+`Counter` is a dict of counts; `most_common` is a stable sort by the
+count, which the container now does for any element; `pairwise` and
+`combinations` answer lists of tuples, which are values here. Nothing
+new crosses the crate boundary for any of it.
+
+## An iterator belongs in a `for`
+
+Every `itertools` combinator answers a lazy iterator in Python. A
+`for` cannot tell laziness from a list — the same elements in the
+same order, and `break` stops at the same place because the list is
+built before the loop runs — so that is the one place these are
+taken. As a value they are refused, and the refusal names the `for`.
+It is the rule `reversed` already follows.
+
+The combinators that never end (`count`, `cycle`, `repeat`) are
+refused for the reason that makes them useful in Python and useless
+here. The ones that yield an iterator of their own (`groupby`, `tee`)
+have nothing to become. `batched`'s last tuple is a different shape
+from the rest, and a tuple's shape is written out.
+
+## A Counter is a dict, and only a Counter has `most_common`
+
+Python's `Counter` is a dict subclass, so it is a dict here: walked,
+measured, tested with `in`, read with `.get`. What a plain dict does
+not have is `.most_common` and `.total`, and neither does one here —
+the translator remembers which locals came from a `Counter(...)`, and
+a plain dict asking for `.most_common` is refused the way Python
+refuses it.
+
+`defaultdict` is the one member deliberately left out rather than
+deferred. Its whole purpose is to answer for a missing key at the
+dict; this dialect asks that question at the read instead, which is
+the same reason bare `d[k]` is refused. Counting is `Counter`, and
+grouping writes the list back — which now works, because a dict of
+lists reads with `.get(k, [])`.

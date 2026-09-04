@@ -385,8 +385,8 @@ def tally():
 
 - `if` / `elif` / `else`, `while`, `for` (over `range()` with one or
   two arguments, a list state, a list field, a list parameter,
-  `sorted(d())`, or `sorted(xs)` / `reversed(xs)`), `break` /
-  `continue`, locals (reassignable).
+  `sorted(d())`, `sorted(xs)` / `reversed(xs)`, or an `itertools`
+  combinator), `break` / `continue`, locals (reassignable).
 - A local assigned in **both** arms of an `if` / `else` reads after
   the branch; assigned in one arm only, it is refused (Python would
   raise NameError on the other path). Loop variables do not outlive
@@ -470,7 +470,8 @@ Two layers, told apart by where the name comes from.
 **Python's own**: `import math`, `import random`, `import
 statistics`, `import json`, `import datetime`, `import time`,
 `import re`, `import string`, `import textwrap`, `import bisect`,
-`import heapq`, written as Python writes them. Development imports
+`import heapq`, `import collections`, `import itertools`, written as
+Python writes them. Development imports
 CPython's module; the shipped binary calls a twin held to CPython by
 a table CPython printed, error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
@@ -537,6 +538,13 @@ small modules: `string`'s constants, `textwrap.dedent` / `indent`,
 `bisect_left` / `bisect_right`, `heapq.nsmallest` / `nlargest`, and
 the rest of `str` (`title`, `zfill`, `ljust`, `center`, the `is…`
 family, `removeprefix`, `splitlines`, `expandtabs`, `strip(chars)`).
+From `collections`: `Counter(list[str])` — a dict of counts in
+first-seen order, with `.most_common(n?)` and `.total()` on top of
+everything a dict answers; the rest of the module is refused by
+name. From `itertools`: `chain`, `pairwise`, `accumulate`,
+`combinations(xs, r)`, `permutations(xs, r)` (r a literal) and
+`product(a, b)` — each answers an iterator in Python, so each is
+what a `for` walks and none is a value.
 Anything that rearranges a list in place is refused: a list lives in
 a `State`.
 

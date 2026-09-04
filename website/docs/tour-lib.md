@@ -25,7 +25,7 @@ except Exception as e:
 
 It comes in two halves, told apart by where the name comes from.
 
-**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`.
+**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`, `import collections`, `import itertools`.
 During development the app imports CPython's module and CPython runs it.
 The shipped binary calls a twin written against CPython's semantics, and a table of answers CPython itself printed holds the twin to it, function by function and error by error.
 `math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs; `json.dumps` writes what CPython writes, down to the `", "` between the parts and the `\uXXXX` escapes; a `date` adds a `timedelta`, subtracts another date and formats itself the way Python's does; and a regular expression is compiled by CPython itself while the app translates, so the shipped binary runs the very array Python would have run — the backtracking, the groups and the flags are CPython's, not a second dialect of them.
@@ -72,7 +72,19 @@ From `json`: `dumps`, with CPython's defaults and no keyword arguments.
 From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
 From `re`: `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not None` (with `match` and `fullmatch`) as the test. The pattern is a literal, because it is compiled while the app translates.
 From `string`: the nine constants. From `textwrap`: `dedent` and `indent`. From `bisect`: `bisect_left`, `bisect_right`. From `heapq`: `nsmallest`, `nlargest`.
+From `collections`: `Counter`, over a list of str — the dict of counts, keyed in first-seen order, with `.most_common()` and `.total()` beside everything a dict answers.
+A Counter held in a `State` reads back as the dict it is, so take the counts out before storing it.
+From `itertools`: `chain`, `pairwise`, `accumulate`, `combinations`, `permutations` and `product`, each of which answers an iterator in Python and is therefore what a `for` walks here.
 From `datetime`: `date`, `datetime` and `timedelta`, all of them naive — construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
+
+```python
+c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
+for name, n in c.most_common(2):           # by count, ties in first-seen order
+    board.set(board() + f"{name}:{n} ")
+
+for a, b in itertools.pairwise(readings()):
+    steps.set(steps() + [b - a])
+```
 
 Every sqlite call takes one more argument, a list of values to bind:
 

@@ -26,7 +26,7 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 
-**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`）。
+**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは CPython の意味に合わせて書いた双子を呼び、CPython 自身が出力した正解表が、関数ごと、エラーごとに双子を縛ります。
 `math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書き、`date` は `timedelta` を足し、別の `date` を引き、Python と同じ書式で自分を描きます。
@@ -78,10 +78,24 @@ Python 側がどこまで届くかは次のとおりです。
 `re` からは `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
 パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
 `string` からは九つの定数、`textwrap` からは `dedent` と `indent`、`bisect` からは `bisect_left` と `bisect_right`、`heapq` からは `nsmallest` と `nlargest`。
+`collections` からは `Counter`（str のリストを数えます）。
+数えた結果は初めて現れた順に並ぶ辞書で、辞書が答えるものすべてに加えて `.most_common()` と `.total()` を持ちます。
+`State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
+`itertools` からは `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。
+どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
 `datetime` からは `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
 構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較が使えます。
 穴に置いた値は `str()` と同じ形で描かれます。
 CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、int のリストには一つの型が決まらず、断ります。
+
+```python
+c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
+for name, n in c.most_common(2):           # 個数の多い順、同数なら現れた順
+    board.set(board() + f"{name}:{n} ")
+
+for a, b in itertools.pairwise(readings()):
+    steps.set(steps() + [b - a])
+```
 
 sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
 

@@ -548,6 +548,15 @@ A compiled dict remembers the order its keys went in, so a walk visits them in t
 Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
 `.items()` walks the pairs, in the same insertion order.
 
+A dict of lists groups, with the empty list as what a missing key means:
+
+```python
+groups: State[dict[str, list[str]]] = State({})
+
+for w in words():
+    groups[w[0]] = groups().get(w[0], []) + [w]
+```
+
 ## Tuples
 
 A tuple is a value with a part for each position, written and read the way Python writes one.
@@ -851,7 +860,7 @@ except Exception as e:
 
 It comes in two halves, told apart by where the name comes from.
 
-**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`.
+**Python's own modules**, written the way Python writes them: `import math`, `import random`, `import statistics`, `import json`, `import datetime`, `import time`, `import re`, `import string`, `import textwrap`, `import bisect`, `import heapq`, `import collections`, `import itertools`.
 During development the app imports CPython's module and CPython runs it.
 The shipped binary calls a twin written against CPython's semantics, and a table of answers CPython itself printed holds the twin to it, function by function and error by error.
 `math.sqrt(-1)` raises where Python raises; `statistics.mean([0.1, 0.2, 0.3])` is `0.2`, the exact answer, not the `0.20000000000000004` a plain sum gives; `random.seed(1)` starts the same Mersenne Twister sequence in both runs; `json.dumps` writes what CPython writes, down to the `", "` between the parts and the `\uXXXX` escapes; a `date` adds a `timedelta`, subtracts another date and formats itself the way Python's does; and a regular expression is compiled by CPython itself while the app translates, so the shipped binary runs the very array Python would have run — the backtracking, the groups and the flags are CPython's, not a second dialect of them.
@@ -898,7 +907,19 @@ From `json`: `dumps`, with CPython's defaults and no keyword arguments.
 From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
 From `re`: `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not None` (with `match` and `fullmatch`) as the test. The pattern is a literal, because it is compiled while the app translates.
 From `string`: the nine constants. From `textwrap`: `dedent` and `indent`. From `bisect`: `bisect_left`, `bisect_right`. From `heapq`: `nsmallest`, `nlargest`.
+From `collections`: `Counter`, over a list of str — the dict of counts, keyed in first-seen order, with `.most_common()` and `.total()` beside everything a dict answers.
+A Counter held in a `State` reads back as the dict it is, so take the counts out before storing it.
+From `itertools`: `chain`, `pairwise`, `accumulate`, `combinations`, `permutations` and `product`, each of which answers an iterator in Python and is therefore what a `for` walks here.
 From `datetime`: `date`, `datetime` and `timedelta`, all of them naive — construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
+
+```python
+c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
+for name, n in c.most_common(2):           # by count, ties in first-seen order
+    board.set(board() + f"{name}:{n} ")
+
+for a, b in itertools.pairwise(readings()):
+    steps.set(steps() + [b - a])
+```
 
 Every sqlite call takes one more argument, a list of values to bind:
 
@@ -1209,7 +1230,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
 - **In Yokan's own modules**: file metadata (size, times) and copying or renaming, and streaming or binary downloads.
-- **In Python's modules**: six members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: an aware value (`timezone`, `tzinfo`), `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused by name, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `collections`, `itertools`, `decimal`, `hashlib`, `base64`, `zoneinfo`.
+- **In Python's modules**: six members of `math` (each refused by name with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: an aware value (`timezone`, `tzinfo`), `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused by name, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. From `collections`: everything but `Counter` — `defaultdict` (what a missing key answers is asked at the read here), `deque` (it works in place, and a list lives in a `State`), `namedtuple` (a `@value` class says it with types), `OrderedDict` (a dict here already keeps its order) and `ChainMap`. From `itertools`: what never ends (`count`, `cycle`, `repeat`), what yields an iterator of its own (`groupby`, `tee`), what takes a function (`starmap`, `takewhile`, `filterfalse`) and `batched`, whose last tuple is a different shape from the rest. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `decimal`, `hashlib`, `base64`, `zoneinfo`.
 - **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no hover readout and no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.

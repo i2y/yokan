@@ -564,6 +564,16 @@ def scan():
 無いキーで Python は KeyError を投げるので、無いときにどうするかを言う `.get(key, default)` が読みの形です。
 `.items()` は対で回ります。順序は同じ挿入順です。
 
+リストを値に持つ辞書でグループ分けができます。
+キーが無いときの意味は、空のリストです。
+
+```python
+groups: State[dict[str, list[str]]] = State({})
+
+for w in words():
+    groups[w[0]] = groups().get(w[0], []) + [w]
+```
+
 ## タプル
 
 タプルは位置ごとに部分を持つ値で、Python と同じ書き方で書き、同じ読み方で読みます。
@@ -860,7 +870,7 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 
-**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`）。
+**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは CPython の意味に合わせて書いた双子を呼び、CPython 自身が出力した正解表が、関数ごと、エラーごとに双子を縛ります。
 `math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書き、`date` は `timedelta` を足し、別の `date` を引き、Python と同じ書式で自分を描きます。
@@ -912,10 +922,24 @@ Python 側がどこまで届くかは次のとおりです。
 `re` からは `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
 パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
 `string` からは九つの定数、`textwrap` からは `dedent` と `indent`、`bisect` からは `bisect_left` と `bisect_right`、`heapq` からは `nsmallest` と `nlargest`。
+`collections` からは `Counter`（str のリストを数えます）。
+数えた結果は初めて現れた順に並ぶ辞書で、辞書が答えるものすべてに加えて `.most_common()` と `.total()` を持ちます。
+`State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
+`itertools` からは `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。
+どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
 `datetime` からは `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
 構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較が使えます。
 穴に置いた値は `str()` と同じ形で描かれます。
 CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、int のリストには一つの型が決まらず、断ります。
+
+```python
+c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
+for name, n in c.most_common(2):           # 個数の多い順、同数なら現れた順
+    board.set(board() + f"{name}:{n} ")
+
+for a, b in itertools.pairwise(readings()):
+    steps.set(steps() + [b - a])
+```
 
 sqlite の呼び出しは、どれも最後にバインドする値のリストを取れます。
 
@@ -1221,7 +1245,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
 - **Yokan 自身のモジュールでは**：ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード。
-- **Python のモジュールでは**：`math` の六つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。`re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。後者は `@py` を教えます。小物のモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。理由を名指しして断るモジュール：`pathlib`、`os`、`collections`、`itertools`、`decimal`、`hashlib`、`base64`、`zoneinfo`。
+- **Python のモジュールでは**：`math` の六つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。`re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。後者は `@py` を教えます。小物のモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。`collections` からは `Counter` 以外を断ります：`defaultdict`（キーが無いときに何を返すかは、ここでは読む側が言います）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`@value` クラスが型付きで同じことを言います）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap`。`itertools` からは、終わらないもの（`count`、`cycle`、`repeat`）、それ自体がイテレータを返すもの（`groupby`、`tee`）、関数を取るもの（`starmap`、`takewhile`、`filterfalse`）、最後のタプルだけ形の違う `batched` を断ります。理由を名指しして断るモジュール：`pathlib`、`os`、`decimal`、`hashlib`、`base64`、`zoneinfo`。
 - **新しい要素の周辺**。表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。チャートにはホバーでの読み取りと凡例がありません。`select` はキーボードで操作できません。ツールチップの表示はスクリプトからホバーで確かめられません（文字列自体はダンプに出ます）。いずれもヘッドレスの検証にまだ無い動詞を待っています。
 - **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
 - **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。
