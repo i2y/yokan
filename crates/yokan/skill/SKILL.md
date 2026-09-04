@@ -452,8 +452,9 @@ except Exception as e:
 Two layers, told apart by where the name comes from.
 
 **Python's own**: `import math`, `import random`, `import
-statistics`, `import json`, `import datetime`, `import time`, written
-as Python writes them. Development imports
+statistics`, `import json`, `import datetime`, `import time`,
+`import re`, `import string`, `import textwrap`, `import bisect`,
+`import heapq`, written as Python writes them. Development imports
 CPython's module; the shipped binary calls a twin held to CPython by
 a table CPython printed, error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
@@ -512,7 +513,16 @@ From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`,
 `strftime` (the directives CPython defines itself), `weekday`,
 `timestamp`, `total_seconds`, arithmetic and comparison. An aware
 value, `datetime.time`, `replace`, `strptime`, a date in a container
-and a date as a helper parameter are refused by name.
+and a date as a helper parameter are refused by name. From `re`:
+`findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not
+None` as the test — the pattern is a LITERAL, compiled by CPython at
+translate time, and a `Match` used as a value is refused. From the
+small modules: `string`'s constants, `textwrap.dedent` / `indent`,
+`bisect_left` / `bisect_right`, `heapq.nsmallest` / `nlargest`, and
+the rest of `str` (`title`, `zfill`, `ljust`, `center`, the `is…`
+family, `removeprefix`, `splitlines`, `expandtabs`, `strip(chars)`).
+Anything that rearranges a list in place is refused: a list lives in
+a `State`.
 
 Determinism is the rule underneath: fixed times, seeded randomness
 (`random.seed(n)` in `on_start` or a reset handler so scripts

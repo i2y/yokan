@@ -480,3 +480,118 @@ fn datetime_matches_cpython() {
         }
     });
 }
+
+/// `re`, asked the way the dialect asks: the pattern arrives as the
+/// array CPython's own compiler produced, so what this checks is the
+/// ENGINE running CPython's bytes rather than a rewriting of the
+/// language.
+#[test]
+fn re_matches_cpython() {
+    check(include_str!("expected/re.txt"), "re", |fname, a| {
+        let ints = |v: &V| v.list().iter().map(|x| x.i()).collect::<Vec<i64>>();
+        let strs = |v: &V| v.list().iter().map(|x| x.s()).collect::<Vec<String>>();
+        match fname {
+            "re_search" => Some(V::B(re_search(ints(&a[0]), &a[1].s()))),
+            "re_match" => Some(V::B(re_match(ints(&a[0]), &a[1].s()))),
+            "re_fullmatch" => Some(V::B(re_fullmatch(ints(&a[0]), &a[1].s()))),
+            "re_findall" => Some(V::L(
+                re_findall(ints(&a[0]), &a[1].s(), a[2].i())
+                    .into_iter()
+                    .map(V::S)
+                    .collect(),
+            )),
+            "re_split" => Some(V::L(
+                re_split(ints(&a[0]), &a[1].s(), a[2].i())
+                    .into_iter()
+                    .map(V::S)
+                    .collect(),
+            )),
+            "re_sub" => Some(V::S(re_sub(
+                ints(&a[0]),
+                ints(&a[1]),
+                strs(&a[2]),
+                &a[3].s(),
+                a[4].i(),
+                a[5].i(),
+            ))),
+            "re_escape" => Some(V::S(re_escape(&a[0].s()))),
+            _ => None,
+        }
+    });
+}
+
+/// The pure small modules: `string`, `textwrap`, `bisect`, `heapq`
+/// and the rest of `str`.
+#[test]
+fn small_modules_match_cpython() {
+    check(include_str!("expected/small.txt"), "small", |fname, a| {
+        let s1 = |g: fn(&str) -> String| Some(V::S(g(&a[0].s())));
+        let b1 = |g: fn(&str) -> bool| Some(V::B(g(&a[0].s())));
+        let s2 = |g: fn(&str, &str) -> String| Some(V::S(g(&a[0].s(), &a[1].s())));
+        let n2 = |g: fn(&str, &str) -> i64| Some(V::I(g(&a[0].s(), &a[1].s())));
+        let pad = |g: fn(&str, i64, &str) -> String| Some(V::S(g(&a[0].s(), a[1].i(), &a[2].s())));
+        let ints = |v: &V| v.list().iter().map(|x| x.i()).collect::<Vec<i64>>();
+        let strs = |v: &V| v.list().iter().map(|x| x.s()).collect::<Vec<String>>();
+        let is_str_list = |v: &V| matches!(v.list().first(), Some(V::S(_)));
+        match fname {
+            "string_ascii_letters" => Some(V::S(string_ascii_letters())),
+            "string_ascii_lowercase" => Some(V::S(string_ascii_lowercase())),
+            "string_ascii_uppercase" => Some(V::S(string_ascii_uppercase())),
+            "string_digits" => Some(V::S(string_digits())),
+            "string_hexdigits" => Some(V::S(string_hexdigits())),
+            "string_octdigits" => Some(V::S(string_octdigits())),
+            "string_punctuation" => Some(V::S(string_punctuation())),
+            "string_whitespace" => Some(V::S(string_whitespace())),
+            "string_printable" => Some(V::S(string_printable())),
+            "textwrap_dedent" => s1(textwrap_dedent),
+            "textwrap_indent" => s2(textwrap_indent),
+            "bisect_left" if is_str_list(&a[0]) => {
+                Some(V::I(bisect_left_str(strs(&a[0]), a[1].s())))
+            }
+            "bisect_right" if is_str_list(&a[0]) => {
+                Some(V::I(bisect_right_str(strs(&a[0]), a[1].s())))
+            }
+            "bisect_left" => Some(V::I(bisect_left_int(ints(&a[0]), a[1].i()))),
+            "bisect_right" => Some(V::I(bisect_right_int(ints(&a[0]), a[1].i()))),
+            "heapq_nsmallest" if is_str_list(&a[1]) => Some(V::L(
+                heapq_nsmallest_str(a[0].i(), strs(&a[1])).into_iter().map(V::S).collect(),
+            )),
+            "heapq_nlargest" if is_str_list(&a[1]) => Some(V::L(
+                heapq_nlargest_str(a[0].i(), strs(&a[1])).into_iter().map(V::S).collect(),
+            )),
+            "heapq_nsmallest" => Some(V::L(
+                heapq_nsmallest_int(a[0].i(), ints(&a[1])).into_iter().map(V::I).collect(),
+            )),
+            "heapq_nlargest" => Some(V::L(
+                heapq_nlargest_int(a[0].i(), ints(&a[1])).into_iter().map(V::I).collect(),
+            )),
+            "py_str_title" => s1(py_str_title),
+            "py_str_capitalize" => s1(py_str_capitalize),
+            "py_str_swapcase" => s1(py_str_swapcase),
+            "py_str_isupper" => b1(py_str_isupper),
+            "py_str_islower" => b1(py_str_islower),
+            "py_str_isalpha" => b1(py_str_isalpha),
+            "py_str_isdigit" => b1(py_str_isdigit),
+            "py_str_isalnum" => b1(py_str_isalnum),
+            "py_str_isspace" => b1(py_str_isspace),
+            "py_str_isascii" => b1(py_str_isascii),
+            "py_str_zfill" => Some(V::S(py_str_zfill(&a[0].s(), a[1].i()))),
+            "py_str_ljust" => pad(py_str_ljust),
+            "py_str_rjust" => pad(py_str_rjust),
+            "py_str_center" => pad(py_str_center),
+            "py_str_removeprefix" => s2(py_str_removeprefix),
+            "py_str_removesuffix" => s2(py_str_removesuffix),
+            "py_str_rfind" => n2(py_str_rfind),
+            "py_str_index_of" => n2(py_str_index_of),
+            "py_str_rindex" => n2(py_str_rindex),
+            "py_str_splitlines" => Some(V::L(
+                py_str_splitlines(&a[0].s()).into_iter().map(V::S).collect(),
+            )),
+            "py_str_expandtabs" => Some(V::S(py_str_expandtabs(&a[0].s(), a[1].i()))),
+            "py_str_strip_chars" => s2(py_str_strip_chars),
+            "py_str_lstrip_chars" => s2(py_str_lstrip_chars),
+            "py_str_rstrip_chars" => s2(py_str_rstrip_chars),
+            _ => None,
+        }
+    });
+}

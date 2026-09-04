@@ -176,8 +176,8 @@ Run these from `crates/yokan/` (they also work via
   compiled run links. This is what makes the gate meaningful.
   Blocking stdlib pyfunctions must `py.detach` around the wait.
 - **Two layers, told apart by the name.** Python's own modules
-  (`import math`, `random`, `statistics`, `json`, `datetime`, `time`)
-  are a twin arrangement: the interpreted run is CPython's module,
+  (`import math`, `random`, `statistics`, `json`, `datetime`, `time`,
+  `re`, `string`, `textwrap`, `bisect`, `heapq`) are a twin arrangement: the interpreted run is CPython's module,
   the compiled run a twin written against it. Yokan's own (`fs`,
   `sqlite`, `http`, `jsondoc`, `clock`, `strings`, `clipboard`,
   `notify`) keep "one implementation, both runs", and never reuse a
@@ -186,7 +186,12 @@ Run these from `crates/yokan/` (they also work via
   are carried as integers (a date is its ordinal, a datetime and a
   timedelta are microseconds), so comparison is integer comparison
   and `DT_ATTRS` / `DT_METHODS` in the translator map what the app
-  writes onto statics over that integer.
+  writes onto statics over that integer. A regular expression is
+  compiled by CPython at translate time (`re._parser` +
+  `re._compiler`) and the array crosses as a `List<Int>`, so the
+  engine on the other side runs CPython's own bytes — check
+  `re._constants.MAGIC` against the `rustpython-sre_engine` crate's
+  `SRE_MAGIC` when Python moves.
 - **Where the name is Python's, CPython is the specification.** The
   gate proves the two runs agree, never that they agree with Python
   — a function wrong the same way in both passes it. A function

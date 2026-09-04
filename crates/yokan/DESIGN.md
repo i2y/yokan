@@ -1174,3 +1174,49 @@ dict, and a date as a helper's parameter. The container one is the
 representation showing through — a list of dates would read as a list
 of numbers wherever the translator did not follow — and it is refused
 rather than half-carried.
+
+## `re` runs CPython's own compiled pattern
+
+A pattern is a literal, and the translator runs on the same CPython
+the app develops on — so the translator compiles it, with
+`re._parser` and `re._compiler`, into the array CPython itself would
+execute, and the shipped binary hands that array to an engine
+(rustpython-sre_engine, the one RustPython uses, whose `SRE_MAGIC`
+matches CPython 3.14's). The backtracking, the groups and the flags
+are therefore CPython's rather than a second dialect of them, and no
+regular-expression compiler is written on this side at all. A pattern
+built at run time is refused by name, pointing at `@py`.
+
+A `Match` has no shape a typed subset can hold — its groups are
+`str | None` and its spans are its own — so what the dialect takes
+are the calls whose answer is already one of its types: `findall`
+(one group or none; two would answer tuples), `sub` (its replacement
+template read by CPython too), `split` (over a pattern without
+groups, since a group that does not participate is `None` between the
+pieces), `escape`, and `re.search(p, s) is not None` as the test that
+`if m:` would have been. Each refusal says which of those to reach
+for instead.
+
+## The small modules, and what stays out of them
+
+`string`'s constants, `textwrap.dedent` and `indent`, `bisect_left`
+and `bisect_right`, `heapq.nsmallest` and `nlargest`, and the rest of
+`str` — `title`, `capitalize`, `swapcase`, `zfill`, `ljust`, `rjust`,
+`center`, `expandtabs`, `splitlines`, `removeprefix`, `removesuffix`,
+`rfind`, `index`, `rindex`, the `is…` family, and `strip` with a set
+of characters. All of it pure, so a view may call any of it.
+
+Two lines drawn, both from the same principle. What rearranges a list
+in place — `heapq.heappush`, `bisect.insort` — is refused, because a
+list lives in a `State` here and a call cannot reach into one; the
+functions that answer a new list are what the dialect has.
+`textwrap.wrap`, `fill` and `shorten` are refused because CPython
+splits words there with a regular expression of its own, so a twin
+for them is a port of that expression rather than a call.
+
+`title` and `capitalize` needed Unicode's TITLECASE mapping, which is
+not the uppercase one: `ß` titlecases to `Ss` and uppercases to `SS`,
+and about a hundred characters make that distinction. The table is
+taken from a crate rather than written. `casefold` is refused for the
+other half of the same fact — its mapping expands `ß` to `ss` and
+needs the full case-folding table, which `lower()` does not.

@@ -17,3 +17,17 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 num-bigint = "0.4"
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std"] }
 num-traits = "0.2"
+# The regular-expression ENGINE, not a compiler: it runs the u32
+# array CPython's own `re._compiler` produces, which the
+# translator computes at translate time. That is what makes the
+# backtracking, the groups and the flags CPython's rather than a
+# second dialect of them. Its SRE_MAGIC (20230612) has to match
+# the CPython the translator runs on — check `re._constants.MAGIC`
+# when Python moves.
+rustpython-sre_engine = "0.5"
+# Unicode's TITLECASE mapping, which is not uppercase: `ß`
+# titlecases to "Ss" and uppercases to "SS", and about a hundred
+# characters make that distinction. `str.title` and
+# `str.capitalize` are the two that need it, and the table is
+# taken rather than written.
+unicode-case-mapping = "1"

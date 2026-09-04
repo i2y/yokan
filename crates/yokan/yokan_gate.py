@@ -383,6 +383,7 @@ def _stdlib_tables(manifest):
     arity), the type a call reads as, the fallible twin a `try`
     routes to, and which functions a view may call."""
     calls, rets, fallible, pure, consts, picks = {}, {}, {}, set(), {}, set()
+    pick_params = {}
     for cls, mod, _layer, rows in manifest:
         for row in rows:
             py, fn, params, ret, _rust = row[:5]
@@ -401,9 +402,10 @@ def _stdlib_tables(manifest):
             spec = [cls, fn, len(tys)]
             if "pick" in row[5:]:
                 # The element type decides which twin runs, so the row
-                # says how many arguments and nothing else — see
-                # `_random_pick`.
+                # says how many arguments and where the list is — see
+                # `_pick_call`.
                 picks.add((mod, py))
+                pick_params[(mod, py)] = params
                 calls.setdefault((mod, py), []).append(tuple(spec))
                 continue
             boxed = {i: t for i, t in enumerate(tys) if t.startswith(("List<", "Map<"))}
@@ -425,6 +427,7 @@ def _stdlib_tables(manifest):
         pure,
         consts,
         picks,
+        pick_params,
     )
 
 
@@ -2667,10 +2670,14 @@ class Translator:
                     f"library's is `from yokan import {pymod}`, and its calls run "
                     "in handlers"
                 )
+            note = self.PY_ABSENT.get(pymod)
+            if note:
+                return f"`{pymod}` is not in the dialect — {note}"
             return (
-                f"`{pymod}` is not in the dialect — the standard library is "
-                f"`from yokan import {', '.join(self.STDLIB_MODULES)}`, and `@py` "
-                "runs Python for anything beyond it"
+                f"`{pymod}` is not in the dialect. Python's modules that are: "
+                f"{', '.join(self.PY_MODULES)}. Yokan's own: "
+                f"`from yokan import {', '.join(self.STDLIB_MODULES)}`. "
+                "For anything beyond them, `@py` runs Python"
             )
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in self.STR_METHODS:
             return (
@@ -3214,6 +3221,71 @@ class Translator:
             ("format_local_ms", "formatLocalMs", "ms: Int, fmt: String", "String", "clock_format_local_ms"),
             ("local_offset_minutes", "localOffsetMinutes", "ms: Int", "Int", "clock_local_offset_minutes"),
         )),
+        # `string`, which is nine constants and nothing else that
+        # a typed subset can take.
+        ("PyString", "string", "python", (
+            ("ascii_letters", "asciiLetters", "", "String", "string_ascii_letters", "pure", "cpython", "const"),
+            ("ascii_lowercase", "asciiLowercase", "", "String", "string_ascii_lowercase", "pure", "cpython", "const"),
+            ("ascii_uppercase", "asciiUppercase", "", "String", "string_ascii_uppercase", "pure", "cpython", "const"),
+            ("digits", "digits", "", "String", "string_digits", "pure", "cpython", "const"),
+            ("hexdigits", "hexdigits", "", "String", "string_hexdigits", "pure", "cpython", "const"),
+            ("octdigits", "octdigits", "", "String", "string_octdigits", "pure", "cpython", "const"),
+            ("punctuation", "punctuation", "", "String", "string_punctuation", "pure", "cpython", "const"),
+            ("whitespace", "whitespace", "", "String", "string_whitespace", "pure", "cpython", "const"),
+            ("printable", "printable", "", "String", "string_printable", "pure", "cpython", "const"),
+        )),
+        # `textwrap`: the two that are pure text arithmetic.
+        # `wrap`, `fill` and `shorten` split words with a regular
+        # expression of CPython's own, so a twin for them is a
+        # port and not a call — refused by name.
+        ("Textwrap", "textwrap", "python", (
+            ("dedent", "dedent", "text: String", "String", "textwrap_dedent", "pure", "cpython"),
+            ("indent", "indent", "text: String, prefix: String", "String", "textwrap_indent", "pure", "cpython"),
+        )),
+        # `bisect` and `heapq`, the pure halves. What they answer
+        # follows what the list holds, so the twin does too.
+        ("Bisect", "bisect", "python", (
+            ("bisect_left", "left", "xs: List<?>, x: ?", "Int", None, "pure", "cpython", "pick"),
+            ("bisect_right", "right", "xs: List<?>, x: ?", "Int", None, "pure", "cpython", "pick"),
+            ("bisect", "right", "xs: List<?>, x: ?", "Int", None, "pure", "cpython", "pick"),
+            (None, "leftStr", "xs: List<String>, x: String", "Int", "bisect_left_str", "pure", "cpython"),
+            (None, "rightStr", "xs: List<String>, x: String", "Int", "bisect_right_str", "pure", "cpython"),
+            (None, "leftInt", "xs: List<Int>, x: Int", "Int", "bisect_left_int", "pure", "cpython"),
+            (None, "rightInt", "xs: List<Int>, x: Int", "Int", "bisect_right_int", "pure", "cpython"),
+            (None, "leftFloat", "xs: List<Float>, x: Float", "Int", "bisect_left_float", "pure", "cpython"),
+            (None, "rightFloat", "xs: List<Float>, x: Float", "Int", "bisect_right_float", "pure", "cpython"),
+        )),
+        ("Heapq", "heapq", "python", (
+            ("nsmallest", "nsmallest", "n: Int, xs: List<?>", "List<?>", None, "pure", "cpython", "pick"),
+            ("nlargest", "nlargest", "n: Int, xs: List<?>", "List<?>", None, "pure", "cpython", "pick"),
+            (None, "nsmallestStr", "n: Int, xs: List<String>", "List<String>", "heapq_nsmallest_str", "pure", "cpython"),
+            (None, "nlargestStr", "n: Int, xs: List<String>", "List<String>", "heapq_nlargest_str", "pure", "cpython"),
+            (None, "nsmallestInt", "n: Int, xs: List<Int>", "List<Int>", "heapq_nsmallest_int", "pure", "cpython"),
+            (None, "nlargestInt", "n: Int, xs: List<Int>", "List<Int>", "heapq_nlargest_int", "pure", "cpython"),
+            (None, "nsmallestFloat", "n: Int, xs: List<Float>", "List<Float>", "heapq_nsmallest_float", "pure", "cpython"),
+            (None, "nlargestFloat", "n: Int, xs: List<Float>", "List<Float>", "heapq_nlargest_float", "pure", "cpython"),
+        )),
+        # Python's `re`. The PATTERN is compiled by CPython at
+        # translate time (`_re_call`), so what crosses is the u32
+        # array its own compiler produced and the engine here runs it
+        # — the backtracking, the groups and the flags are CPython's.
+        # A `Match` has no shape a typed subset can hold, so the calls
+        # that answer one are refused and the rest are here.
+        ("Re", "re", "python", (
+            ("escape", "escape", "s: String", "String", "re_escape", "pure", "cpython"),
+            ("search", "search", "p: String, s: String", "Bool", None, "pure", "cpython"),
+            ("match", "match", "p: String, s: String", "Bool", None, "pure", "cpython"),
+            ("fullmatch", "fullmatch", "p: String, s: String", "Bool", None, "pure", "cpython"),
+            ("findall", "findall", "p: String, s: String", "List<String>", None, "pure", "cpython"),
+            ("sub", "sub", "p: String, r: String, s: String", "String", None, "pure", "cpython"),
+            ("split", "split", "p: String, s: String", "List<String>", None, "pure", "cpython"),
+            (None, "runSearch", "codes: List<Int>, s: String", "Bool", "re_search", "pure", "cpython"),
+            (None, "runMatch", "codes: List<Int>, s: String", "Bool", "re_match", "pure", "cpython"),
+            (None, "runFullmatch", "codes: List<Int>, s: String", "Bool", "re_fullmatch", "pure", "cpython"),
+            (None, "runFindall", "codes: List<Int>, s: String, group: Int", "List<String>", "re_findall", "pure", "cpython"),
+            (None, "runSub", "codes: List<Int>, parts: List<Int>, lits: List<String>, s: String, count: Int, ngroups: Int", "String", "re_sub", "pure", "cpython"),
+            (None, "runSplit", "codes: List<Int>, s: String, maxsplit: Int", "List<String>", "re_split", "pure", "cpython"),
+        )),
         # Python's `datetime`, carried as integers: a date is its
         # ordinal, a datetime is microseconds from the same origin,
         # a timedelta is microseconds. Comparison is then integer
@@ -3341,11 +3413,35 @@ class Translator:
             (None, "minFloat", "a: Float, b: Float", "Float", "py_min2_float", "pure"),
             (None, "maxFloat", "a: Float, b: Float", "Float", "py_max2_float", "pure"),
             (None, "absFloat", "v: Float", "Float", "py_abs_float", "pure"),
+            (None, "strTitle", "s: String", "String", "py_str_title", "pure"),
+            (None, "strCapitalize", "s: String", "String", "py_str_capitalize", "pure"),
+            (None, "strSwapcase", "s: String", "String", "py_str_swapcase", "pure"),
+            (None, "strZfill", "s: String, width: Int", "String", "py_str_zfill", "pure"),
+            (None, "strLjust", "s: String, width: Int, fill: String", "String", "py_str_ljust", "pure"),
+            (None, "strRjust", "s: String, width: Int, fill: String", "String", "py_str_rjust", "pure"),
+            (None, "strCenter", "s: String, width: Int, fill: String", "String", "py_str_center", "pure"),
+            (None, "strIsupper", "s: String", "Bool", "py_str_isupper", "pure"),
+            (None, "strIslower", "s: String", "Bool", "py_str_islower", "pure"),
+            (None, "strIsalpha", "s: String", "Bool", "py_str_isalpha", "pure"),
+            (None, "strIsdigit", "s: String", "Bool", "py_str_isdigit", "pure"),
+            (None, "strIsalnum", "s: String", "Bool", "py_str_isalnum", "pure"),
+            (None, "strIsspace", "s: String", "Bool", "py_str_isspace", "pure"),
+            (None, "strIsascii", "s: String", "Bool", "py_str_isascii", "pure"),
+            (None, "strRemoveprefix", "s: String, p: String", "String", "py_str_removeprefix", "pure"),
+            (None, "strRemovesuffix", "s: String, p: String", "String", "py_str_removesuffix", "pure"),
+            (None, "strRfind", "s: String, p: String", "Int", "py_str_rfind", "pure"),
+            (None, "strIndexOf", "s: String, p: String", "Int", "py_str_index_of", "pure"),
+            (None, "strRindex", "s: String, p: String", "Int", "py_str_rindex", "pure"),
+            (None, "strSplitlines", "s: String", "List<String>", "py_str_splitlines", "pure"),
+            (None, "strExpandtabs", "s: String, size: Int", "String", "py_str_expandtabs", "pure"),
+            (None, "strStripChars", "s: String, set: String", "String", "py_str_strip_chars", "pure"),
+            (None, "strLstripChars", "s: String, set: String", "String", "py_str_lstrip_chars", "pure"),
+            (None, "strRstripChars", "s: String, set: String", "String", "py_str_rstrip_chars", "pure"),
         )),
     )
 
     (STDLIB_CALLS, STDLIB_RET, FALLIBLE, STDLIB_PURE, STDLIB_CONSTS,
-     STDLIB_PICKS) = _stdlib_tables(STDLIB)
+     STDLIB_PICKS, STDLIB_PARAMS) = _stdlib_tables(STDLIB)
 
     # A module that was Yokan's and is now Python's, where only PART
     # of it went: the refusal has to say where the rest is, or a
@@ -3359,7 +3455,52 @@ class Translator:
     # What a module carrying a Python name leaves out, and why. A
     # refusal that only says "not in the dialect" tells the reader
     # nothing about whether to wait for it or write around it.
+    # Python modules the dialect does not take, and why. Without the
+    # reason a reader cannot tell whether to wait for it or write
+    # around it.
+    PY_ABSENT = {
+        "pathlib": "a `Path` would be a second value type carrying a string, and "
+                   "every verb it offers is already `from yokan import fs` over the "
+                   "path itself (`fs.read_text`, `fs.exists`, `fs.list_dir`)",
+        "os": "what it answers is the machine's, not Python's — the parts a desktop "
+              "app needs are `from yokan import fs` (files) and `import time` (the "
+              "clock)",
+        "collections": "its types are generic containers, and how a generic crosses "
+                       "the Rust boundary is not decided yet",
+        "itertools": "it answers iterators, which have no compiled shape — a `for` "
+                     "loop and a list do the same work here",
+        "decimal": "its arithmetic is a type of its own; `float` and the exact sums "
+                   "in `statistics` are what the dialect has",
+        "hashlib": "it answers bytes, and `bytes` is not in the dialect yet",
+        "base64": "it answers bytes, and `bytes` is not in the dialect yet",
+        "zoneinfo": "a zone database is what the dialect keeps out for now — "
+                    "`from yokan import clock` reads the machine's own zone",
+    }
+
     STDLIB_ABSENT = {
+        ("textwrap", "wrap"): "it splits words with a regular expression of "
+                              "CPython's own, so a twin for it is a port of that "
+                              "and not a call — `dedent` and `indent` are in",
+        ("textwrap", "fill"): "it splits words with a regular expression of "
+                              "CPython's own, so a twin for it is a port of that "
+                              "and not a call — `dedent` and `indent` are in",
+        ("textwrap", "shorten"): "it wraps first, and wrapping splits words with a "
+                                 "regular expression of CPython's own",
+        ("heapq", "heappush"): "it rearranges a list in place, and a list lives in a "
+                               "State here — `nsmallest` and `nlargest` answer a new "
+                               "list",
+        ("heapq", "heappop"): "it rearranges a list in place, and a list lives in a "
+                              "State here — `nsmallest` and `nlargest` answer a new "
+                              "list",
+        ("heapq", "heapify"): "it rearranges a list in place, and a list lives in a "
+                              "State here — `sorted(xs())` gives an ordered copy",
+        ("bisect", "insort"): "it inserts into a list in place, and a list lives in a "
+                              "State here — `bisect_left` gives the position and the "
+                              "insertion is a write to the State",
+        ("bisect", "insort_left"): "it inserts into a list in place, and a list lives "
+                                   "in a State here — `bisect_left` gives the position",
+        ("bisect", "insort_right"): "it inserts into a list in place, and a list lives "
+                                    "in a State here — `bisect_right` gives the position",
         ("json", "loads"): "it answers a value whose shape is only known at run "
                            "time — read what you need out of the text with "
                            "`from yokan import jsondoc` and its dotted paths",
@@ -3456,23 +3597,145 @@ class Translator:
         )
         return f"`{mod}.{fn}` is not in the standard library's {mod} — it has {', '.join(have)}"
 
-    def _random_pick(self, node, mod, fn, ctx, param):
-        """`random.choice(xs)` and `random.sample(xs, k)` answer an
-        element of the list, so the twin follows what the list holds —
-        the same shape `json.dumps` uses to pick its writer."""
-        src = self._list_of(node.args[0], ctx, param)
+    def _pick_call(self, node, cls, mod, fn, params, ctx, param):
+        """A call whose twin follows what the list holds — the shape
+        `json.dumps` uses to pick its writer. The list is whichever
+        parameter the manifest wrote as `List<?>`."""
+        tys = _pix_param_types(params)
+        at = next(i for i, t in enumerate(tys) if t.startswith("List<"))
+        src = self._list_of(node.args[at], ctx, param)
         if src is None:
             raise Untranslatable(
-                node.args[0],
+                node.args[at],
                 f"`{mod}.{fn}` takes a list the dialect can name — a state read, "
                 "a field or a local",
             )
         code, _el, suffix = src
-        rest = [self.expr(a, ctx, param) for a in node.args[1:]]
-        return f"Random.{fn}{suffix}({', '.join([code, *rest])})"
+        with self._unwrapped():
+            args = [
+                code if i == at else self.expr(a, ctx, param)
+                for i, a in enumerate(node.args)
+            ]
+        return f"{cls}.{fn}{suffix}({', '.join(args)})"
 
     JSON_SCALAR = {"String": "text", "Int": "int_", "Float": "float_", "Bool": "bool_"}
     JSON_EACH = {"String": "texts", "Int": "ints", "Float": "floats", "Bool": "bools"}
+
+    # `re.search` and its two siblings answer a Match, which a typed
+    # subset cannot hold — but `re.search(p, s) is not None` is a
+    # bool, and that is the shape the dialect takes.
+    RE_TESTS = {"search": "runSearch", "match": "runMatch", "fullmatch": "runFullmatch"}
+
+    def _re_pattern(self, node):
+        """A regular expression, compiled HERE. The translator runs on
+        the same CPython the app develops on, so the pattern goes
+        through `re._parser` and `re._compiler` and what reaches the
+        compiled side is the array CPython itself would run."""
+        import re as _re  # noqa: PLC0415
+        import re._compiler as _c  # noqa: PLC0415
+        import re._parser as _p  # noqa: PLC0415
+
+        if not (isinstance(node, ast.Constant) and type(node.value) is str):
+            raise Untranslatable(
+                node,
+                "a pattern is a literal here — it is compiled while the app is "
+                "translated, by CPython itself, so the compiled side runs exactly "
+                "what Python would. A pattern built at run time needs `@py`",
+            )
+        try:
+            parsed = _p.parse(node.value)
+            codes = [int(x) for x in _c._code(parsed, 0)]
+        except _re.error as e:
+            raise Untranslatable(node, f"this pattern does not compile: {e}") from None
+        return codes, parsed.state.groups - 1
+
+    @staticmethod
+    def _int_list(xs) -> str:
+        return "[" + ", ".join(str(x) for x in xs) + "]"
+
+    def _re_call(self, node, fn, ctx, param):
+        """`re.findall`, `re.sub` and `re.split`, with the pattern
+        compiled at translate time."""
+        want = {"findall": 2, "sub": 3, "split": 2}[fn]
+        if len(node.args) not in (want, want + 1) or node.keywords:
+            raise Untranslatable(
+                node, f"`re.{fn}` takes {want} argument(s) here, by position"
+            )
+        codes, ngroups = self._re_pattern(node.args[0])
+        self.uses_stdlib = True
+        with self._unwrapped():
+            if fn == "findall":
+                if ngroups > 1:
+                    raise Untranslatable(
+                        node,
+                        f"this pattern has {ngroups} groups, and `re.findall` answers "
+                        "a tuple for each match then — a tuple has no compiled shape "
+                        "yet. Use one group, or none",
+                    )
+                subject = self.expr(node.args[1], ctx, param)
+                return f"Re.runFindall({self._int_list(codes)}, {subject}, {min(ngroups, 1)})"
+            if fn == "split":
+                if ngroups:
+                    raise Untranslatable(
+                        node,
+                        "`re.split` over a pattern with groups puts their text between "
+                        "the pieces, and a group that does not participate is None "
+                        "there — write the pattern without groups",
+                    )
+                subject = self.expr(node.args[1], ctx, param)
+                limit = self.expr(node.args[2], ctx, param) if len(node.args) > want else "0"
+                return f"Re.runSplit({self._int_list(codes)}, {subject}, {limit})"
+            parts, lits = self._re_template(node.args[1], node.args[0].value)
+            subject = self.expr(node.args[2], ctx, param)
+            count = self.expr(node.args[3], ctx, param) if len(node.args) > want else "0"
+            lit_list = "[" + ", ".join(f'"{esc(x)}"' for x in lits) + "]"
+            return (
+                f"Re.runSub({self._int_list(codes)}, {self._int_list(parts)}, "
+                f"{lit_list}, {subject}, {count}, {ngroups})"
+            )
+
+    def _re_template(self, node, pattern: str):
+        """A replacement template, parsed by CPython: alternating
+        literals and group numbers, which cross as two lists."""
+        import re as _re  # noqa: PLC0415
+        import re._parser as _p  # noqa: PLC0415
+
+        if not (isinstance(node, ast.Constant) and type(node.value) is str):
+            raise Untranslatable(
+                node,
+                "a replacement is a literal here — it is read by CPython while the "
+                "app is translated, so `\\1` means what it means in Python",
+            )
+        try:
+            chunks = _p.parse_template(node.value, _re.compile(pattern))
+        except _re.error as e:
+            raise Untranslatable(node, f"this replacement does not read: {e}") from None
+        parts, lits = [], []
+        for chunk in chunks:
+            if isinstance(chunk, int):
+                parts.append(chunk)
+                lits.append("")
+            else:
+                parts.append(-1)
+                lits.append(chunk)
+        return parts, lits
+
+    def _re_test(self, node, ctx, param, negate: bool):
+        """`re.search(p, s) is not None` — the bool a Match stands in
+        for. Answers None when this is not one."""
+        if not (isinstance(node, ast.Call) and self._stdlib_call(node.func) is not None):
+            return None
+        mod, fn = self._stdlib_call(node.func)
+        if mod != "re" or fn not in self.RE_TESTS:
+            return None
+        if len(node.args) != 2 or node.keywords:
+            raise Untranslatable(node, f"`re.{fn}` takes the pattern and the string")
+        codes, _n = self._re_pattern(node.args[0])
+        self.uses_stdlib = True
+        with self._unwrapped():
+            subject = self.expr(node.args[1], ctx, param)
+        call = f"Re.{self.RE_TESTS[fn]}({self._int_list(codes)}, {subject})"
+        return f"!({call})" if negate else call
 
     def _json_dumps(self, node, ctx, param):
         """`json.dumps(v)` — the text of the value, composed.
@@ -3815,14 +4078,25 @@ class Translator:
         return self.STDLIB_CONSTS.get(key) if key else None
 
     def _py_import_of(self, node):
-        """The module behind `math.sqrt(x)` or `math.pi`, when `math`
-        came in through a plain `import` — the Python spelling, which
-        the dialect does not take."""
-        if isinstance(node, ast.Call):
-            node = node.func
-        if not (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)):
+        """The module behind `math.sqrt(x)`, `math.pi` or
+        `pathlib.Path("a").name`, when the module came in through a
+        plain `import` — the Python spelling, which the dialect does
+        not take. Walks down to the leftmost name, so a chain says
+        which module it started from rather than which link failed."""
+        seen_attr = False
+        while True:
+            if isinstance(node, ast.Call):
+                node = node.func
+            elif isinstance(node, ast.Attribute):
+                seen_attr = True
+                node = node.value
+            elif isinstance(node, ast.Subscript):
+                node = node.value
+            else:
+                break
+        if not (seen_attr and isinstance(node, ast.Name)):
             return None
-        return self.py_imports.get(node.value.id)
+        return self.py_imports.get(node.id)
 
     def _stdlib_call(self, func):
         # `from math import sqrt` binds the function itself, so the
@@ -4440,8 +4714,19 @@ class Translator:
                     "waits",
                 )
             self.uses_stdlib = True
-            if (mod, fn) in self.STDLIB_PICKS:
-                call = self._random_pick(node, mod, pick[1], ctx, param)
+            if mod == "re" and fn in ("findall", "sub", "split"):
+                call = self._re_call(node, fn, ctx, param)
+            elif mod == "re" and fn in self.RE_TESTS:
+                raise Untranslatable(
+                    node,
+                    f"`re.{fn}` answers a Match, which has no compiled shape yet — "
+                    f"`re.{fn}(p, s) is not None` is the test, and `re.findall` gives "
+                    "the matches as a list",
+                )
+            elif (mod, fn) in self.STDLIB_PICKS:
+                call = self._pick_call(
+                    node, pick[0], mod, pick[1], self.STDLIB_PARAMS[(mod, fn)], ctx, param
+                )
             elif (mod, fn) == ("json", "dumps"):
                 call = self._json_dumps(node, ctx, param)
             else:
@@ -4807,6 +5092,14 @@ class Translator:
                 ast.Gt: ">",
                 ast.GtE: ">=",
             }.get(type(node.ops[0]))
+            if isinstance(node.ops[0], (ast.Is, ast.IsNot)) and isinstance(
+                node.comparators[0], ast.Constant
+            ) and node.comparators[0].value is None:
+                test = self._re_test(
+                    node.left, ctx, param, isinstance(node.ops[0], ast.Is)
+                )
+                if test is not None:
+                    return test
             if op is None:
                 if isinstance(node.ops[0], (ast.Is, ast.IsNot)):
                     raise Untranslatable(
@@ -5077,12 +5370,17 @@ class Translator:
 
     # (method, argument count) -> (static, pix return type). Each one
     # is a Py static: written once in Rust, with CPython's meaning.
+    # (method, argument count) -> the static, what it answers, and the
+    # arguments Python fills in when they are left out.
     STR_METHOD_STATICS = {
         ("upper", 0): ("strUpper", "String"),
         ("lower", 0): ("strLower", "String"),
         ("strip", 0): ("strStrip", "String"),
         ("lstrip", 0): ("strLstrip", "String"),
         ("rstrip", 0): ("strRstrip", "String"),
+        ("strip", 1): ("strStripChars", "String"),
+        ("lstrip", 1): ("strLstripChars", "String"),
+        ("rstrip", 1): ("strRstripChars", "String"),
         ("split", 1): ("strSplit", "List<String>"),
         ("split", 0): ("strSplitWs", "List<String>"),
         ("startswith", 1): ("strStartswith", "Bool"),
@@ -5090,6 +5388,32 @@ class Translator:
         ("replace", 2): ("strReplace", "String"),
         ("find", 1): ("strFind", "Int"),
         ("count", 1): ("strCount", "Int"),
+        ("title", 0): ("strTitle", "String"),
+        ("capitalize", 0): ("strCapitalize", "String"),
+        ("swapcase", 0): ("strSwapcase", "String"),
+        ("zfill", 1): ("strZfill", "String"),
+        ("ljust", 1): ("strLjust", "String", ('" "',)),
+        ("ljust", 2): ("strLjust", "String"),
+        ("rjust", 1): ("strRjust", "String", ('" "',)),
+        ("rjust", 2): ("strRjust", "String"),
+        ("center", 1): ("strCenter", "String", ('" "',)),
+        ("center", 2): ("strCenter", "String"),
+        ("isupper", 0): ("strIsupper", "Bool"),
+        ("islower", 0): ("strIslower", "Bool"),
+        ("isalpha", 0): ("strIsalpha", "Bool"),
+        ("isdigit", 0): ("strIsdigit", "Bool"),
+        ("isnumeric", 0): ("strIsdigit", "Bool"),
+        ("isalnum", 0): ("strIsalnum", "Bool"),
+        ("isspace", 0): ("strIsspace", "Bool"),
+        ("isascii", 0): ("strIsascii", "Bool"),
+        ("removeprefix", 1): ("strRemoveprefix", "String"),
+        ("removesuffix", 1): ("strRemovesuffix", "String"),
+        ("rfind", 1): ("strRfind", "Int"),
+        ("index", 1): ("strIndexOf", "Int"),
+        ("rindex", 1): ("strRindex", "Int"),
+        ("splitlines", 0): ("strSplitlines", "List<String>"),
+        ("expandtabs", 0): ("strExpandtabs", "String", ("8",)),
+        ("expandtabs", 1): ("strExpandtabs", "String"),
     }
 
     @staticmethod
@@ -5179,9 +5503,13 @@ class Translator:
             return None
         if self._num_ty(f.value, ctx, param) != "String":
             return None
-        fn, _ret = entry
+        fn = entry[0]
         self.uses_stdlib = True
-        args = [self.expr(f.value, ctx, param)] + [self.expr(a, ctx, param) for a in node.args]
+        with self._unwrapped():
+            args = [self.expr(f.value, ctx, param)]
+            args += [self.expr(a, ctx, param) for a in node.args]
+        # What Python fills in when an argument is left out.
+        args += list(entry[2]) if len(entry) > 2 else []
         return f"Py.{fn}({', '.join(args)})"
 
     def _str_method_ty(self, node: ast.Call, ctx, param):
@@ -6704,6 +7032,8 @@ class Translator:
                 src = self._list_of(node.args[0], ctx, param)
                 if src is not None and mf[1] == "choice":
                     return src[1]
+                if mf[0] == "bisect":
+                    return "Int"
         if isinstance(node, ast.Constant):
             if type(node.value) is bool:
                 return "Bool"

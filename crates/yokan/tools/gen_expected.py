@@ -35,8 +35,15 @@ import json
 import math
 import os
 import random
+import re
+import re._compiler
+import re._parser
+import bisect
+import heapq
 import statistics
+import string
 import struct
+import textwrap
 import sys
 import urllib.parse
 
@@ -418,8 +425,213 @@ def cases_datetime():
     yield ("date_add_delta", (_ord(_dt.date(9999, 12, 31)), DAY_US))
 
 
+# `re` is the same arrangement as `datetime`: the twin is asked in the
+# shape the dialect hands it, which is CPython's own compiled pattern
+# as a list of ints. The generator compiles the pattern exactly as the
+# translator does, so the table checks the ENGINE rather than a
+# rewriting of it.
+def _code(pattern):
+    p = re._parser.parse(pattern)
+    return [int(x) for x in re._compiler._code(p, 0)], p.state.groups - 1
+
+
+def _template(repl, pattern):
+    parts, lits = [], []
+    for chunk in re._parser.parse_template(repl, re.compile(pattern)):
+        if isinstance(chunk, int):
+            parts.append(chunk)
+            lits.append("")
+        else:
+            parts.append(-1)
+            lits.append(chunk)
+    return parts, lits
+
+
+class _ReTwin:
+    """What the twins answer, asked the way the dialect asks."""
+
+    __name__ = "re"
+
+    re_search = staticmethod(lambda c, s: re.search(_undo(c), s) is not None)
+    re_match = staticmethod(lambda c, s: re.match(_undo(c), s) is not None)
+    re_fullmatch = staticmethod(lambda c, s: re.fullmatch(_undo(c), s) is not None)
+    re_findall = staticmethod(lambda c, s, g: re.findall(_undo(c), s))
+    re_split = staticmethod(
+        lambda c, s, n: re.split(_undo(c), s, maxsplit=n if n > 0 else 0)
+    )
+    re_escape = staticmethod(re.escape)
+
+    @staticmethod
+    def re_sub(c, parts, lits, s, count, ngroups):
+        pattern, repl = _SUBS[(tuple(c), tuple(parts), tuple(lits))]
+        return re.sub(pattern, repl, s, count=count if count > 0 else 0)
+
+
+# The table records the compiled arrays, so the generator keeps the
+# patterns they came from to ask CPython the same question.
+_PATTERNS = {}
+_SUBS = {}
+
+
+def _undo(code):
+    return _PATTERNS[tuple(code)]
+
+
+def cases_re():
+    """`re`, asked the way the dialect asks: the pattern arrives as
+    the array CPython's own compiler produced. Only the calls whose
+    answer is already a dialect type are here — a `Match` has no shape
+    a typed subset can hold, so the translator refuses it by name."""
+    tests = (
+        (r"\d+", "a12b345"),
+        (r"^a", "abc"),
+        (r"^a", "bac"),
+        (r"[A-Z]\w*", "hello World"),
+        (r"(?i)ab", "AB xy"),
+        (r"x*", "abc"),
+        (r"\bfoo\b", "a foo b"),
+        (r"\s*,\s*", "a , b,c"),
+        (r"日本", "これは日本語"),
+        (r"a(?=b)", "ab ac"),
+    )
+    for pat, subject in tests:
+        code, n = _code(pat)
+        _PATTERNS[tuple(code)] = pat
+        for fn in ("re_search", "re_match", "re_fullmatch"):
+            yield (fn, (code, subject))
+        yield ("re_findall", (code, subject, 1 if n else 0))
+        if not n:
+            yield ("re_split", (code, subject, 0))
+            yield ("re_split", (code, subject, 1))
+    grouped = ((r"(\d)\d", "a12b345"), (r"(a)?b", "b ab"), (r"(\w+)@", "me@you he@"))
+    for pat, subject in grouped:
+        code, _n = _code(pat)
+        _PATTERNS[tuple(code)] = pat
+        yield ("re_findall", (code, subject, 1))
+    subs = (
+        (r"\d+", "N", "a12b345", 0),
+        (r"(\w)(\d)", r"\2\1", "a1 b2", 0),
+        (r"x*", "-", "abc", 0),
+        (r"\d", "N", "123", 2),
+        (r"\s+", " ", "a   b\tc", 0),
+        (r"(a)", r"[\g<1>]", "abca", 0),
+    )
+    for pat, repl, subject, count in subs:
+        code, n = _code(pat)
+        _PATTERNS[tuple(code)] = pat
+        parts, lits = _template(repl, pat)
+        _SUBS[(tuple(code), tuple(parts), tuple(lits))] = (pat, repl)
+        yield ("re_sub", (code, parts, lits, subject, count, n))
+    yield from (("re_escape", (s,)) for s in
+                ("plain", "a.b*c", "a b-c", "^$\\", "日本 語", "tab\there"))
+
+
+class _SmallTwin:
+    """`string`, `textwrap`, `bisect`, `heapq` and the rest of `str`,
+    asked the way the dialect asks."""
+
+    __name__ = "small"
+
+    string_ascii_letters = staticmethod(lambda: string.ascii_letters)
+    string_ascii_lowercase = staticmethod(lambda: string.ascii_lowercase)
+    string_ascii_uppercase = staticmethod(lambda: string.ascii_uppercase)
+    string_digits = staticmethod(lambda: string.digits)
+    string_hexdigits = staticmethod(lambda: string.hexdigits)
+    string_octdigits = staticmethod(lambda: string.octdigits)
+    string_punctuation = staticmethod(lambda: string.punctuation)
+    string_whitespace = staticmethod(lambda: string.whitespace)
+    string_printable = staticmethod(lambda: string.printable)
+
+    textwrap_dedent = staticmethod(textwrap.dedent)
+    textwrap_indent = staticmethod(textwrap.indent)
+
+    bisect_left = staticmethod(bisect.bisect_left)
+    bisect_right = staticmethod(bisect.bisect_right)
+    heapq_nsmallest = staticmethod(heapq.nsmallest)
+    heapq_nlargest = staticmethod(heapq.nlargest)
+
+    py_str_title = staticmethod(str.title)
+    py_str_capitalize = staticmethod(str.capitalize)
+    py_str_swapcase = staticmethod(str.swapcase)
+    py_str_zfill = staticmethod(str.zfill)
+    py_str_ljust = staticmethod(str.ljust)
+    py_str_rjust = staticmethod(str.rjust)
+    py_str_center = staticmethod(str.center)
+    py_str_isupper = staticmethod(str.isupper)
+    py_str_islower = staticmethod(str.islower)
+    py_str_isalpha = staticmethod(str.isalpha)
+    py_str_isdigit = staticmethod(str.isnumeric)
+    py_str_isalnum = staticmethod(str.isalnum)
+    py_str_isspace = staticmethod(str.isspace)
+    py_str_isascii = staticmethod(str.isascii)
+    py_str_removeprefix = staticmethod(str.removeprefix)
+    py_str_removesuffix = staticmethod(str.removesuffix)
+    py_str_rfind = staticmethod(str.rfind)
+    py_str_index_of = staticmethod(str.index)
+    py_str_rindex = staticmethod(str.rindex)
+    py_str_splitlines = staticmethod(str.splitlines)
+    py_str_expandtabs = staticmethod(str.expandtabs)
+    py_str_strip_chars = staticmethod(str.strip)
+    py_str_lstrip_chars = staticmethod(str.lstrip)
+    py_str_rstrip_chars = staticmethod(str.rstrip)
+
+
+def cases_small():
+    """The pure small modules. `isdigit` is asked as `isnumeric`
+    deliberately: Rust's `char::is_numeric` is Unicode's N* category,
+    which is what `isnumeric` means, and the row says so rather than
+    the twin quietly answering a different question."""
+    for c in ("ascii_letters", "ascii_lowercase", "ascii_uppercase", "digits",
+              "hexdigits", "octdigits", "punctuation", "whitespace", "printable"):
+        yield (f"string_{c}", ())
+    texts = ("", "  a\n  b\n", "\ta\n\tb", "  a\n    b\n", "a\n  b", "  \n  a\n",
+             "  a\n\n  b\n", "line\n")
+    yield from (("textwrap_dedent", (t,)) for t in texts)
+    yield from (("textwrap_indent", (t, "> ")) for t in texts)
+    ints = [1, 3, 3, 5, 8]
+    yield from (("bisect_left", (ints, x)) for x in (0, 1, 3, 4, 8, 9))
+    yield from (("bisect_right", (ints, x)) for x in (0, 1, 3, 4, 8, 9))
+    yield from (("bisect_left", ([], 1)), ("bisect_right", ([], 1)))
+    words = ["pear", "apple", "fig"]
+    yield from (("bisect_left", (sorted(words), w)) for w in ("apple", "b", "zz"))
+    for n in (0, 1, 3, 9):
+        yield ("heapq_nsmallest", (n, [5, 1, 9, 3, 3]))
+        yield ("heapq_nlargest", (n, [5, 1, 9, 3, 3]))
+        yield ("heapq_nsmallest", (n, ["pear", "apple", "fig"]))
+    strs = ("", "hello world", "don't", "HELLO", "hello", "MiXeD", "\u00fcnicode",
+            "\u65e5\u672c go", "a1b2", "  padded  ", "-42", "+42", "42", "a-b_c",
+            "\u00df", "\u0130")
+    for fn in ("py_str_title", "py_str_capitalize", "py_str_swapcase",
+               "py_str_isupper", "py_str_islower", "py_str_isalpha", "py_str_isdigit",
+               "py_str_isalnum", "py_str_isspace", "py_str_isascii", "py_str_splitlines"):
+        yield from ((fn, (t,)) for t in strs)
+    yield from (("py_str_isspace", (t,)) for t in (" ", "\t\n", " x ", "\u00a0"))
+    yield from (("py_str_isdigit", (t,)) for t in ("123", "\u0661\u0662", "\u2160", "1.5"))
+    for w in (0, 1, 5, 8, 9):
+        for t in ("ab", "abc", "-42", ""):
+            yield ("py_str_zfill", (t, w))
+            yield ("py_str_ljust", (t, w, "."))
+            yield ("py_str_rjust", (t, w, "."))
+            yield ("py_str_center", (t, w, "."))
+    yield from (("py_str_removeprefix", ("prefix-body", p)) for p in ("prefix-", "x", ""))
+    yield from (("py_str_removesuffix", ("body-suffix", p)) for p in ("-suffix", "x", ""))
+    for t, p in (("abcabc", "b"), ("abcabc", "z"), ("abc", ""), ("\u65e5\u672c\u65e5", "\u65e5")):
+        yield ("py_str_rfind", (t, p))
+        yield ("py_str_index_of", (t, p))
+        yield ("py_str_rindex", (t, p))
+    yield from (("py_str_splitlines", (t,)) for t in ("a\nb", "a\r\nb", "a\n", "", "\n", "a\u2028b"))
+    for t in ("a\tb", "\tx", "ab\tc\td", "a\nb\tc"):
+        yield from (("py_str_expandtabs", (t, n)) for n in (0, 1, 4, 8))
+    for t, cs in (("xxaxx", "x"), ("  a  ", " "), ("aabbaa", "ab"), ("abc", "z"), ("", "x")):
+        yield ("py_str_strip_chars", (t, cs))
+        yield ("py_str_lstrip_chars", (t, cs))
+        yield ("py_str_rstrip_chars", (t, cs))
+
+
 MODULES = {
     "math": (math, cases_math),
+    "small": (_SmallTwin, cases_small),
+    "re": (_ReTwin, cases_re),
     "datetime": (_DatetimeTwin, cases_datetime),
     "random": (random, cases_random),
     "statistics": (statistics, cases_statistics),

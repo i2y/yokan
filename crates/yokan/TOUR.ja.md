@@ -818,13 +818,14 @@ except Exception as e:
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
 
-**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`）。
+**Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは CPython の意味に合わせて書いた双子を呼び、CPython 自身が出力した正解表が、関数ごと、エラーごとに双子を縛ります。
 `math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書き、`date` は `timedelta` を足し、別の `date` を引き、Python と同じ書式で自分を描きます。
+正規表現は、アプリを翻訳する時点で CPython 自身がコンパイルします。出荷したバイナリは Python が走らせるはずだった配列をそのまま走らせるので、後方追跡も群もフラグも CPython のもので、その方言ではありません。
 
 ```python
-import json, math, random, statistics
+import json, math, random, re, statistics
 from datetime import date, timedelta
 
 def measure():
@@ -834,6 +835,7 @@ def measure():
     roll.set(random.randint(1, 6))
     doc.set(json.dumps({"name": "momo", "tags": ["a", "b"]}))
     due.set(date(2026, 1, 1) + timedelta(weeks=6))  # 2026-02-12、木曜
+    mail.set(re.findall(r"\w+@[\w.]+", line())[0])   # Match には形がありません
 
 def view():
     text(f"circumference: {math.tau * r():.3f}")   # 純粋なのでビューからも呼べる
@@ -865,6 +867,9 @@ Python 側がどこまで届くかは次のとおりです。
 `statistics` からは `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev` で、受けるのは `list[float]` だけです。
 `json` からは `dumps` で、既定値のまま、キーワード引数は取りません。
 `time` からは `time`、`time_ns`、`monotonic`、`monotonic_ns`、`perf_counter`、`perf_counter_ns`、`sleep`。
+`re` からは `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
+パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
+`string` からは九つの定数、`textwrap` からは `dedent` と `indent`、`bisect` からは `bisect_left` と `bisect_right`、`heapq` からは `nsmallest` と `nlargest`。
 `datetime` からは `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
 構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較が使えます。
 穴に置いた値は `str()` と同じ形で描かれます。
@@ -1166,7 +1171,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - 同じ要素オブジェクトを**二回置くこと**。一度置いた要素は使い切りで、二か所には置けません。
 - **`T | None` を返すメソッド**。ストアとモデルのメソッドはスカラー、リスト、Value クラス、Enum を返せますが、Optional の返り値はまだありません。
 - **ローカルの辞書**と、注釈のないローカルのリスト（`out: list[str] = []` と書けば、コンパイル側が要素の型を読めます）。
-- **よく使う分を超えた str のメソッド**（`.title()`、`.zfill()`、`.format()`、`.encode()` など）。`.upper()`、`.lower()`、`.strip()` / `.lstrip()` / `.rstrip()`、`.split()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.count()`、`len(s)`、`s[i]`、`s[a:b]`、`in` は使えます。
+- **方言に形のないものを返す str のメソッド**：`.partition()` と `.rpartition()`（タプル）、`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。使えるのは `.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
 - **辞書の `.items()` の反復**。二つの名前を一度に束ねる形にはまだコンパイル後の姿がないためです。キーを回して、ループの中で `d().get(k, default)` を読みます。キーの反復と `.values()` は入っていて、どちらも Python と同じ挿入順です。
 - **一部の制御構文**：入れ子の def（クロージャにはコンパイル後の形がありません。ヘルパはモジュールレベルに書きます）と、ビューの中の条件式（ビューでは要素を `if` で分けます）。
@@ -1175,7 +1180,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **`print`**。stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
 - **Yokan 自身のモジュールでは**：ファイルの属性（サイズ、時刻）とコピーや改名、ストリーミングやバイナリのダウンロード。
-- **Python のモジュールでは**：`math` の八つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。Python の標準ライブラリの残りはまだ方言に入っていません。次に入るのは `re` です。
+- **Python のモジュールでは**：`math` の八つ（それぞれ理由を名指しして断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。`json.loads` も断ります。返るものの形が実行するまで決まらないからで、読みは `jsondoc` のパスを通ります。`json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。`datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。`strftime` は CPython が自ら意味を定める指示子だけを取り、`%c`、`%x`、`%X`、`%-d` は断ります。何を返すかが機械の都合で決まるからです。`re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。後者は `@py` を教えます。小物のモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。理由を名指しして断るモジュール：`pathlib`、`os`、`collections`、`itertools`、`decimal`、`hashlib`、`base64`、`zoneinfo`。
 - **新しい要素の周辺**。表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。チャートにはホバーでの読み取りと凡例がありません。`select` はキーボードで操作できません。ツールチップの表示はスクリプトからホバーで確かめられません（文字列自体はダンプに出ます）。いずれもヘッドレスの検証にまだ無い動詞を待っています。
 - **二つめのウィンドウ**。いまは一アプリに一ウィンドウです。engine のウィンドウルートがビューひとつを前提に書かれていて、ヘッドレス実行のダンプもその一本のツリーだからです。ショートカット、クリップボード、メニューバー、ファイルダイアログ、落とされたファイル、ツールチップ、複数行フィールドは入っています。
 - **素のラッパを超えるデコレータの形**：自分が引数を取るもの、ラッパが関数を二度呼ぶもの、関数の戻り値を使うもの。関数をそのまま返すデコレータと、一度だけ呼ぶラッパはコンパイルされます。

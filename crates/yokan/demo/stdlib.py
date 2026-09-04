@@ -15,7 +15,9 @@ Reading a path out of a document is Yokan's own, under `jsondoc`,
 because Python's `json` has no such thing;
 `datetime` is Python's as well: a date is a value that adds a
 timedelta, subtracts another date and formats itself, and the twin
-answers what CPython answers.
+answers what CPython answers. So are `re` (the pattern is compiled by
+CPython while the app translates, and the shipped binary runs that
+array), `string`, `textwrap`, `bisect` and `heapq`.
 
 `clock.format_ms` is UTC and `clock.format_local_ms` is the machine's
 own zone, from the same zone database in both runs. Python's own
@@ -25,8 +27,11 @@ import json
 import math
 import os
 import random
+import re
 import statistics
+import string
 import sys
+import textwrap
 import time
 from datetime import date, timedelta
 
@@ -45,6 +50,7 @@ here: State[str] = State("-")
 ticked: State[str] = State("-")
 due: State[date] = State(date(2026, 1, 1))
 plan: State[str] = State("-")
+words: State[str] = State("-")
 doc: State[str] = State("-")
 scores: State[list[int]] = State([3, 5, 8])
 
@@ -59,6 +65,15 @@ def schedule():
     due.set(date(2026, 1, 1) + timedelta(weeks=6))
     span = due() - date(2026, 1, 1)
     plan.set(f"{due()} ({due().strftime('%A')}) in {span.days} days")
+
+
+def sift():
+    # A pattern is compiled by CPython while the app translates, so
+    # the shipped binary runs the array CPython itself would run.
+    line = "order 42 from momo@example.com"
+    got = re.findall(r"\w+@[\w.]+", line)
+    tidy = re.sub(r"\s+", " ", textwrap.dedent("  a   b  "))
+    words.set(f"{len(got)} {tidy.strip().title()} {string.digits[:3]}")
 
 
 def summarize():
@@ -111,6 +126,7 @@ def view():
         text(f"local={here()}  ticked={ticked()}")
         text(f"exact={spread()}")
         text(f"due={due()} plan={plan()}")
+        text(f"words={words()}")
         text(f"rolls={rolls()}")
         text(f"tau={math.tau:.5f} floor={math.floor(hyp())}")
         text(f"doc={doc()}")
@@ -118,6 +134,7 @@ def view():
             button("measure", on_click=measure)
             button("stats", on_click=summarize)
             button("due", on_click=schedule)
+            button("sift", on_click=sift)
             button("roll", on_click=roll)
         with row(spacing=6):
             button("parse", on_click=parse)

@@ -840,6 +840,597 @@ pub fn clock_format_ms(ms: i64, fmt: &str) -> String {
     }
 }
 
+// ---- string, textwrap, bisect, heapq --------------------------------
+// The small pure modules. Nothing here reads a clock, a file or a
+// generator, so a view may call any of it; what each answers is
+// pinned by a ground-truth table like the rest.
+
+pub fn string_ascii_lowercase() -> String { "abcdefghijklmnopqrstuvwxyz".to_string() }
+pub fn string_ascii_uppercase() -> String { "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string() }
+pub fn string_ascii_letters() -> String {
+    format!("{}{}", string_ascii_lowercase(), string_ascii_uppercase())
+}
+pub fn string_digits() -> String { "0123456789".to_string() }
+pub fn string_hexdigits() -> String { "0123456789abcdefABCDEF".to_string() }
+pub fn string_octdigits() -> String { "01234567".to_string() }
+pub fn string_punctuation() -> String { "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".to_string() }
+pub fn string_whitespace() -> String { " \t\n\r\u{b}\u{c}".to_string() }
+pub fn string_printable() -> String {
+    format!(
+        "{}{}{}{}",
+        string_digits(),
+        string_ascii_letters(),
+        string_punctuation(),
+        string_whitespace()
+    )
+}
+
+/// `textwrap.dedent`, ported line for line from CPython's: the common
+/// leading whitespace is found by comparing the smallest and largest
+/// non-blank lines, and a line of nothing but whitespace becomes
+/// empty.
+pub fn textwrap_dedent(text: &str) -> String {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let non_blank: Vec<&&str> = lines
+        .iter()
+        .filter(|l| !l.is_empty() && !py_str_isspace(l))
+        .collect();
+    let l1 = non_blank.iter().min().map(|l| **l).unwrap_or("");
+    let l2 = non_blank.iter().max().map(|l| **l).unwrap_or("");
+    let l2c: Vec<char> = l2.chars().collect();
+    let mut margin = 0usize;
+    for (i, c) in l1.chars().enumerate() {
+        margin = i;
+        if l2c.get(i) != Some(&c) || !(c == ' ' || c == '\t') {
+            break;
+        }
+        margin = i + 1;
+    }
+    // CPython's loop leaves `margin` at the index it broke on, which
+    // is the first character that is not shared whitespace.
+    let margin = l1.chars().take(margin).count();
+    lines
+        .iter()
+        .map(|l| {
+            if py_str_isspace(l) {
+                String::new()
+            } else {
+                l.chars().skip(margin).collect()
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+/// `textwrap.indent` with the default predicate: every line that is
+/// not all whitespace.
+pub fn textwrap_indent(text: &str, prefix: &str) -> String {
+    let mut out = String::new();
+    for line in py_str_splitlines_keepends(text) {
+        if !py_str_isspace(&line) {
+            out.push_str(prefix);
+        }
+        out.push_str(&line);
+    }
+    out
+}
+
+fn py_str_splitlines_keepends(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut cs = s.chars().peekable();
+    while let Some(c) = cs.next() {
+        cur.push(c);
+        let ends = matches!(
+            c,
+            '\n' | '\u{b}' | '\u{c}' | '\r' | '\u{1c}' | '\u{1d}' | '\u{1e}'
+                | '\u{85}' | '\u{2028}' | '\u{2029}'
+        );
+        if ends {
+            if c == '\r' && cs.peek() == Some(&'\n') {
+                cur.push(cs.next().expect("peeked"));
+            }
+            out.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// The binary searches. `bisect_left` puts an equal value before the
+/// ones already there and `bisect_right` after, which is the only
+/// difference between them.
+macro_rules! bisects {
+    ($($left:ident, $right:ident, $t:ty;)*) => {$(
+        pub fn $left(xs: Vec<$t>, x: $t) -> i64 {
+            let (mut lo, mut hi) = (0usize, xs.len());
+            while lo < hi {
+                let mid = (lo + hi) / 2;
+                if xs[mid] < x { lo = mid + 1 } else { hi = mid }
+            }
+            lo as i64
+        }
+        pub fn $right(xs: Vec<$t>, x: $t) -> i64 {
+            let (mut lo, mut hi) = (0usize, xs.len());
+            while lo < hi {
+                let mid = (lo + hi) / 2;
+                if x < xs[mid] { hi = mid } else { lo = mid + 1 }
+            }
+            lo as i64
+        }
+    )*};
+}
+bisects! {
+    bisect_left_int, bisect_right_int, i64;
+    bisect_left_str, bisect_right_str, String;
+}
+pub fn bisect_left_float(xs: Vec<f64>, x: f64) -> i64 {
+    let (mut lo, mut hi) = (0usize, xs.len());
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if xs[mid] < x { lo = mid + 1 } else { hi = mid }
+    }
+    lo as i64
+}
+pub fn bisect_right_float(xs: Vec<f64>, x: f64) -> i64 {
+    let (mut lo, mut hi) = (0usize, xs.len());
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if x < xs[mid] { hi = mid } else { lo = mid + 1 }
+    }
+    lo as i64
+}
+
+/// `heapq.nsmallest` / `nlargest`. What they answer is the sorted
+/// prefix, which is how the documentation defines them; the heap is
+/// an implementation detail of getting there.
+macro_rules! nsmalls {
+    ($($small:ident, $large:ident, $t:ty, $sort:ident;)*) => {$(
+        pub fn $small(n: i64, xs: Vec<$t>) -> Vec<$t> {
+            let mut out = $sort(xs);
+            out.truncate(n.max(0) as usize);
+            out
+        }
+        pub fn $large(n: i64, xs: Vec<$t>) -> Vec<$t> {
+            let mut out = $sort(xs);
+            out.reverse();
+            out.truncate(n.max(0) as usize);
+            out
+        }
+    )*};
+}
+nsmalls! {
+    heapq_nsmallest_int, heapq_nlargest_int, i64, py_list_sorted_int;
+    heapq_nsmallest_float, heapq_nlargest_float, f64, py_list_sorted_float;
+    heapq_nsmallest_str, heapq_nlargest_str, String, py_list_sorted_str;
+}
+
+// ---- the rest of str ------------------------------------------------
+// The methods the tour listed as "not yet". Case mapping is the full
+// Unicode one on both sides, which is what `upper` and `lower`
+// already relied on.
+
+fn chars(s: &str) -> Vec<char> {
+    s.chars().collect()
+}
+
+/// Python's `str.title`: the first letter of each run of letters is
+/// titlecased and the rest lowercased, so `"don't"` becomes
+/// `"Don'T"` — the apostrophe ends the word.
+pub fn py_str_title(s: &str) -> String {
+    let mut out = String::new();
+    let mut prev_cased = false;
+    for c in s.chars() {
+        if prev_cased {
+            out.extend(c.to_lowercase());
+        } else {
+            out.push_str(&titlecase(c));
+        }
+        prev_cased = c.is_alphabetic();
+    }
+    out
+}
+
+pub fn py_str_capitalize(s: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i == 0 {
+            out.push_str(&titlecase(c));
+        } else {
+            out.extend(c.to_lowercase());
+        }
+    }
+    out
+}
+
+/// Unicode's titlecase mapping, which is not the uppercase one: `ß`
+/// titlecases to "Ss" where it uppercases to "SS".
+fn titlecase(c: char) -> String {
+    unicode_case_mapping::to_titlecase(c)
+        .into_iter()
+        .take_while(|u| *u != 0)
+        .filter_map(char::from_u32)
+        .collect::<String>()
+        .pipe_or(c)
+}
+
+trait PipeOr {
+    fn pipe_or(self, c: char) -> String;
+}
+impl PipeOr for String {
+    /// The table answers nothing for a character that titlecases to
+    /// itself.
+    fn pipe_or(self, c: char) -> String {
+        if self.is_empty() { c.to_string() } else { self }
+    }
+}
+
+pub fn py_str_swapcase(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_uppercase() {
+            out.extend(c.to_lowercase());
+        } else if c.is_lowercase() {
+            out.extend(c.to_uppercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+pub fn py_str_zfill(s: &str, width: i64) -> String {
+    let cs = chars(s);
+    let n = width.max(0) as usize;
+    if cs.len() >= n {
+        return s.to_string();
+    }
+    let pad = n - cs.len();
+    // A leading sign stays in front of the zeros.
+    match cs.first() {
+        Some('+') | Some('-') => {
+            let mut out = String::new();
+            out.push(cs[0]);
+            out.extend(std::iter::repeat_n('0', pad));
+            out.extend(cs[1..].iter());
+            out
+        }
+        _ => {
+            let mut out: String = std::iter::repeat_n('0', pad).collect();
+            out.push_str(s);
+            out
+        }
+    }
+}
+
+fn pad_to(s: &str, width: i64, fill: char, mode: u8) -> String {
+    let cs = chars(s);
+    let n = width.max(0) as usize;
+    if cs.len() >= n {
+        return s.to_string();
+    }
+    let pad = n - cs.len();
+    match mode {
+        0 => format!("{s}{}", fill.to_string().repeat(pad)),
+        1 => format!("{}{s}", fill.to_string().repeat(pad)),
+        _ => {
+            // `center` leans the odd character left when the string
+            // itself has an even length, and right otherwise — which
+            // is what CPython's `(width - len) / 2 + (width & 1 &
+            // ~len)` works out to.
+            let l = pad / 2 + usize::from(pad % 2 == 1 && cs.len() % 2 == 0);
+            format!(
+                "{}{s}{}",
+                fill.to_string().repeat(l),
+                fill.to_string().repeat(pad - l)
+            )
+        }
+    }
+}
+
+pub fn py_str_ljust(s: &str, width: i64, fill: &str) -> String {
+    pad_to(s, width, one_fill(fill), 0)
+}
+pub fn py_str_rjust(s: &str, width: i64, fill: &str) -> String {
+    pad_to(s, width, one_fill(fill), 1)
+}
+pub fn py_str_center(s: &str, width: i64, fill: &str) -> String {
+    pad_to(s, width, one_fill(fill), 2)
+}
+fn one_fill(fill: &str) -> char {
+    let mut it = fill.chars();
+    match (it.next(), it.next()) {
+        (Some(c), None) => c,
+        _ => panic!("The fill character must be exactly one character long"),
+    }
+}
+
+/// Python asks two things of `isupper` and its siblings: that there is
+/// at least one character of the kind, and that none contradicts it.
+pub fn py_str_isupper(s: &str) -> bool {
+    s.chars().any(char::is_uppercase) && !s.chars().any(char::is_lowercase)
+}
+pub fn py_str_islower(s: &str) -> bool {
+    s.chars().any(char::is_lowercase) && !s.chars().any(char::is_uppercase)
+}
+pub fn py_str_isalpha(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(char::is_alphabetic)
+}
+pub fn py_str_isdigit(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_numeric())
+}
+pub fn py_str_isalnum(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric())
+}
+pub fn py_str_isspace(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
+}
+pub fn py_str_isascii(s: &str) -> bool {
+    s.is_ascii()
+}
+
+pub fn py_str_removeprefix(s: &str, p: &str) -> String {
+    s.strip_prefix(p).unwrap_or(s).to_string()
+}
+pub fn py_str_removesuffix(s: &str, p: &str) -> String {
+    s.strip_suffix(p).unwrap_or(s).to_string()
+}
+
+/// `rfind`, and the two that raise where the finds answer -1.
+pub fn py_str_rfind(s: &str, p: &str) -> i64 {
+    match s.rfind(p) {
+        Some(b) => s[..b].chars().count() as i64,
+        None => -1,
+    }
+}
+pub fn py_str_index_of(s: &str, p: &str) -> i64 {
+    let i = py_str_find(s, p);
+    assert!(i >= 0, "substring not found");
+    i
+}
+pub fn py_str_rindex(s: &str, p: &str) -> i64 {
+    let i = py_str_rfind(s, p);
+    assert!(i >= 0, "substring not found");
+    i
+}
+
+pub fn py_str_splitlines(s: &str) -> Vec<String> {
+    py_str_splitlines_keepends(s)
+        .into_iter()
+        .map(|l| {
+            let t = l.trim_end_matches(['\n', '\r', '\u{b}', '\u{c}', '\u{1c}', '\u{1d}',
+                                        '\u{1e}', '\u{85}', '\u{2028}', '\u{2029}']);
+            t.to_string()
+        })
+        .collect()
+}
+
+pub fn py_str_expandtabs(s: &str, size: i64) -> String {
+    let size = size.max(0) as usize;
+    let mut out = String::new();
+    let mut col = 0usize;
+    for c in s.chars() {
+        match c {
+            '\t' => {
+                if size > 0 {
+                    let n = size - col % size;
+                    out.extend(std::iter::repeat_n(' ', n));
+                    col += n;
+                }
+            }
+            '\n' | '\r' => {
+                out.push(c);
+                col = 0;
+            }
+            _ => {
+                out.push(c);
+                col += 1;
+            }
+        }
+    }
+    out
+}
+
+/// `strip` and its two halves with a set of characters to remove —
+/// a SET, not a prefix, which is the part people misread.
+pub fn py_str_strip_chars(s: &str, set: &str) -> String {
+    py_str_rstrip_chars(&py_str_lstrip_chars(s, set), set)
+}
+pub fn py_str_lstrip_chars(s: &str, set: &str) -> String {
+    s.trim_start_matches(|c| set.contains(c)).to_string()
+}
+pub fn py_str_rstrip_chars(s: &str, set: &str) -> String {
+    s.trim_end_matches(|c| set.contains(c)).to_string()
+}
+
+// ---- re -------------------------------------------------------------
+// Python's `re`, as a twin — and the twin borrows CPython's own
+// compiler. A pattern is a literal, so the TRANSLATOR compiles it,
+// with `re._parser` and `re._compiler`, into the u32 array CPython
+// runs; what is here is only the engine that executes that array
+// (rustpython-sre_engine, the same one RustPython uses). The
+// backtracking, the groups and the flags are therefore CPython's,
+// not a second dialect of them, and no regular-expression compiler is
+// written on this side.
+//
+// A `Match` has no shape a typed subset can hold, so what the dialect
+// takes are the calls whose answer is already one of its types:
+// `findall` (a list of str), `sub` (a str), `split` (a list of str)
+// and the tests. The translator refuses the rest by name.
+
+use rustpython_sre_engine::{Request, State};
+
+fn sre_codes(codes: &[i64]) -> Vec<u32> {
+    codes.iter().map(|c| *c as u32).collect()
+}
+
+/// The characters of `s`, so a match span (which CPython counts in
+/// characters) can be sliced without counting the string twice.
+fn chars_of(s: &str) -> Vec<char> {
+    s.chars().collect()
+}
+
+fn slice(cs: &[char], a: usize, b: usize) -> String {
+    cs[a.min(cs.len())..b.min(cs.len())].iter().collect()
+}
+
+/// One match: the whole span, then each group's span, in characters.
+/// A group that did not participate has no span.
+struct Found {
+    start: usize,
+    end: usize,
+    groups: Vec<Option<(usize, usize)>>,
+}
+
+fn find_all(codes: &[i64], s: &str, ngroups: usize, limit: i64) -> Vec<Found> {
+    let codes = sre_codes(codes);
+    let mut out = Vec::new();
+    let n = s.chars().count();
+    let mut req = Request::new(s, 0, n, &codes, false);
+    let mut state = State::default();
+    loop {
+        if limit > 0 && out.len() as i64 >= limit {
+            break;
+        }
+        if req.start > req.end {
+            break;
+        }
+        state.reset(&req, req.start);
+        if !state.search(req) {
+            break;
+        }
+        let (start, end) = (state.start, state.cursor.position);
+        // `Marks::get` is indexed by the MARK pair, and group 1 writes
+        // the first pair — so group n is `get(n - 1)`.
+        let groups = (0..ngroups)
+            .map(|i| {
+                let (a, b) = state.marks.get(i);
+                match (a.into_option(), b.into_option()) {
+                    (Some(a), Some(b)) => Some((a, b)),
+                    _ => None,
+                }
+            })
+            .collect();
+        out.push(Found { start, end, groups });
+        // An empty match does not match again in the same place —
+        // CPython's rule, and what keeps `sub("x*", "-", "abc")` from
+        // looping.
+        req.must_advance = end == start;
+        req.start = end;
+    }
+    out
+}
+
+/// Is there a match at all? `re.search(p, s) is not None` in the app.
+pub fn re_search(codes: Vec<i64>, s: &str) -> bool {
+    !find_all(&codes, s, 0, 1).is_empty()
+}
+
+/// Anchored at the start (`re.match`) and over the whole string
+/// (`re.fullmatch`).
+fn anchored(codes: Vec<i64>, s: &str, whole: bool) -> bool {
+    let codes = sre_codes(&codes);
+    let n = s.chars().count();
+    let req = Request::new(s, 0, n, &codes, whole);
+    let mut state = State::default();
+    state.py_match(&req)
+}
+pub fn re_match(codes: Vec<i64>, s: &str) -> bool {
+    anchored(codes, s, false)
+}
+pub fn re_fullmatch(codes: Vec<i64>, s: &str) -> bool {
+    anchored(codes, s, true)
+}
+
+/// `re.findall`. `group` is 0 for a pattern with no groups (the whole
+/// match) and 1 for a pattern with one; the translator counts them
+/// and refuses two or more, which answer tuples.
+pub fn re_findall(codes: Vec<i64>, s: &str, group: i64) -> Vec<String> {
+    let cs = chars_of(s);
+    let ngroups = if group > 0 { group as usize } else { 0 };
+    find_all(&codes, s, ngroups, 0)
+        .into_iter()
+        .map(|m| {
+            if group == 0 {
+                return slice(&cs, m.start, m.end);
+            }
+            // A group that did not participate is the empty string
+            // here, which is what `findall` answers in Python too.
+            match m.groups[group as usize - 1] {
+                Some((a, b)) => slice(&cs, a, b),
+                None => String::new(),
+            }
+        })
+        .collect()
+}
+
+/// `re.sub`. The replacement template is parsed by CPython at
+/// translate time into alternating literals and group numbers; what
+/// arrives here is those two lists, with -1 marking a literal.
+pub fn re_sub(
+    codes: Vec<i64>,
+    parts: Vec<i64>,
+    lits: Vec<String>,
+    s: &str,
+    count: i64,
+    ngroups: i64,
+) -> String {
+    let cs = chars_of(s);
+    let mut out = String::new();
+    let mut last = 0usize;
+    for m in find_all(&codes, s, ngroups as usize, count) {
+        out.push_str(&slice(&cs, last, m.start));
+        for (i, g) in parts.iter().enumerate() {
+            if *g < 0 {
+                out.push_str(&lits[i]);
+            } else if *g == 0 {
+                out.push_str(&slice(&cs, m.start, m.end));
+            } else {
+                match m.groups[*g as usize - 1] {
+                    Some((a, b)) => out.push_str(&slice(&cs, a, b)),
+                    None => panic!("unmatched group {g}"),
+                }
+            }
+        }
+        last = m.end;
+    }
+    out.push_str(&slice(&cs, last, cs.len()));
+    out
+}
+
+/// `re.split` over a pattern with no groups — a pattern WITH groups
+/// interleaves their text, and a group that did not participate is
+/// `None` there, which a `list[str]` cannot hold. The translator
+/// refuses that case by name.
+pub fn re_split(codes: Vec<i64>, s: &str, maxsplit: i64) -> Vec<String> {
+    let cs = chars_of(s);
+    let mut out = Vec::new();
+    let mut last = 0usize;
+    for m in find_all(&codes, s, 0, maxsplit) {
+        out.push(slice(&cs, last, m.start));
+        last = m.end;
+    }
+    out.push(slice(&cs, last, cs.len()));
+    out
+}
+
+/// `re.escape` — the characters CPython escapes, and only those.
+pub fn re_escape(s: &str) -> String {
+    const SPECIAL: &str = "()[]{}?*+-|^$\\.&~# \t\n\r\u{b}\u{c}";
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if SPECIAL.contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 // ---- datetime -------------------------------------------------------
 // Python's `datetime`, as a twin, carried as integers: a `date` is
 // its ordinal (0001-01-01 is 1, which is what `toordinal` answers), a
