@@ -9,10 +9,7 @@ What Yokan cannot do yet is collected, with reasons, at the end
 
 A Yokan app is an ordinary Python file.
 During development it runs on real CPython; when you ship, the same source compiles to a native binary.
-
-Whether those two behave the same is something you can check, with `yokan gate`.
-It replays a script of clicks and keystrokes through both and compares the screens byte for byte; [Headless runs and the gate](#headless-runs-and-the-gate) covers it.
-Every feature this tour calls "compiled" has been through it, and the sections below will not say so again.
+Whether the two behave the same is checked by `yokan gate`, which replays a script of clicks and keystrokes through both and compares the screens byte for byte ([Headless runs and the gate](#headless-runs-and-the-gate)).
 
 ## Table of contents
 
@@ -451,8 +448,8 @@ best.set(max(scores()))
 ```
 
 The operations that say nothing about the element — `in`, a slice, `+`, `[::-1]` — take a list of anything the app can hold, a value class or a tuple included.
-Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` for those, and a `reverse=` to turn the order around.
-The key is a lambda of one element or the name of a helper that takes one, and sorting is stable: elements with equal keys keep the order they came in, with `reverse=True` as well.
+Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` — a lambda of one element, or the name of a helper that takes one — and `sorted` takes a `reverse=`.
+Sorting is stable either way: elements with equal keys stay in the order they came in.
 
 ```python
 by_score = sorted(players(), key=lambda p: p.score, reverse=True)
@@ -549,7 +546,7 @@ A compiled dict remembers the order its keys went in, so a walk visits them in t
 Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
 `.items()` walks the pairs, in the same insertion order.
 
-A dict of lists groups, with the empty list as what a missing key means:
+A dict of lists groups:
 
 ```python
 groups: State[dict[str, list[str]]] = State({})
