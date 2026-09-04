@@ -1253,3 +1253,44 @@ side reads the state — so a later `f"{q}"` printed two different
 things. It was silent until a tuple unpacking put a common name like
 `q` on the left. It is refused now, in both the plain assignment and
 the unpacking, and the message names the rename.
+
+## The container operations belong to the container
+
+Sixteen functions — `in`, a slice, `+` and a reversal, once per
+element type — said nothing about the element. They were four ideas
+written four times, and a fifth element type meant writing them a
+fifth. They are one implementation each now, generic on the kernel's
+own list, so they take a list of anything the app can hold: a value
+class, a tuple, an enum. Nothing was added to the boundary to get
+there; what moved is where the operation lives.
+
+Comparing is the opposite: it needs to know what to compare, and a
+value class has no order of its own — which is what Python says too,
+where `sorted` on a list of dataclasses raises. So the ordering
+operations take Python's own answer to that, `key=`, and the refusal
+without one names it.
+
+## A key function is a loop, not a callback
+
+`sorted(xs, key=f)` is decorate-sort-undecorate: the keys are
+computed first, then the elements move to where their keys went.
+Written that way the key function never becomes a value — the
+translator emits the loop that computes the keys, in the app's own
+dialect, and asks the container only for the order. So the key can be
+anything the dialect can write, a lambda or a named helper, and the
+crate boundary keeps carrying values and nothing else.
+
+The sort is stable and `reverse=True` reverses the COMPARISON rather
+than the result, which is what Python does and what
+`sorted(...)[::-1]` does not: ties keep the order they came in.
+`min`/`max` with a key take the first of equal keys, the way Python
+does, and an empty list raises.
+
+## `reversed` is an iterator, so `xs[::-1]` is the list
+
+`reversed(xs)` answered a list here and an iterator in Python. The
+difference is invisible in a `for` — where the name is nearly always
+written — and shows up the moment the result is indexed or measured.
+It is now what Python says it is: a `for` iterable. Where a list is
+wanted the spelling is `xs[::-1]`, which is a list in Python too, and
+the refusal for the old shape names it.

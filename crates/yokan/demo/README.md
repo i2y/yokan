@@ -67,7 +67,7 @@ the initial state, right after launch.
 #### moods — Enum, Optional and animation
 <img src="screenshots/moods.png" width="360">
 
-#### pyops — CPython's own arithmetic: `/` `//` `%` `**`, negative indexing, sorted() — byte-identical in both runs
+#### pyops — CPython's own arithmetic: `/` `//` `%` `**`, negative indexing, ordering by a key — byte-identical in both runs
 <img src="screenshots/pyops.png" width="360">
 
 #### pytext — bare float / bool / Enum text renders exactly as Python's str()

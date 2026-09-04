@@ -133,7 +133,7 @@ len(items())                 # 件数
 ```
 
 Python のリスト操作はハンドラの中でそのまま使えます。
-`in`、スライス、`sorted` / `reversed` / `min` / `max` / `sum`、内包表記、`enumerate` と `zip`、step 付きの `range`、二つのリストの連結です。
+`in`、スライス、`sorted` / `min` / `max` / `sum`、内包表記、`enumerate` と `zip`、step 付きの `range`、二つのリストの連結です。
 ローカルのリストは注釈で要素の型を書きます（コンパイル側がそれを読みます）。
 
 ```python
@@ -144,6 +144,23 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+要素が何かを問わない操作（`in`、スライス、`+`、`[::-1]`）は、アプリが持てるどんな要素のリストにも使えます。
+値クラスやタプルのリストも同じです。
+比べるほうは何を比べるかが要るので、`sorted` と `min` と `max` は `key=` を取ります。
+順序を逆にする `reverse=` も取ります。
+`key=` に渡すのは要素を一つ取るラムダか、要素を一つ取るヘルパの名前です。
+並べ替えは安定で、キーが等しい要素は入ってきた順のまま残ります（`reverse=True` のときも同じです）。
+
+```python
+by_score = sorted(players(), key=lambda p: p.score, reverse=True)
+leader = max(players(), key=lambda p: p.score)
+names = [p.name for p in players()]
+newest = entries()[::-1]
+```
+
+`reversed(xs)` は Python ではイテレータなので、`for` で後ろから回すのに使います。
+リストがほしいところでは、Python でもリストになる `xs[::-1]` を書きます。
 
 添字は Python と同じ意味で読めます。
 負の添字は後ろから数え、範囲外はその文をどちらの実行でも中断します。

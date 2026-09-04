@@ -384,8 +384,9 @@ def tally():
 ```
 
 - `if` / `elif` / `else`, `while`, `for` (over `range()` with one or
-  two arguments, a list state, a list field, a list parameter, or
-  `sorted(d())`), `break` / `continue`, locals (reassignable).
+  two arguments, a list state, a list field, a list parameter,
+  `sorted(d())`, or `sorted(xs)` / `reversed(xs)`), `break` /
+  `continue`, locals (reassignable).
 - A local assigned in **both** arms of an `if` / `else` reads after
   the branch; assigned in one arm only, it is refused (Python would
   raise NameError on the other path). Loop variables do not outlive
@@ -412,9 +413,14 @@ def tally():
   negative index counts from the back, past the end aborts the
   statement); `xs[i] = v` writes one. `len(xs)`, `Cart.xs` and
   `self.xs` all say the same thing inside a store. `in`, slices,
-  `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions,
-  `enumerate` / `zip`, a stepped `range` and joining two lists all
-  work; a local list is annotated (`out: list[str] = []`).
+  `sorted` / `min` / `max` / `sum`, comprehensions, `enumerate` /
+  `zip`, a stepped `range` and joining two lists all work; a local
+  list is annotated (`out: list[str] = []`). `in`, a slice, `+` and
+  `[::-1]` take a list of any element the app can hold (a value
+  class, a tuple); `sorted` / `min` / `max` take `key=` (a lambda of
+  one element, or a helper's name) and `sorted` a `reverse=` for
+  those, and the sort is stable. `reversed(xs)` is Python's
+  iterator: it belongs in a `for`, and `xs[::-1]` is the list.
 - `log("…")` writes a line to stderr from either run; `assert` and
   `raise` end the statement the way Python's exception does.
 - Strings: `+`, `==`, `<`, `"-" * 3`, f-strings with Python's

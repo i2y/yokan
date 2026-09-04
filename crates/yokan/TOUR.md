@@ -437,7 +437,7 @@ items.set([])                # clear
 len(items())                 # count
 ```
 
-The rest of Python's list vocabulary works in handlers: `in`, slices, `sorted` / `reversed` / `min` / `max` / `sum`, comprehensions, `enumerate` and `zip`, a stepped `range`, and joining two lists.
+The rest of Python's list vocabulary works in handlers: `in`, slices, `sorted` / `min` / `max` / `sum`, comprehensions, `enumerate` and `zip`, a stepped `range`, and joining two lists.
 A local list carries its element type in the annotation, which is what the compiled side reads.
 
 ```python
@@ -448,6 +448,19 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+The operations that say nothing about the element — `in`, a slice, `+`, `[::-1]` — take a list of anything the app can hold, a value class or a tuple included.
+Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` for those, and a `reverse=` to turn the order around.
+The key is a lambda of one element or the name of a helper that takes one, and sorting is stable: elements with equal keys keep the order they came in, with `reverse=True` as well.
+
+```python
+by_score = sorted(players(), key=lambda p: p.score, reverse=True)
+leader = max(players(), key=lambda p: p.score)
+names = [p.name for p in players()]
+newest = entries()[::-1]
+```
+
+`reversed(xs)` is Python's iterator, so it walks a list backwards in a `for`; where a list is wanted, `xs[::-1]` is the one that is a list in Python too.
 
 Indexing reads an element, with Python's meaning: a negative index counts from the back, and an index past the end stops that statement in both runs.
 

@@ -64,7 +64,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### moods — Enum と Optional とアニメーション
 <img src="screenshots/moods.png" width="360">
 
-#### pyops — CPython と同じ算術。`/` `//` `%` `**`、負のインデックス、sorted() まで両実行でバイト一致
+#### pyops — CPython と同じ算術。`/` `//` `%` `**`、負のインデックス、キーによる並べ替えまで両実行でバイト一致
 <img src="screenshots/pyops.png" width="360">
 
 #### pytext — 素の float / bool / Enum の表示が Python の str() と一致する
