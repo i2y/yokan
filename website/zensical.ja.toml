@@ -93,6 +93,7 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
+[project.markdown_extensions.pymdownx.details]
 [project.markdown_extensions.pymdownx.superfences]
 [project.markdown_extensions.pymdownx.emoji]
 emoji_generator = "zensical.extensions.emoji.to_svg"

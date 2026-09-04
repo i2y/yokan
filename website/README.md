@@ -39,3 +39,10 @@ drops `build/ja` — always build through `./build.sh`.
 
 Deployed by `.github/workflows/docs.yml` to GitHub Pages on every
 push to main that touches `website/`.
+
+## Regenerating the demo gallery's sources
+
+`tools/embed_demo_sources.py` puts each demo's source into a
+collapsed block under its screenshot, on both language pages, reading
+`crates/yokan/demo/`. Run it whenever a demo changes; it replaces
+what a previous run left rather than adding a second copy.
