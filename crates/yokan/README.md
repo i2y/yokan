@@ -52,7 +52,7 @@ Timers are skipped headless.
 
 ```console
 $ yokan gate demo/counter.py --script "click:+1,input:Momo" --release
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
   binary: …/release/pycounter (13.4 MB)      # 10.4 MB stripped
 ```
 

@@ -44,7 +44,7 @@ def repo() -> str:
     for c in cands:
         if c and os.path.isfile(os.path.join(c, "crates", "pixie-cli", "Cargo.toml")):
             return c
-    sys.exit("compiling the native tier needs the pixie repo — set PIXIE_REPO=/path/to/pixie")
+    sys.exit("the native build needs the pixie repo — set PIXIE_REPO=/path/to/pixie")
 
 
 SOURCES: dict = {}   # parsed file -> its lines, for refusal excerpts
@@ -11386,7 +11386,7 @@ def tier_b_project(
     env = dict(os.environ, PIXIE_SCRIPT=script)
     r = subprocess.run([binary], env=env, capture_output=True, text=True)
     if r.returncode != 0:
-        sys.exit(f"compiled tier failed:\n{r.stdout}\n{r.stderr}")
+        sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
     return r.stdout, binary
 
 
@@ -11644,7 +11644,7 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
     env = dict(os.environ, PIXIE_SCRIPT=script)
     r = subprocess.run([binary], env=env, capture_output=True, text=True)
     if r.returncode != 0:
-        sys.exit(f"compiled tier failed:\n{r.stdout}\n{r.stderr}")
+        sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
     return r.stdout, binary
 
 
@@ -11853,7 +11853,7 @@ def main():
     ap.add_argument("--script", default="")
     ap.add_argument("--release", action="store_true")
     ap.add_argument("--fresh", action="append", default=[],
-                    help="delete this file before EACH tier runs — external-state isolation for persistent apps (repeatable)")
+                    help="delete this file before EACH run — external-state isolation for persistent apps (repeatable)")
     ap.add_argument("--onefile", action="store_true",
                     help="one distributable file: launcher + embedded runtime, unpacked to the user cache on first run")
     ap.add_argument("--app", dest="app_bundle", action="store_true",
@@ -11935,7 +11935,7 @@ def main():
             print("  double-clickable; the executable inside replays PIXIE_SCRIPT like any build")
             return
         print(f"built: {binary} ({describe_artifact(binary)})")
-        print("  not gate-checked — `gate` with a script proves the tiers agree")
+        print("  not gate-checked — `gate` with a script proves the two runs agree")
         return
 
     for f in args.fresh:
@@ -11968,12 +11968,12 @@ def main():
     b = b_raw.rstrip("\n")
 
     if a == b:
-        print(f"GATE OK — {len(a.splitlines())} dump lines identical across tiers")
+        print(f"GATE OK — {len(a.splitlines())} dump lines identical in both runs")
         print(f"  script:   {args.script or '(none — startup dump only)'}")
         print(f"  emitted:  {pix_path}")
         print(f"  binary:   {binary} ({describe_artifact(binary)})")
     else:
-        print("GATE FAILED — tiers diverge:")
+        print("GATE FAILED — the two runs diverge:")
         for la, lb in zip(a.splitlines(), b.splitlines()):
             if la != lb:
                 print(f"  cpython: {la}")

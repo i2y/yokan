@@ -1159,7 +1159,7 @@ The **gate** replays the same script against the development build and the shipp
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo" --release
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
 An app that writes to files or a DB takes `--fresh path/to/file.db`, so the first run's writes never leak into the second run's initial read.

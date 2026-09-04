@@ -632,7 +632,7 @@ place for startup work — loading data, seeding the RNG.
 $ yokan check app.py                                  # refusals only, no compiler
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no window
 $ yokan gate app.py --script "click:+1,input:Momo" --release
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 $ yokan build app.py --release [--app] [--bundle | --onefile]
 ```
 

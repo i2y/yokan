@@ -6,9 +6,9 @@ Yokan is a compiler: it takes a statically typed subset of Python to native code
 A subset — but not a lookalike language. What you can write is a
 slice of Python, and inside that slice your code behaves exactly as
 Python. While you develop, the whole app runs on real CPython; when
-you ship, the same source becomes a machine-code executable; and
-the two runs can be checked against each other, screen for screen,
-at build time.
+you ship, the same source becomes a machine-code executable.
+Whether the two behave the same is something you can check, with
+`yokan gate`.
 
 First, what it looks like: OpsBoard, a bundled dashboard demo —
 charts, a virtualized list, theme switching — written entirely in
@@ -96,7 +96,7 @@ The last box of the diagram. Yokan calls it the **gate**:
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
 Hand it a sequence of clicks and input; it replays them on the

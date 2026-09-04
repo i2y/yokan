@@ -6,7 +6,7 @@ Yokan（羊羹）は、静的に型付けされた Python のサブセットを�
 サブセットといっても、Python に似せた別の言語ではありません。
 書けるのは Python の一部ですが、その範囲のコードは Python とまったく同じに動きます。
 開発中はアプリ全体が本物の CPython で動き、リリースするときに同じソースが機械語の実行ファイルになります。
-そして、この二つが同じに振る舞うことを、ビルド時に検証できます。
+その二つが同じに動くかどうかは、`yokan gate` で確かめられます。
 
 まず見た目から。
 付属デモのダッシュボード OpsBoard で、チャートも仮想化リストもテーマ切替も、すべて Python で書かれています（ソースは `crates/yokan/demo/opsboard/`）。
@@ -55,7 +55,7 @@ Python へのリンクもゼロで、13.4 MB（strip 後 10.4 MB）、起動は�
 どちらの場合も、受け取る側のマシンに Python も pip も要りません。
 
 開発中はホットリロード、リリースは AOT コンパイルでネイティブ、という体験は Flutter と Dart の組み合わせに近いものです。
-Yokan はそれを Python でやり、さらに開発版とリリース版が同じに振る舞うことを、ビルド時に検証する手立てを用意します。
+Yokan はそれを Python でやり、さらに開発版とリリース版が同じに動くかどうかを確かめる手立てを用意します。
 
 ## 何が作れるか
 
@@ -83,7 +83,7 @@ Yokan ではこれを**ゲート**と呼んでいます。
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
 クリックや入力の並びを渡すと、CPython 版と機械語版の両方でそれを再生して、画面の結果をバイト単位で突き合わせます。

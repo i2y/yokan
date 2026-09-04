@@ -1176,7 +1176,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo" --release
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
 ファイルや DB に書くアプリは `--fresh path/to/file.db` を付けると、先に走った側の書き込みが後の側の初回読みに漏れません。
