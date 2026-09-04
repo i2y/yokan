@@ -56,8 +56,8 @@ the same change.
 
 `just` is the task runner: `just` alone lists the recipes, and the
 common ones are `just gate <app> "<script>"`, `just sweep`,
-`just dev-so`, `just test` / `just tier-gate`, `just site`,
-`just publish <version>`. It exports the shared `CARGO_TARGET_DIR`
+`just dev-so`, `just test` / `just tier-gate`, `just site` /
+`just site-serve`, `just publish <version>`. It exports the shared `CARGO_TARGET_DIR`
 and encodes the invariants below, so prefer it over typing the raw
 commands; the raw forms stay documented here because they are what
 the recipes run.

@@ -9,6 +9,10 @@
 # Every recipe exports CARGO_TARGET_DIR, because one shared target dir
 # across the workspace and every generated app is what keeps builds
 # fast — a plain `cargo` invocation without it rebuilds gpui.
+#
+# `just --list` prints only the LAST comment line above a recipe, so
+# that line is a whole sentence naming what the recipe does; anything
+# else worth saying goes above it, separated by a bare `#`.
 
 export CARGO_TARGET_DIR := env_var('HOME') / '.cache/pixie/target'
 
@@ -31,8 +35,10 @@ dev-so:
     cp "$CARGO_TARGET_DIR/release/libyokan.dylib" {{pkg}}/yokan.so
     codesign -f -s - {{pkg}}/yokan.so
 
-# The dialect boundary, without starting a compiler: the first
-# refusal in file:line:col form, silence when the app is inside it.
+# Prints the first refusal in file:line:col form, and nothing at all
+# when the app is inside the dialect.
+#
+# Check one app against the dialect, without starting a compiler.
 check app:
     cd {{pkg}} && uv run yokan_gate.py check {{app}}
 
@@ -77,20 +83,27 @@ coverage *modules:
 
 # ---- documentation site ----------------------------------------------------
 
-# Regenerate the coverage page (both languages) from the manifest, the
-# translator's tables and a probe of every builtin.
+# From the manifest, the translator's own tables, and a probe of every
+# builtin — nothing on the page is typed by hand.
+#
+# Regenerate the documentation site's coverage page (both languages).
 coverage-page:
     cd {{pkg}} && uv run tools/stdlib_coverage.py -o ../../website/docs/support.md
     cd {{pkg}} && uv run tools/stdlib_coverage.py --lang ja -o ../../website/docs-ja/support.md
 
-# Build both languages, in the order build.sh enforces.
+# Both languages, in the order build.sh enforces: English first, since
+# it cleans the build directory the Japanese one writes into.
+#
+# Build the documentation site.
 site:
     cd website && ./build.sh
 
-# Build both languages and serve them on :8001. The pages carry
-# absolute links (site_url ends in /yokan/), so the build has to sit
-# under that path or every link 404s — hence the symlinked docroot.
-serve: site
+# The pages carry absolute links (site_url ends in /yokan/), so the
+# build has to sit under that path or every link 404s — hence the
+# symlinked docroot.
+#
+# Build the documentation site and read it at localhost:8001/yokan/.
+site-serve: site
     @mkdir -p website/.serve && ln -sfn ../build website/.serve/yokan
     @echo "http://localhost:8001/yokan/  ·  http://localhost:8001/yokan/ja/"
     python3 -m http.server 8001 -d website/.serve
