@@ -35,6 +35,9 @@ gate labels  python3 yokan_gate.py gate demo/labels.py --script "dump,click:save
 gate badges  python3 yokan_gate.py gate demo/badges.py --script "click:flip,dump,click:flip"
 gate quantities python3 yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
 gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,click:next month"
+# The canvas, and the keyboard as a device: the frame is in the dump one
+# command per line, and the keys steer the ball through the tick.
+gate canvas  python3 yokan_gate.py gate demo/canvas.py --script "click:seed,dump,keydown:left,advance:50,advance:50,keyup:left,dump,keydown:space,advance:50,advance:50,keyup:space,advance:50"
 gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 # The shared properties on every element; the middle steps are inert while locked.
 gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
@@ -68,6 +71,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
+    canvas) continue;;
     shared) continue;;
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;

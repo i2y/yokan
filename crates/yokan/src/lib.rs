@@ -15,7 +15,7 @@
 
 use pixie_engine_gpui::{ReloadWatch, run_app};
 use pixie_kernel::{
-    AsyncCtx, Component, Element, ErasedHandle, LazyRows, List, Listener, Runtime, Str,
+    AsyncCtx, Component, Element, ErasedHandle, LazyRows, List, Listener, Op, Runtime, Str,
     BoolListener, FloatListener, IntListener, TextListener, World, mount,
 };
 use pyo3::prelude::*;
@@ -332,9 +332,78 @@ impl PyElement {
     }
 }
 
+/// One drawing command, waiting to join the canvas it was written in.
+///
+/// A command is not an element — it takes no shared properties, it
+/// cannot be placed anywhere else, and nothing in the tree walks it —
+/// so it is its own value here the way it is its own type in the
+/// kernel, and it collects in its own frame.
+#[pyclass(unsendable)]
+struct PyOp {
+    op: RefCell<Option<Op>>,
+}
+
+thread_local! {
+    /// One frame per open `with canvas(...)`. A command constructed
+    /// with none open is a mistake the message names.
+    static OP_FRAMES: RefCell<Vec<Vec<Py<PyOp>>>> = const { RefCell::new(Vec::new()) };
+}
+
+struct OpReg(PyOp);
+
+impl OpReg {
+    fn wrap(op: Op) -> Self {
+        OpReg(PyOp { op: RefCell::new(Some(op)) })
+    }
+}
+
+impl<'py> IntoPyObject<'py> for OpReg {
+    type Target = PyOp;
+    type Output = Bound<'py, PyOp>;
+    type Error = PyErr;
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let b = Bound::new(py, self.0)?;
+        OP_FRAMES.with(|f| {
+            let mut frames = f.borrow_mut();
+            match frames.last_mut() {
+                Some(frame) => {
+                    frame.push(b.clone().unbind());
+                    Ok(())
+                }
+                None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                    "a drawing command belongs inside `with canvas(...)`: \
+                     pixel / line / rect / rect_outline / circle / \
+                     circle_outline / triangle / triangle_outline / sprite / \
+                     pixel_text paint on a canvas and nowhere else",
+                )),
+            }
+        })?;
+        Ok(b)
+    }
+}
+
+/// Every command the frame collected, in the order they were written.
+fn take_ops(py: Python<'_>, frame: Vec<Py<PyOp>>) -> Vec<Op> {
+    frame
+        .into_iter()
+        .filter_map(|po| po.bind(py).borrow().op.borrow_mut().take())
+        .collect()
+}
+
 #[pymethods]
 impl PyElement {
     fn __enter__(slf: &Bound<'_, PyElement>) -> PyResult<Py<PyElement>> {
+        // A canvas opens a frame of COMMANDS, not of elements.
+        {
+            let pe = slf.borrow();
+            let el = pe.el.borrow();
+            if matches!(el.as_ref(), Some(Element::Canvas { .. })) {
+                drop(el);
+                drop(pe);
+                OP_FRAMES.with(|f| f.borrow_mut().push(Vec::new()));
+                return Ok(slf.clone().unbind());
+            }
+        }
         {
             let pe = slf.borrow();
             let el = pe.el.borrow();
@@ -366,6 +435,36 @@ impl PyElement {
         _tb: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
         let py = slf.py();
+        let is_canvas = {
+            let pe = slf.borrow();
+            let el = pe.el.borrow();
+            matches!(el.as_ref(), Some(Element::Canvas { .. }))
+        };
+        if is_canvas {
+            let frame = OP_FRAMES
+                .with(|f| f.borrow_mut().pop())
+                .unwrap_or_default();
+            if _t.is_some() {
+                return Ok(false); // exception: unwind, keep frames balanced
+            }
+            let ops = take_ops(py, frame);
+            {
+                let pe = slf.borrow();
+                let mut el = pe.el.borrow_mut();
+                let Some(Element::Canvas { ops: slot, .. }) = el.as_mut() else {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "element already used",
+                    ));
+                };
+                *slot = ops;
+            }
+            BUILD_FRAMES.with(|f| {
+                if let Some(outer) = f.borrow_mut().last_mut() {
+                    outer.push(slf.clone().unbind());
+                }
+            });
+            return Ok(false);
+        }
         let frame = BUILD_FRAMES
             .with(|f| f.borrow_mut().pop())
             .unwrap_or_default();
@@ -1439,6 +1538,88 @@ element_fn! {
         }
     }
 }
+
+// The drawing surface. `width`/`height` count VIRTUAL pixels and are
+// its own props (an Int pair, not the shared Float sizing), so the
+// macro's `native_size` mode keeps the riders off them. The commands
+// arrive through the `with` block, not as arguments.
+element_fn! {
+    native_size canvas
+    (width, height, scale=1, background=0, palette=None,)
+    [width: i64, height: i64, scale: i64, background: i64, palette: Option<Vec<String>>,]
+    {
+        Element::Canvas {
+            width,
+            height,
+            scale,
+            background,
+            palette: to_list_str(palette.unwrap_or_default()),
+            ops: Vec::new(),
+        }
+    }
+}
+
+/// The drawing commands. Each one takes its numbers and a color
+/// INDEX into the canvas's palette, and registers itself in the
+/// canvas it was written in — which is the only place it may be
+/// written.
+macro_rules! op_fn {
+    ($name:ident ($($sig:tt)*) [$($p:tt)*] $body:block) => {
+        #[pyfunction(signature = ($($sig)*))]
+        #[allow(clippy::too_many_arguments, unused_braces)]
+        fn $name($($p)*) -> PyResult<OpReg> {
+            Ok(OpReg::wrap($body))
+        }
+    };
+}
+
+op_fn! { pixel (x, y, color,) [x: i64, y: i64, color: i64,]
+    { Op::Pixel { x, y, color } } }
+
+op_fn! { line (x1, y1, x2, y2, color,) [x1: i64, y1: i64, x2: i64, y2: i64, color: i64,]
+    { Op::Line { x1, y1, x2, y2, color } } }
+
+op_fn! { rect (x, y, w, h, color,) [x: i64, y: i64, w: i64, h: i64, color: i64,]
+    { Op::Rect { x, y, w, h, color } } }
+
+op_fn! { rect_outline (x, y, w, h, color,) [x: i64, y: i64, w: i64, h: i64, color: i64,]
+    { Op::RectOutline { x, y, w, h, color } } }
+
+op_fn! { circle (x, y, r, color,) [x: i64, y: i64, r: i64, color: i64,]
+    { Op::Circle { x, y, r, color } } }
+
+op_fn! { circle_outline (x, y, r, color,) [x: i64, y: i64, r: i64, color: i64,]
+    { Op::CircleOutline { x, y, r, color } } }
+
+op_fn! { triangle (x1, y1, x2, y2, x3, y3, color,)
+    [x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64, color: i64,]
+    { Op::Triangle { x1, y1, x2, y2, x3, y3, color } } }
+
+op_fn! { triangle_outline (x1, y1, x2, y2, x3, y3, color,)
+    [x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64, color: i64,]
+    { Op::TriangleOutline { x1, y1, x2, y2, x3, y3, color } } }
+
+op_fn! { sprite (x, y, source, u, v, w, h, colkey=-1, flip_x=false, flip_y=false,)
+    [x: i64, y: i64, source: String, u: i64, v: i64, w: i64, h: i64,
+     colkey: i64, flip_x: bool, flip_y: bool,]
+    {
+        Op::Sprite {
+            x,
+            y,
+            source: Str::from(source),
+            u,
+            v,
+            w,
+            h,
+            colkey,
+            flip_x,
+            flip_y,
+        }
+    }
+}
+
+op_fn! { pixel_text (x, y, text, color,) [x: i64, y: i64, text: String, color: i64,]
+    { Op::PixelText { x, y, text: Str::from(text), color } } }
 
 element_fn! {
     spinner
@@ -2535,6 +2716,24 @@ fn py_clipboard_get_text(py: Python<'_>) -> String {
     py.detach(yokan_stdlib::clipboard_get_text)
 }
 
+// The keyboard's state. No `detach`: these read a thread-local the
+// engine wrote on this same thread and answer immediately, so there
+// is nothing to wait for.
+#[pyfunction] #[pyo3(name = "down")]
+fn py_keys_down(key: &str) -> bool {
+    yokan_stdlib::keys_down(key)
+}
+
+#[pyfunction] #[pyo3(name = "pressed")]
+fn py_keys_pressed(key: &str) -> bool {
+    yokan_stdlib::keys_pressed(key)
+}
+
+#[pyfunction] #[pyo3(name = "released")]
+fn py_keys_released(key: &str) -> bool {
+    yokan_stdlib::keys_released(key)
+}
+
 #[pyfunction] #[pyo3(name = "list_dir")]
 fn py_fs_list_dir(py: Python<'_>, path: &str) -> Vec<String> {
     py.detach(|| yokan_stdlib::fs_list_dir(path))
@@ -2602,6 +2801,17 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(svg, m)?)?;
     m.add_function(wrap_pyfunction!(bar_chart, m)?)?;
     m.add_function(wrap_pyfunction!(line_chart, m)?)?;
+    m.add_function(wrap_pyfunction!(canvas, m)?)?;
+    m.add_function(wrap_pyfunction!(pixel, m)?)?;
+    m.add_function(wrap_pyfunction!(line, m)?)?;
+    m.add_function(wrap_pyfunction!(rect, m)?)?;
+    m.add_function(wrap_pyfunction!(rect_outline, m)?)?;
+    m.add_function(wrap_pyfunction!(circle, m)?)?;
+    m.add_function(wrap_pyfunction!(circle_outline, m)?)?;
+    m.add_function(wrap_pyfunction!(triangle, m)?)?;
+    m.add_function(wrap_pyfunction!(triangle_outline, m)?)?;
+    m.add_function(wrap_pyfunction!(sprite, m)?)?;
+    m.add_function(wrap_pyfunction!(pixel_text, m)?)?;
     m.add_function(wrap_pyfunction!(progress, m)?)?;
     m.add_function(wrap_pyfunction!(spinner, m)?)?;
     m.add_function(wrap_pyfunction!(checkbox, m)?)?;
@@ -2741,6 +2951,11 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;
     m.add_submodule(&clipm)?;
+    let keysm = PyModule::new(m.py(), "keys")?;
+    keysm.add_function(wrap_pyfunction!(py_keys_down, &keysm)?)?;
+    keysm.add_function(wrap_pyfunction!(py_keys_pressed, &keysm)?)?;
+    keysm.add_function(wrap_pyfunction!(py_keys_released, &keysm)?)?;
+    m.add_submodule(&keysm)?;
     let clockm = PyModule::new(m.py(), "clock")?;
     clockm.add_function(wrap_pyfunction!(py_clock_format_ms, &clockm)?)?;
     clockm.add_function(wrap_pyfunction!(py_clock_format_local_ms, &clockm)?)?;
@@ -2752,6 +2967,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sysmod.set_item("yokan.http", &http)?;
     sysmod.set_item("yokan.jsondoc", &jsonm)?;
     sysmod.set_item("yokan.clock", &clockm)?;
+    sysmod.set_item("yokan.keys", &keysm)?;
     sysmod.set_item("yokan.strings", &stringsm)?;
     Ok(())
 }

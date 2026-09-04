@@ -653,6 +653,7 @@ class Translator:
         self.enums = {}                # Enum class -> [member names]
         self.enum_bases = set()        # local names bound to enum.Enum
         self.view_bindings = {}        # view binding name -> pixty (if-let / case arms)
+        self.in_canvas = False         # inside `with canvas(...)`: commands, not elements
         self.unions = {}               # `type Shape = A | B` -> [variant struct names]
         self.union_of = {}             # variant struct -> union name
         self.stores = {}               # @ui.store name -> {"fields", "methods"}
@@ -3270,6 +3271,16 @@ class Translator:
             return True
         return isinstance(func, ast.Name) and self.yokan_names.get(func.id) == name
 
+    def _ui_name(self, func):
+        """The dialect name a call names, in either spelling
+        (`yokan.rect(...)` or a bare `rect(...)` from a from-import),
+        or None when it names something else."""
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == self.ui:
+            return func.attr
+        if isinstance(func, ast.Name):
+            return self.yokan_names.get(func.id)
+        return None
+
     def _is_deco(self, d, name: str) -> bool:
         """A decorator in either spelling — `@yokan.store` / `@ui.store`
         (alias) or bare `@store` (from-import), with or without call
@@ -3447,6 +3458,15 @@ class Translator:
         ("Clipboard", "clipboard", "yokan", (
             ("set_text", "setText", "text: String", "Int", "clipboard_set_text"),
             ("get_text", "getText", "", "String", "clipboard_get_text"),
+        )),
+        # The keyboard's own state, read from a tick. Not `pure`: what
+        # it answers changes under the app's feet, so a view cannot
+        # call it — a view is rebuilt on the framework's schedule, and
+        # what it read would be a moment the app never chose.
+        ("Keys", "keys", "yokan", (
+            ("down", "down", "key: String", "Bool", "keys_down"),
+            ("pressed", "pressed", "key: String", "Bool", "keys_pressed"),
+            ("released", "released", "key: String", "Bool", "keys_released"),
         )),
         ("Notify", "notify", "yokan", (
             ("send", "send", "title: String, body: String", "", "notify_send"),
@@ -10090,6 +10110,112 @@ class Translator:
             lines.append(f"{pad}  borderColor: {pixstr(bc)}")
         return lines
 
+    # The drawing commands, and what each takes positionally. A
+    # command paints on a canvas and nowhere else, takes no shared
+    # properties (it is painted, not laid out), and its numbers are
+    # whole pixels.
+    CANVAS_OPS = {
+        "pixel": ("Pixel", ("x", "y", "color")),
+        "line": ("Line", ("x1", "y1", "x2", "y2", "color")),
+        "rect": ("Rect", ("x", "y", "w", "h", "color")),
+        "rect_outline": ("RectOutline", ("x", "y", "w", "h", "color")),
+        "circle": ("Circle", ("x", "y", "r", "color")),
+        "circle_outline": ("CircleOutline", ("x", "y", "r", "color")),
+        "triangle": ("Triangle", ("x1", "y1", "x2", "y2", "x3", "y3", "color")),
+        "triangle_outline": (
+            "TriangleOutline",
+            ("x1", "y1", "x2", "y2", "x3", "y3", "color"),
+        ),
+        "sprite": ("Sprite", ("x", "y", "source", "u", "v", "w", "h")),
+        "pixel_text": ("PixelText", ("x", "y", "text", "color")),
+    }
+
+    def _op_int(self, node, label: str):
+        """One whole-pixel argument of a drawing command. A canvas has
+        no half pixels, so a float is refused by name instead of being
+        floored behind the app's back."""
+        neg = isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+        c = node.operand if neg else node
+        if isinstance(c, ast.Constant) and isinstance(c.value, bool):
+            raise Untranslatable(node, f"{label} takes a whole number of pixels")
+        if isinstance(c, ast.Constant) and isinstance(c.value, int):
+            return -c.value if neg else c.value
+        if isinstance(c, ast.Constant) and isinstance(c.value, float):
+            raise Untranslatable(
+                node,
+                f"{label} is a whole number of pixels — a canvas has no half pixels, "
+                "so write `int(...)` around it",
+            )
+        ty = self._num_ty(node, "view", None)
+        if ty == "Int":
+            prev, self.in_prop = self.in_prop, True
+            try:
+                return self.expr(node, "view", None)
+            finally:
+                self.in_prop = prev
+        if ty == "Float":
+            raise Untranslatable(
+                node,
+                f"{label} is a whole number of pixels — this reads as a float, "
+                "so write `int(...)` around it",
+            )
+        raise Untranslatable(
+            node,
+            f"{label} takes an int, a state or field read, or arithmetic over them — "
+            f"`{self._src(node)}` is not one of those here",
+        )
+
+    def canvas_op(self, node: ast.Call, indent: int) -> list[str]:
+        """One drawing command inside a canvas."""
+        pad = "  " * indent
+        name = self._ui_name(node.func)
+        tag, params = self.CANVAS_OPS[name]
+        kw = {k.arg: k.value for k in node.keywords if k.arg}
+        for k in node.keywords:
+            if k.arg is None:
+                raise Untranslatable(
+                    k.value,
+                    f"{name}() takes no `**` — a drawing command has no shared "
+                    "properties: it is painted, not laid out",
+                )
+        args = list(node.args)
+        if len(args) > len(params):
+            raise Untranslatable(node, f"{name}() takes {len(params)} arguments")
+        given = dict(zip(params, args))
+        for k in kw:
+            if k in given:
+                raise Untranslatable(node, f"{name}() got `{k}` twice")
+        extra = ("colkey", "flip_x", "flip_y") if name == "sprite" else ()
+        for k in kw:
+            if k not in params and k not in extra:
+                what = ", ".join(params + extra)
+                raise Untranslatable(
+                    node,
+                    f"{name}() has no `{k}` — it takes {what}. A drawing command "
+                    "takes none of the shared properties either",
+                )
+        given.update({k: v for k, v in kw.items() if k in params})
+        props = []
+        for pname in params:
+            if pname not in given:
+                raise Untranslatable(node, f"{name}() needs `{pname}`")
+            v = given[pname]
+            if pname == "source":
+                lit = self._text_value(v)
+                props.append(f"source: {lit}")
+            elif pname == "text":
+                props.append(f"text: {self._text_value(v)}")
+            else:
+                props.append(f"{pname}: {self._op_int(v, f'{name}()\'s `{pname}`')}")
+        if name == "sprite":
+            if "colkey" in kw:
+                props.append(f"colkey: {self._op_int(kw['colkey'], 'colkey')}")
+            for flag, pixname in (("flip_x", "flipX"), ("flip_y", "flipY")):
+                on = self._boolean(kw, flag)
+                if on is not None:
+                    props.append(f"{pixname}: {on}")
+        return [f"{pad}{tag} {{ " + "; ".join(props) + " }"]
+
     def with_element(self, node: ast.With, indent: int) -> list[str]:
         """`with ui.column(...):` — the declarative twin. Children come
         from the block; the emitted .pix is identical to the
@@ -10107,6 +10233,7 @@ class Translator:
             "h_scroll_view": "HScrollView",
             "data_table": "DataTable",
             "modal": "Modal",
+            "canvas": "Canvas",
         }
         tag = None
         if isinstance(call, ast.Call):
@@ -10134,7 +10261,7 @@ class Translator:
             return lines
         if tag is None:
             raise Untranslatable(call, "a `with` block opens a container: column, row, grid, stack, scroll_view, h_scroll_view, data_table, modal, or a component with slots")
-        if call.args:
+        if call.args and not (tag == "Canvas" and len(call.args) <= 2):
             raise Untranslatable(call, "inside a `with` block, children go in the block, not as arguments")
         kw = {k.arg: k.value for k in call.keywords if k.arg}
         style_rider = None
@@ -10163,9 +10290,41 @@ class Translator:
             h = self._num(kw, "height")
             if h is not None:
                 lines.append(f"{pad}  height: {h}")
+        if tag == "Canvas":
+            # `canvas(160, 120)` reads the way the grid is spoken, so
+            # the two sizes may be positional; everything else is
+            # named. They are whole pixels, and so is every command.
+            for i, pname in enumerate(("width", "height")):
+                if i < len(call.args):
+                    if pname in kw:
+                        raise Untranslatable(call, f"canvas() got `{pname}` twice")
+                    kw[pname] = call.args[i]
+                if pname not in kw:
+                    raise Untranslatable(
+                        call,
+                        f"canvas() needs its `{pname}` — the grid it paints on, in "
+                        "virtual pixels",
+                    )
+                lines.append(f"{pad}  {pname}: {self._op_int(kw[pname], f'canvas()\'s `{pname}`')}")
+            for pname in ("scale", "background"):
+                if pname in kw:
+                    lines.append(
+                        f"{pad}  {pname}: {self._op_int(kw[pname], f'canvas()\'s `{pname}`')}"
+                    )
+            if "palette" not in kw:
+                raise Untranslatable(
+                    call,
+                    "canvas() needs `palette=` — inside a canvas a color is a NUMBER, "
+                    "the index of a color in this list",
+                )
+            lines.append(f"{pad}  palette: {self._color_list(kw['palette'])}")
         if tag in ("Column", "Row", "Grid"):
             lines += self._container_props(kw, pad)
-        lines += self._block_stmts(node.body, indent + 1)
+        prev_canvas, self.in_canvas = self.in_canvas, tag == "Canvas"
+        try:
+            lines += self._block_stmts(node.body, indent + 1)
+        finally:
+            self.in_canvas = prev_canvas
         lines.append(f"{pad}}}")
         return lines
 
@@ -10183,7 +10342,24 @@ class Translator:
                     raise Untranslatable(stmt, "slot() lives inside a @component(slots=True) body")
                 lines.append("  " * indent + "Slot { }")
             elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                lines += self.element(stmt.value, indent)
+                name = self._ui_name(stmt.value.func)
+                if name in self.CANVAS_OPS and not self.in_canvas:
+                    raise Untranslatable(
+                        stmt.value,
+                        f"`{name}()` paints on a canvas — put it inside "
+                        "`with canvas(width, height, palette=…):`",
+                    )
+                if self.in_canvas and name not in self.CANVAS_OPS:
+                    raise Untranslatable(
+                        stmt.value,
+                        "a canvas holds drawing commands, not elements — pixel, line, "
+                        "rect, rect_outline, circle, circle_outline, triangle, "
+                        "triangle_outline, sprite and pixel_text",
+                    )
+                if self.in_canvas:
+                    lines += self.canvas_op(stmt.value, indent)
+                else:
+                    lines += self.element(stmt.value, indent)
             elif isinstance(stmt, ast.If):
                 lines += self._if_lines(stmt, indent)
             elif isinstance(stmt, ast.Match) and (
@@ -10229,13 +10405,98 @@ class Translator:
                     lines += self._block_stmts(case.body, indent + 2)
                     lines.append(f"{pad}  }}")
                 lines.append(f"{pad}}}")
+            elif isinstance(stmt, ast.For):
+                lines += self._view_for(stmt, indent)
             elif isinstance(stmt, ast.Pass):
                 continue
             else:
                 raise Untranslatable(
-                    stmt, "a `with` block holds element calls, nested `with` blocks, `if`/`elif`/`else` and `match` — loops and locals are not in the dialect in views (use list_view and store fields)"
+                    stmt, "a `with` block holds element calls, nested `with` blocks, `for`, `if`/`elif`/`else` and `match` — a local is not in the dialect in views (hold it in a State or a store field)"
                 )
         return lines
+
+    def _view_for(self, stmt: ast.For, indent: int) -> list[str]:
+        """`for x in <list>:` inside a view — pixie's repeater.
+
+        The list is one a view can name (a state cell, a store field, a
+        model's own field) and its elements are values or scalars: what
+        the loop contributes is whatever its body would have
+        contributed where it stands. A list of MODELS stays refused,
+        with the reason it already has."""
+        pad = "  " * indent
+        if stmt.orelse:
+            raise Untranslatable(stmt, "a `for` in a view has no `else`")
+        target, it, index = stmt.target, stmt.iter, None
+        # `for i, x in enumerate(xs)` is pixie's second binding, which
+        # counts the rows — the same loop, spelled the way Python
+        # spells it.
+        if (
+            isinstance(it, ast.Call)
+            and isinstance(it.func, ast.Name)
+            and it.func.id == "enumerate"
+            and len(it.args) == 1
+            and not it.keywords
+        ):
+            if not (isinstance(target, ast.Tuple) and len(target.elts) == 2):
+                raise Untranslatable(
+                    stmt.target, "`for i, x in enumerate(xs):` binds the index and the row"
+                )
+            idx, target = target.elts[0], target.elts[1]
+            if not isinstance(idx, ast.Name):
+                raise Untranslatable(idx, "the index binds one name")
+            index = idx.id
+            it = it.args[0]
+        if not isinstance(target, ast.Name):
+            raise Untranslatable(stmt.target, "a view's `for` binds one name")
+        var = target.id
+        src = self._list_source(it, "view", None)
+        if src is None:
+            raise Untranslatable(
+                it,
+                "a view's `for` walks a list it can name — a state read, a store "
+                "field or a model's own field",
+            )
+        expr, ty = src
+        if not ty.startswith("List<"):
+            raise Untranslatable(it, f"`{self._src(it)}` is not a list here")
+        ety = ty[5:-1]
+        if ety in self.models:
+            raise Untranslatable(
+                it,
+                "a view cannot walk a list of models yet — assemble the display "
+                "strings on the store side and hand them to list_view",
+            )
+        head = f"{pad}for {var}" + (f", {index}" if index else "") + f" in {expr} {{"
+        prev_b = self.view_bindings.get(var)
+        prev_t = self.typed_locals.get(var)
+        self.view_bindings[var] = ety
+        # `_struct_of` and `_num_ty` read the local table, which is how
+        # `b.x` on a value-class row resolves.
+        self.typed_locals[var] = ety
+        prev_i = None
+        if index:
+            prev_i = self.view_bindings.get(index)
+            self.view_bindings[index] = "Int"
+            self.typed_locals[index] = "Int"
+        try:
+            body = self._block_stmts(stmt.body, indent + 1)
+        finally:
+            for name, prev in ((var, prev_b),):
+                if prev is None:
+                    self.view_bindings.pop(name, None)
+                else:
+                    self.view_bindings[name] = prev
+            if prev_t is None:
+                self.typed_locals.pop(var, None)
+            else:
+                self.typed_locals[var] = prev_t
+            if index:
+                if prev_i is None:
+                    self.view_bindings.pop(index, None)
+                else:
+                    self.view_bindings[index] = prev_i
+                self.typed_locals.pop(index, None)
+        return [head, *body, f"{pad}}}"]
 
     def _if_lines(self, node: ast.If, indent: int) -> list[str]:
         pad = "  " * indent

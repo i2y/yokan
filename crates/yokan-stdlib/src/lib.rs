@@ -3709,6 +3709,31 @@ pub fn clipboard_get_text() -> String {
     pixie_kernel::clipboard::get().as_str().to_string()
 }
 
+// ---- keys -----------------------------------------------------------
+// The keyboard as a device rather than as a message: not "which chord
+// was pressed" but "is this key held right now". The state is the
+// kernel's, one per process the way the clipboard is, so these three
+// answer the same thing in both runs.
+//
+// A key's name is bare — `left`, `space`, `z` — and the modifiers
+// answer under their own names (`shift`, `cmd`, `ctrl`, `alt`), so
+// `down("left")` is true whether or not shift is down with it, which
+// is what the question means. `pressed` and `released` are spent by
+// the tick that saw them, so a tick reads a tap once however many
+// frames the key stays down.
+
+pub fn keys_down(key: &str) -> bool {
+    pixie_kernel::keys::down(key)
+}
+
+pub fn keys_pressed(key: &str) -> bool {
+    pixie_kernel::keys::pressed(key)
+}
+
+pub fn keys_released(key: &str) -> bool {
+    pixie_kernel::keys::released(key)
+}
+
 
 // ---- file dialogs ---------------------------------------------------
 // A dialog waits for a person, so it belongs inside a task: the call

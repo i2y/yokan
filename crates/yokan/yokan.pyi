@@ -284,6 +284,67 @@ def line_chart(
     colors: Sequence[str] = (),
     **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
+class Command:
+    """One drawing command inside a `with canvas(...)` block. It is
+    not an element: it takes none of the shared properties, and it
+    paints on the canvas it was written in and nowhere else."""
+
+def canvas(
+    width: int,
+    height: int,
+    scale: int = 1,
+    # The palette index the surface is cleared to.
+    background: int = 0,
+    # The colors this canvas paints in. A command's color is an INDEX
+    # into this list: out of range paints the last one, and an empty
+    # palette paints magenta.
+    palette: Sequence[str] = (),
+    **props: Unpack[SharedPropsOwnSize],
+) -> Element:
+    """A grid of virtual pixels, painted command by command.
+
+    `width` and `height` count virtual pixels; `scale` is how many
+    logical pixels each of them takes, so `canvas(160, 120, scale=4)`
+    occupies 640x480. The commands go in the block:
+
+        with canvas(160, 120, scale=4, palette=Game.palette):
+            rect(x, y, 8, 8, 7)
+
+    Coordinates are whole numbers — a pixel grid has no half pixels —
+    and every color is an index into `palette`."""
+
+def pixel(x: int, y: int, color: int) -> Command: ...
+def line(x1: int, y1: int, x2: int, y2: int, color: int) -> Command: ...
+def rect(x: int, y: int, w: int, h: int, color: int) -> Command: ...
+def rect_outline(x: int, y: int, w: int, h: int, color: int) -> Command: ...
+def circle(x: int, y: int, r: int, color: int) -> Command: ...
+def circle_outline(x: int, y: int, r: int, color: int) -> Command: ...
+def triangle(
+    x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, color: int
+) -> Command: ...
+def triangle_outline(
+    x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, color: int
+) -> Command: ...
+def sprite(
+    x: int,
+    y: int,
+    source: str,
+    u: int,
+    v: int,
+    w: int,
+    h: int,
+    # The palette index that is NOT copied (-1 = every pixel is), and
+    # the two mirrorings.
+    colkey: int = -1,
+    flip_x: bool = False,
+    flip_y: bool = False,
+) -> Command:
+    """A rectangle of `source`, copied onto the canvas. The sheet and
+    the canvas share one palette, which is what `colkey` indexes."""
+
+def pixel_text(x: int, y: int, text: str, color: int) -> Command:
+    """A line of text in the canvas's own 4x6 font, on the pixel grid."""
+
 def progress(
     value: float,
     width: float = 0.0,
@@ -566,6 +627,24 @@ class clipboard:
     def set_text(text: str) -> int: ...
     @staticmethod
     def get_text() -> str: ...
+
+class keys:
+    """The keyboard as a device: not which chord was pressed, but
+    which keys are down. Read them from a timer's tick — a view is
+    rebuilt on the framework's schedule, so what it read there would
+    be a moment the app never chose.
+
+    A key's name is bare (`left`, `space`, `z`); the modifiers answer
+    under their own names (`shift`, `cmd`, `ctrl`, `alt`), so
+    `down("left")` is true whether or not shift is held with it.
+    `pressed` and `released` are spent by the tick that saw them, so
+    holding a key fires once however many frames it stays down."""
+    @staticmethod
+    def down(key: str) -> bool: ...
+    @staticmethod
+    def pressed(key: str) -> bool: ...
+    @staticmethod
+    def released(key: str) -> bool: ...
 
 class http:
     """HTTP. The call blocks until the response arrives — the
