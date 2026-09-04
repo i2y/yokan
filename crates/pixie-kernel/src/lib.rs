@@ -770,6 +770,99 @@ impl<T: Clone> List<T> {
     pub fn first(&self) -> Option<T> {
         self.0.first().cloned()
     }
+
+    /// The list backwards. Python's `reversed`, and a copy rather
+    /// than a view, because a view would alias what it came from.
+    pub fn reversed(&self) -> List<T> {
+        let mut out = self.0.as_ref().clone();
+        out.reverse();
+        List(Rc::new(out))
+    }
+
+    /// `xs[a:b]` — Python's rule, which is why it lives here rather
+    /// than at each call site: a negative index counts from the end,
+    /// both ends clamp to the list, and a crossed pair is empty.
+    pub fn slice(&self, a: i64, b: i64) -> List<T> {
+        let n = self.0.len() as i64;
+        let clamp = |v: i64| -> usize {
+            let v = if v < 0 { v + n } else { v };
+            v.clamp(0, n) as usize
+        };
+        let (lo, hi) = (clamp(a), clamp(b));
+        if lo >= hi {
+            return List::new();
+        }
+        List(Rc::new(self.0[lo..hi].to_vec()))
+    }
+
+    /// `xs + ys`.
+    pub fn concat(&self, other: List<T>) -> List<T> {
+        let mut out = self.0.as_ref().clone();
+        out.extend(other.0.iter().cloned());
+        List(Rc::new(out))
+    }
+
+    /// `sorted(xs, key=f)`, decorated: the caller computes one key per
+    /// element and this puts the elements in the keys' order. The
+    /// order is the only part that means anything, so it lives here
+    /// and works for every element type — the key function itself
+    /// never crosses a boundary.
+    ///
+    /// Stable, like Python's sort, and `reverse` reverses the
+    /// COMPARISON rather than the result, so equal keys keep the order
+    /// they came in. That is what `sorted(reverse=True)` does and what
+    /// `sorted(...)[::-1]` does not.
+    pub fn sorted_by<K: Clone + PartialOrd>(&self, keys: List<K>, reverse: bool) -> List<T> {
+        assert!(
+            keys.0.len() == self.0.len(),
+            "sorted(key=...) needs one key per element"
+        );
+        let mut ix: Vec<usize> = (0..self.0.len()).collect();
+        ix.sort_by(|&a, &b| {
+            let o = keys.0[a]
+                .partial_cmp(&keys.0[b])
+                .unwrap_or(std::cmp::Ordering::Equal);
+            if reverse { o.reverse() } else { o }
+        });
+        List(Rc::new(ix.into_iter().map(|i| self.0[i].clone()).collect()))
+    }
+
+    /// `min(xs, key=f)` / `max(xs, key=f)` — the ELEMENT, not the key.
+    /// Python answers the first of equal keys for both, and an empty
+    /// sequence raises rather than answering nothing.
+    pub fn pick_by<K: Clone + PartialOrd>(&self, keys: List<K>, want_max: bool) -> T {
+        assert!(
+            keys.0.len() == self.0.len(),
+            "min()/max() with key=... needs one key per element"
+        );
+        if self.0.is_empty() {
+            let who = if want_max { "max" } else { "min" };
+            panic!("{who}() arg is an empty sequence");
+        }
+        let mut best = 0usize;
+        for i in 1..self.0.len() {
+            let o = keys.0[i]
+                .partial_cmp(&keys.0[best])
+                .unwrap_or(std::cmp::Ordering::Equal);
+            let better = if want_max {
+                o == std::cmp::Ordering::Greater
+            } else {
+                o == std::cmp::Ordering::Less
+            };
+            if better {
+                best = i;
+            }
+        }
+        self.0[best].clone()
+    }
+}
+
+impl<T: Clone + PartialEq> List<T> {
+    /// `v in xs`. Equality is the element's own, which for a value
+    /// class is field by field — the same thing Python compares.
+    pub fn contains(&self, v: T) -> bool {
+        self.0.contains(&v)
+    }
 }
 
 /// COW ordered map — `Map<K, V>` in pixie (QMap's role, §12 design:

@@ -2748,7 +2748,10 @@ class Translator:
         if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
             return "a list or dict literal is not in the dialect here — keep it in a State or a store field (`items.set([...])`)"
         if isinstance(node, ast.Lambda):
-            return "a lambda as a value is not in the dialect — handlers take lambdas, expressions do not"
+            return (
+                "a lambda as a value is not in the dialect — handlers take lambdas, and so "
+                "does `key=`, but an expression does not"
+            )
         if (
             isinstance(node, ast.Attribute)
             and node.attr in ("value", "name")
@@ -2757,6 +2760,14 @@ class Translator:
             and node.value.value.id in self.enums
         ):
             return f"`.{node.attr}` on an Enum member is not in the dialect yet — match on the member instead"
+        if any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "reversed"
+            for n in ast.walk(node)
+        ):
+            return (
+                "`reversed(xs)` walks a list backwards in a `for` — as a value it is an "
+                "iterator, not a list, so write `xs[::-1]`"
+            )
         return (
             f"`{self._src(node)}` is not in the dialect here — expressions are state "
             "reads, fields, locals, literals, arithmetic, comparisons, helper calls "
@@ -3436,22 +3447,6 @@ class Translator:
             (None, "formatStr", "v: String, spec: String", "String", "py_format_str", "pure"),
             (None, "log", "msg: String", "Int", "log_line"),
             (None, "abort", "msg: String", "Int", "py_abort"),
-            (None, "listContainsStr", "xs: List<String>, v: String", "Bool", "py_list_contains_str", "pure"),
-            (None, "listSliceStr", "xs: List<String>, a: Int, b: Int", "List<String>", "py_list_slice_str", "pure"),
-            (None, "listConcatStr", "a: List<String>, b: List<String>", "List<String>", "py_list_concat_str", "pure"),
-            (None, "listReversedStr", "xs: List<String>", "List<String>", "py_list_reversed_str", "pure"),
-            (None, "listContainsInt", "xs: List<Int>, v: Int", "Bool", "py_list_contains_int", "pure"),
-            (None, "listSliceInt", "xs: List<Int>, a: Int, b: Int", "List<Int>", "py_list_slice_int", "pure"),
-            (None, "listConcatInt", "a: List<Int>, b: List<Int>", "List<Int>", "py_list_concat_int", "pure"),
-            (None, "listReversedInt", "xs: List<Int>", "List<Int>", "py_list_reversed_int", "pure"),
-            (None, "listContainsFloat", "xs: List<Float>, v: Float", "Bool", "py_list_contains_float", "pure"),
-            (None, "listSliceFloat", "xs: List<Float>, a: Int, b: Int", "List<Float>", "py_list_slice_float", "pure"),
-            (None, "listConcatFloat", "a: List<Float>, b: List<Float>", "List<Float>", "py_list_concat_float", "pure"),
-            (None, "listReversedFloat", "xs: List<Float>", "List<Float>", "py_list_reversed_float", "pure"),
-            (None, "listContainsBool", "xs: List<Bool>, v: Bool", "Bool", "py_list_contains_bool", "pure"),
-            (None, "listSliceBool", "xs: List<Bool>, a: Int, b: Int", "List<Bool>", "py_list_slice_bool", "pure"),
-            (None, "listConcatBool", "a: List<Bool>, b: List<Bool>", "List<Bool>", "py_list_concat_bool", "pure"),
-            (None, "listReversedBool", "xs: List<Bool>", "List<Bool>", "py_list_reversed_bool", "pure"),
             (None, "listSortedStr", "xs: List<String>", "List<String>", "py_list_sorted_str", "pure"),
             (None, "listSortedInt", "xs: List<Int>", "List<Int>", "py_list_sorted_int", "pure"),
             (None, "listSortedFloat", "xs: List<Float>", "List<Float>", "py_list_sorted_float", "pure"),
@@ -4662,7 +4657,7 @@ class Translator:
             return f"{node.value.id}.{node.attr}"
         if (
             isinstance(node, ast.Attribute)
-            and isinstance(node.value, ast.Attribute)
+            and isinstance(node.value, (ast.Attribute, ast.Subscript))
             and (s8 := self._struct_of(node.value)) is not None
         ):
             fields8 = {f: t for f, t, _ in self.structs[s8]}
@@ -4975,18 +4970,16 @@ class Translator:
                     "arithmetic outside an f-string hole is not in the dialect in views — compute in a handler and render the result",
                 )
             if isinstance(node.op, ast.Add) and (
-                self._list_of(node.left, ctx, param) is not None
-                or self._list_of(node.right, ctx, param) is not None
+                self._list_any(node.left, ctx, param) is not None
+                or self._list_any(node.right, ctx, param) is not None
             ):
-                    left = self._list_of(node.left, ctx, param)
-                    right = self._list_of(node.right, ctx, param)
+                    left = self._list_any(node.left, ctx, param)
+                    right = self._list_any(node.right, ctx, param)
                     if left is not None and right is not None and left[1] == right[1]:
-                        self.uses_stdlib = True
-                        return f"Py.listConcat{left[2]}({left[0]}, {right[0]})"
+                        return f"{left[0]}.concat({right[0]})"
                     if left is not None and isinstance(node.right, ast.List):
-                        self.uses_stdlib = True
                         lit = self._list_literal(node.right, left[1])
-                        return f"Py.listConcat{left[2]}({left[0]}, {lit})"
+                        return f"{left[0]}.concat({lit})"
                     raise Untranslatable(
                         node, "joining lists takes two lists of the same type — a state read, a field, a local, or a list literal"
                     )
@@ -5131,12 +5124,11 @@ class Translator:
             and len(node.ops) == 1
             and isinstance(node.ops[0], (ast.In, ast.NotIn))
         ):
-            lst = self._list_of(node.comparators[0], ctx, param)
+            lst = self._list_any(node.comparators[0], ctx, param)
             if lst is not None:
-                self.uses_stdlib = True
-                code, _el, suf = lst
-                bare = f"Py.listContains{suf}({code}, {self.expr(node.left, ctx, param)})"
-                return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
+                code, _el = lst
+                bare = f"{code}.contains({self.expr(node.left, ctx, param)})"
+                return f"!({bare})" if isinstance(node.ops[0], ast.NotIn) else bare
             if self._num_ty(node.comparators[0], ctx, param) == "String":
                 self.uses_stdlib = True
                 hay = self.expr(node.comparators[0], ctx, param)
@@ -5631,6 +5623,16 @@ class Translator:
 
     LIST_SUFFIX = {"String": "Str", "Int": "Int", "Float": "Float", "Bool": "Bool"}
 
+    def _list_any(self, node, ctx, param):
+        """(code, element type) for a list of ANY element the dialect
+        has — including a value class or a tuple. The operations that
+        carry no meaning beyond the container live on `List<T>` in the
+        kernel, so they need no per-element static and no suffix."""
+        src = self._list_source(node, ctx, param)
+        if src is None or not src[1].startswith("List<"):
+            return None
+        return (src[0], src[1][5:-1])
+
     def _list_of(self, node, ctx, param):
         """(code, element type, static suffix) for a list the dialect
         can hand to a Py static: a state read, a field, or a local."""
@@ -5642,6 +5644,11 @@ class Translator:
         return None if suf is None else (src[0], el, suf)
 
     LIST_BUILTINS = ("min", "max", "sum", "abs", "sorted", "reversed")
+
+    def _nameable(self, ty) -> bool:
+        """A type a container can be declared to hold: a scalar, an
+        enum, or a value class (a tuple is one of those)."""
+        return ty in ("Int", "Float", "Bool", "String") or ty in self.enums or ty in self.structs
 
     def _comprehension(self, node: ast.ListComp, ctx, param):
         """`[f(x) for x in xs if cond]` — the loop it stands for, built
@@ -5655,19 +5662,18 @@ class Translator:
             raise Untranslatable(node, "a comprehension takes at most one `if`")
         if not isinstance(gen.target, ast.Name):
             raise Untranslatable(gen.target, "a comprehension binds one plain name")
-        src = self._list_of(gen.iter, ctx, param)
+        src = self._list_any(gen.iter, ctx, param)
         if src is None:
             raise Untranslatable(gen.iter, "a comprehension walks a list the dialect can name — a state read, a field or a local")
-        code, el, _suf = src
+        code, el = src
         var = gen.target.id
         prev_ty = self.typed_locals.get(var)
         self.handler_locals.add(var)
         self.typed_locals[var] = el
         try:
-            item_ty = self._num_ty(node.elt, ctx, param) or el
-            suffix = self.LIST_SUFFIX.get(item_ty)
-            if suffix is None:
-                raise Untranslatable(node.elt, f"a comprehension builds a list of int, float, str or bool — this one builds {py_ty(item_ty)}")
+            item_ty = self._num_ty(node.elt, ctx, param) or self._struct_of(node.elt) or el
+            if not self._nameable(item_ty):
+                raise Untranslatable(node.elt, f"a comprehension builds a list of a type the dialect can name — {py_ty(item_ty)} is not one")
             item = self.expr(node.elt, ctx, param)
             cond = self._cond(gen.ifs[0], ctx, param) if gen.ifs else None
         finally:
@@ -5690,11 +5696,14 @@ class Translator:
         ]
         return out
 
-    def _list_builtin(self, node: ast.Call, ctx, param):
+    def _list_builtin(self, node: ast.Call, ctx, param, as_iter=False):
         """`sum(xs)`, `min(a, b)`, `sorted(xs)`, `abs(n)` — Python's
         answers, from the same statics both runs would agree on."""
         fn = node.func.id
         if node.keywords:
+            keyed = self._keyed_builtin(node, ctx, param)
+            if keyed is not None:
+                return keyed
             raise Untranslatable(node, f"`{fn}(...)` takes positional arguments")
         if fn in ("min", "max") and len(node.args) == 2:
             t = self._num_ty(node.args[0], ctx, param) or self._num_ty(node.args[1], ctx, param)
@@ -5712,8 +5721,40 @@ class Translator:
             return f"Py.abs{t}({self.expr(node.args[0], ctx, param)})"
         if len(node.args) != 1:
             raise Untranslatable(node, f"`{fn}(...)` takes one list here")
+        if fn == "reversed":
+            # Python's `reversed` answers an iterator, not a list, so it
+            # is a list only where an iterator is what gets used. A
+            # value wants the slice, which is a list in Python too.
+            if not as_iter:
+                raise Untranslatable(
+                    node,
+                    "`reversed(xs)` walks a list backwards in a `for` — as a value it is an "
+                    "iterator, not a list, so write `xs[::-1]`",
+                )
+            # Turning a list around means nothing beyond the container,
+            # so the kernel does it for every element type.
+            any_list = self._list_any(node.args[0], ctx, param)
+            if any_list is None:
+                raise Untranslatable(
+                    node.args[0],
+                    "`reversed(...)` takes a list the dialect can name — a state read, a field or a local",
+                )
+            return f"{any_list[0]}.reversed()"
         lst = self._list_of(node.args[0], ctx, param)
         if lst is None:
+            named = self._list_any(node.args[0], ctx, param)
+            if named is not None:
+                if fn == "sum":
+                    raise Untranslatable(
+                        node.args[0],
+                        f"`sum(xs)` takes a list of int or float — this one holds {py_ty(named[1])}",
+                    )
+                raise Untranslatable(
+                    node.args[0],
+                    f"`{fn}(xs)` compares the elements themselves, and {py_ty(named[1])} has no "
+                    f"order of its own — say which part to compare "
+                    f"(`{fn}(xs, key=lambda p: p.name)`)",
+                )
             raise Untranslatable(
                 node.args[0],
                 f"`{fn}(...)` takes a list the dialect can name — a state read, a field or a local",
@@ -5725,8 +5766,133 @@ class Translator:
             raise Untranslatable(node, "`sorted(xs)` takes a list of int, float or str")
         self.uses_stdlib = True
         name = {"min": "listMin", "max": "listMax", "sum": "listSum",
-                "sorted": "listSorted", "reversed": "listReversed"}[fn]
+                "sorted": "listSorted"}[fn]
         return f"Py.{name}{suf}({code})"
+
+    KEYED = {"sorted": ("key", "reverse"), "min": ("key",), "max": ("key",)}
+
+    def _keyed_builtin(self, node: ast.Call, ctx, param):
+        """`sorted(xs, key=lambda p: p.x)` and its `reverse=`, and the
+        same `key=` on `min` and `max`.
+
+        The key function is not passed anywhere: the loop that computes
+        one key per element is written out here, in the app's own
+        dialect, and what the container is asked for is the order those
+        keys put the elements in. So a key can be anything the dialect
+        can write, and the ordering works for every element type."""
+        fn = node.func.id
+        allowed = self.KEYED.get(fn)
+        if allowed is None:
+            return None
+        if len(node.args) != 1:
+            raise Untranslatable(
+                node,
+                f"`key=` says which part of an element to compare, so `{fn}` takes it with "
+                f"one list (`{fn}(xs, key=lambda p: p.x)`)",
+            )
+        for kw in node.keywords:
+            if kw.arg not in allowed:
+                raise Untranslatable(
+                    node,
+                    f"`{fn}(...)` takes {' and '.join('`' + a + '=`' for a in allowed)} here",
+                )
+        kw_key = next((k.value for k in node.keywords if k.arg == "key"), None)
+        kw_rev = next((k.value for k in node.keywords if k.arg == "reverse"), None)
+        rev = "false"
+        if kw_rev is not None:
+            if not (isinstance(kw_rev, ast.Constant) and type(kw_rev.value) is bool):
+                raise Untranslatable(kw_rev, "`reverse=` is True or False")
+            rev = "true" if kw_rev.value else "false"
+        if kw_key is None:
+            if fn != "sorted":
+                return None
+            # `sorted(xs, reverse=True)` with no key: the plain sort
+            # turned around. Equal scalars are indistinguishable, so
+            # stability has nothing left to keep.
+            plain = ast.Call(func=node.func, args=node.args, keywords=[])
+            ast.copy_location(plain, node)
+            ast.fix_missing_locations(plain)
+            code = self._list_builtin(plain, ctx, param)
+            return f"({code}).reversed()" if rev == "true" else code
+        if isinstance(kw_key, ast.Name) and kw_key.id in self.defs:
+            # A named helper as the key. It is called on each element,
+            # which is what the lambda spelling does too, so the two
+            # take the same road from here.
+            arg = ast.Name(id="__key_e", ctx=ast.Load())
+            kw_key = ast.Lambda(
+                args=ast.arguments(
+                    posonlyargs=[], args=[ast.arg(arg="__key_e")], vararg=None,
+                    kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+                ),
+                body=ast.Call(func=kw_key, args=[arg], keywords=[]),
+            )
+            ast.copy_location(kw_key, node)
+            ast.fix_missing_locations(kw_key)
+        if not (
+            isinstance(kw_key, ast.Lambda)
+            and len(kw_key.args.args) == 1
+            and not kw_key.args.posonlyargs
+            and not kw_key.args.kwonlyargs
+            and kw_key.args.vararg is None
+            and kw_key.args.kwarg is None
+            and not kw_key.args.defaults
+        ):
+            raise Untranslatable(
+                kw_key,
+                "`key=` is a lambda of one element (`key=lambda p: p.x`), or the name of a "
+                "helper that takes one",
+            )
+        if ctx != "store" or self.pre_lines is None:
+            raise Untranslatable(
+                node,
+                f"`{fn}(..., key=...)` computes the keys in a handler — a view reads a list "
+                "that is already in order",
+            )
+        lst = self._list_any(node.args[0], ctx, param)
+        if lst is None:
+            raise Untranslatable(
+                node.args[0],
+                f"`{fn}(...)` takes a list the dialect can name — a state read, a field or a local",
+            )
+        # The keys are `[key(x) for x in xs]`, which the dialect
+        # already writes: the comprehension carries the element's own
+        # scope, so the lambda's parameter needs nothing special.
+        comp = ast.ListComp(
+            elt=kw_key.body,
+            generators=[
+                ast.comprehension(
+                    target=ast.Name(id=kw_key.args.args[0].arg, ctx=ast.Store()),
+                    iter=node.args[0],
+                    ifs=[],
+                    is_async=0,
+                )
+            ],
+        )
+        ast.copy_location(comp, node)
+        ast.fix_missing_locations(comp)
+        keys = self._comprehension(comp, ctx, param)
+        key_ty = self.typed_locals[keys][5:-1]
+        if key_ty not in ("Int", "Float", "String", "Bool"):
+            raise Untranslatable(
+                kw_key.body,
+                f"a key is an int, a float, a str or a bool — this one is {py_ty(key_ty)}",
+            )
+        code, el = lst
+        if fn == "sorted":
+            out = f"__sb{len(self.handler_locals)}"
+            self.handler_locals.add(out)
+            self.typed_locals[out] = f"List<{el}>"
+            self.pre_lines.append(f"var {out} = {code}.sortedBy({keys}, {rev})")
+            return out
+        # `min`/`max` answer the element itself. Python takes the first
+        # of equal keys for both, and an empty list raises — both of
+        # which the container does, so there is nothing to arrange here.
+        out = f"__pb{len(self.handler_locals)}"
+        self.handler_locals.add(out)
+        self.typed_locals[out] = el
+        want_max = "true" if fn == "max" else "false"
+        self.pre_lines.append(f"var {out} = {code}.pickBy({keys}, {want_max})")
+        return out
 
     def _dict_key(self, node, ctx, param) -> str:
         """A dict key: any str the app can name. A literal is written
@@ -5777,6 +5943,31 @@ class Translator:
                     for f, t, _d in self.models[mn]["fields"]:
                         if f == node.attr and t.startswith(("List<", "Map<")):
                             return f"{node.value.id}.{f}", t
+        # The container operations answer a list of the same element
+        # type, so a local bound to one carries it: `back = xs[::-1]`
+        # is a `list[T]` wherever `xs` was.
+        same = None
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "sorted"
+            and len(node.args) == 1
+            and not node.keywords
+            and node.func.id not in self.defs
+        ):
+            same = node.args[0]
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Slice):
+            same = node.value
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            for side in (node.left, node.right):
+                inner = self._list_source(side, ctx, param)
+                if inner is not None and inner[1].startswith("List<"):
+                    same = side
+                    break
+        if same is not None:
+            inner = self._list_source(same, ctx, param)
+            if inner is not None and inner[1].startswith("List<"):
+                return (self.expr(node, ctx, param), inner[1])
         if isinstance(node, ast.Name) and self.comp_params and node.id in self.comp_params:
             return node.id, self.comp_params[node.id]
         if isinstance(node, ast.Name) and self.comp_locals and node.id in self.comp_locals:
@@ -5828,16 +6019,31 @@ class Translator:
         if lit is not None:
             return self.expr(lit, ctx, param)
         if isinstance(node.slice, ast.Slice):
-            lst = self._list_of(node.value, ctx, param)
+            lst = self._list_any(node.value, ctx, param)
             if lst is None:
                 return None
+            code = lst[0]
             if node.slice.step is not None:
-                raise Untranslatable(node.slice, "a slice step is not in the dialect yet — `xs[a:b]` takes a start and a stop")
-            code, _el, suf = lst
-            self.uses_stdlib = True
+                if (
+                    node.slice.lower is None
+                    and node.slice.upper is None
+                    and isinstance(node.slice.step, ast.UnaryOp)
+                    and isinstance(node.slice.step.op, ast.USub)
+                    and isinstance(node.slice.step.operand, ast.Constant)
+                    and node.slice.step.operand.value == 1
+                ):
+                    # Turning a list around means nothing beyond the
+                    # container, so the kernel does it for every
+                    # element type.
+                    return f"{code}.reversed()"
+                raise Untranslatable(
+                    node.slice,
+                    "a slice step is not in the dialect yet — `xs[a:b]` takes a start and a "
+                    "stop, and `xs[::-1]` turns a list around",
+                )
             lo = self.expr(node.slice.lower, ctx, param) if node.slice.lower else "0"
             hi = self.expr(node.slice.upper, ctx, param) if node.slice.upper else f"{code}.length"
-            return f"Py.listSlice{suf}({code}, {lo}, {hi})"
+            return f"{code}.slice({lo}, {hi})"
         src = self._list_source(node.value, ctx, param)
         if src is None:
             return None
@@ -6144,6 +6350,16 @@ class Translator:
         )
         if not ok:
             src = self._src(node)
+            if (
+                isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == "reversed"
+            ):
+                raise Untranslatable(
+                    node,
+                    "`reversed(xs)` walks a list backwards in a `for` — as a value it is an "
+                    "iterator, not a list, so write `xs[::-1]`",
+                )
             if isinstance(node.slice, ast.Slice):
                 raise Untranslatable(node, f"a slice (`{src}`) is not in the dialect yet")
             c = self._cell_read(node.value)
@@ -6660,11 +6876,21 @@ class Translator:
                     raise Untranslatable(stmt.value.right.elts[0], f"this list holds {py_ty(el)} — the value is {py_ty(got)}")
                 return [f"{name}.push({self.expr(stmt.value.right.elts[0], 'store', param)})"]
             value = self.expr(stmt.value, "store", param)
-            vt = self._num_ty(stmt.value, "store", param)
+            vt = None
+            if value in self.typed_locals:
+                # The expression wrote itself into a local of its own (a
+                # comprehension, a keyed sort): its type is recorded
+                # already, and asking again would emit the work twice.
+                vt = self.typed_locals[value]
             if vt is None:
-                src = self._list_of(stmt.value, "store", param)
-                if src is not None:
-                    vt = f"List<{src[1]}>"
+                vt = self._num_ty(stmt.value, "store", param)
+            if vt is None:
+                # A container the dialect can name: any element type,
+                # not only the four a per-element static was written
+                # for.
+                src = self._list_source(stmt.value, "store", param)
+                if src is not None and src[1] not in ("List<?>",):
+                    vt = src[1]
             if vt is not None and (
                 vt in ("Int", "Float", "Bool", "String")
                 or vt in self.models
@@ -7223,10 +7449,20 @@ class Translator:
     def _struct_of(self, node):
         """The value-class name an expression carries, when the
         declarations alone can answer it: a typed local, a struct
-        cell, or a field chain rooted at either."""
+        cell, a list element, or a field chain rooted at any of
+        them."""
         if isinstance(node, ast.Name):
             t = self.typed_locals.get(node.id)
             return t if t in self.structs else None
+        if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
+            # An element of a list of value classes. The type is the
+            # same whichever run reads it, so the context the code
+            # would be emitted in does not enter into it.
+            src = self._list_source(node.value, "store", None)
+            if src is not None and src[1].startswith("List<"):
+                el = src[1][5:-1]
+                return el if el in self.structs else None
+            return None
         c = self._cell_read(node)
         if c is not None and self._ty(c) in self.structs:
             return self._ty(c)
@@ -8107,14 +8343,14 @@ class Translator:
             and it.func.id == "sorted"
             and len(it.args) == 1
             and not it.keywords
+            and self._map_source(it.args[0]) is not None
         ):
             # `for k in sorted(d())` — the keys, in order. A map
             # answers them in the order they went in (a dict's own
             # promise), so the sort is written out rather than
-            # inherited from the container.
+            # inherited from the container. A list goes the other way,
+            # below, where `sorted` and `reversed` share a path.
             m = self._map_source(it.args[0])
-            if m is None:
-                raise Untranslatable(it, "sorted() here iterates a dict state or field in key order — `sorted(list)` is not in the dialect yet")
             msrc, kt = m[0], self._map_kv(m[1])[0]
             if kt not in ("String", "Int"):
                 raise Untranslatable(it, f"sorted() over a dict keyed by {py_ty(kt)} is not in the dialect yet")
@@ -8180,9 +8416,9 @@ class Translator:
                 src = f"{it.value.id}.{it.attr}"
                 self._loop_src_elem = self.stores[it.value.id]["field_tys"][it.attr][5:-1]
             if src is None and isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("sorted", "reversed") and len(it.args) == 1:
-                inner = self._list_of(it.args[0], "store", param)
+                inner = self._list_any(it.args[0], "store", param)
                 if inner is not None:
-                    src = self._list_builtin(it, "store", param)
+                    src = self._list_builtin(it, "store", param, as_iter=True)
                     self._loop_src_elem = inner[1]
             if src is None:
                 if isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id in ("reversed", "enumerate", "zip"):

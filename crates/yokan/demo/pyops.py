@@ -5,10 +5,12 @@
 float/bool/enum text, negative indexing, dict iteration (the keys
 in the order they went in, the values, `.items()`, and sorted()),
 tuples (a literal, a part, unpacking, a pair loop, a tuple return),
-if/else locals that outlive the branch, @value, list-typed store
-method parameters. The interpreted run uses the real
-operators and str(); the compiled run reproduces CPython's results
-exactly — the gate proves they print the same bytes.
+ordering by a key (`sorted`/`min`/`max` with `key=`, `reverse=`),
+comprehensions and `[::-1]` over a value class, if/else locals that
+outlive the branch, @value, list-typed store method parameters.
+The interpreted run uses the real operators and str(); the compiled
+run reproduces CPython's results exactly — the gate proves they print
+the same bytes.
 """
 import os
 import sys
@@ -50,6 +52,8 @@ tail: State[str] = State("-")
 pt: State[Point] = State(Point(3, 4))
 prices: State[dict[str, int]] = State({"cherry": 300, "apple": 120, "banana": 80})
 names: State[list[str]] = State(["ada", "erik", "momo"])
+people: State[list[Point]] = State([Point(3, 1), Point(1, 5), Point(2, 5)])
+ranked: State[str] = State("-")
 
 
 @store
@@ -119,6 +123,29 @@ def walk():
     Bag.spot(pt())
 
 
+def rank(p: Point) -> int:
+    return p.y
+
+
+def order():
+    # A key says which part to compare, so an order works for a value
+    # class as much as for a number, and the key can be a lambda or a
+    # helper. Sorting is stable: the two points with y=5 keep the
+    # order they came in, and `reverse=True` keeps it as well — it
+    # turns the comparison around, not the answer.
+    by_y = sorted(people(), key=lambda p: p.y)
+    down = sorted(people(), key=rank, reverse=True)
+    lo = min(people(), key=lambda p: p.x)
+    hi = max(people(), key=lambda p: p.x)
+    xs = [p.x for p in people()]
+    back = people()[::-1]
+    high = sorted(xs, reverse=True)
+    ranked.set(
+        f"{by_y[0].x}{by_y[1].x}{by_y[2].x} {down[0].x}{down[1].x} "
+        f"{lo.x}{hi.x} {xs[0]} {back[0].x} {high[0]}"
+    )
+
+
 def view():
     with column(spacing=6, padding=12):
         text(f"q = {q()}")
@@ -132,10 +159,12 @@ def view():
         text(f"walked = {walked()}  spend = {spend()}")
         text(f"paired = {paired()}")
         text(f"bag = {Bag.joined}")
+        text(f"ranked = {ranked()}")
         with row(spacing=6):
             button("crunch", on_click=crunch)
             button("walk", on_click=walk)
             button("pairs", on_click=pairs)
+            button("order", on_click=order)
 
 
 if __name__ == "__main__":

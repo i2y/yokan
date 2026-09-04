@@ -1993,6 +1993,14 @@ fn builtin_value_method_arity(name: &str) -> Option<usize> {
         "first" => 0,
         "keys" => 0,
         "values" => 0,
+        // The container operations that carry no meaning beyond the
+        // container: they live on `List<T>` in the kernel, so they
+        // work for every element type rather than one per type.
+        "reversed" => 0,
+        "slice" => 2,
+        "concat" => 1,
+        "sortedBy" => 2,
+        "pickBy" => 2,
         _ => return None,
     })
 }
