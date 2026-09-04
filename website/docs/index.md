@@ -28,6 +28,18 @@ can check</strong>, with <code>yokan gate</code>.
 </div>
 </div>
 
+## The whole picture
+
+One source, two roads to run it.
+Both roads stand on the same Rust foundation — **pixie**, the
+substrate language Yokan compiles through; the `.pix` in the middle
+of the release road is its readable source, so you can open it and
+see what your app compiled to.
+
+![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
+
+---
+
 ## What it looks like
 
 ![OpsBoard, a dashboard demo written in Yokan](images/opsboard.png)
@@ -104,17 +116,6 @@ Yokan cannot do yet is listed, with reasons, in
 
 ---
 
-## The whole picture
-
-Your app is one Python file with two roads to run it.
-Both roads stand on the same Rust foundation — **pixie**, the
-substrate language Yokan compiles through; the `.pix` in the middle
-of the release road is its readable source, so you can open it and
-see what your app compiled to.
-
-![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
-
----
 
 ## What else is in it
 

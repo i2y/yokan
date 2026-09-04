@@ -149,10 +149,15 @@
 /* A paragraph holding nothing but a picture centres it. */
 .md-typeset p:has(> img:only-child) { text-align: center; }
 
-/* The dashboard shot is 848px tall; cap it so it introduces the app
-   rather than filling the first screen. */
-/* the diagram is wide rather than tall */
-.md-typeset img[src$="architecture.svg"] { max-height: none; width: 100%; }
+/* The diagram is the page's one wide picture: it takes the column,
+   with no height cap. The `:not()` is there to match the rule above
+   in specificity — without it the 26rem cap wins and the diagram
+   shrinks to two thirds. */
+.md-typeset img[src*="architecture"]:not(.yk-hero__mark) {
+  max-height: none;
+  width: 100%;
+  padding: .8rem;
+}
 
 /* ---- rhythm ------------------------------------------------------ */
 

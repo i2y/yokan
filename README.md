@@ -84,7 +84,7 @@ in one pass. There are 41 bundled demos, all screenshotted in the
 
 ## The whole picture
 
-Your app is one Python file with two roads to run it.
+One source, two roads to run it.
 Both roads stand on the same Rust foundation, which is what makes the final comparison meaningful.
 That foundation is **pixie**, the substrate language Yokan compiles through, and the `.pix` in the middle of the release road is its readable source — open the generated `.pix` and you can see, with your own eyes, what your app compiled to.
 
