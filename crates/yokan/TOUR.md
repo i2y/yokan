@@ -918,17 +918,18 @@ Call them from handlers (views stay pure).
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
 
-How far the Python half reaches: all of `math` except six members, each refused by name with its reason (`prod` and `sumprod` answer an int or a float depending on the list; `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform).
-From `random`: `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
-From `statistics`: `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]` — CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so a list of ints has no one type here and is refused.
-From `json`: `dumps`, with CPython's defaults and no keyword arguments.
-From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
-From `re`: `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not None` (with `match` and `fullmatch`) as the test. The pattern is a literal, because it is compiled while the app translates.
-From `string`: the nine constants. From `textwrap`: `dedent` and `indent`. From `bisect`: `bisect_left`, `bisect_right`. From `heapq`: `nsmallest`, `nlargest`.
-From `collections`: `Counter`, over a list of str — the dict of counts, keyed in first-seen order, with `.most_common()` and `.total()` beside everything a dict answers.
-A Counter held in a `State` reads back as the dict it is, so take the counts out before storing it.
-From `itertools`: `chain`, `pairwise`, `accumulate`, `combinations`, `permutations` and `product`, each of which answers an iterator in Python and is therefore what a `for` walks here.
-From `datetime`: `date`, `datetime` and `timedelta`, all of them naive — construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
+How far the Python half reaches, module by module:
+
+- **math** — everything but six members, each refused by name with its reason: `prod` and `sumprod` answer an int or a float depending on the list, and `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform.
+- **random** — `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
+- **statistics** — `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]`. A list of ints is refused: CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so there is no one type it could have.
+- **json** — `dumps`, with CPython's defaults and no keyword arguments.
+- **time** — `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
+- **re** — `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not None` (with `match` and `fullmatch`) as the test. The pattern is a literal, because it is compiled while the app translates.
+- **datetime** — `date`, `datetime` and `timedelta`, all of them naive: construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
+- **collections** — `Counter`, over a list of str: the dict of counts, keyed in first-seen order, with `.most_common()` and `.total()` beside everything a dict answers. A Counter held in a `State` reads back as the dict it is, so take the counts out before storing it.
+- **itertools** — `chain`, `pairwise`, `accumulate`, `combinations`, `permutations`, `product`. Each answers an iterator in Python, so each is what a `for` walks here.
+- **string / textwrap / bisect / heapq** — the nine constants; `dedent` and `indent`; `bisect_left` and `bisect_right`; `nsmallest` and `nlargest`.
 
 ```python
 c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}

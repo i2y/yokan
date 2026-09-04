@@ -513,9 +513,9 @@ runs; the shipped binary needs no Python. Call it from handlers only.
 - **notify**: `send(title, body)` — delivered when the app runs as
   an `.app` bundle; dev and headless runs drop it quietly
 
-From Python's side: all of `math` but eight members (`frexp`,
-`modf`, `prod`, `sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each
-refused by name with its reason); `random`'s `seed`, `random`,
+From Python's side: all of `math` but six members (`prod`,
+`sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each refused by name
+with its reason); `random`'s `seed`, `random`,
 `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`,
 `sample` (no `shuffle` — it reorders in place, and a list lives in a
 `State`); `statistics`' `mean`, `fmean`, `median`, `mode`,

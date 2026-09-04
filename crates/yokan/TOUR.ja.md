@@ -930,24 +930,18 @@ JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機
 - **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
 
-Python 側がどこまで届くかは次のとおりです。
-`math` は六つを除いて全部で、除いた六つはそれぞれ理由を名指しして断ります（`prod` と `sumprod` はリストの中身によって int か float かが変わる、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算している）。
-`random` からは `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
-`statistics` からは `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev` で、受けるのは `list[float]` だけです。
-`json` からは `dumps` で、既定値のまま、キーワード引数は取りません。
-`time` からは `time`、`time_ns`、`monotonic`、`monotonic_ns`、`perf_counter`、`perf_counter_ns`、`sleep`。
-`re` からは `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
-パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
-`string` からは九つの定数、`textwrap` からは `dedent` と `indent`、`bisect` からは `bisect_left` と `bisect_right`、`heapq` からは `nsmallest` と `nlargest`。
-`collections` からは `Counter`（str のリストを数えます）。
-数えた結果は初めて現れた順に並ぶ辞書で、辞書が答えるものすべてに加えて `.most_common()` と `.total()` を持ちます。
-`State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
-`itertools` からは `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。
-どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
-`datetime` からは `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
-構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較が使えます。
-穴に置いた値は `str()` と同じ形で描かれます。
-CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、int のリストには一つの型が決まらず、断ります。
+Python 側がどこまで届くかを、モジュールごとに挙げます。
+
+- **math** — 六つを除いて全部です。除いた六つはそれぞれ理由を名指しして断ります。`prod` と `sumprod` はリストの中身によって int か float かが変わり、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算しているからです。
+- **random** — `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
+- **statistics** — `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev`。受けるのは `list[float]` だけです。int のリストは断ります。CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、型が一つに決まらないからです。
+- **json** — `dumps`。既定値のままで、キーワード引数は取りません。
+- **time** — `time`、`time_ns`、`monotonic`、`monotonic_ns`、`perf_counter`、`perf_counter_ns`、`sleep`。
+- **re** — `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
+- **datetime** — `date`、`datetime`、`timedelta` の三つで、いずれも naive です。構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較。穴に置いた値は `str()` と同じ形で描かれます。
+- **collections** — `Counter`（str のリストを数えます）。結果は初めて現れた順に並ぶ辞書で、辞書が答えるものすべてに加えて `.most_common()` と `.total()` を持ちます。`State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
+- **itertools** — `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
+- **string / textwrap / bisect / heapq** — 九つの定数、`dedent` と `indent`、`bisect_left` と `bisect_right`、`nsmallest` と `nlargest`。
 
 ```python
 c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
