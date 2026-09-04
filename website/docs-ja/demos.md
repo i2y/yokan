@@ -2684,7 +2684,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     def view():
         with column(spacing=8, padding=14):
             text("Yokan", size=28)
-            text("version 0.1.2")
+            text("version 0.2.0")
             link("Website", "https://i2y.github.io/yokan/")
             link("Source", "https://github.com/i2y/yokan")
             link("Docs", "https://i2y.github.io/yokan/tour/")

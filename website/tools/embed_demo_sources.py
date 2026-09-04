@@ -42,8 +42,11 @@ def block(name: str, label: str) -> str:
 def main() -> int:
     for page, label in PAGES.items():
         text = page.read_text()
-        # drop what a previous run put in, so this is idempotent
-        text = re.sub(re.escape(MARK) + r".*?" + re.escape(MARK) + r"\n", "", text, flags=re.S)
+        # Drop what a previous run put in, so this is idempotent — the
+        # blank line before the block included, since the insertion
+        # below adds one back. Without it every run left another.
+        text = re.sub(r"\n\n" + re.escape(MARK) + r".*?" + re.escape(MARK) + r"\n", "\n",
+                      text, flags=re.S)
         out, n = [], 0
         lines = text.split("\n")
         for i, line in enumerate(lines):
