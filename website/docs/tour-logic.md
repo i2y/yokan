@@ -25,7 +25,7 @@ def save():
 ```
 
 The decorator is a def of one argument that either returns that argument or defines a wrapper calling it once.
-A decorator that takes arguments of its own, or calls the function twice, or uses its value, is refused by name.
+A decorator that takes arguments of its own, or calls the function twice, or uses its value, is refused.
 
 The body of a def handler compiles with its real control flow.
 

@@ -190,7 +190,7 @@ while i > 0 { i -= 1 }
 ```
 
 `case` over a declared enum is **exhaustiveness-checked**: missing a
-variant is a compile **error** naming what's absent (`when _` is the
+variant is a compile **error** listing what is absent (`when _` is the
 catch-all). Operators: `+ - * / %`, comparisons `< <= > >= == !=`,
 logic `&& || !`.
 

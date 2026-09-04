@@ -51,7 +51,7 @@ with `@py` and it runs on CPython — numpy and friends included.
 And where you want native speed of your own, declare a Rust crate
 and call it — the same implementation serves both the development
 run and the release build.
-And when something can't be compiled, you get an error naming what
+And when something can't be compiled, you get an error saying what
 and why. Behavior never changes silently.
 
 Shipping is `yokan build app.py --release`. If the app uses no

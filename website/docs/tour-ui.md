@@ -118,5 +118,5 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 `width` / `height` are logical pixels, given as a pair (omitted, the engine default applies).
 The declaration is baked into the compiled binary as well.
 `on_start` is a handler that runs once right after mount, and a failure prints and continues (use it for loading startup data or seeding the RNG).
-It is also the only place for startup work: module level holds declarations, and a statement there (`count.set(5)`, say, or `fs.write_text(...)`) is refused by name, because the compiled app reads the module and never executes it.
+It is also the only place for startup work: module level holds declarations, and a statement there (`count.set(5)`, say, or `fs.write_text(...)`) is refused, because the compiled app reads the module and never executes it.
 

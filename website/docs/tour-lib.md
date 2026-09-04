@@ -76,7 +76,7 @@ Call them from handlers (views stay pure).
 
 How far the Python half reaches, module by module:
 
-- **math** — everything but six members, each refused by name with its reason: `prod` and `sumprod` answer an int or a float depending on the list, and `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform.
+- **math** — everything but six members, each refused with its reason: `prod` and `sumprod` answer an int or a float depending on the list, and `gamma`, `lgamma`, `erf` and `erfc` are computed by CPython itself rather than by the platform.
 - **random** — `seed`, `random`, `randint`, `randrange`, `getrandbits`, `uniform`, `gauss`, `choice`, `sample`.
 - **statistics** — `mean`, `fmean`, `median`, `mode`, `variance`, `pvariance`, `stdev`, `pstdev`, over `list[float]`. A list of ints is refused: CPython answers an int for `mean([1, 2, 3])` and a float for `mean([1, 2, 4])`, so there is no one type it could have.
 - **json** — `dumps`, with CPython's defaults and no keyword arguments.
@@ -207,7 +207,7 @@ self.verdict = crates.hexfmt.describe(crates.hexfmt.judge(7))
 Structs whose Rust fields carry exact widths (`u32` and friends)
 cross too — reads widen, writes cast back to the width — and the
 same rules apply to nested fields.
-Anything that cannot cross is refused with a named reason.
+Anything that cannot cross is refused, and the error says what and why.
 The demos: `demo/rustcrate.py` (a path crate and a crates.io crate;
 Optionals, Result, a struct, an enum and a dict) and `demo/proj/`
 (the pyproject spelling).

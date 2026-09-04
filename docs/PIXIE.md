@@ -172,7 +172,7 @@ Early but real. Working today:
 - **Bindings** — `.rpi` files over Rust crates, and `rpi-gen` derives
   them from rustdoc JSON (measured against the real `std.json`:
   `std::fs` binds 14 functions, everything unbindable is skipped with
-  a named reason). Numbers, bools, strings, bytes, maps, lists and
+  the reason). Numbers, bools, strings, bytes, maps, lists and
   optionals cross in both directions, plus `Result<T, E>` as `!T` on
   the way back — so `std::fs::read` comes back as a copy-on-write
   `Bytes`, not a list of ints. A C-like Rust `enum` and a Rust

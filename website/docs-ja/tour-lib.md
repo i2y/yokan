@@ -82,7 +82,7 @@ JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機
 
 Python 側がどこまで届くかを、モジュールごとに挙げます。
 
-- **math** — 六つを除いて全部です。除いた六つはそれぞれ理由を名指しして断ります。`prod` と `sumprod` はリストの中身によって int か float かが変わり、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算しているからです。
+- **math** — 六つを除いて全部です。除いた六つはそれぞれ理由を挙げて断ります。`prod` と `sumprod` はリストの中身によって int か float かが変わり、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算しているからです。
 - **random** — `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
 - **statistics** — `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev`。受けるのは `list[float]` だけです。int のリストは断ります。CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、型が一つに決まらないからです。
 - **json** — `dumps`。既定値のままで、キーワード引数は取りません。
@@ -203,7 +203,7 @@ self.verdict = crates.hexfmt.describe(crates.hexfmt.judge(7))
 ```
 
 Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そのまま越えます（読みは広がり、書きは幅に合わせて戻ります）。入れ子のフィールドも同じ規則です。
-越えられない型を呼ぶと、何がなぜだめかを名指しするエラーになります。
+越えられない型を呼ぶと、何がなぜだめかがエラーに出ます。
 デモは `demo/rustcrate.py`（path と version の同居、Optional・Result・構造体・enum・辞書まで）と `demo/proj/`（pyproject 綴り）です。
 
 ## CPython エスケープ
