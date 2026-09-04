@@ -50,10 +50,11 @@ def view():
 `math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
 An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
 
-**Yokan's own modules**, for the desktop verbs — files, a database, the network, the clipboard, notifications: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
-Python reaches most of these too, through `pathlib`, `sqlite3` and `urllib`.
-Here they are written once, in Rust, and both runs call that one implementation, so the two cannot disagree about them and the shipped binary needs no Python.
-Their names are Yokan's and never Python's, so nothing here claims to be a module it is not — which is why reading a path out of a JSON document is `jsondoc`, and the machine's own zone is `clock`.
+**Yokan's own modules** cover files, a database, the network, the clipboard and notifications: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
+Python can do most of this too, through `pathlib`, `sqlite3` and `urllib`.
+What differs here is that there is one implementation: both runs call the same Rust function, so they cannot disagree about it, and the shipped binary needs no Python.
+None of them uses a Python module's name, because a Python name is a promise that CPython decides the answers.
+Reading a JSON document by a dotted path is `jsondoc`, not `json`, and the machine's own time zone is `clock`, not `time`.
 Call them from handlers (views stay pure).
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet)

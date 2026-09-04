@@ -54,13 +54,15 @@ def view():
 種を撒いていない生成器が繰り返せないのは Python と同じです。
 種を撒けば、gate が両方の実行を一つの列に縛れます。
 
-**Yokan 自身のモジュール**は、デスクトップの動詞です（ファイル、データベース、ネットワーク、クリップボード、通知）。
-`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify` と書いて呼びます。
-その多くは Python にもあります（`pathlib`、`sqlite3`、`urllib`）。
-ここでは Rust で一度だけ書き、両方の実行がその一つを呼びます。
-二つの実行が食い違いようがなく、リリースバイナリに Python も要りません。
-名前は Yokan のもので、Python のモジュール名は名乗りません。
-別のものが同じ名前を名乗らないようにするためで、JSON 文書からパスで読むのが `jsondoc`、機械自身のゾーンが `clock` なのはそのためです。
+**Yokan 自身のモジュール**が受け持つのは、ファイル、データベース、ネットワーク、クリップボード、通知です。
+`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify` と書いて読み込みます。
+同じことは Python でもできます（`pathlib`、`sqlite3`、`urllib`）。
+違うのは、実装が一つしかないことです。
+開発中の実行もリリース後の実行も Rust の同じ関数を呼ぶので、二つの実行が食い違いません。
+リリースバイナリに Python も要りません。
+これらに Python のモジュール名は使いません。
+Python の名前が付いていることは、CPython の答えに合わせるという約束だからです。
+JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
 - **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
