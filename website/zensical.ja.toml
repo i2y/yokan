@@ -37,9 +37,17 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
-# Previous / next links at the foot of every page, so the tour reads
-# in order without going back to the sidebar.
-features = ["navigation.footer"]
+# navigation.footer  previous / next at the foot of every page, so the
+#                    tour reads in order without the sidebar
+# navigation.top     a back-to-top button on long pages
+# navigation.tracking  the address bar follows the section being read
+# content.code.copy  a copy button on every code block
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
 logo = "images/logo.svg"
 favicon = "images/favicon.png"
 language = "ja"
