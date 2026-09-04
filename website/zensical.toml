@@ -9,6 +9,9 @@ docs_dir = "docs"
 site_dir = "build"
 use_directory_urls = true
 
+# Site styling: the hero, and the frame around the app screenshots.
+extra_css = ["stylesheets/extra.css"]
+
 nav = [
   { Home = "index.md" },
   { Installation = "installation.md" },

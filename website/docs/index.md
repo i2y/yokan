@@ -4,20 +4,35 @@ hide:
   - toc
 ---
 
-# ![Yokan — Write Python. Ship native.](images/banner.png)
+<div class="yk-hero" markdown>
+<img class="yk-hero__mark" src="images/logo.svg" alt="">
 
-Yokan is a **compiler** that takes a statically typed subset of
-Python to native code. Not a Python-lookalike language: what you can write is a
-slice of Python, and inside that slice your code behaves exactly
-as Python. While you develop, the whole app runs on real CPython;
-when you ship, the same source becomes a machine-code executable —
-and **the two runs can be checked against each other, screen for
-screen**.
+# Yokan
 
-[Installation](installation.md){ .md-button .md-button--primary }
+<p class="yk-hero__tag">Write Python. Ship native.</p>
+
+<p class="yk-hero__lede">
+A compiler that takes a statically typed subset of Python to native
+code. What you write is a slice of Python, and inside that slice your
+code behaves exactly as Python. While you develop, the whole app runs
+on real CPython; when you ship, the same source becomes a machine-code
+executable. <strong>Whether the two behave the same is something you
+can check</strong>, with <code>yokan gate</code>.
+</p>
+
+<div class="yk-hero__cta" markdown>
+[Get started](installation.md){ .md-button .md-button--primary }
 [Language tour](tour.md){ .md-button }
 [Demos](demos.md){ .md-button }
 [GitHub](https://github.com/i2y/yokan){ .md-button }
+</div>
+</div>
+
+<div class="yk-facts" markdown>
+<div><b>13.4 MB</b><span>a counter, shipped — no Python inside, millisecond startup</span></div>
+<div><b>~1 ms</b><span>edit, save, and the running window updates with its state intact</span></div>
+<div><b>Byte for byte</b><span>the gate replays your interactions through both runs and compares the screens</span></div>
+</div>
 
 ![OpsBoard, a dashboard demo written in Yokan](images/opsboard.png)
 
@@ -88,14 +103,16 @@ resulting screens. Yokan calls it the **gate**:
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
-The standard library (files, SQLite, HTTP, and friends) is one
-implementation used by both runs — that is what makes the
-comparison meaningful. And what Yokan cannot do yet is listed, with
-reasons, in [What does not work yet](tour-ship.md#what-does-not-work-yet)
-at the end of the tour.
+Yokan's own modules — files, SQLite, HTTP, the clipboard — are one
+implementation that both runs call, so there is nothing for them to
+disagree about. Python's own modules (`math`, `re`, `datetime` and
+the rest) are answered by CPython while you develop and by a twin
+once compiled, and the gate is what holds those two together. What
+Yokan cannot do yet is listed, with reasons, in
+[What does not work yet](tour-ship.md#what-does-not-work-yet).
 
 ---
 
@@ -103,11 +120,11 @@ at the end of the tour.
 
 <div class="grid cards" markdown>
 
--   :material-check-decagram: __Verified, per app__
+-   :material-check-decagram: __What you shipped is what you tested__
 
-    The claim is never "Python compiles". It is: *this app*
-    translates, and the gate proved the binary behaves exactly
-    like the CPython run — byte for byte, on your interactions.
+    Replay your clicks and keystrokes through both the development
+    run and the built binary, and the screens are compared byte for
+    byte. Run it in CI and a difference fails the build.
 
 -   :material-fire: __Hot reload with state__
 
@@ -149,7 +166,7 @@ at the end of the tour.
 -   :material-rocket-launch: __[Installation](installation.md)__
 
     `uv run` covers development; clone the repo for native builds.
-    macOS (Apple silicon) today, Linux lands shortly.
+    macOS on Apple silicon today.
 
 -   :material-book-open-variant: __[Language tour](tour.md)__
 
@@ -159,7 +176,7 @@ at the end of the tour.
 
 -   :material-view-gallery: __[Demos](demos.md)__
 
-    All 41 bundled demos, screenshotted — from the smallest
+    Every bundled demo, screenshotted — from the smallest
     counter to the OpsBoard dashboard.
 
 -   :material-github: __[Source](https://github.com/i2y/yokan)__

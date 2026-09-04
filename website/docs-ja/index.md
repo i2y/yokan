@@ -4,18 +4,29 @@ hide:
   - toc
 ---
 
-# ![Yokan — Write Python. Ship native.](images/banner.png)
+<div class="yk-hero" markdown>
+<img class="yk-hero__mark" src="images/logo.svg" alt="">
 
-Yokan（羊羹）は、静的に型付けされた Python のサブセットをネイティブコードにコンパイルする**処理系**です。
-サブセットといっても、Python に似せた別の言語ではありません。
-書けるのは Python の一部ですが、その範囲のコードは Python とまったく同じに動きます。
-開発中はアプリ全体が本物の CPython で動き、リリースするときに同じソースが機械語の実行ファイルになります。
-そして、**この二つが同じに振る舞うことを、ビルド時に検証できます**。
+# Yokan
 
-[インストール](installation.md){ .md-button .md-button--primary }
+<p class="yk-hero__tag">Write Python. Ship native.</p>
+
+<!-- 日本語は行の折り返しが空白として描画されるので、リード文は一行で書く -->
+<p class="yk-hero__lede">Yokan（羊羹）は、静的に型付けされた Python のサブセットをネイティブコードにコンパイルする処理系です。書けるのは Python の一部ですが、その範囲のコードは Python とまったく同じに動きます。開発中はアプリ全体が本物の CPython で動き、リリースするときに同じソースが機械語の実行ファイルになります。<strong>その二つが同じに動くかどうかは、<code>yokan gate</code> で確かめられます</strong>。</p>
+
+<div class="yk-hero__cta" markdown>
+[はじめる](installation.md){ .md-button .md-button--primary }
 [言語ツアー](tour.md){ .md-button }
 [デモ](demos.md){ .md-button }
 [GitHub](https://github.com/i2y/yokan){ .md-button }
+</div>
+</div>
+
+<div class="yk-facts" markdown>
+<div><b>13.4 MB</b><span>counter を配布した実行ファイル。Python は入らず、起動はミリ秒</span></div>
+<div><b>約 1 ms</b><span>保存すると、動いているウィンドウが状態を保ったまま更新される</span></div>
+<div><b>バイト単位で一致</b><span>同じ操作を両方の実行に流し、出てきた画面を突き合わせる</span></div>
+</div>
 
 ![Yokan で書いたダッシュボードのデモ OpsBoard](images/opsboard.png)
 
@@ -80,10 +91,11 @@ Yokan ではこれを**ゲート**と呼んでいます。
 
 ```console
 $ yokan gate app.py --script "click:+1,input:Momo"
-GATE OK — 2 dump lines identical across tiers
+GATE OK — 2 dump lines identical in both runs
 ```
 
-ファイルや SQLite、HTTP などの標準ライブラリが開発中も配布後も同じ実装なのは、この検証を成り立たせるためです。
+Yokan 自身のモジュール（ファイル、SQLite、HTTP、クリップボード）は、両方の実行が同じ実装を呼ぶので食い違いようがありません。
+Python 自身のモジュール（`math`、`re`、`datetime` など）は、開発中は CPython が、コンパイル後は双子が答えます。その二つをつなぐのがゲートです。
 まだできないことは、ツアー末尾の[今できないこと](tour-ship.md#今できないこと)に理由付きでまとまっています。
 
 ---
@@ -92,9 +104,9 @@ GATE OK — 2 dump lines identical across tiers
 
 <div class="grid cards" markdown>
 
--   :material-check-decagram: __アプリごとの検証__
+-   :material-check-decagram: __配ったものが、試したものと同じ__
 
-    「Python がコンパイルできます」ではなく、「*この*アプリが変換でき、バイナリが CPython 版とバイト単位で同じに振る舞うことをゲートが証明した」と言います。
+    クリックやキー入力を開発中の実行とビルド後のバイナリの両方に流し、出てきた画面をバイト単位で比べます。CI に置けば、違いが出た時点でビルドが落ちます。
 
 -   :material-fire: __状態を保つホットリロード__
 
@@ -126,7 +138,7 @@ GATE OK — 2 dump lines identical across tiers
 
 -   :material-rocket-launch: __[インストール](installation.md)__
 
-    開発は `uv run` だけ。ネイティブビルドはリポジトリを clone。今日は Apple silicon の macOS、Linux はまもなく。
+    開発は `uv run` だけ。ネイティブビルドはリポジトリを clone。いまのところ Apple silicon の macOS です。
 
 -   :material-book-open-variant: __[言語ツアー](tour.md)__
 
@@ -134,7 +146,7 @@ GATE OK — 2 dump lines identical across tiers
 
 -   :material-view-gallery: __[デモ](demos.md)__
 
-    付属デモ 41 本を全部スクリーンショット付きで。最小の counter から OpsBoard まで。
+    付属デモを全部スクリーンショット付きで。最小の counter から OpsBoard まで。
 
 -   :material-github: __[ソースコード](https://github.com/i2y/yokan)__
 
