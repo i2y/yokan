@@ -654,7 +654,10 @@ class audio:
     file that cannot be read, plays nothing rather than failing the
     app."""
     @staticmethod
-    def play(path: str) -> int: ...
+    def play(path: str, volume: float = 1.0) -> int:
+        """`volume` is a level between 0 and 1, where 1 is the file as
+        it was recorded. Loud is the one mistake a sound cannot take
+        back, so something that plays often should ask for less."""
     @staticmethod
     def stop() -> int: ...
 

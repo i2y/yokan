@@ -3267,6 +3267,14 @@ fn silent_run() -> bool {
 
 #[cfg(feature = "audio")]
 pub fn audio_play(path: &str) -> i64 {
+    audio_play_at(path, 1.0)
+}
+
+/// The same, at a level: `1.0` is the file as it was recorded, `0.25`
+/// a quarter of it. Loud is the one mistake a sound cannot take back,
+/// so an app that plays something in a loop should ask for less.
+#[cfg(feature = "audio")]
+pub fn audio_play_at(path: &str, volume: f64) -> i64 {
     if silent_run() {
         return 0;
     }
@@ -3298,6 +3306,7 @@ pub fn audio_play(path: &str) -> i64 {
     };
     audio.playing.retain(|p| !p.empty());
     let player = rodio::Player::connect_new(&audio.mixer);
+    player.set_volume(volume.clamp(0.0, 1.0) as f32);
     player.append(source);
     audio.playing.push(player);
     0
@@ -3324,6 +3333,11 @@ pub fn audio_stop() -> i64 {
 // They answer the way a machine with no speakers answers.
 #[cfg(not(feature = "audio"))]
 pub fn audio_play(_path: &str) -> i64 {
+    0
+}
+
+#[cfg(not(feature = "audio"))]
+pub fn audio_play_at(_path: &str, _volume: f64) -> i64 {
     0
 }
 

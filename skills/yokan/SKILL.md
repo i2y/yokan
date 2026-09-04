@@ -552,8 +552,9 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   so copy-and-paste is gate-checkable
 - **notify**: `send(title, body)` — delivered when the app runs as
   an `.app` bundle; dev and headless runs drop it quietly
-- **audio**: `play(path)` (a WAV; returns at once, sounds mix) /
-  `stop()`. A SCRIPTED run is silent, so nothing here reaches a dump
+- **audio**: `play(path, volume=1.0)` (a WAV; returns at once, sounds
+  mix; `volume` is 0..1 and anything that plays often should ask for
+  less) / `stop()`. A SCRIPTED run is silent, so nothing here reaches a dump
   and the gate cannot check it; no device or an unreadable file plays
   nothing rather than failing. Only an app that imports it links a
   sound device (~1.3 MB)

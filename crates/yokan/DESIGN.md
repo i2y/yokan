@@ -1818,3 +1818,21 @@ compiles and proves the shipped run agrees. Someone building an app
 lives in the first two. That is as true of a person as of an agent
 writing the app for one — and an agent had, until now, no way to see
 what it had drawn.
+
+## A sound is quiet until it is asked to be loud (2026-09-05)
+
+The five sounds the ported games play were made at a third of full
+scale and started at full amplitude on the first sample, which is a
+click — and a click is what makes a sound startling rather than
+audible. They are quieter now, and each one rises from silence over a
+few milliseconds and decays on a curve.
+
+`play` also takes a level: `play(path, 0.5)`. Under the hood that is a
+second row in the standard library's manifest, the arity trick
+`sqlite.exec` already uses, so the one-argument call keeps working and
+`Audio.playAt` carries the level on the compiled side. The shooter's
+shot asks for half, because it plays several times a second.
+
+Loud is the one mistake a sound cannot take back. A person hears it
+before anything can be undone, and someone in the next room hears it
+too.

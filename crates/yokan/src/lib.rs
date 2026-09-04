@@ -2764,9 +2764,9 @@ fn py_clipboard_get_text(py: Python<'_>) -> String {
 // is nothing to wait for.
 // Opening a device is the platform's business and can take a moment,
 // so both of these release Python while they wait.
-#[pyfunction] #[pyo3(name = "play")]
-fn py_audio_play(py: Python<'_>, path: &str) -> i64 {
-    py.detach(|| yokan_stdlib::audio_play(path))
+#[pyfunction] #[pyo3(name = "play", signature = (path, volume = 1.0))]
+fn py_audio_play(py: Python<'_>, path: &str, volume: f64) -> i64 {
+    py.detach(|| yokan_stdlib::audio_play_at(path, volume))
 }
 
 #[pyfunction] #[pyo3(name = "stop")]

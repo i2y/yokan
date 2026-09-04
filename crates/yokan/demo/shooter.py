@@ -215,7 +215,7 @@ class Game:
             self.bullets = self.bullets + [
                 Bullet(self.px + 3, self.py - 4)
             ]
-            audio.play(SHOT)
+            audio.play(SHOT, 0.5)
 
     def move_bullets(self) -> None:
         out: list[Bullet] = []
@@ -278,7 +278,7 @@ class Game:
                     Blast(e.x + 4, e.y + 4, BLAST_START_RADIUS)
                 ]
                 score_ = score_ + 10
-                audio.play(BLAST)
+                audio.play(BLAST, 0.7)
             elif (
                 self.px + PLAYER_WIDTH > e.x
                 and e.x + ENEMY_WIDTH > self.px
@@ -289,7 +289,7 @@ class Game:
                     Blast(self.px + 4, self.py + 4, BLAST_START_RADIUS)
                 ]
                 struck_player = True
-                audio.play(BLAST)
+                audio.play(BLAST, 0.7)
             else:
                 live_enemies = live_enemies + [e]
         live_bullets: list[Bullet] = []

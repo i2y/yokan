@@ -73,7 +73,7 @@ Call them from handlers (views stay pure).
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
-- **audio**: `play(path)` / `stop()` — a WAV starts and the call returns; several play together. A SCRIPTED run is silent, so a gate never needs a machine with speakers and a sound never reaches a dump; a machine with no audio device, or a file that cannot be read, plays nothing rather than failing the app. Only an app that imports this links a sound device, which is about 1.3 MB of binary
+- **audio**: `play(path, volume=1.0)` / `stop()` — a WAV starts and the call returns; several play together, and `volume` is a level between 0 and 1 (loud is the one mistake a sound cannot take back, so something that plays several times a second should ask for less). A SCRIPTED run is silent, so a gate never needs a machine with speakers and a sound never reaches a dump; a machine with no audio device, or a file that cannot be read, plays nothing rather than failing the app. Only an app that imports this links a sound device, which is about 1.3 MB of binary
 - **keys**: `down(k)` / `pressed(k)` / `released(k)` — the keyboard as a device, read from a timer's tick; see [The window](#the-window) for the chords that come to a handler instead
 
 How far the Python half reaches, module by module:

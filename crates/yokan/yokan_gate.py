@@ -3534,6 +3534,7 @@ class Translator:
         # place it plays.
         ("Audio", "audio", "yokan", (
             ("play", "play", "path: String", "Int", "audio_play"),
+            ("play", "playAt", "path: String, volume: Float", "Int", "audio_play_at"),
             ("stop", "stop", "", "Int", "audio_stop"),
         )),
         ("Notify", "notify", "yokan", (
