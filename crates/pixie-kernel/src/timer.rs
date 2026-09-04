@@ -59,18 +59,23 @@ pub fn next_due(w: &World) -> Option<f64> {
         .fold(None, |acc: Option<f64>, n| Some(acc.map_or(n, |a| a.min(n))))
 }
 
-/// Run every callback the clock has passed. A callback may itself
-/// take the World, so the schedule is read out first and the entries
-/// are put back after — the same shape the task queue uses.
+/// Run every callback the clock has passed, and answer whether any
+/// ran. A callback may itself take the World, so the schedule is read
+/// out first and the entries are put back after — the same shape the
+/// task queue uses.
+///
+/// The answer is what lets a window tell a frame that DID something
+/// from one that only arrived: a display refreshes far faster than an
+/// app ticks, and a frame with no tick in it has nothing new to build.
 ///
 /// A tick that is late by more than one period does NOT repeat: the
 /// clock jumped (a slow frame, or a script advancing a minute at
 /// once), and running a minute of ticks would be surprising where
 /// catching up is what nobody asked for.
-pub fn fire_due(w: &mut World) {
+pub fn fire_due(w: &mut World) -> bool {
     let now = crate::anim::now(w);
     let Some(h) = w.try_singleton_ref::<Timers>() else {
-        return;
+        return false;
     };
     let mut due: Vec<Tick> = Vec::new();
     {
@@ -96,4 +101,5 @@ pub fn fire_due(w: &mut World) {
     if ticked {
         crate::keys::end_tick();
     }
+    ticked
 }

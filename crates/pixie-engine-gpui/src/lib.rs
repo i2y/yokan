@@ -117,6 +117,35 @@ struct CanvasState {
     sprites: raster::Sprites,
 }
 
+/// `PIXIE_TRACE_FRAMES=1`: one line a second saying how many frames the
+/// window painted and how many of them rebuilt the element tree. The
+/// two used to be the same number for any app with a timer.
+fn trace_frame(rebuilt: bool) {
+    use std::cell::Cell;
+    thread_local! {
+        static SINCE: Cell<f64> = const { Cell::new(0.0) };
+        static FRAMES: Cell<u32> = const { Cell::new(0) };
+        static BUILDS: Cell<u32> = const { Cell::new(0) };
+    }
+    let now = ANIM_CLOCK.elapsed().as_secs_f64() * 1000.0;
+    FRAMES.with(|c| c.set(c.get() + 1));
+    if rebuilt {
+        BUILDS.with(|c| c.set(c.get() + 1));
+    }
+    let since = SINCE.with(|c| c.get());
+    if since == 0.0 {
+        SINCE.with(|c| c.set(now));
+        return;
+    }
+    if now - since >= 1000.0 {
+        let (f, b) = (FRAMES.with(|c| c.get()), BUILDS.with(|c| c.get()));
+        eprintln!("pixie frames: painted {f}, rebuilt {b} in the last second");
+        SINCE.with(|c| c.set(now));
+        FRAMES.with(|c| c.set(0));
+        BUILDS.with(|c| c.set(0));
+    }
+}
+
 /// A bounded, least-recently-used image cache.
 ///
 /// gpui ships exactly one implementation — `RetainAllImageCache`, a
@@ -915,15 +944,34 @@ impl<C: Component> Render for Root<C> {
             // Declared timers run on the same clock the animations do,
             // so a frame is the only place they fire — and while one
             // exists the pump keeps asking for frames.
-            pixie_kernel::timer::fire_due(w);
+            let ticked = pixie_kernel::timer::fire_due(w);
             let ticking = pixie_kernel::timer::any(w);
             let animating = pixie_kernel::anim::active(w);
-            let tree = (flipped || animating || ticking)
+            // Asking for a frame is not the same as having something
+            // to build. A display refreshes at 120 Hz and an app ticks
+            // at 30, so rebuilding because a timer EXISTS rebuilt the
+            // whole tree three times out of four for nothing — and in
+            // the interpreted run those are three runs of the app's own
+            // view function. The rule here is the one `apply` already
+            // uses: build when the theme flipped, when a tween is
+            // moving, when a tick actually fired, or when what just ran
+            // left a view dirty.
+            w.flush();
+            let dirty = !w.take_dirty_views().is_empty();
+            let tree = (flipped || animating || ticked || dirty)
                 .then(|| pixie_kernel::build_prepared(w, view));
             (tree, animating || ticking)
         });
+        let rebuilt_now = rebuilt.is_some();
         if let Some(t) = rebuilt {
             self.tree = t;
+        }
+        // How much of the pump is doing work. A frame that paints is
+        // not a frame that rebuilt, and the gap between the two is the
+        // whole point of the rule above — so it is a number, printed
+        // once a second, rather than something to reason about.
+        if std::env::var("PIXIE_TRACE_FRAMES").is_ok() {
+            trace_frame(rebuilt_now);
         }
         if animating {
             window.request_animation_frame();
