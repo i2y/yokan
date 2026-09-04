@@ -252,7 +252,8 @@ with canvas(160, 120, scale=4, palette=Game.palette):
 ```
 
 It walks a list the view can name — a `State` cell, a store field, a model's own field — whose elements are scalars or value classes, and `for i, e in enumerate(...)` binds the index beside the element.
-The same loop works in any container, not only in a canvas.
+`for i in range(2):` works too, and is written out where it stands: the bounds are written-out numbers (up to 64 of them) because the loop becomes the elements it would have produced.
+The same loops work in any container, not only in a canvas.
 
 A drawing command is not an element: it takes none of the [shared properties](tour-ui.md#shared-properties), nothing in a canvas can be clicked, and a canvas is one image in the accessibility tree — an `a11y_label=` on it is the only way to say what it paints.
 What the dump prints is the frame itself, one command per line, so `yokan gate` compares what the two runs would have painted.

@@ -1716,3 +1716,27 @@ keeps its 16 when nothing says otherwise, so every app that existed
 looks exactly as it did. It is window chrome rather than an element,
 so no dump moves with it — which also means the gate cannot check it,
 and only a window can.
+
+## Two more the games asked for (2026-09-05)
+
+**An app can close its own window.** `quit()` from any handler. It is
+a device the way the clipboard is: the app asks, and whoever holds a
+window answers on the next frame. A headless run holds none, so it
+ignores the request and the script runs its remaining steps — which
+keeps the two runs printing the same dumps, and means this is one of
+the few things a gate cannot check. The alternative, exiting the
+process in a headless run too, would have made a compiled binary stop
+halfway through a script for a reason the app never asked about.
+
+**`for i in range(2):` works in a view.** The compiled side repeats
+over a list, and a range is not one — so the loop is written out where
+it stands, once per value, with the variable standing for the number
+it is. That is what a person does by hand, and it is why the bounds
+have to be written-out numbers: the count is decided when the view is
+translated, not when it runs. Sixty-four is the cap, and past it the
+refusal says to walk a list. A count that changes at run time is a
+list, which the same `for` already walks.
+
+Both came from the ports, where the first was a line of the original
+that had nowhere to go and the second was a loop that had to be
+written out twice.

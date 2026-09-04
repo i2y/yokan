@@ -377,7 +377,9 @@ what its body builds. The list is one the view can name — a `State`
 cell, a store field, a model's own field — and its elements are
 scalars or value classes (a list of MODELS is still refused: hand
 `list_view` the display strings). `for i, x in enumerate(xs):` binds
-the index beside the element.
+the index beside the element. `for i in range(2):` also works and is
+written out where it stands, so its bounds are written-out numbers (up
+to 64).
 
 ## Form controls
 
@@ -672,7 +674,9 @@ paragraphs; every element takes `tooltip="…"`.
 on_start=boot)`. Title and size are baked into the binary; width
 and height come as a pair in logical pixels. `padding=` is the inset
 between the window and the tree (16 px unless set); `padding=0.0`
-paints to the window's edge, which is what a canvas app wants. `on_start` runs once
+paints to the window's edge, which is what a canvas app wants.
+`quit()` closes the window from any handler; a headless run has no
+window, so a script runs on and the gate sees no difference. `on_start` runs once
 after mount (a failure prints and the app opens) and is the one
 place for startup work — loading data, seeding the RNG.
 
