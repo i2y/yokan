@@ -215,6 +215,55 @@ def line(i):
 list_view(len(items()), line, item_height=24.0, height=200.0)
 ```
 
+## The canvas
+
+A canvas is a grid of virtual pixels you paint command by command.
+`width` and `height` count those pixels and `scale` says how many logical ones each of them takes, so `canvas(160, 120, scale=4)` occupies 640x480 on screen.
+The commands go in the block.
+
+```python
+with canvas(160, 120, scale=4, background=0, palette=Game.palette):
+    rect(Game.x, Game.y, 8, 8, 7)
+    circle(30, 20, 4, 12)
+    pixel_text(4, 4, f"SCORE {Game.score}", 7)
+```
+
+Every color is a **number**: the index of a color in `palette`, a list of hex colors the app declares.
+That is what a pixel machine means by a color, and it is why a frame written for one reads the same here.
+An index past the end paints the last color, so an off-by-one is visible rather than invisible; a canvas with an empty palette paints magenta.
+
+```python
+@store
+class Game:
+    palette: list[str] = ["#000000", "#2b335f", "#7e2072", "#19959c"]
+```
+
+The commands are `pixel`, `line`, `rect`, `rect_outline`, `circle`, `circle_outline`, `triangle`, `triangle_outline`, `sprite` and `pixel_text`.
+Coordinates are whole numbers — a pixel grid has no half pixels, so a float is refused and asks for `int(...)`.
+`sprite(x, y, source, u, v, w, h)` copies a rectangle of a PNG onto the canvas; `colkey=` is the palette index that is not copied, and `flip_x=` / `flip_y=` mirror it.
+`pixel_text` writes in the canvas's own 4x6 font, on the pixel grid.
+
+A `for` inside the canvas is the ordinary loop: what its body paints joins the frame where it stands.
+
+```python
+with canvas(160, 120, scale=4, palette=Game.palette):
+    for e in Game.enemies:
+        sprite(e.x, e.y, "assets/sheet.png", 0, 16, 8, 8, colkey=0)
+```
+
+It walks a list the view can name — a `State` cell, a store field, a model's own field — whose elements are scalars or value classes, and `for i, e in enumerate(...)` binds the index beside the element.
+The same loop works in any container, not only in a canvas.
+
+A drawing command is not an element: it takes none of the [shared properties](tour-ui.md#shared-properties), nothing in a canvas can be clicked, and a canvas is one image in the accessibility tree — an `a11y_label=` on it is the only way to say what it paints.
+What the dump prints is the frame itself, one command per line, so `yokan gate` compares what the two runs would have painted.
+
+```console
+Canvas(160x120, scale=4, bg=#000000)[
+  Rect(56, 100, 8, 8, #eeeeee)
+  PixelText(4, 4, "SCORE 1250", #eeeeee)
+]
+```
+
 ## Dicts
 
 Read with `.get`, write per key, count with `len`, walk it like a Python dict.

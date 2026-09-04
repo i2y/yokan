@@ -243,7 +243,7 @@ The catalog: `text`, `link`, `button`, `text_field`, `number_field`,
 `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`,
 `divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
 `data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`,
-`progress`, `spinner`. Containers are opened with `with`; elements
+`progress`, `spinner`, `canvas`. Containers are opened with `with`; elements
 add themselves to the open container. `grid(columns=, rows=)` lays
 equal tracks and a button spans cells with `col_span=` /
 `row_span=`. In `data_table` the first `row` child is the header
@@ -351,6 +351,33 @@ to change a size or color with state, branch with `if`.
 `enter=True` / `exit=True` on text, buttons and containers.
 Frames come from the shared clock, so `advance:<ms>` in a script
 lands identically in both runs.
+
+**The canvas.** `with canvas(width, height, scale=, background=,
+palette=)` opens a grid of VIRTUAL pixels; `scale` is how many
+logical pixels each of them takes. Inside it the commands paint:
+`pixel`, `line`, `rect`, `rect_outline`, `circle`, `circle_outline`,
+`triangle`, `triangle_outline`, `sprite(x, y, source, u, v, w, h,
+colkey=, flip_x=, flip_y=)` and `pixel_text`. Every color is an INDEX
+into `palette` (a `list[str]` of hex colors, usually a store field);
+out of range paints the last one. Coordinates are whole numbers — a
+float is refused and asks for `int(...)`. A command is not an element:
+no shared properties, nothing clickable, and the canvas is one image
+in the accessibility tree. The dump prints the frame one command per
+line, so a game is gate-checkable frame by frame.
+
+```python
+with canvas(160, 120, scale=4, background=0, palette=Game.palette):
+    for e in Game.enemies:
+        sprite(e.x, e.y, "assets/sheet.png", 0, 16, 8, 8, colkey=0)
+    pixel_text(4, 4, f"SCORE {Game.score}", 7)
+```
+
+**`for` in a view.** `for x in <list>:` inside any container repeats
+what its body builds. The list is one the view can name — a `State`
+cell, a store field, a model's own field — and its elements are
+scalars or value classes (a list of MODELS is still refused: hand
+`list_view` the display strings). `for i, x in enumerate(xs):` binds
+the index beside the element.
 
 ## Form controls
 
@@ -615,6 +642,16 @@ While a text field has the caret, plain keys keep going into it and
 only chords carrying cmd or ctrl reach the app. A headless script
 presses one with `key:cmd+s`.
 
+`from yokan import keys` reads the keyboard as a DEVICE: `keys.down(k)`
+is "held right now", `keys.pressed(k)` "went down since the last
+tick", `keys.released(k)` its opposite. A name is one bare key
+(`left`, `space`, `z`); the modifiers answer as `shift` / `cmd` /
+`ctrl` / `alt`, so `down("left")` holds whether or not shift is down
+with it. Read them from a TICK — a view is refused, because a view is
+rebuilt on the framework's schedule. What `pressed` saw is spent by
+the tick that read it, so holding a key fires once. Scripts:
+`keydown:left` / `keyup:left`, and `key:<chord>` is both halves.
+
 `menu_item("File", "Save", save)` puts a handler in the application
 menu bar — declaration order is menu order, and a script picks one
 with `menu:Save`. `on_file_drop(handler)` takes a file dragged onto
@@ -651,8 +688,10 @@ $ yokan version                                       # package, checkout, build
 ```
 
 Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
-`slide[@n]:<value>`, `select[@n]:<label>`, `advance:<ms>`,
-`theme:light|dark`, `a11y`, `mem`, `dump`. `@n` picks the n-th
+`slide[@n]:<value>`, `select[@n]:<label>`, `key:<chord>`,
+`keydown:<key>` / `keyup:<key>`, `menu:<item>`, `file:<path>`,
+`drop:<path>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`,
+`dump`. `@n` picks the n-th
 match in tree order; `dump` prints the screen mid-script; a comma
 in text is `\,`. From tests, `yokan._headless(view, None, script)`
 returns the same string. Apps with PEP 723 dependencies run the
@@ -690,8 +729,13 @@ reason.
 - Calling Protocol-bound helpers, value-class methods, or a store
   or model method from views (handlers can; views read fields and
   `@property`).
-- Iterating a list of models in a view: assemble strings on the
-  store side and hand them to `list_view`.
+- Iterating a list of models in a view: `for` there walks scalars
+  and value classes; for models, assemble strings on the store side
+  and hand them to `list_view`.
+- On a canvas: no sound, no mouse, no tilemap, no camera offset;
+  whole-pixel coordinates only; the scale is declared, not fitted to
+  the window; a missing sprite PNG paints nothing; and what a canvas
+  paints is one image to assistive technology (`a11y_label=`).
 - A `Weak` field on a store (stores own; the back pointer lives on
   the model).
 - Type names the compiled side uses, such as `Vec`: pick another.

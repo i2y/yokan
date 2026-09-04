@@ -122,6 +122,9 @@ the initial state, right after launch.
 #### loading — progress with a label, a size, and an indeterminate sweep for work with no known length
 <img src="screenshots/loading.png" width="360">
 
+#### canvas — the drawing surface: a grid of virtual pixels painted command by command, colors by palette index, a `for` inside the canvas, and the keyboard read as a device from the tick
+<img src="screenshots/canvas.png" width="360">
+
 #### charts — negative values below the zero line, a pinned range, an axis with gridlines, and two series with their own colors
 <img src="screenshots/charts.png" width="360">
 

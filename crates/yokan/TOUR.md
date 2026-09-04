@@ -21,27 +21,28 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 6. [Arithmetic](#arithmetic)
 7. [Strings](#strings)
 8. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
-9. [Dicts](#dicts)
-10. [Tuples](#tuples)
-11. [Value classes and interfaces](#value-classes-and-interfaces)
-12. [Memory](#memory)
-13. [Sum types and match](#sum-types-and-match)
-14. [Optional and Enum](#optional-and-enum)
-15. [Components](#components)
-16. [Shared properties](#shared-properties)
-17. [Styles and themes](#styles-and-themes)
-18. [Animation](#animation)
-19. [The window](#the-window)
-20. [Error handling](#error-handling)
-21. [The standard library](#the-standard-library)
-22. [Calling a Rust crate](#calling-a-rust-crate)
-23. [CPython escapes](#cpython-escapes)
-24. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
-25. [Working with type checkers](#working-with-type-checkers)
-26. [Headless runs and the gate](#headless-runs-and-the-gate)
-27. [Shipping](#shipping)
-28. [A real app](#a-real-app)
-29. [What does not work yet](#what-does-not-work-yet)
+9. [The canvas](#the-canvas)
+10. [Dicts](#dicts)
+11. [Tuples](#tuples)
+12. [Value classes and interfaces](#value-classes-and-interfaces)
+13. [Memory](#memory)
+14. [Sum types and match](#sum-types-and-match)
+15. [Optional and Enum](#optional-and-enum)
+16. [Components](#components)
+17. [Shared properties](#shared-properties)
+18. [Styles and themes](#styles-and-themes)
+19. [Animation](#animation)
+20. [The window](#the-window)
+21. [Error handling](#error-handling)
+22. [The standard library](#the-standard-library)
+23. [Calling a Rust crate](#calling-a-rust-crate)
+24. [CPython escapes](#cpython-escapes)
+25. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
+26. [Working with type checkers](#working-with-type-checkers)
+27. [Headless runs and the gate](#headless-runs-and-the-gate)
+28. [Shipping](#shipping)
+29. [A real app](#a-real-app)
+30. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -532,6 +533,55 @@ def line(i):
         button("delete", on_click=lambda: Sel.drop(i))
 
 list_view(len(items()), line, item_height=24.0, height=200.0)
+```
+
+## The canvas
+
+A canvas is a grid of virtual pixels you paint command by command.
+`width` and `height` count those pixels and `scale` says how many logical ones each of them takes, so `canvas(160, 120, scale=4)` occupies 640x480 on screen.
+The commands go in the block.
+
+```python
+with canvas(160, 120, scale=4, background=0, palette=Game.palette):
+    rect(Game.x, Game.y, 8, 8, 7)
+    circle(30, 20, 4, 12)
+    pixel_text(4, 4, f"SCORE {Game.score}", 7)
+```
+
+Every color is a **number**: the index of a color in `palette`, a list of hex colors the app declares.
+That is what a pixel machine means by a color, and it is why a frame written for one reads the same here.
+An index past the end paints the last color, so an off-by-one is visible rather than invisible; a canvas with an empty palette paints magenta.
+
+```python
+@store
+class Game:
+    palette: list[str] = ["#000000", "#2b335f", "#7e2072", "#19959c"]
+```
+
+The commands are `pixel`, `line`, `rect`, `rect_outline`, `circle`, `circle_outline`, `triangle`, `triangle_outline`, `sprite` and `pixel_text`.
+Coordinates are whole numbers — a pixel grid has no half pixels, so a float is refused and asks for `int(...)`.
+`sprite(x, y, source, u, v, w, h)` copies a rectangle of a PNG onto the canvas; `colkey=` is the palette index that is not copied, and `flip_x=` / `flip_y=` mirror it.
+`pixel_text` writes in the canvas's own 4x6 font, on the pixel grid.
+
+A `for` inside the canvas is the ordinary loop: what its body paints joins the frame where it stands.
+
+```python
+with canvas(160, 120, scale=4, palette=Game.palette):
+    for e in Game.enemies:
+        sprite(e.x, e.y, "assets/sheet.png", 0, 16, 8, 8, colkey=0)
+```
+
+It walks a list the view can name — a `State` cell, a store field, a model's own field — whose elements are scalars or value classes, and `for i, e in enumerate(...)` binds the index beside the element.
+The same loop works in any container, not only in a canvas.
+
+A drawing command is not an element: it takes none of the [shared properties](#shared-properties), nothing in a canvas can be clicked, and a canvas is one image in the accessibility tree — an `a11y_label=` on it is the only way to say what it paints.
+What the dump prints is the frame itself, one command per line, so `yokan gate` compares what the two runs would have painted.
+
+```console
+Canvas(160x120, scale=4, bg=#000000)[
+  Rect(56, 100, 8, 8, #eeeeee)
+  PixelText(4, 4, "SCORE 1250", #eeeeee)
+]
 ```
 
 ## Dicts
@@ -1139,6 +1189,27 @@ The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `c
 While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
 A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
 
+A chord is a message; a key that is *held* is something else, and `keys` answers that.
+
+```python
+from yokan import keys
+
+def tick():
+    if keys.down("left"):
+        Game.steer(-1)
+    if keys.pressed("space"):
+        Game.fire()
+
+every(0.033, tick)
+```
+
+`keys.down(name)` is "held right now", `keys.pressed(name)` is "went down since the last tick" and `keys.released(name)` its opposite.
+A name is one bare key — `left`, `space`, `z` — and the modifiers answer under their own names (`shift`, `cmd`, `ctrl`, `alt`), so `down("left")` is true whether or not shift is held with it.
+
+Read them from a tick, not from a view: a view is rebuilt on the framework's schedule, so what it read there would be a moment the app never chose (the dialect refuses it for the same reason it refuses a clock in a view).
+What `pressed` and `released` saw is spent by the tick that read it, so holding a key fires once however many frames it stays down.
+A script presses one with `keydown:left` and lets go with `keyup:left`, and `key:<chord>` is both halves at once — which is why a game is gate-checkable frame by frame.
+
 `menu_item(menu, name, handler)` puts the same handler in the application's menu bar.
 
 ```python
@@ -1195,7 +1266,7 @@ Running without a window is where verification starts.
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
-The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's column header), `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>` (a chooser's option, or a table's row by its first cell), `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
+The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's column header), `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>` (a chooser's option, or a table's row by its first cell), `key:<chord>`, `keydown:<key>` / `keyup:<key>`, `menu:<item>`, `file:<path>`, `drop:<path>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
 `@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
 A comma inside text is written `\,` (`input:hello\, world`).
@@ -1271,7 +1342,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
 - **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
-- **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
+- **Iterating a list of models directly in a view.** A view's `for` walks a list of scalars or value classes; for models, assemble the display strings on the store side and hand them to `list_view`.
+- **On a canvas**: no sound, no mouse, no tilemap and no camera offset; coordinates are whole pixels (a float is refused and asks for `int(...)`); the scale is a number the app declares rather than a fit to the window, because the painted size would then depend on a window the dump cannot see; and a sprite's PNG is found next to the app, so a missing one paints nothing. What a canvas paints is not readable by assistive technology either — it reports as one image, and `a11y_label=` is the honest way to say what is on it.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
 - **Type names the native side already uses, such as `Vec`.** Refused; pick another (`V2`, say).
 - **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused. Startup work goes in a def passed as `run(view, on_start=setup)`.

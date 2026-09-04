@@ -273,6 +273,32 @@ on_key(lambda k: last.set(k))
 テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴うコードだけがアプリに届きます。
 ヘッドレスのスクリプトは `key:cmd+s` で押せるので、ショートカットもクリックと同じく検証される操作になります。
 
+コードは届いて終わる知らせですが、押されたままのキーはそうではありません。
+それに答えるのが `keys` です。
+
+```python
+from yokan import keys
+
+def tick():
+    if keys.down("left"):
+        Game.steer(-1)
+    if keys.pressed("space"):
+        Game.fire()
+
+every(0.033, tick)
+```
+
+`keys.down(name)` は「いま押されている」、`keys.pressed(name)` は「前のティック以降に押された」、`keys.released(name)` はその反対です。
+名前は修飾のないキー1つ（`left`、`space`、`z`）で、修飾キーはそれぞれの名前（`shift`、`cmd`、`ctrl`、`alt`）で答えます。
+`down("left")` は shift を一緒に押していても真です。
+
+読むのはティックの中で、ビューの中ではありません。
+ビューはフレームワークの都合で組み直されるので、そこで読んだ瞬間はアプリが選んだ瞬間ではないからです（ビューの中の時計を断るのと同じ理由です）。
+`pressed` と `released` が見たものは、それを読んだティックで使い切ります。
+だからキーを押しっぱなしにしても、何フレーム続こうと1回です。
+スクリプトは `keydown:left` で押し、`keyup:left` で離します。
+`key:<chord>` はその両方を一度に行うので、ゲームも1フレームずつゲートで比べられます。
+
 `menu_item(menu, name, handler)` は、同じハンドラをアプリケーションのメニューバーに置きます。
 
 ```python

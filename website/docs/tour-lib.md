@@ -272,6 +272,27 @@ The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `c
 While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
 A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
 
+A chord is a message; a key that is *held* is something else, and `keys` answers that.
+
+```python
+from yokan import keys
+
+def tick():
+    if keys.down("left"):
+        Game.steer(-1)
+    if keys.pressed("space"):
+        Game.fire()
+
+every(0.033, tick)
+```
+
+`keys.down(name)` is "held right now", `keys.pressed(name)` is "went down since the last tick" and `keys.released(name)` its opposite.
+A name is one bare key — `left`, `space`, `z` — and the modifiers answer under their own names (`shift`, `cmd`, `ctrl`, `alt`), so `down("left")` is true whether or not shift is held with it.
+
+Read them from a tick, not from a view: a view is rebuilt on the framework's schedule, so what it read there would be a moment the app never chose (the dialect refuses it for the same reason it refuses a clock in a view).
+What `pressed` and `released` saw is spent by the tick that read it, so holding a key fires once however many frames it stays down.
+A script presses one with `keydown:left` and lets go with `keyup:left`, and `key:<chord>` is both halves at once — which is why a game is gate-checkable frame by frame.
+
 `menu_item(menu, name, handler)` puts the same handler in the application's menu bar.
 
 ```python

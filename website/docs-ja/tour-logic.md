@@ -226,6 +226,66 @@ def line(i):
 list_view(len(items()), line, item_height=24.0, height=200.0)
 ```
 
+## キャンバス
+
+キャンバスは、仮想的なピクセルを一つずつ描いていく格子です。
+`width` と `height` がそのピクセル数で、`scale` は仮想の1ピクセルが論理ピクセル何個分かを表します。
+`canvas(160, 120, scale=4)` は画面上で 640x480 を占めます。
+描画命令はブロックの中に並べます。
+
+```python
+with canvas(160, 120, scale=4, background=0, palette=Game.palette):
+    rect(Game.x, Game.y, 8, 8, 7)
+    circle(30, 20, 4, 12)
+    pixel_text(4, 4, f"SCORE {Game.score}", 7)
+```
+
+色はすべて数値です。
+アプリが宣言した `palette`（16進の色のリスト）の何番目か、という意味の番号です。
+ドット絵の機械が色と呼ぶものがこれで、だからそちらのために書かれた1フレームがそのままここでも読めます。
+範囲を越えた番号は最後の色で描きます。
+見えなくなるより、間違った色が見えるほうが直せるからです。
+palette が空のキャンバスはマゼンタで描きます。
+
+```python
+@store
+class Game:
+    palette: list[str] = ["#000000", "#2b335f", "#7e2072", "#19959c"]
+```
+
+命令は `pixel`、`line`、`rect`、`rect_outline`、`circle`、`circle_outline`、`triangle`、`triangle_outline`、`sprite`、`pixel_text` です。
+座標は整数だけです。
+ピクセルの格子に半分のピクセルはないので、浮動小数点数は `int(...)` を書くように名指しで断ります。
+`sprite(x, y, source, u, v, w, h)` は PNG の一部を切り出して置きます。
+`colkey=` は写さない色の番号で、`flip_x=` と `flip_y=` は左右と上下の反転です。
+`pixel_text` はキャンバス自身が持つ 4x6 のフォントで、ピクセルの格子の上に文字を書きます。
+
+キャンバスの中の `for` は普通のループです。
+本体が描くものが、その場所でフレームに加わります。
+
+```python
+with canvas(160, 120, scale=4, palette=Game.palette):
+    for e in Game.enemies:
+        sprite(e.x, e.y, "assets/sheet.png", 0, 16, 8, 8, colkey=0)
+```
+
+回せるのはビューが名前を言えるリスト（`State` のセル、ストアのフィールド、モデル自身のフィールド）で、その要素はスカラーか value クラスです。
+`for i, e in enumerate(...)` と書けば、要素の隣に添字も束縛できます。
+このループはキャンバスに限らず、どのコンテナの中でも同じように書けます。
+
+描画命令は要素ではありません。
+[共通のプロパティ](tour-ui.md#共通のプロパティ)を一つも取らず、キャンバスの中のものはクリックできず、アクセシビリティの木ではキャンバス全体が1枚の画像です。
+何を描いているかを伝える手段は `a11y_label=` だけです。
+ダンプに出るのはフレームそのもので、1命令が1行になります。
+だから `yokan gate` は、両方の実行が描こうとした絵を比べられます。
+
+```console
+Canvas(160x120, scale=4, bg=#000000)[
+  Rect(56, 100, 8, 8, #eeeeee)
+  PixelText(4, 4, "SCORE 1250", #eeeeee)
+]
+```
+
 ## 辞書
 
 読みは `.get`、書きはキー単位、数えるのは `len`、回すのは Python の辞書と同じ形です。

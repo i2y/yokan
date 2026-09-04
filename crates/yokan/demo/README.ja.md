@@ -119,6 +119,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### loading — progress の見出しと大きさ、長さの分からない作業のための不確定の往復
 <img src="screenshots/loading.png" width="360">
 
+#### canvas — 描画面。仮想的なピクセルの格子を1命令ずつ描き、色はパレットの番号で指定します。キャンバスの中の `for` と、ティックからキーの状態を読む例です
+<img src="screenshots/canvas.png" width="360">
+
 #### charts — 0 の線の下に垂れる負の値、固定した範囲、グリッド線付きの軸、色の異なる二つの系列
 <img src="screenshots/charts.png" width="360">
 
