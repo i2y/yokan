@@ -80,7 +80,7 @@ canvas you paint command by command), plus styles,
 light/dark themes, and animation; virtualized lists stay smooth at
 a hundred thousand rows. State comes in exactly three shapes, and
 the [language tour](crates/yokan/TOUR.md) walks the whole surface
-in one pass. There are 56 bundled demos, all screenshotted in the
+in one pass. There are 54 bundled demos, all screenshotted in the
 [gallery](crates/yokan/demo/README.md).
 
 ## The whole picture
