@@ -723,6 +723,9 @@ reason.
   key-ordered): use `sorted(d())`.
 - Bare `d[k]` reads: use `.get(key, default)`.
 - Reading a local assigned in one branch only.
+- A local, a parameter or a loop variable with a FIELD's name inside a
+  store or model method: the compiled side reads a field by its bare
+  name, so rename it (`score_`).
 - Negative exponents on `int ** int`: make a side float.
 - Compiling dict state (`run(state={...})`): development only;
   the compiled form is typed `State`.

@@ -1336,6 +1336,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 What Yokan cannot do as of today, with the reason for each refusal:
 
 - **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
+- **A local, a parameter or a loop variable that takes a field's name**, inside a store or model method. Python keeps `score` and `self.score` apart; the compiled side reads a field by its bare name, so the two runs would mean different things by it. Rename the local — `score_` reads the same in Python.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
