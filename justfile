@@ -77,14 +77,23 @@ coverage *modules:
 
 # ---- documentation site ----------------------------------------------------
 
+# Regenerate the coverage page (both languages) from the manifest, the
+# translator's tables and a probe of every builtin.
+coverage-page:
+    cd {{pkg}} && uv run tools/stdlib_coverage.py -o ../../website/docs/support.md
+    cd {{pkg}} && uv run tools/stdlib_coverage.py --lang ja -o ../../website/docs-ja/support.md
+
 # Build both languages, in the order build.sh enforces.
 site:
     cd website && ./build.sh
 
-# Build both languages and serve them on :8001.
+# Build both languages and serve them on :8001. The pages carry
+# absolute links (site_url ends in /yokan/), so the build has to sit
+# under that path or every link 404s — hence the symlinked docroot.
 serve: site
+    @mkdir -p website/.serve && ln -sfn ../build website/.serve/yokan
     @echo "http://localhost:8001/yokan/  ·  http://localhost:8001/yokan/ja/"
-    python3 -m http.server 8001 -d website/build
+    python3 -m http.server 8001 -d website/.serve
 
 # ---- release ---------------------------------------------------------------
 

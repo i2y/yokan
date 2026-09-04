@@ -24,6 +24,7 @@ nav = [
     { "Verify and ship" = "tour-ship.md" },
   ] },
   { Demos = "demos.md" },
+  { Coverage = "support.md" },
 ]
 
 # ---- Language switcher ----------------------------------------------------
