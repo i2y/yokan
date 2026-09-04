@@ -56,7 +56,7 @@ and why. Behavior never changes silently.
 
 Shipping is `yokan build app.py --release`. If the app uses no
 `@py`, the executable contains no CPython at all — zero links to
-Python, 13.4 MB (10.4 MB stripped), millisecond startup. Apps that
+Python, 14.7 MB (11.3 MB stripped), millisecond startup. Apps that
 do use `@py` ship CPython embedded via `--bundle` or `--onefile`
 (one file: about 17 MB stdlib-only, about 21 MB with numpy). Add
 `--app` and either shape becomes a macOS `.app` bundle — Dock name,

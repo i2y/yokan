@@ -81,7 +81,7 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
 ## ビルドで何ができるか
 
 `@py` を使っていないアプリなら、実行ファイルに CPython は入りません。
-Python へのリンクもゼロで、**13.4 MB**（strip 後 10.4 MB）、起動は数ミリ秒です。
+Python へのリンクもゼロで、**14.7 MB**（strip 後 11.3 MB）、起動は数ミリ秒です。
 
 `@py` を使うアプリは CPython ごと同梱します。
 

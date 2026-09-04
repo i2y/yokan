@@ -97,7 +97,7 @@ instead of learning it from refusals at build time.
 ## What a build produces
 
 If the app uses no `@py` escapes, the executable contains no
-CPython at all — zero links to Python, **13.4 MB** (10.4 MB
+CPython at all — zero links to Python, **14.7 MB** (11.3 MB
 stripped), millisecond startup.
 
 Apps that do use `@py` ship CPython embedded:

@@ -49,7 +49,7 @@ numpy のようなライブラリもここで使えます。
 
 配布は `yokan build app.py --release`。
 `@py` を使っていないアプリなら、できあがる実行ファイルに CPython は入りません。
-Python へのリンクもゼロで、13.4 MB（strip 後 10.4 MB）、起動は数ミリ秒です。
+Python へのリンクもゼロで、14.7 MB（strip 後 11.3 MB）、起動は数ミリ秒です。
 `@py` を使うアプリは `--bundle` か `--onefile` で CPython ごと同梱します（単一ファイルで stdlib のみ約 17 MB、numpy 込み約 21 MB）。
 `--app` を足せば、どちらの形も macOS の `.app` バンドル（Dock 名とアイコン付き、ダブルクリックで起動）になります。
 どちらの場合も、受け取る側のマシンに Python も pip も要りません。

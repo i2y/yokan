@@ -519,7 +519,7 @@ generator on, so it stays in a handler. Seed it and the two runs walk
 one sequence.
 
 **Yokan's own**: `from yokan import fs, sqlite, http, jsondoc, clock,
-strings, clipboard, notify`. One implementation in Rust serves both
+strings, clipboard, notify, audio, keys`. One implementation in Rust serves both
 runs; the shipped binary needs no Python. Call it from handlers only.
 
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` /
@@ -552,6 +552,13 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   so copy-and-paste is gate-checkable
 - **notify**: `send(title, body)` — delivered when the app runs as
   an `.app` bundle; dev and headless runs drop it quietly
+- **audio**: `play(path)` (a WAV; returns at once, sounds mix) /
+  `stop()`. A SCRIPTED run is silent, so nothing here reaches a dump
+  and the gate cannot check it; no device or an unreadable file plays
+  nothing rather than failing. Only an app that imports it links a
+  sound device (~1.3 MB)
+- **keys**: `down(k)` / `pressed(k)` / `released(k)` — see the tick
+  rule above
 
 From Python's side: all of `math` but six members (`prod`,
 `sumprod`, `gamma`, `lgamma`, `erf`, `erfc`, each refused
@@ -741,7 +748,7 @@ reason.
 - Iterating a list of models in a view: `for` there walks scalars
   and value classes; for models, assemble strings on the store side
   and hand them to `list_view`.
-- On a canvas: no sound, no mouse, no tilemap, no camera offset;
+- On a canvas: no mouse, no tilemap, no camera offset;
   whole-pixel coordinates only; the scale is declared, not fitted to
   the window; a missing sprite PNG paints nothing; and what a canvas
   paints is one image to assistive technology (`a11y_label=`).

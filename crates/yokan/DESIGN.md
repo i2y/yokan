@@ -1740,3 +1740,32 @@ list, which the same `for` already walks.
 Both came from the ports, where the first was a line of the original
 that had nowhere to go and the second was a loop that had to be
 written out twice.
+
+## Sound (2026-09-05)
+
+`audio.play(path)` starts a WAV and returns; several play together,
+and `audio.stop()` ends them. One device is opened when the first
+sound plays and held for the run, because dropping it stops everything
+mid-note.
+
+**A scripted run is silent.** The gate must not need a machine with
+speakers, a dump has no sound in it, and both runs read the same flag
+through the same implementation — so neither run is louder than the
+other, and this is one of the few things only a window shows. A
+machine with no audio device, or a file that cannot be read, plays
+nothing rather than failing the app: the rule a missing sprite already
+follows.
+
+**Only an app that asks for sound carries it.** Linking a sound device
+costs about 1.3 MB, which every app would otherwise pay for a feature
+most never use. The standard library's crate takes it as a feature,
+the two functions exist either way (the binding door is generated from
+one manifest, so every name in it has to resolve, and without the
+feature they answer without playing), and an app that imports `audio`
+turns it on. The interpreted run always has it: that IS the app being
+developed, and it has to hear what the compiled one will play.
+
+The two ported games use it. Pyxel writes its sounds as MML for the
+chip it emulates and `play` takes a file, so the five WAVs in the
+demos' assets were made for the ports rather than carried over — which
+is what the ports' own docstrings say.

@@ -93,7 +93,7 @@ $ yokan build app.py --release
 ```
 
 No `@py` escapes in the app? Then the executable contains no
-CPython at all — zero links to Python, 13.4 MB (10.4 MB stripped),
+CPython at all — zero links to Python, 14.7 MB (11.3 MB stripped),
 millisecond startup. The person receiving it installs nothing.
 
 ---

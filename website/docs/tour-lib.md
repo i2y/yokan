@@ -55,7 +55,7 @@ def view():
 `math` and `statistics` are pure, so a view can call them; `random` moves a generator on, so it belongs in a handler like the rest.
 An unseeded generator is as unrepeatable here as it is in Python — seed it and the gate can hold the two runs to one sequence.
 
-**Yokan's own modules** cover files, a database, the network, the clipboard and notifications: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify`.
+**Yokan's own modules** cover files, a database, the network, the clipboard, notifications, sound and the keyboard: `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify, audio, keys`.
 Python can do most of this too, through `pathlib`, `sqlite3` and `urllib`.
 What differs is how many implementations there are.
 `math` and `re` are CPython's modules during development and Rust twins after shipping.
@@ -73,6 +73,8 @@ Call them from handlers (views stay pure).
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
 - **clipboard**: `set_text(s)` / `get_text()` — the system clipboard. A window exchanges it with every other application; a headless run keeps it to itself, so a copy and a paste are checked like any other interaction
 - **notify**: `send(title, body)` — an OS notification, delivered through Notification Center when the app runs as an `.app` bundle (`--app`); a bare dev run and headless runs drop it quietly
+- **audio**: `play(path)` / `stop()` — a WAV starts and the call returns; several play together. A SCRIPTED run is silent, so a gate never needs a machine with speakers and a sound never reaches a dump; a machine with no audio device, or a file that cannot be read, plays nothing rather than failing the app. Only an app that imports this links a sound device, which is about 1.3 MB of binary
+- **keys**: `down(k)` / `pressed(k)` / `released(k)` — the keyboard as a device, read from a timer's tick; see [The window](#the-window) for the chords that come to a handler instead
 
 How far the Python half reaches, module by module:
 

@@ -60,7 +60,7 @@ def view():
 種を撒けば、gate が両方の実行を一つの列に縛れます。
 
 **Yokan 自身のモジュール**が受け持つのは、ファイル、データベース、ネットワーク、クリップボード、通知です。
-`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify` と書いて読み込みます。
+`from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify, audio, keys` と書いて読み込みます。
 同じことは Python でもできます（`pathlib`、`sqlite3`、`urllib`）。
 違うのは、実装がいくつあるかです。
 `math` や `re` は、開発中は CPython のモジュールが動き、リリース後は Rust の双子が動きます。
@@ -79,6 +79,8 @@ JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
 - **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
 - **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
+- **audio**：`play(path)` / `stop()` — WAV を鳴らす。呼び出しはすぐ戻り、複数の音は重なって鳴る。スクリプト実行は無音なので、ゲートにスピーカーのある機械は要らず、音がダンプに出ることもない。音の出せない機械や読めないファイルでは、アプリを止めずに何も鳴らさない。音のデバイスを積むのはこれを import したアプリだけで、バイナリの増分はおよそ 1.3 MB
+- **keys**：`down(k)` / `pressed(k)` / `released(k)` — 装置としてのキーボード。タイマーのティックから読む（ハンドラに届くコードのほうは[ウィンドウ](#ウィンドウ)を参照）
 
 Python 側がどこまで届くかを、モジュールごとに挙げます。
 
