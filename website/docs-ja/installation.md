@@ -48,6 +48,23 @@ $ yokan build app.py --release --onefile    # 1 ファイルで配る
 - コンパイル先の Rust クレート群はリポジトリに入っていますが、最初の `gate` か `build` が、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます（約 11 MB）。手で clone するものはありません。チェックアウトの中で `yokan` を実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 - 初回はエンジンごとコンパイルするので数分かかります。二回目からは差分だけです。
 
+## 更新とキャッシュ
+
+更新は `uv tool upgrade yokan`（`pip install -U yokan` でも同じ）です。
+次のネイティブビルドが新しい版のチェックアウトを取ってきて、入れ替わった古いほうを消します。
+ビルドの成果物はチェックアウトの中ではなく隣に置いてあるので、版を上げても、変わったところだけコンパイルすれば済みます。
+
+```console
+$ yokan version
+yokan 0.2.1
+  checkout  ~/.cache/yokan/repo-0.2.1 (v0.2.1, fetched)
+  builds    ~/.cache/yokan/target (3.4G)
+$ yokan clean                                # キャッシュを捨てる
+```
+
+`~/.cache/yokan/` の中身は、取り直しとビルドし直しで元に戻せるものだけです。
+だから状態が怪しくなったときは `clean` が出口になります。
+
 ## ビルドで何ができるか
 
 `@py` を使っていないアプリなら、実行ファイルに CPython は入りません。

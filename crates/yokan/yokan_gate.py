@@ -41,12 +41,32 @@ def wheel_version() -> str:
         return None
 
 
+def cache_root() -> str:
+    """Everything this command keeps between runs: the checkouts it
+    fetched and the build tree they compile into."""
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, "yokan")
+
+
 def cached_repo() -> str:
     """Where a fetched checkout lives. One directory per version: the
     native build compiles against the crates in there, so a wheel must
     never build against another wheel's."""
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return os.path.join(base, "yokan", "repo-" + (wheel_version() or "main"))
+    return os.path.join(cache_root(), "repo-" + (wheel_version() or "main"))
+
+
+def cargo_env() -> dict:
+    """The environment a cargo run gets. A fetched checkout builds into
+    the cache BESIDE it, not inside it: the checkout is replaced when
+    the version changes, and a build tree inside it would go with it —
+    every upgrade would compile the engine again from nothing. One
+    tree, shared across versions, means an upgrade compiles what
+    changed. A checkout the user brought keeps cargo's own default, and
+    a CARGO_TARGET_DIR they set wins over both."""
+    env = dict(os.environ)
+    if "CARGO_TARGET_DIR" not in env and repo() == cached_repo():
+        env["CARGO_TARGET_DIR"] = os.path.join(cache_root(), "target")
+    return env
 
 
 def fetch_repo(dest: str) -> str:
@@ -78,10 +98,17 @@ def fetch_repo(dest: str) -> str:
                  f"clone it yourself and set PIXIE_REPO to it")
     shutil.rmtree(dest, ignore_errors=True)
     os.replace(tmp, dest)
+    # The checkouts of other versions are dead the moment this one
+    # lands: nothing reads them, and any of them is one clone away.
+    for name in os.listdir(os.path.dirname(dest)):
+        old = os.path.join(os.path.dirname(dest), name)
+        if name.startswith("repo-") and old != dest and os.path.isdir(old):
+            shutil.rmtree(old, ignore_errors=True)
+            print(f"removed the checkout of an older version: {old}", file=sys.stderr)
     return dest
 
 
-def repo() -> str:
+def repo(fetch: bool = True):
     """The pixie repo, needed only to compile the native tier —
     `translate` never asks. Resolution: $PIXIE_REPO, then the dev
     tree this file sits in, then upward from the cwd (so the
@@ -100,7 +127,7 @@ def repo() -> str:
     for c in cands:
         if c and os.path.isfile(os.path.join(c, "crates", "pixie-cli", "Cargo.toml")):
             return c
-    return fetch_repo(cached_repo())
+    return fetch_repo(cached_repo()) if fetch else None
 
 
 SOURCES: dict = {}   # parsed file -> its lines, for refusal excerpts
@@ -11354,7 +11381,7 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
         tc = os.path.join(repo(), "rust-toolchain.toml")
         if os.path.isfile(tc):
             shutil.copyfile(tc, os.path.join(src_dir, "rust-toolchain.toml"))
-        env = dict(os.environ)
+        env = cargo_env()
         env.pop("RUSTUP_TOOLCHAIN", None)
         r = subprocess.run(
             ["cargo", "build", "--release", "--quiet"],
@@ -11686,7 +11713,7 @@ def tier_b_project(
         cmd.append("--release")
     else:
         cmd.append("--no-interp")
-    env = dict(os.environ)
+    env = cargo_env()
     if pyo3_python:
         env["PYO3_PYTHON"] = pyo3_python
     p = subprocess.run(cmd, cwd=proj, capture_output=True, text=True, env=env)
@@ -11947,7 +11974,7 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
         # The gate's compiled tier is never hot-reloaded, and leaving
         # the interpreter out of the crate graph is most of the link.
         cmd.append("--no-interp")
-    p = subprocess.run(cmd, cwd=repo(), capture_output=True, text=True)
+    p = subprocess.run(cmd, cwd=repo(), capture_output=True, text=True, env=cargo_env())
     if p.returncode != 0:
         sys.exit(f"pixie build failed:\n{p.stdout}\n{p.stderr}")
     binary = None
@@ -12203,9 +12230,54 @@ def do_init(path: str) -> None:
         print(f"  {c.ljust(w)}   # {note}")
 
 
+def dir_size(path: str) -> str:
+    """How much a cache directory is holding, in the shell's own words."""
+    if not os.path.isdir(path):
+        return "empty"
+    r = subprocess.run(["du", "-sh", path], capture_output=True, text=True)
+    return r.stdout.split()[0] if r.returncode == 0 else "?"
+
+
+def do_version() -> None:
+    """The three moving parts, named: the package, the checkout it
+    compiles against, and the tree those builds land in. Answers
+    without fetching anything, because the question is often asked
+    when something is already wrong."""
+    ver = wheel_version()
+    print(f"yokan {ver or '(not installed as a package)'}")
+    found = repo(fetch=False)
+    if found is None:
+        print(f"  checkout  not fetched yet — the first native build takes it "
+              f"into {cached_repo()}")
+    else:
+        tag = subprocess.run(["git", "-C", found, "describe", "--tags", "--always"],
+                             capture_output=True, text=True)
+        at = tag.stdout.strip() if tag.returncode == 0 else "not a git checkout"
+        how = "fetched" if found == cached_repo() else "yours"
+        print(f"  checkout  {found} ({at}, {how})")
+    target = os.environ.get("CARGO_TARGET_DIR") or (
+        os.path.join(cache_root(), "target") if found == cached_repo() else None)
+    if target:
+        print(f"  builds    {target} ({dir_size(target)})")
+    else:
+        print("  builds    inside the checkout (cargo's default)")
+
+
+def do_clean() -> None:
+    """Drop everything the cache holds. All of it is one fetch and one
+    build away, which is what makes this the way out of a bad state."""
+    root = cache_root()
+    if not os.path.isdir(root):
+        print(f"nothing to clean ({root} does not exist)")
+        return
+    print(f"removing {root} ({dir_size(root)})")
+    shutil.rmtree(root, ignore_errors=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["init", "check", "translate", "gate", "build", "sync", "add"])
+    ap.add_argument("mode", choices=["init", "check", "translate", "gate", "build",
+                                     "sync", "add", "version", "clean"])
     ap.add_argument("app", nargs="?", default=None,
                     help="the app; `init` defaults it to app.py")
     ap.add_argument("extra", nargs="*",
@@ -12230,6 +12302,12 @@ def main():
 
     if args.mode == "init":
         do_init(args.app or "app.py")
+        return
+    if args.mode == "version":
+        do_version()
+        return
+    if args.mode == "clean":
+        do_clean()
         return
     if args.app is None:
         tail = " <crate>" if args.mode == "add" else ""

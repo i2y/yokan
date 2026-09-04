@@ -60,6 +60,25 @@ compiles, at any point along the way.
 - That first build compiles the engine and takes a few minutes;
   later builds are incremental.
 
+## Upgrading, and the cache
+
+Upgrading is `uv tool upgrade yokan` (or `pip install -U yokan`).
+The next native build fetches the checkout for the new version and
+removes the one it replaces. The build tree sits beside the
+checkouts rather than inside one, so an upgrade compiles what
+changed instead of the engine all over again.
+
+```console
+$ yokan version
+yokan 0.2.1
+  checkout  ~/.cache/yokan/repo-0.2.1 (v0.2.1, fetched)
+  builds    ~/.cache/yokan/target (3.4G)
+$ yokan clean                                # throw the cache away
+```
+
+Everything under `~/.cache/yokan/` is one fetch and one build away,
+which is what makes `clean` the way out of a state you don't trust.
+
 ## What a build produces
 
 If the app uses no `@py` escapes, the executable contains no

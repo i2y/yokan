@@ -1507,3 +1507,35 @@ in a `for`, and only running them says so.
 
 Both languages come from the same generator, so the two pages cannot
 drift apart, and neither can drift from the compiler.
+
+## The build tree outlives the version, and `version` says what is in play
+
+A user of the wheel has three things in play: the package, the
+checkout it compiles against, and the tree those builds land in. Only
+the first is theirs to manage — `uv tool upgrade yokan` — and the
+second already follows it, since the checkout is fetched at the tag of
+the installed version. The third was wrong.
+
+Cargo's default target sits inside the manifest's directory, which for
+a fetched checkout meant `~/.cache/yokan/repo-<version>/target`. That
+ties the build tree to the version: an upgrade fetched a new checkout,
+found no build tree in it, and compiled the engine from nothing — the
+first-build wait again, at every release — while the tree it replaced
+stayed on disk for good. The tree now sits beside the checkouts, one
+of it, shared across versions, so an upgrade compiles what changed. A
+checkout the user brought keeps cargo's own default and a
+CARGO_TARGET_DIR they set wins over both, so a contributor's build is
+untouched.
+
+A fetch also drops the checkouts it supersedes. Each is one clone
+away, and nothing reads them once the version has moved.
+
+Upgrading stays where it belongs: the package manager moves the
+wheel, and the checkout follows it by its tag. What that leaves is a
+question of visibility, and `yokan version` answers it — the package,
+the checkout with its tag and whether it was fetched or brought, and
+the build tree with its size — while fetching nothing on the way,
+because the question tends to be asked when something is already
+wrong. `yokan clean` drops the
+cache, which is safe to offer precisely because everything in it is
+one fetch and one build away.

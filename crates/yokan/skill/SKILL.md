@@ -641,6 +641,7 @@ $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py    # dump before/after, no wi
 $ yokan gate app.py --script "click:+1,input:Momo" --release
 GATE OK — 2 dump lines identical in both runs
 $ yokan build app.py --release [--app] [--bundle | --onefile]
+$ yokan version                                       # package, checkout, build tree
 ```
 
 Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
@@ -651,8 +652,10 @@ in text is `\,`. From tests, `yokan._headless(view, None, script)`
 returns the same string. Apps with PEP 723 dependencies run the
 gate under `uv run --with <dep>`. Building needs a Rust toolchain;
 the checkout it compiles against is fetched into `~/.cache/yokan/`
-on first use (`PIXIE_REPO` overrides); `translate` works
-anywhere. `--app`
+on first use (`PIXIE_REPO` overrides) and the build tree sits beside
+it, so an upgrade compiles what changed rather than the engine again.
+`yokan version` prints package, checkout and build tree; `yokan
+clean` drops the cache; `translate` works anywhere. `--app`
 makes `dist/<Title>.app` (a `<stem>.png` beside the file becomes
 the icon); it excludes `--onefile`.
 
