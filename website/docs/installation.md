@@ -91,8 +91,8 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
     https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
 ```
 
-An agent that has read it writes inside the boundary from the start,
-instead of finding it at build time.
+An agent that has read it gets the subset right the first time,
+instead of learning it from refusals at build time.
 
 ## What a build produces
 

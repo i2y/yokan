@@ -76,7 +76,7 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
     https://raw.githubusercontent.com/i2y/yokan/main/skills/yokan/SKILL.md
 ```
 
-これを読んだエージェントは、境界をビルド時に見つけるのではなく、最初から内側で書きます。
+これを読ませておくと、ビルドで断られてから直す、という手戻りが減ります。
 
 ## ビルドで何ができるか
 
