@@ -4258,21 +4258,59 @@ fn lower_view_float_prop(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, Em
 fn lower_view_int(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, EmitError> {
     match &e.kind {
         ExprKind::Int(v) => Ok(format!("{v}i64")),
+        // A sign belongs to the literal a reader wrote, the way it
+        // does for a Float (`colkey: -1` is the property that needs
+        // it).
+        ExprKind::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } if matches!(expr.kind, ExprKind::Int(_)) => {
+            Ok(format!("(-{})", lower_view_int(expr, cx, key)?))
+        }
+        // A repeater row that IS an Int — `for n in Store.counts`.
+        ExprKind::Ident(n) if cx.is_loop_var(n) => {
+            match cx.loop_elem_ty(n) {
+                Some(RustTy::Int) => Ok(camel_to_snake(n)),
+                _ => err(e.span, format!("`{key}:` needs an Int — `{n}` is not one")),
+            }
+        }
         // `columns: name.prop` — an Int prop / state-cell read.
         ExprKind::Member { receiver, name } => {
-            let ExprKind::Ident(f) = &receiver.kind else {
-                return err(e.span, format!("`{key}:` must be an int literal or an Int property"));
-            };
-            let Some((class, handle)) = cx.handle_for(f) else {
-                return err(e.span, format!("`{f}` is not a view state field or global"));
-            };
-            let Some(p) = class.prop(&name.name) else {
-                return err(e.span, format!("no property `{}` on `{}`", name.name, class.name));
-            };
-            if p.ty != RustTy::Int {
-                return err(e.span, format!("this {key} binding must be an Int property"));
+            if let ExprKind::Ident(f) = &receiver.kind {
+                if let Some((class, handle)) = cx.handle_for(f) {
+                    let Some(p) = class.prop(&name.name) else {
+                        return err(
+                            e.span,
+                            format!("no property `{}` on `{}`", name.name, class.name),
+                        );
+                    };
+                    if p.ty != RustTy::Int {
+                        return err(e.span, format!("this {key} binding must be an Int property"));
+                    }
+                    return Ok(format!("{handle}.{}(w)", p.rust));
+                }
             }
-            Ok(format!("{handle}.{}(w)", p.rust))
+            // Through an OBJECT or a STRUCT: `b.x` inside `for b in
+            // Store.blips` is how a canvas reads the thing it is
+            // drawing, and a drawing command is Ints all the way down.
+            // Typed here rather than routed to `lower_view_display`,
+            // whose output is untyped: an Int slot filled with a Float
+            // would land in generated code as a rustc error, which is
+            // the compiler's bug to prevent (D10).
+            match cx
+                .object_prop_read(receiver, &name.name)
+                .or_else(|| cx.struct_field_read(receiver, &name.name))
+            {
+                Some((read, RustTy::Int)) => Ok(read),
+                Some(_) => err(
+                    e.span,
+                    format!("`{key}:` needs an Int — this field is not one"),
+                ),
+                None => err(
+                    e.span,
+                    format!("`{key}:` must be an int literal or an Int property"),
+                ),
+            }
         }
         ExprKind::Binary { op, lhs, rhs } => {
             let l = lower_view_int(lhs, cx, key)?;
@@ -6549,6 +6587,44 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(selected, cx, "selected")?
             ))
         }
+        // The drawing surface. `width:`/`height:` count VIRTUAL
+        // pixels and are required — a canvas with no grid has no
+        // meaning — while `scale:` (1) and `background:` (index 0)
+        // have defaults. `palette:` is required too: inside a canvas a
+        // color is an index, so a canvas with no palette could not
+        // paint anything the app could name.
+        "Canvas" => {
+            let width = element_prop(el, "width").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Canvas needs `width:` (its width in virtual pixels)".into(),
+            })?;
+            let height = element_prop(el, "height").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Canvas needs `height:` (its height in virtual pixels)".into(),
+            })?;
+            let palette = element_prop(el, "palette").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Canvas needs `palette:` — a list of colors; a command's \
+                          color is an index into it"
+                    .into(),
+            })?;
+            let scale = match element_prop(el, "scale") {
+                Some(v) => lower_view_int(v, cx, "scale")?,
+                None => "1i64".into(),
+            };
+            let background = match element_prop(el, "background") {
+                Some(v) => lower_view_int(v, cx, "background")?,
+                None => "0i64".into(),
+            };
+            let ops = lower_ops(el, cx, ind)?;
+            Ok(format!(
+                "Element::Canvas {{ width: {}, height: {}, scale: {scale}, \
+                 background: {background}, palette: {}, ops: {ops} }}",
+                lower_view_int(width, cx, "width")?,
+                lower_view_int(height, cx, "height")?,
+                lower_view_str_list(palette, cx, "palette")?
+            ))
+        }
         other => err(
             el.span,
             format!(
@@ -6556,7 +6632,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
                  BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
-                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented), and no \
+                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented / Canvas), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),
@@ -6612,6 +6688,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "borderWidth",
             "borderColor",
         ],
+        "Canvas" => &["width", "height", "scale", "background", "palette"],
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
@@ -6685,7 +6762,7 @@ pub fn sized_prop_keys() -> &'static [&'static str] {
 /// and equality-tested beside the other tables (ledger §11.12).
 pub fn native_size_keys(element: &str) -> &'static [&'static str] {
     match element {
-        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" => {
+        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" | "Canvas" => {
             &["width", "height"]
         }
         "Text" => &["width"],
@@ -6764,12 +6841,13 @@ fn view_pattern_span(p: &ast::Pattern) -> Span {
     }
 }
 
-fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitError> {
-    // Container-property allowlist (§5.11/R3, ledger §11.12): only the
-    // keys THIS element consumes in its own arm before calling us may
-    // sit among the children. Interp's `build_children` runs the
-    // identical table and the identical error, so a rung-2 reload of a
-    // bad view fails the same way instead of silently ignoring it.
+/// Every property an element carries must be one THIS element
+/// consumes in its own arm, or one of the universal riders — anything
+/// else is a named error rather than a silently ignored key
+/// (ledger §11.12). Interp's `build_children` runs the identical
+/// table and the identical error, so a reload of a bad view fails the
+/// same way.
+fn check_own_props(el: &Element) -> Result<(), EmitError> {
     for m in &el.members {
         if let ElementMember::Property { key, span, .. } = m {
             if !grid_item_prop_keys().contains(&key.as_str())
@@ -6791,6 +6869,207 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
             }
         }
     }
+    Ok(())
+}
+
+/// The property keys one drawing command consumes. A command takes
+/// NONE of the universal riders — it is not an element, there is
+/// nothing under it to disable, theme, size or animate — so this
+/// table IS the allowlist, and an unknown key is a named error.
+/// `pixie_interp::op_prop_keys` mirrors it, and the accept test
+/// fails if the two drift.
+pub fn op_prop_keys(op: &str) -> &'static [&'static str] {
+    match op {
+        "Pixel" => &["x", "y", "color"],
+        "Line" => &["x1", "y1", "x2", "y2", "color"],
+        "Rect" | "RectOutline" => &["x", "y", "w", "h", "color"],
+        "Circle" | "CircleOutline" => &["x", "y", "r", "color"],
+        "Triangle" | "TriangleOutline" => &["x1", "y1", "x2", "y2", "x3", "y3", "color"],
+        "Sprite" => &[
+            "x", "y", "source", "u", "v", "w", "h", "colkey", "flipX", "flipY",
+        ],
+        "PixelText" => &["x", "y", "text", "color"],
+        _ => &[],
+    }
+}
+
+/// The commands a canvas body contributes, as a `Vec<Op>` block
+/// expression — `lower_children`'s twin. The `for` / `if` / `case`
+/// recursion is shared (`lower_items` takes the child lowerer), so
+/// what is separate here is only what a command IS.
+fn lower_ops(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitError> {
+    check_own_props(el)?;
+    let var = format!("__ops{}", cx.depth);
+    cx.depth += 1;
+    let inner_ind = format!("{ind}    ");
+    let mut out = String::new();
+    writeln!(out, "{{").unwrap();
+    writeln!(out, "{inner_ind}let mut {var}: Vec<Op> = Vec::new();").unwrap();
+    lower_items(
+        lower_op,
+        &items_of_members(&el.members),
+        &var,
+        cx,
+        &inner_ind,
+        &mut out,
+    )?;
+    write!(out, "{ind}    {var}\n{ind}}}").unwrap();
+    Ok(out)
+}
+
+/// A required Int property of a drawing command.
+fn op_int(el: &Element, key: &str, cx: &ViewCtx) -> Result<String, EmitError> {
+    let Some(e) = element_prop(el, key) else {
+        return err(
+            el.span,
+            format!("`{}` needs `{key}:`", el.name.name),
+        );
+    };
+    lower_view_int(e, cx, key)
+}
+
+/// An optional Int property, with the value it means when absent.
+fn op_int_or(el: &Element, key: &str, cx: &ViewCtx, default: i64) -> Result<String, EmitError> {
+    match element_prop(el, key) {
+        Some(e) => lower_view_int(e, cx, key),
+        None => Ok(format!("{default}i64")),
+    }
+}
+
+/// An optional Bool property (`flipX:` / `flipY:`), false when absent.
+fn op_bool(el: &Element, key: &str, cx: &ViewCtx) -> Result<String, EmitError> {
+    match element_prop(el, key) {
+        Some(e) => lower_view_bool(e, cx, key),
+        None => Ok("false".into()),
+    }
+}
+
+/// One drawing command. Same signature as `lower_element` so the two
+/// can be handed to the same item recursion.
+fn lower_op(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitError> {
+    let _ = ind;
+    let name = el.name.name.as_str();
+    let keys = op_prop_keys(name);
+    if keys.is_empty() {
+        return err(
+            el.span,
+            format!(
+                "`{name}` is not a drawing command — a canvas holds commands \
+                 (Pixel / Line / Rect / RectOutline / Circle / CircleOutline / \
+                 Triangle / TriangleOutline / Sprite / PixelText), not elements"
+            ),
+        );
+    }
+    for m in &el.members {
+        match m {
+            ElementMember::Property { key, span, .. } => {
+                if !keys.contains(&key.as_str()) {
+                    return err(
+                        *span,
+                        format!(
+                            "`{name}` has no `{key}:` — it takes {}. A drawing command \
+                             takes none of the shared properties either: it is painted, \
+                             not laid out",
+                            keys.join(", ")
+                        ),
+                    );
+                }
+            }
+            ElementMember::Child(c) => {
+                return err(c.span, format!("`{name}` draws one thing and has no body"));
+            }
+            ElementMember::Stmt(_) => {
+                return err(
+                    el.span,
+                    format!("`{name}` draws one thing and has no body"),
+                );
+            }
+        }
+    }
+    let color = |cx: &ViewCtx| op_int(el, "color", cx);
+    let out = match name {
+        "Pixel" => format!(
+            "Op::Pixel {{ x: {}, y: {}, color: {} }}",
+            op_int(el, "x", cx)?,
+            op_int(el, "y", cx)?,
+            color(cx)?
+        ),
+        "Line" => format!(
+            "Op::Line {{ x1: {}, y1: {}, x2: {}, y2: {}, color: {} }}",
+            op_int(el, "x1", cx)?,
+            op_int(el, "y1", cx)?,
+            op_int(el, "x2", cx)?,
+            op_int(el, "y2", cx)?,
+            color(cx)?
+        ),
+        "Rect" | "RectOutline" => format!(
+            "Op::{name} {{ x: {}, y: {}, w: {}, h: {}, color: {} }}",
+            op_int(el, "x", cx)?,
+            op_int(el, "y", cx)?,
+            op_int(el, "w", cx)?,
+            op_int(el, "h", cx)?,
+            color(cx)?
+        ),
+        "Circle" | "CircleOutline" => format!(
+            "Op::{name} {{ x: {}, y: {}, r: {}, color: {} }}",
+            op_int(el, "x", cx)?,
+            op_int(el, "y", cx)?,
+            op_int(el, "r", cx)?,
+            color(cx)?
+        ),
+        "Triangle" | "TriangleOutline" => format!(
+            "Op::{name} {{ x1: {}, y1: {}, x2: {}, y2: {}, x3: {}, y3: {}, color: {} }}",
+            op_int(el, "x1", cx)?,
+            op_int(el, "y1", cx)?,
+            op_int(el, "x2", cx)?,
+            op_int(el, "y2", cx)?,
+            op_int(el, "x3", cx)?,
+            op_int(el, "y3", cx)?,
+            color(cx)?
+        ),
+        "Sprite" => {
+            let Some(source) = element_prop(el, "source") else {
+                return err(el.span, "`Sprite` needs `source:` (the image to copy from)");
+            };
+            format!(
+                "Op::Sprite {{ x: {}, y: {}, source: {}, u: {}, v: {}, w: {}, h: {}, \
+                 colkey: {}, flip_x: {}, flip_y: {} }}",
+                op_int(el, "x", cx)?,
+                op_int(el, "y", cx)?,
+                lower_view_text(source, cx)?,
+                op_int_or(el, "u", cx, 0)?,
+                op_int_or(el, "v", cx, 0)?,
+                op_int(el, "w", cx)?,
+                op_int(el, "h", cx)?,
+                op_int_or(el, "colkey", cx, -1)?,
+                op_bool(el, "flipX", cx)?,
+                op_bool(el, "flipY", cx)?
+            )
+        }
+        "PixelText" => {
+            let Some(text) = element_prop(el, "text") else {
+                return err(el.span, "`PixelText` needs `text:`");
+            };
+            format!(
+                "Op::PixelText {{ x: {}, y: {}, text: {}, color: {} }}",
+                op_int(el, "x", cx)?,
+                op_int(el, "y", cx)?,
+                lower_view_text(text, cx)?,
+                color(cx)?
+            )
+        }
+        _ => unreachable!("guarded by op_prop_keys"),
+    };
+    Ok(out)
+}
+
+fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitError> {
+    // Container-property allowlist (§5.11/R3, ledger §11.12): only the
+    // keys THIS element consumes in its own arm before calling us may
+    // sit among the children. Interp's `build_children` runs the
+    // identical table and the identical error, so a rung-2 reload of a
+    // bad view fails the same way instead of silently ignoring it.
+    check_own_props(el)?;
     let var = format!("__c{}", cx.depth);
     cx.depth += 1;
     let inner_ind = format!("{ind}    ");
@@ -6798,6 +7077,7 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
     writeln!(out, "{{").unwrap();
     writeln!(out, "{inner_ind}let mut {var}: Vec<Element> = Vec::new();").unwrap();
     lower_items(
+        lower_element,
         &items_of_members(&el.members),
         &var,
         cx,
@@ -6812,7 +7092,10 @@ fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, E
 /// `for` bodies and `if` branches are runs of items too (§8.56), so
 /// this is the whole recursion: a repeater body may hold several
 /// elements, another repeater, or a conditional, and so may a branch.
+type LowerOne = fn(&Element, &mut ViewCtx, &str) -> Result<String, EmitError>;
+
 fn lower_items(
+    one: LowerOne,
     items: &[ViewItem<'_>],
     var: &str,
     cx: &mut ViewCtx,
@@ -6822,7 +7105,11 @@ fn lower_items(
     for item in items {
         match item {
             ViewItem::Child(child) => {
-                let c = lower_element(child, cx, ind)?;
+                // Which of the two a child lowers to — an `Element`
+                // or a canvas `Op` — is the caller's, and everything
+                // else in this recursion (`for`, `if`, `case`) is the
+                // same for both.
+                let c = one(child, cx, ind)?;
                 writeln!(out, "{ind}{var}.push({c});").unwrap();
             }
             ViewItem::Repeat {
@@ -6907,6 +7194,7 @@ fn lower_items(
                 }
                 cx.repeat_depth += 1;
                 let r = lower_items(
+                    one,
                     &items_of_block(body),
                     var,
                     cx,
@@ -6948,6 +7236,7 @@ fn lower_items(
                 let c = lower_action_expr(cond, &acx)?;
                 writeln!(out, "{ind}if {c} {{").unwrap();
                 lower_items(
+                    one,
                     &items_of_block(then_b),
                     var,
                     cx,
@@ -6956,7 +7245,8 @@ fn lower_items(
                 )?;
                 if let Some(eb) = else_b {
                     writeln!(out, "{ind}}} else {{").unwrap();
-                    lower_items(&items_of_block(eb), var, cx, &format!("{ind}    "), out)?;
+                    lower_items(
+                    one,&items_of_block(eb), var, cx, &format!("{ind}    "), out)?;
                 }
                 writeln!(out, "{ind}}}").unwrap();
             }
@@ -6997,6 +7287,7 @@ fn lower_items(
                             cx.loop_vars.push((b, elem_class, (*inner).clone()));
                         }
                         let r = lower_items(
+                    one,
                             &items_of_block(some_body),
                             var,
                             cx,
@@ -7008,6 +7299,7 @@ fn lower_items(
                         writeln!(out, "{ind}    }}").unwrap();
                         writeln!(out, "{ind}    None => {{").unwrap();
                         lower_items(
+                    one,
                             &items_of_block(none_body),
                             var,
                             cx,
@@ -7089,6 +7381,7 @@ fn lower_items(
                                 cx.loop_vars.push((b.clone(), c.clone(), t.clone()));
                             }
                             let r = lower_items(
+                    one,
                                 &items_of_block(&arm.body),
                                 var,
                                 cx,
@@ -7472,7 +7765,7 @@ fn collect_program(
 fn emit_header(out: &mut String) {
     out.push_str("// Generated by pixie — do not edit.\n");
     out.push_str("#![allow(unused_imports, unused_variables, unused_mut, unused_parens, unused_assignments, dead_code, non_camel_case_types, non_snake_case, clippy::all)]\n\n");
-    out.push_str("use pixie_kernel::{mount, Bytes, Component, Element, Handle, LazyRows, List, Map, Runtime, SignalId, Str, World};\n");
+    out.push_str("use pixie_kernel::{mount, Bytes, Component, Element, Handle, LazyRows, List, Map, Op, Runtime, SignalId, Str, World};\n");
     out.push_str("use std::rc::Rc;\n");
     // FromStr in scope so bindings may name `i64::from_str` and friends.
     out.push_str("use std::str::FromStr;\n\n");

@@ -197,6 +197,10 @@ pub fn role_of(el: &Element) -> Option<Role> {
         // Its data is not readable without a `label:` — which is the
         // honest report, not a gap to paper over.
         Element::BarChart { .. } | Element::LineChart { .. } => Some(Role::Image),
+        // So is a canvas: what it paints — including the text it
+        // paints — is pixels, and a `label:` is the only way to say
+        // what they are.
+        Element::Canvas { .. } => Some(Role::Image),
         Element::Checkbox { .. } => Some(Role::CheckBox),
         Element::Switch { .. } => Some(Role::Switch),
         Element::Slider { .. } => Some(Role::Slider),

@@ -1599,6 +1599,217 @@ pub enum Element {
         selected: i64,
         on_select: Option<IntListener>,
     },
+    /// A grid of virtual pixels the app paints command by command.
+    ///
+    /// `width`/`height` are counted in VIRTUAL pixels and `scale` is
+    /// how many logical pixels each of them takes, so a 160x120
+    /// canvas at `scale: 4` occupies 640x480 of layout. `background`
+    /// and every command's color are INDEXES into `palette` (a list
+    /// of hex colors the app declares — inside a canvas a color is a
+    /// number, which is what lets a frame written for a pixel machine
+    /// port line for line). The commands are pure data: no listeners,
+    /// no World reads, so nothing here needs a finder or an animation
+    /// arm, and the dump can print the whole frame.
+    Canvas {
+        width: i64,
+        height: i64,
+        scale: i64,
+        background: i64,
+        palette: List<Str>,
+        ops: Vec<Op>,
+    },
+}
+
+/// One drawing command inside a `Canvas`, in virtual pixels.
+///
+/// Deliberately NOT an `Element`: a command means nothing outside a
+/// canvas, takes none of the universal riders (a `Rect` cannot be
+/// disabled, themed or sized), and is invisible to every walker that
+/// looks for something to click. Coordinates are integers because a
+/// pixel grid has no half pixels; a color is a palette index.
+#[derive(Clone, PartialEq)]
+pub enum Op {
+    Pixel {
+        x: i64,
+        y: i64,
+        color: i64,
+    },
+    Line {
+        x1: i64,
+        y1: i64,
+        x2: i64,
+        y2: i64,
+        color: i64,
+    },
+    Rect {
+        x: i64,
+        y: i64,
+        w: i64,
+        h: i64,
+        color: i64,
+    },
+    RectOutline {
+        x: i64,
+        y: i64,
+        w: i64,
+        h: i64,
+        color: i64,
+    },
+    Circle {
+        x: i64,
+        y: i64,
+        r: i64,
+        color: i64,
+    },
+    CircleOutline {
+        x: i64,
+        y: i64,
+        r: i64,
+        color: i64,
+    },
+    Triangle {
+        x1: i64,
+        y1: i64,
+        x2: i64,
+        y2: i64,
+        x3: i64,
+        y3: i64,
+        color: i64,
+    },
+    TriangleOutline {
+        x1: i64,
+        y1: i64,
+        x2: i64,
+        y2: i64,
+        x3: i64,
+        y3: i64,
+        color: i64,
+    },
+    /// A rectangle of another image, copied in. `u`/`v`/`w`/`h` cut it
+    /// out of `source`; `colkey` is the palette index that is treated
+    /// as transparent (`-1` = none, the spelling the source material
+    /// already uses).
+    Sprite {
+        x: i64,
+        y: i64,
+        source: Str,
+        u: i64,
+        v: i64,
+        w: i64,
+        h: i64,
+        colkey: i64,
+        flip_x: bool,
+        flip_y: bool,
+    },
+    /// A line of text in the engine's own 4x6 font, laid out on the
+    /// pixel grid rather than by the text system.
+    PixelText {
+        x: i64,
+        y: i64,
+        text: Str,
+        color: i64,
+    },
+}
+
+/// What a canvas color index resolves to.
+///
+/// Out of range CLAMPS to the ends, so an off-by-one paints a
+/// visibly wrong color instead of vanishing. A canvas whose palette
+/// is empty answers magenta — what a missing color looks like
+/// everywhere else in graphics — rather than a silent black. The
+/// engine paints what this answers and the dump prints it, so the
+/// two cannot disagree.
+pub fn palette_color(palette: &List<Str>, index: i64) -> Str {
+    if palette.is_empty() {
+        return Str::from("#ff00ff");
+    }
+    let last = palette.len() - 1;
+    let ix = if index < 0 {
+        0
+    } else {
+        (index as usize).min(last)
+    };
+    palette.iter().nth(ix).cloned().unwrap_or_else(Str::new)
+}
+
+impl Op {
+    /// One command, one line. The numbers are what the app wrote; the
+    /// colors are what the palette made of them.
+    pub fn dump(&self, palette: &List<Str>) -> String {
+        let c = |i: &i64| palette_color(palette, *i);
+        match self {
+            Op::Pixel { x, y, color } => format!("Pixel({x}, {y}, {})", c(color)),
+            Op::Line {
+                x1,
+                y1,
+                x2,
+                y2,
+                color,
+            } => format!("Line({x1}, {y1}, {x2}, {y2}, {})", c(color)),
+            Op::Rect { x, y, w, h, color } => {
+                format!("Rect({x}, {y}, {w}, {h}, {})", c(color))
+            }
+            Op::RectOutline { x, y, w, h, color } => {
+                format!("RectOutline({x}, {y}, {w}, {h}, {})", c(color))
+            }
+            Op::Circle { x, y, r, color } => format!("Circle({x}, {y}, {r}, {})", c(color)),
+            Op::CircleOutline { x, y, r, color } => {
+                format!("CircleOutline({x}, {y}, {r}, {})", c(color))
+            }
+            Op::Triangle {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                color,
+            } => format!(
+                "Triangle({x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {})",
+                c(color)
+            ),
+            Op::TriangleOutline {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                color,
+            } => format!(
+                "TriangleOutline({x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {})",
+                c(color)
+            ),
+            Op::Sprite {
+                x,
+                y,
+                source,
+                u,
+                v,
+                w,
+                h,
+                colkey,
+                flip_x,
+                flip_y,
+            } => {
+                let mut s = format!("Sprite({source}, {u},{v} {w}x{h} at {x},{y}");
+                if *colkey >= 0 {
+                    s.push_str(&format!(", colkey={}", c(colkey)));
+                }
+                if *flip_x {
+                    s.push_str(", flipX");
+                }
+                if *flip_y {
+                    s.push_str(", flipY");
+                }
+                s.push(')');
+                s
+            }
+            Op::PixelText { x, y, text, color } => {
+                format!("PixelText({x}, {y}, {text:?}, {})", c(color))
+            }
+        }
+    }
 }
 
 /// Clamp `v` into `[min, max]`, then snap it to the nearest `step`
@@ -2437,6 +2648,37 @@ impl Element {
                 let inner: Vec<String> =
                     options.iter().map(|o| o.as_str().to_string()).collect();
                 format!("Segmented(selected={selected})[{}]", inner.join(", "))
+            }
+            // The one element that dumps over several lines. Every
+            // other element joins its children with ", " because a
+            // tree is short; a frame is hundreds of commands, and the
+            // gate reports a difference by printing the whole LINE it
+            // is on. One command per line makes that report a diff.
+            // Colors print RESOLVED, so what the palette did is
+            // visible and a reader sees what was painted.
+            Element::Canvas {
+                width,
+                height,
+                scale,
+                background,
+                palette,
+                ops,
+            } => {
+                let head = format!(
+                    "Canvas({width}x{height}, scale={scale}, bg={})",
+                    palette_color(palette, *background)
+                );
+                if ops.is_empty() {
+                    return format!("{head}[]");
+                }
+                let mut s = format!("{head}[\n");
+                for op in ops {
+                    s.push_str("  ");
+                    s.push_str(&op.dump(palette));
+                    s.push('\n');
+                }
+                s.push(']');
+                s
             }
             // The bound number is the whole widget, so it always
             // prints — as `str(value)` would print it, which is what

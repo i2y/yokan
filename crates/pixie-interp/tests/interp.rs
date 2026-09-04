@@ -1530,6 +1530,68 @@ fn segmented_requires_its_props() {
 }
 
 #[test]
+fn a_canvas_dumps_its_frame_one_command_per_line() {
+    // The interp builds the same `Op` values the emitter does, which
+    // is what the tier gate compares — including the resolved colors,
+    // the optional halves of a sprite and the clamp on an index past
+    // the end of the palette.
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view(
+            "Canvas { width: 16; height: 8; scale: 2; background: 0; \
+             palette: [\"#000000\", \"#ffffff\"]\n      \
+             Rect { x: 1; y: 1; w: 4; h: 2; color: 1 }\n      \
+             Sprite { x: 8; y: 0; source: \"sheet.png\"; w: 8; h: 8 }\n      \
+             PixelText { x: 0; y: 4; text: \"hi\"; color: 9 } }",
+        ),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Canvas(16x8, scale=2, bg=#000000)[\n  \
+         Rect(1, 1, 4, 2, #ffffff)\n  \
+         Sprite(sheet.png, 0,0 8x8 at 8,0)\n  \
+         PixelText(0, 4, \"hi\", #ffffff)\n]]"
+    );
+}
+
+#[test]
+fn an_empty_canvas_dumps_on_one_line_and_a_command_is_not_an_element() {
+    let (w, e) = charts_world();
+    let tree = build_view(
+        &chart_view("Canvas { width: 4; height: 4; palette: [\"#101010\"] }"),
+        &e,
+        &tables(),
+        &w,
+    )
+    .expect("builds");
+    assert_eq!(tree.dump(&w), "Column[Canvas(4x4, scale=1, bg=#101010)[]]");
+
+    // The mirrors of codegen's refusals, so a reload rejects exactly
+    // what a build rejects.
+    for (body, needle) in [
+        ("Canvas { height: 4; palette: [\"#000\"] }", "Canvas needs `width:`"),
+        ("Canvas { width: 4; height: 4 }", "palette"),
+        (
+            "Canvas { width: 4; height: 4; palette: [\"#000\"]; Text { text: \"x\" } }",
+            "not a drawing command",
+        ),
+        (
+            "Canvas { width: 4; height: 4; palette: [\"#000\"]; Pixel { x: 0; y: 0; color: 0; theme: \"light\" } }",
+            "`Pixel` has no `theme:`",
+        ),
+    ] {
+        match build_view(&chart_view(body), &e, &tables(), &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(err.contains(needle), "unexpected error: {err}"),
+        }
+    }
+}
+
+#[test]
 fn disabled_rider_wraps_only_while_true() {
     // A literal `true` wraps; `false` leaves the element bare (no
     // wrapper, so an enabled element's dump never moves); a bound

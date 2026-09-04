@@ -1201,6 +1201,99 @@ fn charts_demo_checks_and_emits() {
 }
 
 #[test]
+fn canvas_demo_checks_and_emits() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/canvas/canvas.pix"
+    );
+    let outcome = pixie_driver::check_file(Path::new(path)).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        // The surface itself: virtual size, an integer scale, the
+        // background index and the palette read off the store.
+        "Element::Canvas { width: 48i64, height: 24i64, scale: 6i64, background: 0i64, \
+         palette: w.singleton_ref::<Sky>().palette(w)",
+        // A command is a plain value pushed into the frame — no
+        // listener, no rider wrapper, nothing to key.
+        "Op::Rect { x: 2i64, y: 2i64, w: 10i64, h: 6i64, color: 1i64 }",
+        // The optional halves of a sprite: `u`/`v` default to zero,
+        // `colkey` to -1 (none), the flips to false.
+        "Op::Sprite { x: 29i64, y: 14i64, source: Str::from(\"examples/canvas/sheet.png\"), \
+         u: 0i64, v: 0i64, w: 8i64, h: 8i64, colkey: 4i64, flip_x: false, flip_y: false }",
+        // The repeater inside the canvas is the ordinary one, and the
+        // row's fields are read as the Ints a command needs.
+        "for (__row_idx0, b) in __xs0.iter().enumerate() {",
+        "Op::Pixel { x: (b).x.clone(), y: (b).y.clone(), color: (b).c.clone() }",
+        // Interpolation in a command's text goes through the same
+        // display lowering a `Text` uses.
+        "Op::PixelText { x: 2i64, y: 15i64, text:",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+#[test]
+fn a_canvas_names_what_it_needs_and_what_a_command_cannot_take() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let emit_err = |name: &str, body: &str| -> String {
+        let f = dir.join(name);
+        std::fs::write(
+            &f,
+            format!("view Main {{\n  Column {{\n    {body}\n  }}\n}}\n"),
+        )
+        .unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(outcome.module.as_ref().unwrap(), outcome.binding_items, None)
+            .expect_err("this canvas must not emit")
+            .message
+    };
+
+    // The palette is not optional: inside a canvas a color IS an
+    // index, so a canvas without one could paint nothing an app named.
+    let err = emit_err(
+        "canvas_no_palette.pix",
+        "Canvas { width: 8; height: 8 }",
+    );
+    assert!(err.contains("palette"), "error should name it: {err}");
+
+    // The grid is not optional either.
+    let err = emit_err("canvas_no_width.pix", "Canvas { height: 8 }");
+    assert!(err.contains("`width:`"), "error should name it: {err}");
+
+    // An element inside a canvas is a named error — a canvas holds
+    // commands, and the message lists them.
+    let err = emit_err(
+        "canvas_holds_commands.pix",
+        "Canvas { width: 8; height: 8; palette: [\"#000\"]; Text { text: \"no\" } }",
+    );
+    assert!(
+        err.contains("not a drawing command") && err.contains("PixelText"),
+        "error should say what a canvas holds: {err}"
+    );
+
+    // And a command takes no shared properties: it is painted, not
+    // laid out.
+    let err = emit_err(
+        "canvas_command_rider.pix",
+        "Canvas { width: 8; height: 8; palette: [\"#000\"]; \
+         Pixel { x: 1; y: 1; color: 0; disabled: true } }",
+    );
+    assert!(
+        err.contains("`Pixel` has no `disabled:`"),
+        "error should name the command and the key: {err}"
+    );
+}
+
+#[test]
 fn a_chart_takes_data_or_series_and_refuses_a_nested_literal() {
     let dir = std::env::temp_dir().join("pixie-m0-gate");
     std::fs::create_dir_all(&dir).unwrap();

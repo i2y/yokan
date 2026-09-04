@@ -41,6 +41,28 @@ impl QssValueShape {
     }
 }
 
+/// The canvas drawing commands. They are not styled elements — a
+/// command is painted, not laid out — so the shorthand vocabulary
+/// below does not reach them, and `color:` on one is a palette index
+/// rather than a color string. `pixie_codegen::op_prop_keys` owns the
+/// real list (this crate does not depend on it, the `theme_names`
+/// rule); the accept test asserts the two agree.
+pub fn is_draw_command(element: &str) -> bool {
+    matches!(
+        element,
+        "Pixel"
+            | "Line"
+            | "Rect"
+            | "RectOutline"
+            | "Circle"
+            | "CircleOutline"
+            | "Triangle"
+            | "TriangleOutline"
+            | "Sprite"
+            | "PixelText"
+    )
+}
+
 /// Map a Cute camelCase key (optionally with a pseudo-class prefix
 /// `hover.`, `pressed.`, ...) to its expected value shape. Returns
 /// `None` for keys outside the shorthand vocabulary so the caller

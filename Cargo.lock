@@ -3986,6 +3986,7 @@ dependencies = [
  "pixie-kernel",
  "pixie-rpi-gen",
  "pixie-syntax",
+ "pixie-types",
  "toml 0.8.23",
 ]
 
@@ -4019,7 +4020,9 @@ dependencies = [
  "futures",
  "gpui",
  "gpui_platform",
+ "image",
  "pixie-kernel",
+ "smallvec",
  "stacker",
  "tempfile",
  "unicode-segmentation",

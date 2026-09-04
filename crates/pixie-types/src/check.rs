@@ -636,6 +636,17 @@ impl<'a> Checker<'a> {
             let _ = self.synth(env, value);
             return;
         }
+        // A canvas's drawing commands are the one place in the
+        // vocabulary where `color:` is a NUMBER — the index of a
+        // color in the canvas's palette — and they carry no styling
+        // at all, so the shorthand check below has nothing to say
+        // about them.
+        // The canvas's own `background:` is the same kind of number:
+        // the index the surface is cleared to.
+        if crate::qss::is_draw_command(element) || (element == "Canvas" && key == "background") {
+            let _ = self.synth(env, value);
+            return;
+        }
         // QSS shorthand keys (`color`, `borderRadius`, `hover.X`,
         // ...) target Qt classes that aren't in the project type
         // table, so the parent-class lookup below would always miss.

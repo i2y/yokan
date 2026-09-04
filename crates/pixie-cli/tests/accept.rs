@@ -341,6 +341,32 @@ fn container_prop_allowlists_match_across_tiers() {
     assert_eq!(pixie_codegen::native_size_keys("ListView"), ["height"]);
     assert!(pixie_codegen::native_size_keys("Column").is_empty());
     assert!(pixie_codegen::container_prop_keys("HScrollView").is_empty());
+    // The drawing commands' allowlists are mirrored the same way, and
+    // pixie-types carries the bare NAMES (it may not depend on
+    // codegen) so a `color:` inside a canvas is read as an index
+    // rather than a color string.
+    for op in [
+        "Pixel",
+        "Line",
+        "Rect",
+        "RectOutline",
+        "Circle",
+        "CircleOutline",
+        "Triangle",
+        "TriangleOutline",
+        "Sprite",
+        "PixelText",
+    ] {
+        assert_eq!(
+            pixie_codegen::op_prop_keys(op),
+            pixie_interp::op_prop_keys(op),
+            "op property allowlists drifted for {op}"
+        );
+        assert!(!pixie_codegen::op_prop_keys(op).is_empty(), "{op}");
+        assert!(pixie_types::qss::is_draw_command(op), "{op}");
+    }
+    assert!(pixie_codegen::op_prop_keys("Column").is_empty());
+    assert!(!pixie_types::qss::is_draw_command("Canvas"));
 }
 
 #[test]
@@ -737,6 +763,16 @@ fn tiers_agree_on_every_demo() {
         (
             "examples/riders/riders.pix",
             "click:lock,click:save,input:typed,select:b,click:lock,click:save",
+        ),
+        // The canvas: ten drawing commands, a repeater among them and
+        // a timer moving the text. What the tier gate compares here is
+        // the FRAME — the dump prints one command per line — so a
+        // difference in what the two tiers would have painted is a
+        // difference in the lines, not something only a screenshot
+        // could catch.
+        (
+            "examples/canvas/canvas.pix",
+            "click:seed,dump,advance:100,advance:100",
         ),
     ];
     for (rel, script) in demos {

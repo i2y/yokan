@@ -23,7 +23,7 @@ use std::rc::Rc;
 
 use pixie_kernel::{
     BoolListener, Bytes, Element, ErasedHandle, FloatListener, IntListener, LazyRows, List,
-    Listener, Str, TextListener, World,
+    Listener, Op, Str, TextListener, World,
 };
 use pixie_syntax::ast::{
     self, AssignOp, BinOp, ElementMember, Expr, ExprKind, StateFieldKind, Stmt, StrPart, UnaryOp,
@@ -2863,8 +2863,216 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // The drawing surface — the mirror of codegen's `Canvas` arm,
+        // same required props, same defaults, same errors.
+        "Canvas" => {
+            let width = prop_of(el, "width")
+                .ok_or("Canvas needs `width:` (its width in virtual pixels)")?;
+            let height = prop_of(el, "height")
+                .ok_or("Canvas needs `height:` (its height in virtual pixels)")?;
+            let palette = prop_of(el, "palette").ok_or(
+                "Canvas needs `palette:` — a list of colors; a command's color is an \
+                 index into it",
+            )?;
+            let scale = match prop_of(el, "scale") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => 1,
+            };
+            let background = match prop_of(el, "background") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => 0,
+            };
+            Ok(Element::Canvas {
+                width: eval_expr(width, env, scope, w)?.as_int()?,
+                height: eval_expr(height, env, scope, w)?.as_int()?,
+                scale,
+                background,
+                palette: eval_str_list(palette, env, scope, w)?,
+                ops: build_ops(el, env, scope, w)?,
+            })
+        }
         other => Err(format!("element `{other}` is not in the engine vocabulary")),
     }
+}
+
+/// The property keys one drawing command consumes — the mirror of
+/// `pixie_codegen::op_prop_keys`, and the whole allowlist: a command
+/// takes none of the universal riders.
+pub fn op_prop_keys(op: &str) -> &'static [&'static str] {
+    match op {
+        "Pixel" => &["x", "y", "color"],
+        "Line" => &["x1", "y1", "x2", "y2", "color"],
+        "Rect" | "RectOutline" => &["x", "y", "w", "h", "color"],
+        "Circle" | "CircleOutline" => &["x", "y", "r", "color"],
+        "Triangle" | "TriangleOutline" => &["x1", "y1", "x2", "y2", "x3", "y3", "color"],
+        "Sprite" => &[
+            "x", "y", "source", "u", "v", "w", "h", "colkey", "flipX", "flipY",
+        ],
+        "PixelText" => &["x", "y", "text", "color"],
+        _ => &[],
+    }
+}
+
+/// A canvas body, built into the command list — `build_children`'s
+/// twin, sharing the `for` / `if` / `case` recursion with it.
+fn build_ops(
+    el: &ast::Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<Vec<Op>, String> {
+    check_own_props(el)?;
+    let mut out = Vec::new();
+    build_items(build_op, &items_of_members(&el.members), env, scope, w, &mut out)?;
+    Ok(out)
+}
+
+/// A required Int property of a drawing command.
+fn op_int(
+    el: &ast::Element,
+    key: &str,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<i64, String> {
+    let e = prop_of(el, key).ok_or_else(|| format!("`{}` needs `{key}:`", el.name.name))?;
+    eval_expr(e, env, scope, w)?.as_int()
+}
+
+/// An optional Int property, with the value it means when absent.
+fn op_int_or(
+    el: &ast::Element,
+    key: &str,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+    default: i64,
+) -> Result<i64, String> {
+    match prop_of(el, key) {
+        Some(e) => eval_expr(e, env, scope, w)?.as_int(),
+        None => Ok(default),
+    }
+}
+
+/// An optional Bool property, false when absent.
+fn op_bool(
+    el: &ast::Element,
+    key: &str,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<bool, String> {
+    match prop_of(el, key) {
+        Some(e) => eval_expr(e, env, scope, w)?.as_bool(),
+        None => Ok(false),
+    }
+}
+
+/// One drawing command — the mirror of codegen's `lower_op`.
+fn build_op(
+    el: &ast::Element,
+    env: &ClosEnv,
+    scope: &Scope,
+    w: &World,
+) -> Result<Op, String> {
+    let name = el.name.name.as_str();
+    let keys = op_prop_keys(name);
+    if keys.is_empty() {
+        return Err(format!(
+            "`{name}` is not a drawing command — a canvas holds commands (Pixel / \
+             Line / Rect / RectOutline / Circle / CircleOutline / Triangle / \
+             TriangleOutline / Sprite / PixelText), not elements"
+        ));
+    }
+    for m in &el.members {
+        match m {
+            ElementMember::Property { key, .. } => {
+                if !keys.contains(&key.as_str()) {
+                    return Err(format!(
+                        "`{name}` has no `{key}:` — it takes {}. A drawing command takes \
+                         none of the shared properties either: it is painted, not laid out",
+                        keys.join(", ")
+                    ));
+                }
+            }
+            _ => return Err(format!("`{name}` draws one thing and has no body")),
+        }
+    }
+    let color = |env: &ClosEnv, scope: &Scope, w: &World| op_int(el, "color", env, scope, w);
+    Ok(match name {
+        "Pixel" => Op::Pixel {
+            x: op_int(el, "x", env, scope, w)?,
+            y: op_int(el, "y", env, scope, w)?,
+            color: color(env, scope, w)?,
+        },
+        "Line" => Op::Line {
+            x1: op_int(el, "x1", env, scope, w)?,
+            y1: op_int(el, "y1", env, scope, w)?,
+            x2: op_int(el, "x2", env, scope, w)?,
+            y2: op_int(el, "y2", env, scope, w)?,
+            color: color(env, scope, w)?,
+        },
+        "Rect" | "RectOutline" => {
+            let (x, y) = (op_int(el, "x", env, scope, w)?, op_int(el, "y", env, scope, w)?);
+            let (ww, h) = (op_int(el, "w", env, scope, w)?, op_int(el, "h", env, scope, w)?);
+            let c = color(env, scope, w)?;
+            if name == "Rect" {
+                Op::Rect { x, y, w: ww, h, color: c }
+            } else {
+                Op::RectOutline { x, y, w: ww, h, color: c }
+            }
+        }
+        "Circle" | "CircleOutline" => {
+            let (x, y) = (op_int(el, "x", env, scope, w)?, op_int(el, "y", env, scope, w)?);
+            let r = op_int(el, "r", env, scope, w)?;
+            let c = color(env, scope, w)?;
+            if name == "Circle" {
+                Op::Circle { x, y, r, color: c }
+            } else {
+                Op::CircleOutline { x, y, r, color: c }
+            }
+        }
+        "Triangle" | "TriangleOutline" => {
+            let x1 = op_int(el, "x1", env, scope, w)?;
+            let y1 = op_int(el, "y1", env, scope, w)?;
+            let x2 = op_int(el, "x2", env, scope, w)?;
+            let y2 = op_int(el, "y2", env, scope, w)?;
+            let x3 = op_int(el, "x3", env, scope, w)?;
+            let y3 = op_int(el, "y3", env, scope, w)?;
+            let c = color(env, scope, w)?;
+            if name == "Triangle" {
+                Op::Triangle { x1, y1, x2, y2, x3, y3, color: c }
+            } else {
+                Op::TriangleOutline { x1, y1, x2, y2, x3, y3, color: c }
+            }
+        }
+        "Sprite" => {
+            let source = prop_of(el, "source")
+                .ok_or("`Sprite` needs `source:` (the image to copy from)")?;
+            Op::Sprite {
+                x: op_int(el, "x", env, scope, w)?,
+                y: op_int(el, "y", env, scope, w)?,
+                source: eval_text(source, env, scope, w)?,
+                u: op_int_or(el, "u", env, scope, w, 0)?,
+                v: op_int_or(el, "v", env, scope, w, 0)?,
+                w: op_int(el, "w", env, scope, w)?,
+                h: op_int(el, "h", env, scope, w)?,
+                colkey: op_int_or(el, "colkey", env, scope, w, -1)?,
+                flip_x: op_bool(el, "flipX", env, scope, w)?,
+                flip_y: op_bool(el, "flipY", env, scope, w)?,
+            }
+        }
+        "PixelText" => {
+            let text = prop_of(el, "text").ok_or("`PixelText` needs `text:`")?;
+            Op::PixelText {
+                x: op_int(el, "x", env, scope, w)?,
+                y: op_int(el, "y", env, scope, w)?,
+                text: eval_text(text, env, scope, w)?,
+                color: color(env, scope, w)?,
+            }
+        }
+        _ => unreachable!("guarded by op_prop_keys"),
+    })
 }
 
 /// Property keys a container element consumes in its own `build_element`
@@ -2917,6 +3125,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "borderWidth",
             "borderColor",
         ],
+        "Canvas" => &["width", "height", "scale", "background", "palette"],
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
@@ -2981,7 +3190,7 @@ pub fn sized_prop_keys() -> &'static [&'static str] {
 /// to it.
 pub fn native_size_keys(element: &str) -> &'static [&'static str] {
     match element {
-        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" => {
+        "Button" | "Image" | "Svg" | "BarChart" | "LineChart" | "ProgressBar" | "Canvas" => {
             &["width", "height"]
         }
         "Text" => &["width"],
@@ -3001,9 +3210,25 @@ fn build_children(
     scope: &Scope,
     w: &World,
 ) -> Result<Vec<Element>, String> {
-    // Same allowlist and same wording as codegen's `lower_children`:
-    // an unknown container-level property is an error here too, never
-    // a silently ignored member.
+    check_own_props(el)?;
+    let mut out = Vec::new();
+    build_items(
+        build_element,&items_of_members(&el.members), env, scope, w, &mut out)?;
+    Ok(out)
+}
+
+/// Append what a run of view items contributes. `for` bodies and `if`
+/// branches are runs of items too (§8.56), so this is the whole
+/// recursion — a repeater body may hold several elements, another
+/// repeater, or a conditional, and so may a branch.
+/// What one child of a view body builds into — an `Element` for a
+/// container, an `Op` for a canvas.
+type BuildOne<T> = fn(&ast::Element, &ClosEnv, &Scope, &World) -> Result<T, String>;
+
+/// Same allowlist and same wording as codegen's `check_own_props`: an
+/// unknown property is an error here too, never a silently ignored
+/// member.
+fn check_own_props(el: &ast::Element) -> Result<(), String> {
     for m in &el.members {
         if let ElementMember::Property { key, .. } = m {
             if !grid_item_prop_keys().contains(&key.as_str())
@@ -3022,25 +3247,24 @@ fn build_children(
             }
         }
     }
-    let mut out = Vec::new();
-    build_items(&items_of_members(&el.members), env, scope, w, &mut out)?;
-    Ok(out)
+    Ok(())
 }
 
-/// Append what a run of view items contributes. `for` bodies and `if`
-/// branches are runs of items too (§8.56), so this is the whole
-/// recursion — a repeater body may hold several elements, another
-/// repeater, or a conditional, and so may a branch.
-fn build_items(
+fn build_items<T>(
+    one: BuildOne<T>,
     items: &[ViewItem<'_>],
     env: &ClosEnv,
     scope: &Scope,
     w: &World,
-    out: &mut Vec<Element>,
+    out: &mut Vec<T>,
 ) -> Result<(), String> {
     for item in items {
         match item {
-            ViewItem::Child(c) => out.push(build_element(c, env, scope, w)?),
+            // Which of the two a child builds — an `Element` or a
+            // canvas `Op` — is the caller's; the rest of the
+            // recursion is the same for both, and is the mirror of
+            // codegen's `lower_items`.
+            ViewItem::Child(c) => out.push(one(c, env, scope, w)?),
             ViewItem::Repeat {
                 binding,
                 index,
@@ -3068,7 +3292,8 @@ fn build_items(
                     if let Some(ix) = index {
                         inner.vars.push((ix.name.clone(), Value::Int(__ri as i64)));
                     }
-                    build_items(&inner_items, env, &inner, w, out)?;
+                    build_items(
+                        one,&inner_items, env, &inner, w, out)?;
                 }
             }
             // Conditional render — mirrors codegen exactly: the
@@ -3093,7 +3318,8 @@ fn build_items(
                     else_b.as_ref()
                 };
                 if let Some(b) = taken {
-                    build_items(&items_of_block(b), env, scope, w, out)?;
+                    build_items(
+                        one,&items_of_block(b), env, scope, w, out)?;
                 }
             }
             // `case` in a view body (§8.69), and therefore `if let`.
@@ -3112,7 +3338,8 @@ fn build_items(
                             .find(|a| !is_some_pattern(&a.pattern))
                             .map(|a| &a.body)
                             .ok_or("matching a `T?` needs both a `some` and a `nil` arm")?;
-                        build_items(&items_of_block(body), env, scope, w, out)?;
+                        build_items(
+                        one,&items_of_block(body), env, scope, w, out)?;
                     }
                     _ => {
                         // A present optional is the value itself, so a
@@ -3128,7 +3355,8 @@ fn build_items(
                                     inner.vars.push((name.name.clone(), v.clone()));
                                 }
                             }
-                            build_items(&items_of_block(&arm.body), env, &inner, w, out)?;
+                            build_items(
+                        one,&items_of_block(&arm.body), env, &inner, w, out)?;
                         } else {
                             let (name, fields) = match &v {
                                 Value::Struct(n2, fs) => (n2.clone(), Some(fs.clone())),
@@ -3152,7 +3380,8 @@ fn build_items(
                                         inner.vars.push(bnd);
                                     }
                                 }
-                                build_items(&items_of_block(b), env, &inner, w, out)?;
+                                build_items(
+                        one,&items_of_block(b), env, &inner, w, out)?;
                             }
                         }
                     }

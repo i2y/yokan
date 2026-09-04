@@ -7,7 +7,8 @@
 //! (+ its GridCell items) / Stack / ListView / ScrollView /
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
-//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented,
+//! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented /
+//! Canvas (whose drawing commands this crate rasterizes itself — see `raster`),
 //! plus the riders every element takes — Themed / Semantics / Tooltip /
 //! Disabled / Sized / Anim (and the GridCell above) — each a wrapper
 //! around exactly one element, transparent to path-keying.
@@ -41,9 +42,11 @@
 //! the plot; the Spinner is a stroked 120° arc rotating over a
 //! background ring, driven by `request_animation_frame`.
 
+mod font;
+mod raster;
 mod text_input;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
@@ -82,6 +85,13 @@ struct Root<C: Component> {
     /// control (taffy absolute resolves against the direct parent,
     /// so the overlay cannot inherit them by position).
     selects: HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    /// What the canvases in this window keep between frames: each
+    /// one's last rasterized image, keyed by element path (the
+    /// `scrolls` rule, GC'd by the same pass), and the sprite sheets
+    /// they have decoded. Behind an `Rc<RefCell<..>>` because the
+    /// rasterizing happens in a paint callback, after the render walk
+    /// that built it has returned.
+    canvases: Rc<RefCell<CanvasState>>,
     /// True while the 16 ms async pump chain is scheduled.
     pumping: bool,
     /// The window's decoded-image cache (§8.38). Every `img()` and
@@ -92,6 +102,19 @@ struct Root<C: Component> {
     /// shortcuts are dispatched from here, so an app answers `cmd-s`
     /// without anything being focused first.
     root_focus: gpui::FocusHandle,
+}
+
+/// What the canvases in one window keep between frames.
+///
+/// `frames` holds each canvas's last rasterized image keyed by its
+/// path in the element tree, so a canvas whose commands did not change
+/// keeps the image it already has — and with it the atlas tile, which
+/// is otherwise uploaded again on every paint. `sprites` holds the
+/// decoded sheets, which outlive any one canvas.
+#[derive(Default)]
+struct CanvasState {
+    frames: raster::Store,
+    sprites: raster::Sprites,
 }
 
 /// A bounded, least-recently-used image cache.
@@ -920,6 +943,7 @@ impl<C: Component> Render for Root<C> {
             &mut self.inputs,
             &mut self.scrolls,
             &mut self.selects,
+            &self.canvases,
             Slot::Flow,
             Sem::default(),
             th,
@@ -934,6 +958,25 @@ impl<C: Component> Render for Root<C> {
         self.inputs.retain(|k, _| live(k));
         self.scrolls.retain(|k, _| live(k));
         self.selects.retain(|k, _| live(k));
+        // A canvas that left the tree takes its image with it — and
+        // the atlas tile with it, which is why the images are held at
+        // all rather than rebuilt every frame.
+        {
+            let gone: Vec<Vec<usize>> = self
+                .canvases
+                .borrow()
+                .frames
+                .keys()
+                .filter(|k| !live(k))
+                .cloned()
+                .collect();
+            for k in gone {
+                let dead = self.canvases.borrow_mut().frames.remove(&k);
+                if let Some(c) = dead {
+                    cx.drop_image(c.image, Some(window));
+                }
+            }
+        }
         // Wire Tab / Shift-Tab as a ring over document order.
         let n = pass.order.len();
         for i in 0..n {
@@ -1275,13 +1318,17 @@ fn render_el<C: Component>(
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    // Every canvas's last frame and the sprite sheets they have
+    // decoded. Shared rather than threaded by value because the paint
+    // callback that rasterizes runs after this walk has returned.
+    canvases: &Rc<RefCell<CanvasState>>,
     slot: Slot,
     sem: Sem<'_>,
     th: &'static Theme,
     cx: &mut Context<Root<C>>,
 ) -> gpui::AnyElement {
     stacker::maybe_grow(RENDER_RED_ZONE, RENDER_STACK, || {
-        render_el_in(el, pass, inputs, scrolls, selects, slot, sem, th, cx)
+        render_el_in(el, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx)
     })
 }
 
@@ -1294,6 +1341,7 @@ fn render_el_in<C: Component>(
     // A Select's open-popover flag, keyed by element path like
     // `scrolls` and GC'd by the same pass rule.
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    canvases: &Rc<RefCell<CanvasState>>,
     slot: Slot,
     // Authored accessibility overrides from an enclosing
     // `Element::Semantics`; `Sem::default()` everywhere else.
@@ -1551,7 +1599,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -1578,7 +1626,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, Slot::Row, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -1619,7 +1667,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, Slot::Grid, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Grid, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -1635,7 +1683,7 @@ fn render_el_in<C: Component>(
             };
             let th = pixie_kernel::theme::by_name(theme.as_str()).unwrap_or(th);
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
             pass.path.pop();
             rendered
         }
@@ -1655,7 +1703,7 @@ fn render_el_in<C: Component>(
                 label: (!label.as_str().is_empty()).then_some(label),
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
             pass.path.pop();
             rendered
         }
@@ -1666,7 +1714,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
             pass.path.pop();
             let label: SharedString = text.as_str().to_string().into();
             let (grow, basis) = child_flex(child);
@@ -1711,7 +1759,7 @@ fn render_el_in<C: Component>(
             let was = pass.disabled;
             pass.disabled = true;
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
             pass.path.pop();
             pass.disabled = was;
             let d = wrapper_flex(
@@ -1754,7 +1802,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, Slot::Flow, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, Slot::Flow, sem, th, cx);
             pass.path.pop();
             let claim = if *width > 0.0 { Slot::Flow } else { slot };
             let mut d = wrapper_flex(div().flex().flex_col(), child, claim);
@@ -1784,7 +1832,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
             pass.path.pop();
             if *opacity >= 1.0 {
                 return rendered;
@@ -1817,7 +1865,7 @@ fn render_el_in<C: Component>(
             // grid slot: one element in, the spans applied out.
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, Slot::Grid, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Grid, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -1838,7 +1886,7 @@ fn render_el_in<C: Component>(
             let mut d = div().relative();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 d = d.child(if i == 0 {
                     rendered
@@ -1912,6 +1960,7 @@ fn render_el_in<C: Component>(
                                     &mut this.inputs,
                                     &mut this.scrolls,
                                     &mut this.selects,
+                                    &this.canvases,
                                     Slot::Flow,
                                     Sem::default(),
                                     th,
@@ -1965,7 +2014,7 @@ fn render_el_in<C: Component>(
             let mut rows: Vec<gpui::AnyElement> = Vec::new();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 rows.push(if *item_height > 0.0 {
                     // `flex_none` so the clipped viewport cannot squash
@@ -2033,7 +2082,7 @@ fn render_el_in<C: Component>(
             let mut inner = div().flex().flex_col().gap_2();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx));
+                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             div()
@@ -2076,7 +2125,7 @@ fn render_el_in<C: Component>(
             let mut inner = div().flex().flex_row().flex_none().gap_2().items_center();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, Slot::Row, Sem::default(), th, cx));
+                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx));
                 pass.path.pop();
             }
             div()
@@ -2189,7 +2238,7 @@ fn render_el_in<C: Component>(
             let mut data_row_ix = 0usize;
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 let wrapped = if matches!(c, Element::Row { .. }) {
                     if !header_seen {
@@ -2248,7 +2297,7 @@ fn render_el_in<C: Component>(
                 // children key on their index in `children`, so a
                 // TextField keeps its editor across open/close.
                 pass.path.push(i);
-                surface = surface.child(render_el(c, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx));
+                surface = surface.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             // `deferred` paints after every sibling, so the overlay
@@ -3298,6 +3347,7 @@ fn render_el_in<C: Component>(
                                     &mut this.inputs,
                                     &mut this.scrolls,
                                     &mut this.selects,
+                                    &this.canvases,
                                     th,
                                     cx,
                                 );
@@ -3339,7 +3389,7 @@ fn render_el_in<C: Component>(
             for (i, row) in children.iter().enumerate() {
                 pass.path.push(i);
                 let e = render_table_row(
-                    row, i, widths, ncol, *selected, on_select, ih, pass, inputs, scrolls, selects, th, cx,
+                    row, i, widths, ncol, *selected, on_select, ih, pass, inputs, scrolls, selects, canvases, th, cx,
                 );
                 pass.path.pop();
                 rows.push(if ih > 0.0 {
@@ -3490,6 +3540,97 @@ fn render_el_in<C: Component>(
             }
             d.into_any_element()
         }
+        // The drawing surface. Everything else in the catalog hands
+        // gpui elements and lets it paint; this one paints itself,
+        // because a grid of virtual pixels has to arrive on the screen
+        // unfiltered (see `raster`). The box is the virtual size times
+        // `scale` in LOGICAL pixels; the image inside it is that times
+        // the display's own factor, so the sampler has nothing to
+        // interpolate.
+        Element::Canvas {
+            width,
+            height,
+            scale,
+            background,
+            palette,
+            ops,
+        } => {
+            let key = pass.path.clone();
+            pass.seen.push(key.clone());
+            let scale = (*scale).max(1);
+            let (bw, bh) = ((*width * scale) as f32, (*height * scale) as f32);
+            let store = canvases.clone();
+            // The palette is resolved HERE, where the theme is: the
+            // rasterizer sees colors, and a theme flip is a different
+            // frame rather than a special case inside it.
+            let palette: Vec<[u8; 4]> = palette
+                .iter()
+                .map(|c| {
+                    let rgba = parse_color(c).unwrap_or(gpui::Rgba {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 1.0,
+                        a: 1.0,
+                    });
+                    [
+                        (rgba.b * 255.0).round() as u8,
+                        (rgba.g * 255.0).round() as u8,
+                        (rgba.r * 255.0).round() as u8,
+                        0xff,
+                    ]
+                })
+                .collect();
+            let (w, h, bg, ops) = (*width, *height, *background, ops.clone());
+            let painter = gpui::canvas(
+                |_, _, _| (),
+                move |bounds: Bounds<Pixels>, _, window: &mut Window, cx: &mut App| {
+                    // An integer device factor keeps the expansion
+                    // nearest-neighbor; macOS hands out 1 or 2.
+                    let dpr = window.scale_factor().round().max(1.0) as i64;
+                    let spec = raster::Spec {
+                        w,
+                        h,
+                        scale,
+                        bg,
+                        palette: palette.clone(),
+                        ops: ops.clone(),
+                        dpr,
+                    };
+                    let mut st = store.borrow_mut();
+                    let hit = st.frames.get(&key).is_some_and(|c| c.spec == spec);
+                    if !hit {
+                        let CanvasState { frames, sprites } = &mut *st;
+                        let Some(image) = raster::render(&spec, sprites, resolve_asset) else {
+                            return;
+                        };
+                        // The atlas caches by image id, so the frame
+                        // this one replaces has to be dropped or its
+                        // tile stays resident for the life of the
+                        // window.
+                        if let Some(old) = frames.insert(key.clone(), raster::Cached { spec, image })
+                        {
+                            cx.drop_image(old.image, Some(window));
+                        }
+                    }
+                    if let Some(c) = st.frames.get(&key) {
+                        let _ = window.paint_image(
+                            bounds,
+                            bounds,
+                            gpui::Corners::default(),
+                            c.image.clone(),
+                            0,
+                            false,
+                        );
+                    }
+                },
+            );
+            pass.next_id += 1;
+            with_a11y(div().id(pass.next_id), el, sem)
+                .w(px(bw))
+                .h(px(bh))
+                .child(painter.size_full())
+                .into_any_element()
+        }
     }
 }
 
@@ -3528,6 +3669,7 @@ fn render_table_row<C: Component>(
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    canvases: &Rc<RefCell<CanvasState>>,
     th: &'static Theme,
     cx: &mut Context<Root<C>>,
 ) -> gpui::AnyElement {
@@ -3536,7 +3678,7 @@ fn render_table_row<C: Component>(
         Element::Row { children, .. } => {
             for (j, c) in children.iter().enumerate().take(ncol) {
                 pass.path.push(j);
-                let e = render_el(c, pass, inputs, scrolls, selects, Slot::Row, Sem::default(), th, cx);
+                let e = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx);
                 pass.path.pop();
                 cells.push(table_track(div(), widths, j).child(e).into_any_element());
             }
@@ -3545,7 +3687,7 @@ fn render_table_row<C: Component>(
             }
         }
         other => {
-            let e = render_el(other, pass, inputs, scrolls, selects, Slot::Flow, Sem::default(), th, cx);
+            let e = render_el(other, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
             cells.push(
                 div()
                     .flex_grow(1.)
@@ -4186,6 +4328,7 @@ pub fn run_app<C: Component>(
                         inputs: HashMap::new(),
                         scrolls: HashMap::new(),
                         selects: HashMap::new(),
+                        canvases: Rc::new(RefCell::new(CanvasState::default())),
                         pumping: false,
                         images,
                         root_focus: cx.focus_handle(),
@@ -4281,3 +4424,4 @@ mod tests {
         assert!(start(0.75).1 < -9.9, "phase 0.75 starts at 12 o'clock");
     }
 }
+

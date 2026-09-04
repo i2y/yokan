@@ -210,6 +210,11 @@ fn color_slots(el: &mut Element) -> Vec<&mut Str> {
         Element::BarChart { color, colors, .. } | Element::LineChart { color, colors, .. } => {
             std::iter::once(color).chain(colors.iter_mut()).collect()
         }
+        // A canvas's palette is a list of color slots, so `palette:
+        // ["accent", …]` follows a `theme:` scope and reaches both the
+        // rasterizer and the dump as hex. The commands hold indexes,
+        // not colors, so there is nothing else here to resolve.
+        Element::Canvas { palette, .. } => palette.iter_mut().collect(),
         _ => Vec::new(),
     }
 }

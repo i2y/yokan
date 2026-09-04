@@ -19,5 +19,8 @@ pixie-interp.workspace = true
 [dev-dependencies]
 # Only the accept tests reach the kernel: they are the one place that
 # can see the role vocabulary on BOTH sides of the codegen/kernel
-# split and assert the two agree (§8.36).
+# split and assert the two agree (§8.36). pixie-types is here for the
+# same reason: the canvas command names live in three crates that
+# cannot see each other.
 pixie-kernel.workspace = true
+pixie-types.workspace = true

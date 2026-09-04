@@ -21,6 +21,12 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff
 # recursion onto heap-allocated stack segments when the red zone is hit.
 stacker = "0.1"
 unicode-segmentation = "1"
+# The canvas rasterizer decodes its own sprite sheets (gpui's image
+# cache answers a frame later, and a rasterizer needs the pixels now)
+# and hands the finished frame to gpui as an `image::Frame` — so the
+# version is gpui's own, or `RenderImage::new` would not take it.
+image = { version = "0.25", default-features = false, features = ["png"] }
+smallvec = "1"
 
 [dev-dependencies]
 tempfile = "3"

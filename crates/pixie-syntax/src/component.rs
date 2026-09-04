@@ -68,7 +68,7 @@ fn err<T>(span: Span, message: impl Into<String>) -> Result<T, ComponentError> {
 const CATALOG: &[&str] = &[
     "Column", "Row", "Stack", "Text", "Button", "TextField", "ListView", "ScrollView",
     "HScrollView", "Image", "Svg", "DataTable", "Modal", "BarChart", "LineChart", "ProgressBar",
-    "Spinner", "Checkbox", "Switch", "Slider", "Slot", "Link",
+    "Spinner", "Checkbox", "Switch", "Slider", "Slot", "Link", "Canvas",
 ];
 
 /// Sanity checks every component declaration must pass regardless of
