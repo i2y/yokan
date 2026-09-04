@@ -11,8 +11,8 @@ logical pixels each virtual one takes, so a 64x40 canvas at six is
 384x240 on screen.
 
 Every color is a NUMBER: the index of a color in `palette`. That is
-what a pixel machine means by a color, and it is why a frame written
-for one ports to this a line at a time.
+how tools for pixel art work, so drawing code written for one moves
+here with its numbers unchanged.
 
 The commands are not elements. Nothing here can be clicked, themed,
 sized or animated, and a `for` inside the canvas is the ordinary

@@ -10605,8 +10605,8 @@ class Translator:
         if src is None:
             raise Untranslatable(
                 it,
-                "a view's `for` walks a list it can name — a state read, a store "
-                "field or a model's own field",
+                "a view's `for` walks a list it can read directly — a state read, a "
+                "store field or a model's own field",
             )
         expr, ty = src
         if not ty.startswith("List<"):

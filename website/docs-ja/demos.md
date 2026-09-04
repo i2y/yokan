@@ -3033,8 +3033,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     384x240 on screen.
 
     Every color is a NUMBER: the index of a color in `palette`. That is
-    what a pixel machine means by a color, and it is why a frame written
-    for one ports to this a line at a time.
+    how tools for pixel art work, so drawing code written for one moves
+    here with its numbers unchanged.
 
     The commands are not elements. Nothing here can be clicked, themed,
     sized or animated, and a `for` inside the canvas is the ordinary
@@ -3173,12 +3173,12 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     What is different, and why. Speeds that were fractional (1.5 px a
     frame) are carried in tenths of a pixel and drawn whole, because a
     pixel grid has no half pixels. The music and the sound effects are
-    gone: there is no audio here yet. So are the gamepad and `pyxel.quit`.
+    gone: there is no audio here yet. So is the gamepad.
     Everything else — three scenes, a hundred parallax stars, the enemy
     that sways as it falls, rectangle collisions, expanding blasts — is
     the game.
 
-    Arrow keys move, space fires, enter starts and restarts.
+    Arrow keys move, space fires, enter starts and restarts, q quits.
     """
     import os
     import random
@@ -3195,6 +3195,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
         keys,
         pixel,
         pixel_text,
+        quit,
         rect,
         run,
         sprite,
@@ -3303,6 +3304,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
             self.stars = out
 
         def tick(self) -> None:
+            if keys.pressed("q"):
+                quit()
             self.frame = self.frame + 1
             self.title_col = self.frame % 16
             Game.move_stars()
@@ -3479,7 +3482,16 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
     if __name__ == "__main__":
-        run(view, title="Pyxel Shooter", width=480.0, height=640.0, on_start=Game.boot)
+        # `padding=0.0`: the canvas IS the app, so it paints to the
+        # window's edge rather than sitting inside the engine's ring.
+        run(
+            view,
+            title="Pyxel Shooter",
+            width=480.0,
+            height=640.0,
+            padding=0.0,
+            on_start=Game.boot,
+        )
     ```
 <!-- source -->
 
@@ -3503,11 +3515,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     canvas background, and 12 still means the same color, because inside a
     canvas a color is an index into the palette this file declares.
 
-    What is different, and why. The two parallax passes the original
-    writes as `for i in range(2)` are written out twice here, since a
-    view's `for` walks a list rather than a range. The music and the
-    sound effects are gone: there is no audio here yet. So are the gamepad
-    and `pyxel.quit`. Everything else — the falling player, the floors
+    What is different, and why. The music and the sound effects are gone:
+    there is no audio here yet. So is the gamepad. Everything else — the falling player, the floors
     that drop away when you land on them, the fruit, the scrolling
     mountain, trees and two layers of cloud — is the game.
 
@@ -3696,17 +3705,15 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
                 # sky, mountain, and the trees that scroll fastest
                 sprite(0, 88, SHEET, 0, 88, 160, 32)
                 sprite(0, 88, SHEET, 0, 64, 160, 24, colkey=SKY)
-                sprite(0 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
-                sprite(160 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
-                # two layers of cloud, each drawn twice so the strip wraps
-                for c in Game.far:
-                    sprite(c.x - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
-                for c in Game.far:
-                    sprite(c.x + 160 - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
-                for c in Game.near:
-                    sprite(c.x - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
-                for c in Game.near:
-                    sprite(c.x + 160 - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
+                for i in range(2):
+                    sprite(i * 160 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
+                # two layers of cloud, each strip drawn twice so it wraps
+                for i in range(2):
+                    for c in Game.far:
+                        sprite(c.x + i * 160 - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
+                for i in range(2):
+                    for c in Game.near:
+                        sprite(c.x + i * 160 - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
                 for f in Game.floors:
                     sprite(f.x, f.y, SHEET, 0, 16, 40, 8, colkey=SKY)
                 for fr in Game.fruits:
@@ -3718,7 +3725,14 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
     if __name__ == "__main__":
-        run(view, title="Pyxel Jump", width=640.0, height=480.0, on_start=Game.boot)
+        run(
+            view,
+            title="Pyxel Jump",
+            width=640.0,
+            height=480.0,
+            padding=0.0,
+            on_start=Game.boot,
+        )
     ```
 <!-- source -->
 

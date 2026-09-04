@@ -373,7 +373,7 @@ with canvas(160, 120, scale=4, background=0, palette=Game.palette):
 ```
 
 **`for` in a view.** `for x in <list>:` inside any container repeats
-what its body builds. The list is one the view can name — a `State`
+what its body builds. The list is one the view reads directly — a `State`
 cell, a store field, a model's own field — and its elements are
 scalars or value classes (a list of MODELS is still refused: hand
 `list_view` the display strings). `for i, x in enumerate(xs):` binds

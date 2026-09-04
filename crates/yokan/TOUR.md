@@ -549,7 +549,7 @@ with canvas(160, 120, scale=4, background=0, palette=Game.palette):
 ```
 
 Every color is a **number**: the index of a color in `palette`, a list of hex colors the app declares.
-That is what a pixel machine means by a color, and it is why a frame written for one reads the same here.
+Numbering the colors is how tools for pixel art work, so drawing code written for one moves here with its numbers unchanged.
 An index past the end paints the last color, so an off-by-one is visible rather than invisible; a canvas with an empty palette paints magenta.
 
 ```python
@@ -571,7 +571,7 @@ with canvas(160, 120, scale=4, palette=Game.palette):
         sprite(e.x, e.y, "assets/sheet.png", 0, 16, 8, 8, colkey=0)
 ```
 
-It walks a list the view can name — a `State` cell, a store field, a model's own field — whose elements are scalars or value classes, and `for i, e in enumerate(...)` binds the index beside the element.
+It walks a list the view can read directly — a `State` cell, a store field, a model's own field — whose elements are scalars or value classes, and `for i, e in enumerate(...)` binds the index beside the element.
 `for i in range(2):` works too, and is written out where it stands: the bounds are written-out numbers (up to 64 of them) because the loop becomes the elements it would have produced.
 The same loops work in any container, not only in a canvas.
 
