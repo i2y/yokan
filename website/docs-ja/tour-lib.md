@@ -30,7 +30,7 @@ except Exception as e:
 **Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは、CPython の意味に合わせて書いた双子を呼びます。
-双子が同じ答えを返すかどうかは、CPython に計算させた答えをファイルに記録しておき、関数ごとに、エラーの文言まで突き合わせて確かめます。
+返す値も、失敗の仕方も、エラーの文言まで同じです。
 `math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書き、`date` は `timedelta` を足し、別の `date` を引き、Python と同じ書式で自分を描きます。
 正規表現は、アプリを翻訳する時点で CPython 自身がコンパイルします。出荷したバイナリは Python が走らせるはずだった配列をそのまま走らせるので、後方追跡も群もフラグも CPython のもので、その方言ではありません。
 
@@ -61,8 +61,7 @@ def view():
 同じことは Python でもできます（`pathlib`、`sqlite3`、`urllib`）。
 違うのは、実装がいくつあるかです。
 `math` や `re` は、開発中は CPython のモジュールが動き、リリース後は Rust の双子が動きます。
-さきほどの突き合わせが要るのはそのためです。
-こちらはどちらの実行も Rust の同じ関数を呼ぶので、突き合わせるものがありません。
+こちらはどちらの実行も Rust の同じ関数を呼ぶので、二つの実行が違う答えを返しようがありません。
 これらに Python のモジュール名は使いません。
 Python の名前が付いていることは、CPython の答えに合わせるという約束だからです。
 JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
