@@ -11,11 +11,8 @@ Pyxel's palette. The port follows it line by line: `pyxel.blt` becomes
 canvas background, and 12 still means the same color, because inside a
 canvas a color is an index into the palette this file declares.
 
-What is different, and why. The two parallax passes the original
-writes as `for i in range(2)` are written out twice here, since a
-view's `for` walks a list rather than a range. The music and the
-sound effects are gone: there is no audio here yet. So are the gamepad
-and `pyxel.quit`. Everything else — the falling player, the floors
+What is different, and why. The music and the sound effects are gone:
+there is no audio here yet. So is the gamepad. Everything else — the falling player, the floors
 that drop away when you land on them, the fruit, the scrolling
 mountain, trees and two layers of cloud — is the game.
 
@@ -204,17 +201,15 @@ def view():
             # sky, mountain, and the trees that scroll fastest
             sprite(0, 88, SHEET, 0, 88, 160, 32)
             sprite(0, 88, SHEET, 0, 64, 160, 24, colkey=SKY)
-            sprite(0 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
-            sprite(160 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
-            # two layers of cloud, each drawn twice so the strip wraps
-            for c in Game.far:
-                sprite(c.x - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
-            for c in Game.far:
-                sprite(c.x + 160 - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
-            for c in Game.near:
-                sprite(c.x - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
-            for c in Game.near:
-                sprite(c.x + 160 - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
+            for i in range(2):
+                sprite(i * 160 - Game.tree_off, 104, SHEET, 0, 48, 160, 16, colkey=SKY)
+            # two layers of cloud, each strip drawn twice so it wraps
+            for i in range(2):
+                for c in Game.far:
+                    sprite(c.x + i * 160 - Game.far_off, c.y, SHEET, 64, 32, 32, 8, colkey=SKY)
+            for i in range(2):
+                for c in Game.near:
+                    sprite(c.x + i * 160 - Game.near_off, c.y, SHEET, 0, 32, 56, 8, colkey=SKY)
             for f in Game.floors:
                 sprite(f.x, f.y, SHEET, 0, 16, 40, 8, colkey=SKY)
             for fr in Game.fruits:
