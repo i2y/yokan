@@ -472,8 +472,9 @@ statistics`, `import json`, `import datetime`, `import time`,
 `import re`, `import string`, `import textwrap`, `import bisect`,
 `import heapq`, `import collections`, `import itertools`, written as
 Python writes them. Development imports
-CPython's module; the shipped binary calls a twin held to CPython by
-a table CPython printed, error messages included. `math` and
+CPython's module; the shipped binary calls a twin, and a test
+compares that twin's answers with CPython's own, recorded to a file,
+error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
 generator on, so it stays in a handler. Seed it and the two runs walk
 one sequence.
