@@ -14,7 +14,7 @@ Under mypy, `@store` method calls are therefore misreported as "self is not pass
 We recommend pyright for checking.
 
 A type checker knows Python's types, not the dialect's boundary.
-`yokan check app.py` answers that half: it runs the translator over every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
+`yokan check app.py` answers that half: it checks every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
 No compiler is started, so it is the check to run while editing.
 
 ## Headless runs and the gate

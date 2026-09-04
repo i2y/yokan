@@ -670,7 +670,7 @@ fn wrap_theme(el: Element, theme: &str) -> Element {
 // field repeated on thirty variants — so adding one is a single table
 // entry in three places that must agree: this struct plus
 // `apply_riders` below, `_riders()` in `yokan_gate.py`, and the
-// `Riders` TypedDict in `yokan.pyi`. The kwargs themselves come from
+// `SharedProps` TypedDict in `yokan.pyi`. The kwargs themselves come from
 // `element_fn!`, so no element's signature can drift from the table.
 
 struct Riders {

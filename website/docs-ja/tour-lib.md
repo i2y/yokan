@@ -178,9 +178,7 @@ pub fn add(a: i64, b: i64) -> i64 { … }
 pub fn avg(xs: Vec<f64>) -> f64 { … }
 ```
 
-仕組みは標準ライブラリと同じ「実装ひとつ、入口ふたつ」です。
-開発中の CPython 向けには pyo3 の入口が自動生成されてビルドされ、リリース向けにはバインディングが rustdoc の JSON 出力から自動導出されます。
-どちらも `yokan gate` / `yokan build` が面倒を見ます。
+`yokan gate` と `yokan build` が、どちらの実行からも呼べるように crate を用意します。
 ゲートを通さず `uv run` だけで動かしたいときは、先に一度 `yokan sync app.py` を実行します。
 
 この機能はネイティブビルドと同じ前提です（リポジトリの clone と Rust）。

@@ -43,8 +43,8 @@ today (with a two-line `.rpi` binding `Fs` over `std::fs::write`).
 
 **New here? Take the [language tour](TOUR.md)** — basic syntax,
 the type system, memory management (what is reclaimed and what is
-not), components, animation, accessibility, packaging, and the
-two-tier execution story, with diagrams.
+not), components, animation, accessibility, packaging, and how the
+two runs work, with diagrams.
 
 ## Quick start
 
@@ -135,7 +135,7 @@ Early but real. Working today:
   inert in the window and in a script, marked for AccessKit),
   `width:` / `height:` / `minWidth:` / `maxWidth:` (on elements
   without native sides), `theme:`, the animation properties and
-  `colSpan:` / `rowSpan:`, nested in one fixed order in both tiers.
+  `colSpan:` / `rowSpan:`, nested in one fixed order in both runs.
 - **Styles and themes** — named property bags (`style Key {
   background: "#313244" }`), merged with `+`, applied as `style: Key`
   on any element and inlined at compile time; `pub style` shares them
@@ -240,9 +240,8 @@ Early but real. Working today:
   vendored `gpui_macos` carrying pixie's panic-containment patch for
   the macOS input-method callbacks.
 
-The toolchain pins itself via `rust-toolchain.toml`; ~500 workspace
-tests and a 31-demo two-tier gate run green — the gate replays
-fifty-eight scripted readings through both execution tiers and fails
-on any byte of difference, accessibility trees, mid-animation frames,
-live-object counts and destructor tallies included. `examples/`
-holds runnable demos of every feature above.
+The toolchain pins itself via `rust-toolchain.toml`. The gate
+replays a scripted reading through both runs and fails on any byte of
+difference — accessibility trees, mid-animation frames, live-object
+counts and destructor tallies included. `examples/` holds runnable
+demos of every feature above.

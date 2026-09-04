@@ -1000,12 +1000,7 @@ pub fn add(a: i64, b: i64) -> i64 { … }
 pub fn avg(xs: Vec<f64>) -> f64 { … }
 ```
 
-The machinery is the standard library's own shape: one
-implementation, two doors.
-For the CPython run a pyo3 door is generated and built
-automatically; for the release build the binding is derived from
-rustdoc's JSON output.
-`yokan gate` / `yokan build` take care of both.
+`yokan gate` and `yokan build` set the crate up for both runs.
 To run with plain `uv run` before ever gating, run
 `yokan sync app.py` once.
 
@@ -1131,7 +1126,7 @@ Under mypy, `@store` method calls are therefore misreported as "self is not pass
 We recommend pyright for checking.
 
 A type checker knows Python's types, not the dialect's boundary.
-`yokan check app.py` answers that half: it runs the translator over every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
+`yokan check app.py` answers that half: it checks every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
 No compiler is started, so it is the check to run while editing.
 
 ## Headless runs and the gate

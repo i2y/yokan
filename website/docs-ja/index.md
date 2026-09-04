@@ -110,7 +110,7 @@ GATE OK — 2 dump lines identical across tiers
 
 -   :material-language-rust: __Rust crate（crates.io も手元のも）__
 
-    `yokan add app.py deunicode 1` — crates.io の version 指定でも手元の path でも、宣言すれば Yokan のコードから呼べます。開発用の pyo3 の入口もリリース用のバインディングも、crate の rustdoc JSON から自動生成されます。
+    `yokan add app.py deunicode 1` — crates.io の version 指定でも手元の path でも、宣言すれば Yokan のコードから呼べます。crate 側は普通の Rust のままで、Yokan のために書き足すものはありません。
 
 -   :material-shield-check: __型チェックが通る__
 

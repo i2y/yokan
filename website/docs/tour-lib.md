@@ -165,12 +165,7 @@ pub fn add(a: i64, b: i64) -> i64 { … }
 pub fn avg(xs: Vec<f64>) -> f64 { … }
 ```
 
-The machinery is the standard library's own shape: one
-implementation, two doors.
-For the CPython run a pyo3 door is generated and built
-automatically; for the release build the binding is derived from
-rustdoc's JSON output.
-`yokan gate` / `yokan build` take care of both.
+`yokan gate` and `yokan build` set the crate up for both runs.
 To run with plain `uv run` before ever gating, run
 `yokan sync app.py` once.
 

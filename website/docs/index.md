@@ -129,9 +129,8 @@ at the end of the tour.
 -   :material-language-rust: __Rust crates, yours or crates.io's__
 
     `yokan add app.py deunicode 1` — declare a crates.io version or
-    a local path and call it from your Yokan code. Both doors — the
-    pyo3 shim for development, the binding for release — are
-    generated from the crate's rustdoc JSON.
+    a local path and call it from your Yokan code. The crate side is
+    ordinary Rust; nothing has to be written for Yokan.
 
 -   :material-shield-check: __Typed and checked__
 

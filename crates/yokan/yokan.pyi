@@ -42,18 +42,17 @@ class State(Generic[T]):
     def __iadd__(self, other: Any) -> "State[T]": ...
     def __isub__(self, other: Any) -> "State[T]": ...
 
-# The riders: the cross-cutting keyword arguments EVERY element takes.
-# Each one is a wrapper around the element, not a property of it, so
-# the same spelling works on a text, a button or a whole column — and
-# the two runs build the same tree, which is what the build checks.
-class CommonRiders(TypedDict, total=False):
-    """The riders EVERY element takes. The four families below add
-    back the `width` / `height` / `a11y_label` an element does not
-    already own under those names."""
+# The shared properties: the keyword arguments EVERY element takes,
+# under the same names and with the same meaning, whether it is a
+# text, a button or a whole column.
+class SharedPropsBase(TypedDict, total=False):
+    """The shared properties EVERY element takes. The four families
+    below add back the `width` / `height` / `a11y_label` an element
+    does not already own under those names."""
 
-    # A box around the element: `min_width` and `max_width` always
-    # ride, `width` and `height` ride on every element that has no
-    # prop of its own by that name.
+    # A box around the element: `min_width` and `max_width` are
+    # always here, `width` and `height` on every element that has
+    # no prop of its own by that name.
     min_width: float
     max_width: float
     # Paint this element's subtree dimmed, swallow its clicks and mark
@@ -93,34 +92,34 @@ class CommonRiders(TypedDict, total=False):
 # The four narrower families, one per thing an element already owns.
 # Which sides an element sizes for itself is the same table on both
 # sides of the build, so a `width=` lands on the same prop either way.
-class RidersOwnLabel(CommonRiders, total=False):
+class SharedPropsOwnLabel(SharedPropsBase, total=False):
     """checkbox / switch: their visible `label` is already their
     accessible name, so there is no `a11y_label` to give them."""
 
     width: float
     height: float
 
-class RidersOwnSize(CommonRiders, total=False):
+class SharedPropsOwnSize(SharedPropsBase, total=False):
     """button / image / svg / bar_chart / line_chart: `width` and
-    `height` are their own props, not the sizing rider."""
+    `height` are their own props, not the shared ones."""
 
     a11y_label: str
 
-class RidersOwnWidth(CommonRiders, total=False):
+class SharedPropsOwnWidth(SharedPropsBase, total=False):
     """text: `width` is its own prop; the box still gives it a
     height."""
 
     height: float
     a11y_label: str
 
-class RidersOwnHeight(CommonRiders, total=False):
+class SharedPropsOwnHeight(SharedPropsBase, total=False):
     """list_view / scroll_view / table: `height` is their own prop."""
 
     width: float
     a11y_label: str
 
-class Riders(RidersOwnLabel, total=False):
-    """Every rider an element takes."""
+class SharedProps(SharedPropsOwnLabel, total=False):
+    """Every shared property an element takes."""
 
     # The name assistive technology reads instead of the one the
     # element would otherwise derive.
@@ -153,7 +152,7 @@ def text(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    **riders: Unpack[RidersOwnWidth],
+    **props: Unpack[SharedPropsOwnWidth],
 ) -> Element: ...
 def button(
     label: str,
@@ -170,7 +169,7 @@ def button(
     border_width: float = 0.0,
     border_color: str = "",
     basis: float = 0.0,
-    **riders: Unpack[RidersOwnSize],
+    **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
 def text_field(
     value: str,
@@ -182,7 +181,7 @@ def text_field(
     # line. `rows` is how many lines are visible (default 4).
     multiline: bool = False,
     rows: float = 0.0,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def column(
     *children: Element,
@@ -193,7 +192,7 @@ def column(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def row(
     *children: Element,
@@ -204,7 +203,7 @@ def row(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def grid(
     *children: Element,
@@ -217,12 +216,12 @@ def grid(
     border_radius: float = 0.0,
     border_width: float = 0.0,
     border_color: str = "",
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
-def grid_cell(child: Element, **riders: Unpack[Riders]) -> Element:
-    """The span rider written out: `grid_cell(child, col_span=2)` and
+def grid_cell(child: Element, **props: Unpack[SharedProps]) -> Element:
+    """The span written out: `grid_cell(child, col_span=2)` and
     `col_span=2` on the child itself are the same tree."""
-def stack(*children: Element, **riders: Unpack[Riders]) -> Element: ...
+def stack(*children: Element, **props: Unpack[SharedProps]) -> Element: ...
 def list_view(
     count: int,
     row: Callable[[int], Any],
@@ -230,30 +229,30 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
-    **riders: Unpack[RidersOwnHeight],
+    **props: Unpack[SharedPropsOwnHeight],
 ) -> Element: ...
 def scroll_view(
-    *children: Element, height: float = 0.0, **riders: Unpack[RidersOwnHeight]
+    *children: Element, height: float = 0.0, **props: Unpack[SharedPropsOwnHeight]
 ) -> Element: ...
-def h_scroll_view(*children: Element, **riders: Unpack[Riders]) -> Element: ...
-def data_table(*children: Element, **riders: Unpack[Riders]) -> Element:
+def h_scroll_view(*children: Element, **props: Unpack[SharedProps]) -> Element: ...
+def data_table(*children: Element, **props: Unpack[SharedProps]) -> Element:
     """The first `row` child is the header; later `row` children
     are data rows shaded in alternation. The frame comes with the
     element."""
 def modal(
-    *children: Element, open: bool = True, **riders: Unpack[Riders]
+    *children: Element, open: bool = True, **props: Unpack[SharedProps]
 ) -> Element: ...
 def image(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    **riders: Unpack[RidersOwnSize],
+    **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
 def svg(
     source: str,
     width: float = 0.0,
     height: float = 0.0,
-    **riders: Unpack[RidersOwnSize],
+    **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
 # min/max pin the range (0/0 = from the data, which may be negative —
 # the zero line is the baseline); `axis` draws tick labels and
@@ -270,7 +269,7 @@ def bar_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    **riders: Unpack[RidersOwnSize],
+    **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
 def line_chart(
     data: Sequence[float] = (),
@@ -283,7 +282,7 @@ def line_chart(
     color: str = "",
     series: Sequence[Sequence[float]] = (),
     colors: Sequence[str] = (),
-    **riders: Unpack[RidersOwnSize],
+    **props: Unpack[SharedPropsOwnSize],
 ) -> Element: ...
 def progress(
     value: float,
@@ -293,7 +292,7 @@ def progress(
     # accessible name — so `a11y_label` is deliberately absent here.
     label: str = "",
     indeterminate: bool = False,
-    **riders: Unpack[CommonRiders],
+    **props: Unpack[SharedPropsBase],
 ) -> Element:
     """A track filled to `value` (0..1); `indeterminate=True` sweeps
     instead, for work with no known length."""
@@ -304,13 +303,13 @@ def checkbox(
     # `label` is ALREADY this toggle's accessible name (pixie derives
     # it from the same visible text) — the dialect has no way to give
     # it a different one, so a11y_label is deliberately absent here.
-    **riders: Unpack[RidersOwnLabel],
+    **props: Unpack[SharedPropsOwnLabel],
 ) -> Element: ...
 def switch(
     label: str,
     checked: bool = False,
     on_change: Optional[Callable[[bool], Any]] = None,
-    **riders: Unpack[RidersOwnLabel],
+    **props: Unpack[SharedPropsOwnLabel],
 ) -> Element: ...
 def slider(
     value: float = 0.0,
@@ -318,28 +317,28 @@ def slider(
     max: float = 1.0,
     step: float = 0.0,
     on_change: Optional[Callable[[float], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def select(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def radio_group(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def tab_bar(
     labels: Sequence[str] = (),
     active: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
-def spinner(size: float = 0.0, **riders: Unpack[Riders]) -> Element: ...
-def link(label: str, url: str, size: float = 0.0, **riders: Unpack[Riders]) -> Element:
+def spinner(size: float = 0.0, **props: Unpack[SharedProps]) -> Element: ...
+def link(label: str, url: str, size: float = 0.0, **props: Unpack[SharedProps]) -> Element:
     """Text that opens `url` in the browser when clicked; a headless
     run records the click and opens nothing."""
 def table(
@@ -355,7 +354,7 @@ def table(
     sort: int = -1,
     descending: bool = False,
     on_sort: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[RidersOwnHeight],
+    **props: Unpack[SharedPropsOwnHeight],
 ) -> Element:
     """A virtualized table: `row(i)` builds row i as a `row` of one
     cell per column, laid on tracks whose shares are `widths`.
@@ -378,7 +377,7 @@ def number_field(
     step: float = 0.0,
     placeholder: str = "",
     on_change: Optional[Callable[[float], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def int_field(
     value: int,
@@ -387,21 +386,21 @@ def int_field(
     step: int = 1,
     placeholder: str = "",
     on_change: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element: ...
 def segmented(
     options: Sequence[str] = (),
     selected: int = 0,
     on_change: Optional[Callable[[int], Any]] = None,
-    **riders: Unpack[Riders],
+    **props: Unpack[SharedProps],
 ) -> Element:
     """A row of joined toggle buttons; the handler receives the
     chosen index."""
 
-def spacer(grow: float = 0.0, **riders: Unpack[Riders]) -> Element:
+def spacer(grow: float = 0.0, **props: Unpack[SharedProps]) -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""
 
-def divider(color: str = "", thickness: float = 0.0, **riders: Unpack[Riders]) -> Element:
+def divider(color: str = "", thickness: float = 0.0, **props: Unpack[SharedProps]) -> Element:
     """A rule across the parent: horizontal in a column, vertical in a row."""
 
 # The work runs off the UI thread in both runs — a Python thread
