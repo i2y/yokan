@@ -3682,11 +3682,14 @@ fn emit_await_dispatch(
     // The worker inherits the task's progress id, so anything the
     // awaited work reports — a Rust fn's own call, or a `@py`
     // escape's Python — is addressed to the handler that is waiting
-    // for it rather than dropped on the floor.
+    // for it rather than dropped on the floor. A task with no handler
+    // claims nothing, and says so: the pool thread may have carried
+    // another task's id here, and a report is better dropped than
+    // delivered to the wrong listener.
     let claim = if cx.progress_task {
         "pixie_kernel::progress::set_current(__task); "
     } else {
-        ""
+        "pixie_kernel::progress::set_current(0); "
     };
     writeln!(
         out,
@@ -9299,9 +9302,8 @@ fn emit_class(info: &ClassInfo, p: &Program, out: &mut String) -> Result<(), Emi
                 .unwrap();
             }
             writeln!(out, "        w.spawn(async move {{").unwrap();
-            if reports.is_some() {
-                writeln!(out, "            pixie_kernel::progress::set_current(__task);").unwrap();
-            }
+            let claim = if reports.is_some() { "__task" } else { "0" };
+            writeln!(out, "            pixie_kernel::progress::set_current({claim});").unwrap();
             let mut body_s = String::new();
             emit_async_body(body, &mut cx, &mut body_s, "            ")?;
             out.push_str(&body_s);

@@ -49,7 +49,13 @@ pub fn anim_settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Eleme
 }
 
 /// Spin the async tier to completion (bounded — a task that never
-/// completes is a harness misuse, not a hang).
+/// completes should fail the run rather than hang it).
+///
+/// The bound is minutes, not seconds. It was five seconds while the
+/// only tasks anyone wrote were a sleep and a file read; a task is
+/// there for work that takes a while, and an app that spends a
+/// minute in a model or a compiler is the case it was invented for.
+/// What the bound is for is the task that will never finish at all.
 ///
 /// This is also where a running task's reports are heard: the window
 /// drains them on its pump, and a headless run has this loop instead.
@@ -62,8 +68,8 @@ pub fn settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
         rt.turn();
         flush(rt, view, tree);
         spins += 1;
-        if spins > 5000 {
-            panic!("async tasks did not settle within ~5s");
+        if spins > 300_000 {
+            panic!("async tasks did not settle within ~5 minutes");
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
     }

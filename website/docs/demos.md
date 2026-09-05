@@ -10,7 +10,11 @@ $ ./tools/gate_all.sh               # gate-check every demo at once
 ```
 
 The three numpy demos (pystats / csv_viewer / app) run with
-`uv run --with numpy`. Two demos — `app` and `csv_viewer` —
+`uv run --with numpy`, and `transcribe` declares its own dependencies,
+so `uv run demo/transcribe/app.py` fetches them; it downloads a
+Whisper model the first time it transcribes, and is gated on its own
+(`just transcribe-gate`) rather than in the sweep.
+Two demos — `app` and `csv_viewer` —
 use dict state and are development-only by design (see the
 [What does not work yet](tour-ship.md#what-does-not-work-yet) section); they are listed here, not gated. All screenshots show
 the initial state, right after launch.
@@ -3175,8 +3179,11 @@ the initial state, right after launch.
 
     What is different, and why. Speeds that were fractional (1.5 px a
     frame) are carried in tenths of a pixel and drawn whole, because a
-    pixel grid has no half pixels. The music and the sound effects are
-    gone: there is no audio here yet. So is the gamepad.
+    pixel grid has no half pixels. The music is gone, and the two sound
+    effects are ours rather than Pyxel's: its sounds are written as MML
+    for a chip it emulates, and `audio.play` takes a file, so
+    `assets/shot.wav` and `assets/blast.wav` were made for this port. So
+    is the gamepad.
     Everything else — three scenes, a hundred parallax stars, the enemy
     that sways as it falls, rectangle collisions, expanding blasts — is
     the game.
@@ -3190,6 +3197,7 @@ the initial state, right after launch.
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
     from yokan import (  # noqa: E402
+        audio,
         canvas,
         circle,
         circle_outline,
@@ -3237,6 +3245,8 @@ the initial state, right after launch.
     BLAST_COLOR_OUT = 10
 
     SHEET = "demo/assets/shooter.png"
+    SHOT = "demo/assets/shot.wav"
+    BLAST = "demo/assets/blast.wav"
 
 
     @value
@@ -3371,6 +3381,7 @@ the initial state, right after launch.
                 self.bullets = self.bullets + [
                     Bullet(self.px + 3, self.py - 4)
                 ]
+                audio.play(SHOT, 0.5)
 
         def move_bullets(self) -> None:
             out: list[Bullet] = []
@@ -3433,6 +3444,7 @@ the initial state, right after launch.
                         Blast(e.x + 4, e.y + 4, BLAST_START_RADIUS)
                     ]
                     score_ = score_ + 10
+                    audio.play(BLAST, 0.7)
                 elif (
                     self.px + PLAYER_WIDTH > e.x
                     and e.x + ENEMY_WIDTH > self.px
@@ -3443,6 +3455,7 @@ the initial state, right after launch.
                         Blast(self.px + 4, self.py + 4, BLAST_START_RADIUS)
                     ]
                     struck_player = True
+                    audio.play(BLAST, 0.7)
                 else:
                     live_enemies = live_enemies + [e]
             live_bullets: list[Bullet] = []
@@ -3518,8 +3531,10 @@ the initial state, right after launch.
     canvas background, and 12 still means the same color, because inside a
     canvas a color is an index into the palette this file declares.
 
-    What is different, and why. The music and the sound effects are gone:
-    there is no audio here yet. So is the gamepad. Everything else — the falling player, the floors
+    What is different, and why. The music is gone, and the three sound
+    effects are ours rather than Pyxel's: its sounds are written as MML
+    for a chip it emulates, and `audio.play` takes a file, so the three
+    WAVs in `assets/` were made for this port. So is the gamepad. Everything else — the falling player, the floors
     that drop away when you land on them, the fruit, the scrolling
     mountain, trees and two layers of cloud — is the game.
 
@@ -3532,6 +3547,7 @@ the initial state, right after launch.
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
     from yokan import (  # noqa: E402
+        audio,
         canvas,
         column,
         every,
@@ -3547,6 +3563,9 @@ the initial state, right after launch.
     HEIGHT = 120
     SKY = 12
     SHEET = "demo/assets/jump.png"
+    LAND = "demo/assets/land.wav"
+    FRUIT = "demo/assets/fruit.wav"
+    FALL = "demo/assets/fall.wav"
 
 
     @value
@@ -3629,6 +3648,8 @@ the initial state, right after launch.
             if self.dy > 0:
                 self.player_u = 16
             if self.py > HEIGHT:
+                if self.alive:
+                    audio.play(FALL)
                 self.alive = False
                 if self.py > 600:
                     self.score = 0
@@ -3662,6 +3683,7 @@ the initial state, right after launch.
                         alive_ = False
                         score_ = score_ + 10
                         dy_ = -12
+                        audio.play(LAND)
                 else:
                     y = y + 6
                 x = x - 4
@@ -3687,6 +3709,7 @@ the initial state, right after launch.
                     alive_ = False
                     score_ = score_ + (kind + 1) * 100
                     dy_ = min(dy_, -8)
+                    audio.play(FRUIT)
                 x = x - 2
                 if x < -40:
                     x = x + 240
@@ -5453,11 +5476,17 @@ the initial state, right after launch.
     # ///
     """task — slow work off the UI thread, in both runs.
 
-    `task(work, on_done=...)` hands the work to a worker: during
-    development that is a Python thread, and the compiled app awaits the
-    standard-library call inside it, which puts it on the engine's pool.
-    Either way the window keeps drawing — the counter button stays
-    clickable while the work runs — and `on_done` lands the result.
+    `task(work, on_done=..., on_progress=...)` hands the work to a
+    worker: during development that is a Python thread, and the compiled
+    app awaits the standard-library call inside it, which puts it on the
+    engine's pool. Either way the window keeps drawing — the counter
+    button stays clickable while the work runs — and `on_done` lands the
+    result.
+
+    The work is not silent while it runs: `report(fraction, note)` says
+    where it has got to, from wherever it is running, and `on_progress`
+    hears it on the UI thread. Every report is heard, and the last one
+    lands before `on_done` does.
     """
     import os
     import sys
@@ -5469,26 +5498,45 @@ the initial state, right after launch.
         State,
         button,
         column,
+        progress,
+        report,
         row,
         run,
-        spinner,
         task,
         text,
     )
 
     busy: State[bool] = State(False)
     result: State[str] = State("—")
+    done: State[float] = State(0.0)
+    step: State[str] = State("")
+    heard: State[int] = State(0)
     n: State[int] = State(0)
 
 
     def slow_work() -> int:
-        time.sleep(1.5)
+        time.sleep(0.5)
+        report(0.33, "500 ms")
+        time.sleep(0.5)
+        report(0.66, "1000 ms")
+        time.sleep(0.5)
+        report(1.0, "1500 ms")
         return 1_500
+
+
+    def moved(fraction: float, note: str):
+        done.set(fraction)
+        step.set(note)
+        heard.set(heard() + 1)
 
 
     def start():
         busy.set(True)
-        task(slow_work, on_done=lambda v: (busy.set(False), result.set(f"waited {v} ms")))
+        task(
+            slow_work,
+            on_done=lambda v: (busy.set(False), result.set(f"waited {v} ms")),
+            on_progress=moved,
+        )
 
 
     def view():
@@ -5497,10 +5545,10 @@ the initial state, right after launch.
             with row(spacing=8):
                 button("start slow work", on_click=start)
                 button(f"+1 ({n()})", on_click=lambda: n.set(n() + 1))
+            progress(done(), width=260.0)
+            text(f"{step()} · {heard()} reports", size=13, color="#8a8f98")
             if busy():
-                with row(spacing=8):
-                    spinner(size=16.0)
-                    text("working…", color="#8a8f98")
+                text("working…", color="#8a8f98")
             else:
                 text(f"result: {result()}", size=18)
 
@@ -5528,38 +5576,61 @@ the initial state, right after launch.
     """numpy inside the native app: the escape imports numpy, and
     --bundle installs it (from this file's own PEP 723 block) into the
     shipped runtime's site-packages.
+
+    The escape runs inside a `task`, which is what keeps a long Python
+    call off the UI thread in the compiled app as well as in the
+    development run. From in there it can say where it has got to:
+    `report(fraction, note)` inside the escape reaches this app's
+    `on_progress`, on whatever thread the Python happened to run on.
     """
     import os
     import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-    from yokan import bar_chart, button, column, py, run, State, text  # noqa: E402
+    from yokan import bar_chart, button, column, py, progress, run, State, task, text  # noqa: E402
 
 
     @py
     def stats(xs: list[float]) -> list[float]:
+        from yokan import report
+
         import numpy as np
 
+        report(0.5, "mean")
         a = np.array(xs)
-        return [float(a.mean()), float(a.std())]
+        m = float(a.mean())
+        report(1.0, "spread")
+        return [m, float(a.std())]
 
 
     values: State[list[float]] = State([3.0, 5.0, 2.0, 8.0])
     mean: State[float] = State(0.0)
     std: State[float] = State(0.0)
+    done: State[float] = State(0.0)
+    step: State[str] = State("idle")
+
+
+    def landed(r: list[float]):
+        mean.set(r[0])
+        std.set(r[1])
+
+
+    def moved(fraction: float, note: str):
+        done.set(fraction)
+        step.set(note)
 
 
     def compute():
-        r = stats(values())
-        mean.set(r[0])
-        std.set(r[1])
+        xs = values()
+        task(lambda: stats(xs), on_done=landed, on_progress=moved)
 
 
     def view():
         with column(spacing=10, padding=14):
             bar_chart(values(), height=100.0)
             button("stats (numpy)", on_click=compute)
+            progress(done(), width=220.0, label=step())
             text(f"mean {mean():.2f} · std {std():.2f}", size=16)
 
 
@@ -5569,6 +5640,425 @@ the initial state, right after launch.
 <!-- source -->
 
 
+
+
+#### pyjob — a slow Python job inside a @py escape, run through a task: the window keeps drawing, and the escape reports its progress from the worker thread it landed on
+<img src="images/demos/pyjob.png" width="360">
+
+<!-- source -->
+??? note "pyjob.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """A long Python job, off the UI thread, saying where it has got to.
+
+    The work is a `@py` escape — real Python, run on an embedded CPython
+    inside the compiled binary — and `task` puts it on a worker in both
+    runs, so the window keeps drawing while it grinds: the counter button
+    stays clickable throughout.
+
+    From inside the escape, `report(fraction, note)` reaches this app's
+    `on_progress`, which runs on the UI thread like any other handler.
+    Every report is heard, and the last one lands before `on_done` does —
+    which is what makes `4 reports` in the dump a checked claim rather
+    than a hope.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from yokan import (  # noqa: E402
+        State,
+        button,
+        column,
+        progress,
+        py,
+        row,
+        run,
+        task,
+        text,
+    )
+
+
+    @py
+    def count_primes(limit: int, chunks: int) -> int:
+        from yokan import report
+
+        found = 0
+        step = limit // chunks
+        for c in range(chunks):
+            lo = c * step + 2
+            hi = lo + step
+            found += sum(
+                1
+                for n in range(lo, hi)
+                if all(n % d for d in range(2, int(n**0.5) + 1))
+            )
+            report((c + 1) / chunks, f"below {hi}")
+        return found
+
+
+    limit: State[int] = State(20_000)
+    found: State[int] = State(0)
+    done: State[float] = State(0.0)
+    step: State[str] = State("idle")
+    heard: State[int] = State(0)
+    n: State[int] = State(0)
+
+
+    def counted(total: int):
+        found.set(total)
+
+
+    def moved(fraction: float, note: str):
+        done.set(fraction)
+        step.set(note)
+        heard.set(heard() + 1)
+
+
+    def start():
+        n_max = limit()
+        task(lambda: count_primes(n_max, 4), on_done=counted, on_progress=moved)
+
+
+    def view():
+        with column(spacing=12, padding=16):
+            text("a Python job on a worker — the window keeps drawing", size=13, color="#8a8f98")
+            with row(spacing=8):
+                button("count", on_click=start)
+                button(f"+1 ({n()})", on_click=lambda: n.set(n() + 1))
+            progress(done(), width=260.0, label=step())
+            text(f"{found()} primes below {limit()} · {heard()} reports", size=16)
+
+
+    if __name__ == "__main__":
+        run(view, title="pyjob")
+    ```
+<!-- source -->
+
+#### transcribe — the Buzz port: Whisper transcription through @py + mlx-whisper, with a progress bar, a table of segments and TXT / SRT / VTT export
+<img src="images/demos/transcribe.png" width="720">
+
+<!-- source -->
+??? note "app.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # dependencies = ["mlx-whisper", "static-ffmpeg"]
+    # ///
+    """Transcribe — Buzz's screen and flow, ported.
+
+    Buzz (MIT, github.com/chidiwilliams/buzz) is a desktop app that turns
+    recordings into text with Whisper, offline. What is ported here is
+    its screen and its flow: drop a file, pick a model, a language and
+    whether to transcribe or translate, watch it work, read the segments,
+    export TXT / SRT / VTT. The transcription itself is not Buzz's code
+    and not this app's either — it is mlx-whisper, called from a `@py`
+    escape. That is the point of the pair: the model stays real Python,
+    and everything around it — the window, the table, the timestamps, the
+    three exports — is compiled.
+
+    The escape runs inside a `task`, so a recording that takes a minute
+    leaves the window drawing, and `report(fraction, note)` from in there
+    moves the bar as the audio goes by.
+
+        uv run demo/transcribe/app.py
+
+    The first run downloads the model from Hugging Face; after that it is
+    offline. ffmpeg reads the audio: the system's is used when there is
+    one, and `static-ffmpeg` fetches a copy when there is not. With no
+    recording to hand, this machine can speak one:
+
+        say -v Samantha -o /tmp/hello.wav --data-format=LEI16@16000 \
+            "It builds native desktop applications."
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+    from yokan import (  # noqa: E402
+        State,
+        button,
+        column,
+        data_table,
+        on_file_drop,
+        progress,
+        py,
+        row,
+        run,
+        scroll_view,
+        segmented,
+        select,
+        spacer,
+        task,
+        text,
+        value,
+    )
+    from yokan import fs, strings  # noqa: E402
+
+
+    @value
+    class Seg:
+        start: float
+        end: float
+        text: str
+
+
+    @py
+    def transcribe_file(path: str, repo: str, language: str, job: str) -> list[str]:
+        """One call to mlx-whisper, with the bar wired to the window.
+
+        `transcribe` has no progress callback: it counts audio frames
+        through a tqdm bar, so the bar is what this replaces — every
+        window it decodes becomes a `report`. If a future mlx-whisper
+        counts differently the transcription is unaffected; only the bar
+        would stop moving.
+        """
+        import shutil
+
+        from yokan import report
+
+        # The three imports a type checker cannot resolve without the
+        # model stack installed. They are the escape's own dependencies,
+        # declared in the block at the top of this file; `uv run` fetches
+        # them, and pyright is not asked to.
+        if shutil.which("ffmpeg") is None:
+            import static_ffmpeg  # pyright: ignore[reportMissingImports]
+
+            static_ffmpeg.add_paths()
+
+        import mlx_whisper  # pyright: ignore[reportMissingImports]
+        import mlx_whisper.transcribe as engine  # pyright: ignore[reportMissingImports]
+
+        class Bar:
+            def __init__(self, total=0, **kw):
+                self.total = max(1, total)
+                self.n = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def update(self, k):
+                self.n += k
+                secs = self.n // 100
+                report(min(1.0, self.n / self.total), f"{secs // 60}:{secs % 60:02d}")
+
+        class Counter:
+            tqdm = Bar
+
+        report(0.0, "loading the model")
+        engine.tqdm = Counter
+        r = mlx_whisper.transcribe(
+            path,
+            path_or_hf_repo=repo,
+            language=language or None,
+            task=job,
+            temperature=0.0,
+            verbose=None,
+        )
+        return [
+            f"{s['start']:.3f}\t{s['end']:.3f}\t{s['text'].strip()}"
+            for s in r["segments"]
+        ]
+
+
+    # What the chooser shows, and what Hugging Face calls it. The lists
+    # are held in State rather than written as module constants because
+    # that is what `select(options=…)` reads, and what an index into one
+    # can be looked up in.
+    models: State[list[str]] = State(["tiny", "base", "small", "medium", "large-v3"])
+    repos: State[list[str]] = State(
+        [
+            "mlx-community/whisper-tiny",
+            "mlx-community/whisper-base-mlx",
+            "mlx-community/whisper-small-mlx",
+            "mlx-community/whisper-medium-mlx",
+            "mlx-community/whisper-large-v3-mlx",
+        ]
+    )
+    langs: State[list[str]] = State(
+        ["detect", "English", "Japanese", "German", "French", "Spanish"]
+    )
+    codes: State[list[str]] = State(["", "en", "ja", "de", "fr", "es"])
+    jobs: State[list[str]] = State(["transcribe", "translate"])
+
+    path: State[str] = State("")
+    model_ix: State[int] = State(0)
+    lang_ix: State[int] = State(0)
+    job_ix: State[int] = State(0)
+    segs: State[list[Seg]] = State([])
+    pct: State[float] = State(0.0)
+    note: State[str] = State("")
+    busy: State[bool] = State(False)
+    saved: State[str] = State("")
+
+
+    def name_of(p: str) -> str:
+        if p == "":
+            return "(nothing yet)"
+        cut = p.rfind("/")
+        return p[cut + 1 :]
+
+
+    def stamp(t: float, comma: bool) -> str:
+        ms = int(t * 1000)
+        sep = "."
+        if comma:
+            sep = ","
+        return f"{ms // 3600000:02d}:{(ms // 60000) % 60:02d}:{(ms // 1000) % 60:02d}{sep}{ms % 1000:03d}"
+
+
+    def pick_model(i: int):
+        model_ix.set(i)
+
+
+    def pick_lang(i: int):
+        lang_ix.set(i)
+
+
+    def pick_job(i: int):
+        job_ix.set(i)
+
+
+    def took(p: str):
+        if p != "":
+            path.set(p)
+            segs.set([])
+            saved.set("")
+
+
+    def open_one():
+        task(lambda: fs.open_dialog("Choose a recording"), on_done=took)
+
+
+    def to_seg(line: str) -> Seg:
+        part: list[str] = line.split("\t")
+        return Seg(
+            strings.to_float(part[0], 0.0),
+            strings.to_float(part[1], 0.0),
+            part[2],
+        )
+
+
+    def landed(lines: list[str]):
+        segs.set([to_seg(line) for line in lines])
+        busy.set(False)
+        pct.set(1.0)
+        note.set(f"{len(lines)} segments")
+
+
+    def moved(fraction: float, mark: str):
+        pct.set(fraction)
+        note.set(mark)
+
+
+    def start():
+        if path() == "":
+            return
+        audio = path()
+        repo = repos()[model_ix()]
+        code = codes()[lang_ix()]
+        job = jobs()[job_ix()]
+        busy.set(True)
+        pct.set(0.0)
+        task(
+            lambda: transcribe_file(audio, repo, code, job),
+            on_done=landed,
+            on_progress=moved,
+        )
+
+
+    def wrote_txt(p: str):
+        if p != "":
+            body = ""
+            for s in segs():
+                body = body + s.text + "\n"
+            fs.write_text(p, body)
+            saved.set(f"wrote {name_of(p)}")
+
+
+    def wrote_srt(p: str):
+        if p != "":
+            body = ""
+            n = 0
+            for s in segs():
+                n = n + 1
+                head = f"{stamp(s.start, True)} --> {stamp(s.end, True)}"
+                body = body + f"{n}\n{head}\n{s.text}\n\n"
+            fs.write_text(p, body)
+            saved.set(f"wrote {name_of(p)}")
+
+
+    def wrote_vtt(p: str):
+        if p != "":
+            body = "WEBVTT\n\n"
+            for s in segs():
+                head = f"{stamp(s.start, False)} --> {stamp(s.end, False)}"
+                body = body + f"{head}\n{s.text}\n\n"
+            fs.write_text(p, body)
+            saved.set(f"wrote {name_of(p)}")
+
+
+    def export_txt():
+        task(lambda: fs.save_dialog("transcript.txt"), on_done=wrote_txt)
+
+
+    def export_srt():
+        task(lambda: fs.save_dialog("transcript.srt"), on_done=wrote_srt)
+
+
+    def export_vtt():
+        task(lambda: fs.save_dialog("transcript.vtt"), on_done=wrote_vtt)
+
+
+    on_file_drop(took)
+
+
+    def view():
+        with column(spacing=10, padding=14):
+            text("Transcribe — drop a recording, or open one", size=13, color="#8a8f98")
+            with row(spacing=8):
+                button("open…", on_click=open_one)
+                text(f"{name_of(path())}", size=14)
+            with row(spacing=8):
+                select(options=models(), selected=model_ix(), on_change=pick_model, width=110.0)
+                select(options=langs(), selected=lang_ix(), on_change=pick_lang, width=130.0)
+                segmented(options=jobs(), selected=job_ix(), on_change=pick_job)
+                spacer()
+                button("transcribe", on_click=start, disabled=busy())
+            progress(pct(), width=520.0, label=note())
+            with scroll_view(height=260.0):
+                with data_table():
+                    with row(spacing=8):
+                        text("start", grow=1.0)
+                        text("end", grow=1.0)
+                        text("text", grow=8.0)
+                    for s in segs():
+                        with row(spacing=8):
+                            text(f"{s.start:.2f}", grow=1.0)
+                            text(f"{s.end:.2f}", grow=1.0)
+                            text(s.text, grow=8.0)
+            with row(spacing=8):
+                text("export", size=13, color="#8a8f98")
+                button("TXT", on_click=export_txt)
+                button("SRT", on_click=export_srt)
+                button("VTT", on_click=export_vtt)
+                spacer()
+                text(f"{saved()}", size=13, color="#8a8f98")
+
+
+    if __name__ == "__main__":
+        run(view, title="transcribe", width=760, height=560)
+    ```
+<!-- source -->
 
 #### multi — a multi-module app (state.py and widgets.py; helpers become components)
 <img src="images/demos/multi.png" width="360">

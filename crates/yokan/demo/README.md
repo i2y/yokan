@@ -11,7 +11,11 @@ $ ./tools/gate_all.sh               # gate-check every demo at once
 ```
 
 The three numpy demos (pystats / csv_viewer / app) run with
-`uv run --with numpy`. Two demos — `app` and `csv_viewer` —
+`uv run --with numpy`, and `transcribe` declares its own dependencies,
+so `uv run demo/transcribe/app.py` fetches them; it downloads a
+Whisper model the first time it transcribes, and is gated on its own
+(`just transcribe-gate`) rather than in the sweep.
+Two demos — `app` and `csv_viewer` —
 use dict state and are development-only by design (see the tour's
 [What does not work yet](../TOUR.md#what-does-not-work-yet)); they are listed here, not gated. All screenshots show
 the initial state, right after launch.
@@ -191,6 +195,12 @@ the initial state, right after launch.
 #### pystats — @py + numpy: escaped functions ship with CPython embedded in the release binary
 <img src="screenshots/pystats.png" width="360">
 
+#### pyjob — a slow Python job inside a @py escape, run through a task: the window keeps drawing, and the escape reports its progress from the worker thread it landed on
+<img src="screenshots/pyjob.png" width="360">
+
+#### transcribe — the Buzz port: Whisper transcription through @py + mlx-whisper, with a progress bar, a table of segments and TXT / SRT / VTT export
+<img src="screenshots/transcribe.png" width="720">
+
 #### multi — a multi-module app (state.py and widgets.py; helpers become components)
 <img src="screenshots/multi.png" width="360">
 
@@ -199,4 +209,3 @@ the initial state, right after launch.
 
 #### csv_viewer — a 100k-row virtualized table + numpy (development-only: dict state)
 <img src="screenshots/csv_viewer.png" width="360">
-

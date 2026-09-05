@@ -1379,6 +1379,7 @@ The steps are collected in the README's Platforms section.
 The release binary of an app that uses no escapes is self-contained on its own (zero links to Python).
 `--bundle` produces a folder carrying the Python runtime and the declared dependencies; `--onefile` produces one file (about 17 MB with the stdlib only, about 21 MB with numpy. The first launch unpacks to a cache; later launches start in about 40 ms).
 The gate can replay scripts against the single file itself.
+A real `python3` rides beside the runtime, 52 KB of it, and `sys.executable` points at that rather than at the app — so a library that launches a helper process (multiprocessing does, the moment anything takes a lock) launches an interpreter instead of a second copy of the app.
 
 `--app` produces `dist/<Title>.app`: a Dock name, double-click
 launch, drag-to-Applications. With `--bundle --app` the CPython

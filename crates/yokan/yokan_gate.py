@@ -2372,13 +2372,19 @@ class Translator:
         pixie free fn, so the computation is NATIVE in the compiled
         tier (an escape would stay interpreted)."""
         # The body is its own scope: a text hole around the CALL SITE
-        # must not leak into how the body's locals lower.
+        # must not leak into how the body's locals lower. Neither must
+        # the task around it — a helper is a `static fn`, so nothing in
+        # it is awaited, and an `await` hoisted from here would land in
+        # the caller's body reading locals that live in this one.
         prev_hole = self.text_hole
+        prev_async, prev_hit, prev_pre = self.in_async, self.async_hit, self.pre_lines
         self.text_hole = False
+        self.in_async, self.pre_lines = False, None
         try:
             return self._take_helper_inner(node)
         finally:
             self.text_hole = prev_hole
+            self.in_async, self.async_hit, self.pre_lines = prev_async, prev_hit, prev_pre
 
     # The dialect's own decorators; the compiled side reads these
     # directly. Everything else is a user decorator, which is folded
@@ -6826,6 +6832,14 @@ class Translator:
                 vt = self._map_kv(m[1])[1]
                 if vt.startswith("List<"):
                     return (self.expr(node, ctx, param), vt)
+        # A str method that ANSWERS a list is a list, and so can start
+        # a local: `parts: list[str] = line.split("\t")`. Without this
+        # `.split()` was callable but its answer had nowhere to go,
+        # which is where the transcript port first stopped.
+        if isinstance(node, ast.Call):
+            t = self._str_method_ty(node, ctx, param)
+            if t is not None and t.startswith("List<"):
+                return (self.expr(node, ctx, param), t)
         # The container operations answer a list of the same element
         # type, so a local bound to one carries it: `back = xs[::-1]`
         # is a `list[T]` wherever `xs` was.
@@ -8573,6 +8587,10 @@ class Translator:
             if type(node.value) is str:
                 return "String"
             return None
+        # An f-string is a str, so a local bound to one is a str local
+        # and reads in a hole like any other.
+        if isinstance(node, ast.JoinedStr):
+            return "String"
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return self._num_ty(node.operand, ctx, param)
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
@@ -12150,6 +12168,26 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         "    Ok(())",
         "}",
         "",
+        "/// Where Python is, for anything that asks. An embedded",
+        "/// interpreter answers `sys.executable` with the program that",
+        "/// embedded it, and a library that re-launches that answer —",
+        "/// multiprocessing does, the moment anything takes a lock —",
+        "/// then starts a second copy of the app instead of an",
+        "/// interpreter. The real one sits under `sys.prefix`: the",
+        "/// bundle ships it beside the runtime, and an unbundled build",
+        "/// finds the one it was linked against.",
+        "fn point_at_python(py: Python<'_>) -> PyResult<()> {",
+        '    let sys = py.import("sys")?;',
+        '    let prefix: String = sys.getattr("prefix")?.extract()?;',
+        '    let exe = std::path::Path::new(&prefix).join("bin").join("python3");',
+        "    if exe.is_file() {",
+        "        let p = exe.to_string_lossy().into_owned();",
+        '        sys.setattr("executable", &p)?;',
+        '        sys.setattr("_base_executable", &p)?;',
+        "    }",
+        "    Ok(())",
+        "}",
+        "",
         "fn module(py: Python<'_>) -> &'static Py<PyAny> {",
         "    ensure_env();",
         "    MODULE.get_or_init(|| {",
@@ -12157,6 +12195,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         "            e.print(py);",
         '            panic!("yokan door failed to install")',
         "        });",
+        "        let _ = point_at_python(py);",
         '        let c = std::ffi::CString::new(SRC).expect("src");',
         '        let f = std::ffi::CString::new("escapes.py").expect("name");',
         '        let m = std::ffi::CString::new("pixie_escapes").expect("mod");',
@@ -12390,18 +12429,33 @@ PRUNE = {"test", "idlelib", "tkinter", "turtledemo", "ensurepip", "pydoc_data", 
 
 
 def bundle(proj: str, binary: str, stem: str, root: str, ver: str, deps: list[str]) -> str:
-    """The app-folder layout: dist/<stem> + dist/python/{lib/libpython,
-    lib/pythonX.Y stdlib}, link reference rewritten to
+    """The app-folder layout: dist/<stem> + dist/python/{bin/python3,
+    lib/libpython, lib/pythonX.Y stdlib}, link reference rewritten to
     @executable_path, re-signed."""
     import shutil
 
     dist = os.path.join(proj, "dist")
     shutil.rmtree(dist, ignore_errors=True)
     os.makedirs(os.path.join(dist, "python", "lib"), exist_ok=True)
+    os.makedirs(os.path.join(dist, "python", "bin"), exist_ok=True)
     app = os.path.join(dist, stem)
     shutil.copy2(binary, app)
     lib = f"libpython{ver}.dylib"
     shutil.copy2(os.path.join(root, "lib", lib), os.path.join(dist, "python", "lib", lib))
+    # A real interpreter beside the runtime, 52 KB, so that anything
+    # asking Python where Python is gets an answer that IS one. It is
+    # `sys.executable` that libraries re-launch — multiprocessing's
+    # resource tracker does it the moment anything takes a lock — and
+    # without this the answer is the app, which then starts a second
+    # copy of itself. Its own load path is `@executable_path/../lib`,
+    # which from here is exactly the libpython next door.
+    for spelling in (f"python{ver}", "python3"):
+        # Copied rather than linked: `--onefile` packs this folder into
+        # a tar the launcher unpacks, and a copy survives every
+        # unpacker. It is 52 KB.
+        py_bin = os.path.join(dist, "python", "bin", spelling)
+        shutil.copy2(os.path.join(root, "bin", f"python{ver}"), py_bin)
+        subprocess.run(["codesign", "--force", "-s", "-", py_bin], check=True, capture_output=True)
     shutil.copytree(
         os.path.join(root, "lib", f"python{ver}"),
         os.path.join(dist, "python", "lib", f"python{ver}"),

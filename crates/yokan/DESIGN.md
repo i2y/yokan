@@ -1979,3 +1979,57 @@ compiled run would read it on the UI thread and agree with nothing.
 The reach is refused by name — read the value before the task, hand it
 in, and write what comes back in `on_done` — rather than reaching the
 user as an interpreter panic in one run only.
+
+## The transcription port (2026-09-05)
+
+`demo/transcribe/` is Buzz's screen and flow — drop a recording, pick
+a model, a language and whether to transcribe or translate, watch it
+work, read the segments, export TXT / SRT / VTT. The transcription
+itself is mlx-whisper, called from a `@py` escape: the app says so,
+and so does its docstring. What the port demonstrates is the other
+half — a window, a table and three exports written in the dialect,
+compiled to a native binary, with real Python and a Whisper model
+inside it.
+
+**It found four things wrong and two limits worth naming.**
+
+A helper called for the first time from inside a task was translated
+in the task's own scope, so the `await`s its body needed were hoisted
+into the CALLER's body — where they read locals that live in the
+helper. That is generated code that could not compile, which makes it
+a compiler bug rather than the app's (D10). A helper is a `static fn`:
+it is its own scope now, and nothing in it is awaited.
+
+`.split()` could be called but its answer had nowhere to go: a local
+list had to start from a literal or another list. A str method that
+answers a list is a list now. An f-string bound to a local had no type
+either, so it could not be read in a hole; it is a `String`.
+
+The headless settle gave a task five seconds. That was written when
+the only tasks anyone had were a sleep and a file read; a task is for
+work that takes a while, and a minute inside a model is the case it
+was invented for. The bound is five minutes now, and what it is for is
+the task that will never finish at all.
+
+The two limits the port worked around, both refused by name: a local
+list cannot be appended to (build it with a comprehension, or
+accumulate a string), and a module-level list constant cannot be
+indexed by a computed index (hold it in a `State` — which is what a
+`select`'s options want anyway).
+
+## Where Python is, for anything that asks (2026-09-05)
+
+An embedded interpreter answers `sys.executable` with the program that
+embedded it. That is honest and it is a trap: a library that
+re-launches `sys.executable` starts a second copy of the APP. The
+transcription port hit it as a fork bomb — multiprocessing's resource
+tracker launches `sys.executable -c "…resource_tracker…"` the moment
+anything takes a lock, the app re-ran its own script, and each copy
+started another.
+
+A shipped app now carries a real interpreter beside its runtime: 52 KB
+of `bin/python3`, whose own load path resolves to the libpython the
+bundle already ships. The escape module points `sys.executable` at
+`sys.prefix/bin/python3` whenever that exists, which answers for the
+unbundled build too — there the prefix is the interpreter it was
+linked against.

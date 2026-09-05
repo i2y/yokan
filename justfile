@@ -62,6 +62,20 @@ gate app script='':
 sweep:
     cd {{pkg}} && ./tools/gate_all.sh
 
+# Out of the sweep because it fetches a Whisper model and builds a
+# bundle with mlx in it, which the other demos have no reason to wait
+# for. The recording is spoken by the machine's own voice, so nothing
+# has to be carried in the repository and the two runs still hear the
+# same audio.
+#
+# Gate the transcription port, fixture and all.
+transcribe-gate:
+    say -v Samantha -r 165 -o /tmp/yokan-transcribe.wav --data-format=LEI16@16000 \
+        "Yokan is a compiler for a statically typed subset of Python. It builds native desktop applications. Every build is checked by running the program twice and comparing the screens."
+    cd {{pkg}} && env -u VIRTUAL_ENV uv run --quiet --with mlx-whisper --with static-ffmpeg \
+        python3 yokan_gate.py gate demo/transcribe/app.py --bundle \
+        --script "drop:/tmp/yokan-transcribe.wav,click:transcribe,file:/tmp/yokan-transcribe.srt,click:SRT,dump"
+
 # Run this and tier-gate when a crates/pixie-* change is in the diff.
 #
 # The substrate's own test suites.

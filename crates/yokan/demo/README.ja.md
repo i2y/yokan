@@ -10,6 +10,8 @@ $ ./tools/gate_all.sh               # 全デモをゲートで一括チェック
 ```
 
 numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` で。
+`transcribe` は依存を自分で宣言しているので `uv run demo/transcribe/app.py` がそれを取ってきます。
+初めて文字起こしをするときに Whisper のモデルを取得し、ゲートはスイープではなく単独（`just transcribe-gate`）で走ります。
 `app` と `csv_viewer` の 2 本は辞書 state を使う開発専用デモで、ゲート対象外です（ツアーの[今できないこと](../TOUR.ja.md#今できないこと)参照）。
 スクリーンショットはすべて初期状態（起動直後）のものです。
 
@@ -188,6 +190,12 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### pystats — @py + numpy。エスケープした関数はリリースバイナリに CPython ごと同梱される
 <img src="screenshots/pystats.png" width="360">
 
+#### pyjob — @py のエスケープの中の重い Python を task で回すデモ。ウィンドウは描き続け、エスケープは載ったワーカースレッドから進み具合を報告します
+<img src="screenshots/pyjob.png" width="360">
+
+#### transcribe — Buzz の移植。@py と mlx-whisper で文字起こしをして、進捗バー、区間の表、TXT と SRT と VTT の書き出しを持ちます
+<img src="screenshots/transcribe.png" width="720">
+
 #### multi — マルチモジュール構成（state.py と widgets.py に分割、ヘルパはコンポーネントになる）
 <img src="screenshots/multi.png" width="360">
 
@@ -196,4 +204,3 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 #### csv_viewer — 10 万行の仮想化テーブル + numpy（開発専用: 辞書 state）
 <img src="screenshots/csv_viewer.png" width="360">
-
