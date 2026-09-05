@@ -122,6 +122,61 @@
   .yk-hero__tag { font-size: 1.15rem; }
 }
 
+/* ---- the hero on a light page ------------------------------------ */
+/* The block is the brand, and a brand does not have to invert — but a
+   dark slab at the top of an otherwise white page reads as a picture
+   someone forgot to redraw. On the light scheme the same block is cut
+   from the pale end of the same confection: warm off-white, chestnut
+   still the accent, the grid drawn in ink instead of light. */
+
+[data-md-color-scheme="default"] .yk-hero {
+  background:
+    radial-gradient(120% 140% at 12% 0%, #fff 0%, #fbf7f4 45%, #f4ece6 100%);
+  color: var(--yk-block);
+  border: 1px solid #ecdfd6;
+}
+
+[data-md-color-scheme="default"] .yk-hero::after {
+  background-image:
+    linear-gradient(rgba(27, 29, 35, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 29, 35, .05) 1px, transparent 1px);
+}
+
+[data-md-color-scheme="default"] .yk-hero h1 { color: var(--yk-block); }
+[data-md-color-scheme="default"] .yk-hero__tag { color: #a8492c; }
+
+[data-md-color-scheme="default"] .yk-hero__lede { color: rgba(27, 29, 35, .78); }
+[data-md-color-scheme="default"] .yk-hero__lede strong { color: var(--yk-block); }
+
+[data-md-color-scheme="default"] .md-typeset .yk-hero__lede code,
+[data-md-color-scheme="default"] .md-typeset .yk-hero code {
+  background: rgba(27, 29, 35, .06);
+  color: var(--yk-block);
+  border: 1px solid rgba(27, 29, 35, .12);
+}
+
+[data-md-color-scheme="default"] .yk-hero__cta .md-button {
+  border-color: rgba(27, 29, 35, .22);
+  color: var(--yk-block);
+}
+
+[data-md-color-scheme="default"] .yk-hero__cta .md-button:hover {
+  background: rgba(27, 29, 35, .06);
+  border-color: rgba(27, 29, 35, .4);
+  color: var(--yk-block);
+}
+
+[data-md-color-scheme="default"] .yk-hero__cta .md-button--primary,
+[data-md-color-scheme="default"] .yk-hero__cta .md-button--primary:hover {
+  color: #fff;
+}
+
+[data-md-color-scheme="default"] .yk-hero__cta .md-button--primary:hover {
+  background: #a8492c;
+  border-color: #a8492c;
+}
+
+
 /* ---- screenshots ------------------------------------------------- */
 /* Every app window on this site is a dark image. On a light page a
    bare one reads as a hole, so each gets a rim and a shadow, and the

@@ -1891,3 +1891,26 @@ the old stripped figure; it is 11.3 MB stripped now). A number inside
 a diagram is not reached by any of the checks that keep prose honest,
 which is an argument for keeping numbers out of pictures — or for
 reading the picture whenever the number moves.
+
+## The brand block is cut from the pale end too (2026-09-05)
+
+The banner at the head of the README and the hero at the head of the
+landing page were the last two things drawn for one scheme only. Both
+are the same object — a block of the confection with the wordmark
+beside it — so both get the same treatment: the light twin is the same
+block cut from the pale end, chestnut still the accent, the grid drawn
+in ink instead of light.
+
+The banner has no source file, so its twin is made from the pixels.
+Two families live in it and had to move in opposite directions: the
+near-greys (ground, dots, wordmark) invert through a lightness curve,
+and the chestnuts only darken, because inverting a hue gives a
+different picture. Which is which is decided by chroma rather than by
+HLS saturation — the wordmark is a tinted near-white, and the second
+measure calls that saturated.
+
+The logo's own twin exists for the same reason: its three faces are a
+light-to-dark ladder read against a dark ground, and on a white one
+the top face dissolves. The ladder moves down one step; the geometry
+does not move at all. The header keeps the dark mark, because the
+header is black in both schemes.

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Yokan: a dense block, one slice cut and handed out.
+       Light-ground twin: the same three faces, one ladder lower, so
+       the cut face still separates from a white page. -->
+  <g stroke-linejoin="round">
+    <!-- the slice -->
+    <path d="M3 32 L9 26 L17 26 L11 32 Z" fill="#cf6b42"/>
+    <path d="M11 32 L17 26 L17 46 L11 52 Z" fill="#7a3220"/>
+    <path d="M3 32 L11 32 L11 52 L3 52 Z" fill="#a8492c"/>
+    <!-- the loaf -->
+    <path d="M22 28 L28 22 L58 22 L52 28 Z" fill="#cf6b42"/>
+    <path d="M52 28 L58 22 L58 42 L52 48 Z" fill="#7a3220"/>
+    <path d="M22 28 L52 28 L52 48 L22 48 Z" fill="#a8492c"/>
+  </g>
+</svg>

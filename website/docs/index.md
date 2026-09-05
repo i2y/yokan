@@ -6,7 +6,8 @@ hide:
 ---
 
 <div class="yk-hero" markdown>
-<img class="yk-hero__mark" src="images/logo.svg" alt="">
+<img class="yk-hero__mark" src="images/logo.svg#only-dark" alt="">
+<img class="yk-hero__mark" src="images/logo-light.svg#only-light" alt="">
 
 # Yokan
 

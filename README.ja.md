@@ -1,4 +1,7 @@
-<img src="docs/assets/banner.png" alt="Yokan — Write Python. Ship native.">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.png">
+  <img alt="Yokan — Write Python. Ship native." src="docs/assets/banner-light.png">
+</picture>
 
 [English README](README.md) · **📘 ドキュメントサイト: <https://i2y.github.io/yokan/ja/>**
 
