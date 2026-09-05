@@ -74,6 +74,18 @@ Python has no module of this name, so there is nothing to measure against — Yo
 
 - `get_text`, `set_text`
 
+## `keys` — Yokan's own, 3 functions
+
+Python has no module of this name, so there is nothing to measure against — Yokan has all of them.
+
+- `down`, `pressed`, `released`
+
+## `audio` — Yokan's own, 2 functions
+
+Python has no module of this name, so there is nothing to measure against — Yokan has all of them.
+
+- `play`, `stop`
+
 ## `notify` — Yokan's own, 1 functions
 
 Python has no module of this name, so there is nothing to measure against — Yokan has all of them.

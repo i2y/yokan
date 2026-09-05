@@ -91,7 +91,7 @@ BUILTIN_PROBES = {
     "dict": "d = dict()",
     "divmod": "q, r = divmod(7, 2)",
     "enumerate": "for i, v in enumerate(xs()):\n            self.n = i + v",
-    "filter": "ys = filter(view, xs())",
+    "filter": "zs = filter(view, xs())",
     "float": 'self.x = float("1.5")',
     "format": 'self.note = format(1, "d")',
     "getattr": 'self.note = getattr(S, "note")',
@@ -104,8 +104,8 @@ BUILTIN_PROBES = {
     "isinstance": "self.ok = isinstance(1, int)",
     "iter": "it = iter(xs())",
     "len": "self.n = len(xs())",
-    "list": "ys = list(xs())",
-    "map": "ys = map(view, xs())",
+    "list": "zs = list(xs())",
+    "map": "zs = map(view, xs())",
     "max": "self.n = max(xs())",
     "min": "self.n = min(xs())",
     "next": "v = next(iter(xs()))",
@@ -118,7 +118,7 @@ BUILTIN_PROBES = {
     "repr": 'self.note = repr("a")',
     "reversed": "for v in reversed(xs()):\n            self.n = v",
     "round": "self.n = round(1.5)",
-    "set": "ys = set()",
+    "set": "zs = set()",
     "setattr": 'setattr(S, "note", "x")',
     "sorted": "self.ys = sorted(xs())",
     "str": "self.note = str(1)",
@@ -210,9 +210,10 @@ PHRASES = {
         "shape": "Python では{theirs}、ここでは{ours}",
         "extra": "Python のモジュールにはない",
         "bi_head": "## 組み込み関数 — 調べた {t} 個のうち {n} 個",
-        "bi_note": "組み込み関数はどこにも宣言されていないので、アプリが書くとおりに"
-                   "ハンドラへ書いて翻訳器に通しました。備考は拒否の文言そのまま（英語）です。"
-                   "値としては断られても `for` でなら通るものがあり、それも備考に出ます。",
+        "bi_note": "組み込み関数はどこにも宣言されていないので、実際のアプリと同じ"
+                   "書き方でハンドラに置き、翻訳器に通して調べました。\n"
+                   "備考に出ているのは、断られたときのメッセージそのままです（英語）。\n"
+                   "値としては断られても `for` の中でなら通るものがあり、それも備考に出ます。",
     },
 }
 
