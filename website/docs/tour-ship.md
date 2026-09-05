@@ -2,6 +2,10 @@
 
 The [tour](tour.md) concludes: type checkers, headless runs, the gate, shipping — and what does not work yet.
 
+![The three commands and what each hands back: yokan check refuses in about a second with no compiler, yokan show prints the screen in about a second with no window, and yokan gate compiles and reports that both runs drew the same screen](images/commands.svg#only-dark)
+
+![The three commands and what each hands back: yokan check refuses in about a second with no compiler, yokan show prints the screen in about a second with no window, and yokan gate compiles and reports that both runs drew the same screen](images/commands-light.svg#only-light)
+
 ## Working with type checkers
 
 Yokan bundles type stubs, so checking with pyright (Pylance in VS Code) works out of the box.
@@ -86,6 +90,7 @@ Handlers, store methods and value classes are ordinary Python too, so the parts 
 What a test like this checks is the development run, which is CPython.
 Whether the shipped binary agrees is the other half, and that is what `yokan gate` answers — the same script through both runs, byte-compared.
 The two are complementary: a unit test says the app does the right thing, and the gate says the compiled app does the same thing.
+How `check`, `show` and the gate fit together into a loop an agent can work on its own is on [Building with an agent](agents.md).
 
 ## Headless runs and the gate
 

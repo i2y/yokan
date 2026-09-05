@@ -120,6 +120,25 @@ Yokan cannot do yet is listed, with reasons, in
 ---
 
 
+## When an agent is writing it
+
+An agent writes a file and reads what comes back, so what comes back
+decides how the session goes. The first two commands answer in about a
+second, with no compiler and no window: a refusal that names what to
+write instead, and the screen as text. The gate is the proof at the
+end.
+
+![The loop an agent works in: it writes app.py at the centre of a ring, spins through yokan check and yokan show in about a second each, and leaves the ring for yokan gate, the compile that proves the shipped binary agrees, and then for ship](images/cycle.svg#only-dark)
+
+![The loop an agent works in: it writes app.py at the centre of a ring, spins through yokan check and yokan show in about a second each, and leaves the ring for yokan gate, the compile that proves the shipped binary agrees, and then for ship](images/cycle-light.svg#only-light)
+
+[Building with an agent](agents.md) walks the whole loop, and
+[`skills/yokan/SKILL.md`](https://github.com/i2y/yokan/blob/main/skills/yokan/SKILL.md)
+is the guide to hand your agent.
+
+---
+
+
 ## What else is in it
 
 <div class="grid cards" markdown>

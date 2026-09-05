@@ -1836,3 +1836,36 @@ shot asks for half, because it plays several times a second.
 Loud is the one mistake a sound cannot take back. A person hears it
 before anything can be undone, and someone in the next room hears it
 too.
+
+## A panic reaches the command line as one line (2026-09-05)
+
+A script step the app has no handler for panics in the kernel on
+purpose: a `click:` on a label no button carries, or a `key:` chord
+nothing is bound to, would otherwise pass as a green run that did
+nothing. The message names the step and what was missing.
+
+What reached the command line, though, was that message wrapped in a
+Rust panic notice and a Python traceback, with the one useful line in
+the middle. `tier_a` prints that line now and exits. The panic stays,
+because failing loudly is the point of it; what changed is the
+presentation, and the reason is who reads it — `show` and `gate` are
+often read by an agent, and a traceback costs it a turn to parse.
+
+## The loop is written down (2026-09-05)
+
+`check`, `show` and `gate` were designed as a loop but had never been
+written as one. The site has a page for it: what each command answers,
+what it hands back, and why the answers being text is what lets an
+agent work without anyone watching a window. The one thing the loop
+cannot answer is on it too — the gate proves the two runs agree, not
+that the window looks right.
+
+Three diagrams carry it, each placed where it does its own job: a
+terminal session on that page, because showing the real transcript is
+both the content and the argument; the three commands, set as a
+typographic table, at the head of the tour's closing chapter; and the
+loop drawn as a ring on the landing page. Each is drawn twice, once
+per colour scheme, and translated — four files apiece. The theme ships
+only half of the `#only-dark` / `#only-light` pair (it hides the dark
+picture on a light page and nothing the other way), so the other half
+is one rule in the site's own stylesheet.

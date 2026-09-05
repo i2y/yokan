@@ -94,6 +94,9 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
 An agent that has read it gets the subset right the first time,
 instead of learning it from refusals at build time.
 
+The loop it works in — three commands, and what each hands back —
+is on [Building with an agent](agents.md).
+
 ## What a build produces
 
 If the app uses no `@py` escapes, the executable contains no

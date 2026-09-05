@@ -23,6 +23,7 @@ nav = [
     { "ライブラリと crate" = "tour-lib.md" },
     { "検証とリリース" = "tour-ship.md" },
   ] },
+  { "エージェントと作る" = "agents.md" },
   { "デモ" = "demos.md" },
   { "対応状況" = "support.md" },
 ]

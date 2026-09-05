@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 790" width="1200" height="790" role="img" aria-labelledby="t">
+  <title id="t">The loop an agent works in with Yokan</title>
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .head { font-size: 34px; font-weight: 600; fill: #eef0f6; letter-spacing: -0.4px; }
+    .deck { font-size: 17px; fill: #9ea2b8; }
+    .num  { font-size: 78px; font-weight: 200; fill: #3a3e56; }
+    .cmd  { font-size: 24px; font-weight: 500; fill: #eef0f6; }
+    .q    { font-size: 18px; fill: #d5d8e4; }
+    .big  { font-size: 30px; font-weight: 300; fill: #eef0f6; }
+    .acc  { fill: #7ee0a5; }
+    .small{ font-size: 14.5px; fill: #8a8ea6; }
+    .out  { font-size: 14px; fill: #b9bdd0; }
+    .rule { stroke: #2b2e3f; stroke-width: 1; }
+    .rail { stroke: #9ea2b8; stroke-width: 1.25; fill: none; }
+    .ink  { stroke: #eef0f6; stroke-width: 1.5; fill: none; }
+    .knock{ paint-order: stroke fill; stroke: #15171f; stroke-width: 12px; stroke-linejoin: round; }
+  </style>
+
+  <rect x="0.5" y="0.5" width="1199" height="789" rx="22" fill="#15171f" stroke="#262938" stroke-width="1"/>
+
+  <!-- the agent: a small machine, drawn in strokes -->
+  <g transform="translate(124 92)">
+    <line x1="0" y1="-23" x2="0" y2="-14" class="ink"/>
+    <circle cx="0" cy="-25.5" r="2.5" class="ink"/>
+    <rect x="-22" y="-14" width="44" height="36" rx="11" class="ink"/>
+    <circle cx="-8" cy="4" r="2.75" fill="#eef0f6"/>
+    <circle cx="8" cy="4" r="2.75" fill="#eef0f6"/>
+  </g>
+  <text x="176" y="103" class="sans head">The agent writes <tspan class="mono">app.py</tspan></text>
+  <text x="176" y="135" class="sans deck">Then it asks three questions. Every answer comes back as text; no one has to watch a window.</text>
+
+  <!-- 1 · check -->
+  <line x1="96" y1="170" x2="1104" y2="170" class="rule"/>
+  <text x="124" y="234" text-anchor="middle" class="sans num">1</text>
+  <text x="176" y="214" class="mono cmd">yokan check</text>
+  <text x="176" y="238" class="sans small">starts no compiler</text>
+  <text x="520" y="214" class="sans q">Is this inside the dialect?</text>
+  <text x="1104" y="214" text-anchor="end" class="sans big">≈ 1 s</text>
+  <text x="1104" y="238" text-anchor="end" class="sans small">run constantly</text>
+  <text x="176" y="272" class="mono out">app.py:8:17: not in the dialect — rect()'s `y` is a whole number of pixels</text>
+  <text x="176" y="292" class="mono out">— this reads as a float, so write `int(...)` around it</text>
+  <text x="176" y="314" class="sans small">or silence, which means it is fine</text>
+
+  <!-- 2 · show -->
+  <line x1="96" y1="334" x2="1104" y2="334" class="rule"/>
+  <text x="124" y="398" text-anchor="middle" class="sans num">2</text>
+  <text x="176" y="378" class="mono cmd">yokan show</text>
+  <text x="176" y="402" class="sans small">opens no window</text>
+  <text x="520" y="378" class="sans q">What does it do, and how does it look?</text>
+  <text x="1104" y="378" text-anchor="end" class="sans big">≈ 1 s</text>
+  <text x="1104" y="402" text-anchor="end" class="sans small">run constantly</text>
+  <text x="176" y="436" class="mono out">Canvas(160x120, scale=4)[ Sprite(...) PixelText(4, 4, "SCORE 0") ]</text>
+  <text x="176" y="458" class="sans small">the screen as text, and a PNG of each frame if asked</text>
+
+  <!-- 3 · gate -->
+  <line x1="96" y1="504" x2="1104" y2="504" class="rule"/>
+  <text x="124" y="568" text-anchor="middle" class="sans num">3</text>
+  <text x="176" y="548" class="mono cmd">yokan gate</text>
+  <text x="176" y="572" class="sans small">one script, two runs: development and compiled; screens compared byte for byte</text>
+  <text x="520" y="548" class="sans q">Will the shipped binary do the same?</text>
+  <text x="1104" y="548" text-anchor="end" class="sans big acc">a compile</text>
+  <text x="1104" y="572" text-anchor="end" class="sans small">the proof, run when the change is done</text>
+  <text x="176" y="606" class="mono out acc">GATE OK — 341 dump lines identical in both runs</text>
+  <text x="176" y="628" class="sans small">or the differing line from each run</text>
+
+  <!-- the return -->
+  <circle cx="1040" cy="658" r="2.5" fill="#9ea2b8"/>
+  <path d="M 1040 658 H 84 A 20 20 0 0 1 64 638 V 112 A 20 20 0 0 1 84 92 H 95" class="rail"/>
+  <path d="M 95 87 L 102 92 L 95 97 Z" fill="#9ea2b8"/>
+  <text x="200" y="664" class="sans q knock" fill="#eef0f6">Text comes back. The agent reads it, edits, goes round again.</text>
+
+  <!-- ship -->
+  <path d="M 1096 586 V 680" stroke="#7ee0a5" stroke-width="1.25" fill="none"/>
+  <path d="M 1091 680 L 1096 687 L 1101 680 Z" fill="#7ee0a5"/>
+  <text x="1082" y="620" text-anchor="end" class="sans small">when green</text>
+  <text x="1104" y="720" text-anchor="end" class="sans big acc">ship</text>
+  <text x="1104" y="742" text-anchor="end" class="sans small">a native binary</text>
+</svg>

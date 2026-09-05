@@ -157,6 +157,9 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
 An agent that has read it gets the subset right the first time,
 instead of learning it from refusals at build time.
 
+The loop it works in — three commands, and what each hands back — is
+[written up here](https://i2y.github.io/yokan/agents/).
+
 ## Learn more
 
 - [The documentation site](https://i2y.github.io/yokan/) —

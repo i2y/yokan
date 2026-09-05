@@ -127,6 +127,8 @@ $ curl --create-dirs -o ~/.claude/skills/yokan/SKILL.md \
 
 これを読ませておくと、ビルドで断られてから直す、という手戻りが減ります。
 
+エージェントが回す往復（三つのコマンドと、それぞれが返すもの）は[こちらに書きました](https://i2y.github.io/yokan/ja/agents/)。
+
 ## もっと知る
 
 - [ドキュメントサイト](https://i2y.github.io/yokan/ja/) — インストール、言語ツアー、デモギャラリーをブラウザで（[English](https://i2y.github.io/yokan/)）

@@ -145,7 +145,7 @@
    one does not fill the first screen. Both are excluded here rather
    than overridden below, because a `:not()` more raises specificity
    and an override loses to it. */
-.md-typeset img[src*="images/"]:not(.yk-hero__mark):not([width]):not([src*="architecture"]) {
+.md-typeset img[src*="images/"]:not(.yk-hero__mark):not([width]):not([src*="architecture"]):not([src*="images/loop"]):not([src*="images/commands"]):not([src*="images/cycle"]) {
   max-height: 26rem;
   width: auto;
 }
@@ -158,10 +158,20 @@
 /* A paragraph holding nothing but a picture centres it. */
 .md-typeset p:has(> img:only-child) { text-align: center; }
 
-/* The diagram is the page's one wide picture: it takes the column. */
-.md-typeset img[src*="architecture"] {
+/* A diagram is a page's one wide picture: it takes the column. */
+.md-typeset img[src*="architecture"],
+.md-typeset img[src*="images/loop"],
+.md-typeset img[src*="images/commands"],
+.md-typeset img[src*="images/cycle"] {
   width: 100%;
   padding: .8rem;
+}
+
+/* A picture drawn for one colour scheme names it in the fragment.
+   The theme ships only half of that pair (it hides `#only-dark` on
+   the light scheme), so the other half is written here. */
+[data-md-color-scheme="slate"] .md-typeset img[src$="#only-light"] {
+  display: none;
 }
 
 /* ---- rhythm ------------------------------------------------------ */

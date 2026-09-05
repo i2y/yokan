@@ -104,6 +104,24 @@ Python 自身のモジュール（`math`、`re`、`datetime` など）は、開�
 ---
 
 
+## エージェントに書かせるなら
+
+エージェントはファイルを書き、返ってきたものを読みます。
+だから、返ってくるものが何かで往復の質が決まります。
+最初の二つのコマンドは、コンパイラもウィンドウもなしに約1秒で答えます。
+代わりに何を書くかを名指しする拒否と、テキストになった画面です。
+ゲートは最後の証明です。
+
+![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、出荷へ向かう](images/cycle-ja.svg#only-dark)
+
+![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、出荷へ向かう](images/cycle-ja-light.svg#only-light)
+
+往復の全体は[エージェントと作る](agents.md)にあります。
+エージェントに渡すガイドは [`skills/yokan/SKILL.md`](https://github.com/i2y/yokan/blob/main/skills/yokan/SKILL.md) です。
+
+---
+
+
 ## ほかに入っているもの
 
 <div class="grid cards" markdown>

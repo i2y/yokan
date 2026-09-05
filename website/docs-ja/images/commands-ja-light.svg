@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 790" width="1200" height="790" role="img" aria-labelledby="t">
+  <title id="t">Yokan でエージェントが回す往復</title>
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .head { font-size: 34px; font-weight: 600; fill: #14161f; letter-spacing: 0; }
+    .deck { font-size: 17px; fill: #6f7489; }
+    .num  { font-size: 78px; font-weight: 200; fill: #cdd1dc; }
+    .cmd  { font-size: 24px; font-weight: 500; fill: #14161f; }
+    .q    { font-size: 18px; fill: #2b2f40; }
+    .big  { font-size: 30px; font-weight: 300; fill: #14161f; }
+    .acc  { fill: #1c7a5a; }
+    .small{ font-size: 15px; fill: #6b7086; }
+    .out  { font-size: 14px; fill: #3f4457; }
+    .rule { stroke: #e4e7ee; stroke-width: 1; }
+    .rail { stroke: #6f7489; stroke-width: 1.25; fill: none; }
+    .ink  { stroke: #14161f; stroke-width: 1.5; fill: none; }
+    .knock{ paint-order: stroke fill; stroke: #fbfcfe; stroke-width: 24px; stroke-linejoin: round; }
+  </style>
+
+  <rect x="0.5" y="0.5" width="1199" height="789" rx="22" fill="#fbfcfe" stroke="#e3e6ee" stroke-width="1"/>
+
+  <!-- the agent: a small machine, drawn in strokes -->
+  <g transform="translate(124 92)">
+    <line x1="0" y1="-23" x2="0" y2="-14" class="ink"/>
+    <circle cx="0" cy="-25.5" r="2.5" class="ink"/>
+    <rect x="-22" y="-14" width="44" height="36" rx="11" class="ink"/>
+    <circle cx="-8" cy="4" r="2.75" fill="#14161f"/>
+    <circle cx="8" cy="4" r="2.75" fill="#14161f"/>
+  </g>
+  <text x="176" y="103" class="sans head">エージェントが<tspan class="mono" dx="5">app.py</tspan><tspan dx="5">を書く</tspan></text>
+  <text x="176" y="135" class="sans deck">そして三つ問う。答えはどれもテキストで返るので、ウィンドウを見張る人は要らない。</text>
+
+  <!-- 1 · check -->
+  <line x1="96" y1="170" x2="1104" y2="170" class="rule"/>
+  <text x="124" y="234" text-anchor="middle" class="sans num">1</text>
+  <text x="176" y="214" class="mono cmd">yokan check</text>
+  <text x="176" y="238" class="sans small">コンパイラを起動しない</text>
+  <text x="520" y="214" class="sans q">この書き方は方言の中か。</text>
+  <text x="1104" y="214" text-anchor="end" class="sans big">約1秒</text>
+  <text x="1104" y="238" text-anchor="end" class="sans small">編集のたびに</text>
+  <text x="176" y="272" class="mono out">app.py:8:17: not in the dialect — rect()'s `y` is a whole number of pixels</text>
+  <text x="176" y="292" class="mono out">— this reads as a float, so write `int(...)` around it</text>
+  <text x="176" y="314" class="sans small">何も言わなければ中にいる</text>
+
+  <!-- 2 · show -->
+  <line x1="96" y1="334" x2="1104" y2="334" class="rule"/>
+  <text x="124" y="398" text-anchor="middle" class="sans num">2</text>
+  <text x="176" y="378" class="mono cmd">yokan show</text>
+  <text x="176" y="402" class="sans small">ウィンドウを開かない</text>
+  <text x="520" y="378" class="sans q">何をして、どう見えるか。</text>
+  <text x="1104" y="378" text-anchor="end" class="sans big">約1秒</text>
+  <text x="1104" y="402" text-anchor="end" class="sans small">編集のたびに</text>
+  <text x="176" y="436" class="mono out">Canvas(160x120, scale=4)[ Sprite(...) PixelText(4, 4, "SCORE 0") ]</text>
+  <text x="176" y="458" class="sans small">画面をテキストで、頼めば各フレームの PNG も</text>
+
+  <!-- 3 · gate -->
+  <line x1="96" y1="504" x2="1104" y2="504" class="rule"/>
+  <text x="124" y="568" text-anchor="middle" class="sans num">3</text>
+  <text x="176" y="548" class="mono cmd">yokan gate</text>
+  <text x="176" y="572" class="sans small">同じ台本を開発実行とコンパイル済みに流し、画面をバイト単位で比べる</text>
+  <text x="520" y="548" class="sans q">出荷する側も同じことをするか。</text>
+  <text x="1104" y="548" text-anchor="end" class="sans big acc">コンパイルあり</text>
+  <text x="1104" y="572" text-anchor="end" class="sans small">証明。変更が終わったときに走らせる</text>
+  <text x="176" y="606" class="mono out acc">GATE OK — 341 dump lines identical in both runs</text>
+  <text x="176" y="628" class="sans small">違えば、その行を両方の実行から</text>
+
+  <!-- the return -->
+  <circle cx="1040" cy="658" r="2.5" fill="#6f7489"/>
+  <path d="M 1040 658 H 84 A 20 20 0 0 1 64 638 V 112 A 20 20 0 0 1 84 92 H 95" class="rail"/>
+  <path d="M 95 87 L 102 92 L 95 97 Z" fill="#6f7489"/>
+  <text x="200" y="664" class="sans q knock" fill="#14161f">テキストが返る。エージェントが読んで直し、また回る。</text>
+
+  <!-- ship -->
+  <path d="M 1096 586 V 680" stroke="#1c7a5a" stroke-width="1.25" fill="none"/>
+  <path d="M 1091 680 L 1096 687 L 1101 680 Z" fill="#1c7a5a"/>
+  <text x="1082" y="620" text-anchor="end" class="sans small">緑なら</text>
+  <text x="1104" y="720" text-anchor="end" class="sans big acc">出荷する</text>
+  <text x="1104" y="742" text-anchor="end" class="sans small">ネイティブバイナリ</text>
+</svg>

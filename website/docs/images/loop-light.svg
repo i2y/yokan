@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" role="img" aria-labelledby="t">
+  <title id="t">The loop: the agent writes app.py, and check, show and gate hand back text it reads</title>
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .code { font-size: 15px; fill: #3f4560; }
+    .lbl  { font-size: 15px; fill: #5d6380; }
+    .hd   { font-size: 16px; font-weight: 600; }
+  </style>
+  <defs>
+    <marker id="ah-lav" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#5f45cc"/>
+    </marker>
+    <marker id="ah-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#15804a"/>
+    </marker>
+  </defs>
+
+  <!-- canvas -->
+  <rect x="0" y="0" width="1200" height="720" rx="20" fill="#f4f5f9"/>
+
+  <!-- ===== the terminal ===== -->
+  <rect x="280" y="44" width="685" height="542" rx="12" fill="#ffffff" stroke="#d5d9e4" stroke-width="1"/>
+  <path d="M292,44 H953 a12,12 0 0 1 12,12 V80 H280 V56 a12,12 0 0 1 12,-12 Z" fill="#f7f8fb"/>
+  <line x1="280" y1="80.5" x2="965" y2="80.5" stroke="#e4e7ef" stroke-width="1"/>
+  <circle cx="302" cy="62" r="4.5" fill="#c8ccd8"/>
+  <circle cx="318" cy="62" r="4.5" fill="#c8ccd8"/>
+  <circle cx="334" cy="62" r="4.5" fill="#c8ccd8"/>
+
+  <!-- transcript: baseline = 112 + 26*(line-1) -->
+  <g class="mono code">
+    <text x="306" y="112"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">yokan check</tspan><tspan fill="#4a5068"> app.py</tspan></text>
+    <text x="306" y="138" fill="#c0302a">app.py:8:17: not in the dialect — rect()'s `y` is a whole number</text>
+    <text x="306" y="164" fill="#c0302a">of pixels — this reads as a float, so write `int(...)` around it</text>
+    <text x="306" y="190" fill="#6f7590" xml:space="preserve">        rect(8, y() * 1.5, 8, 8, 1)</text>
+    <text x="306" y="216" fill="#c0302a" xml:space="preserve">                ^</text>
+
+    <text x="306" y="268"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">yokan check</tspan><tspan fill="#4a5068"> app.py</tspan></text>
+
+    <text x="306" y="320"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">yokan show</tspan><tspan fill="#4a5068"> app.py --script "keydown:left,advance:33"</tspan></text>
+    <text x="306" y="346">Canvas(160x120, scale=4)[</text>
+    <text x="306" y="372" xml:space="preserve">  Sprite(assets/sheet.png, 0,0 16x16 at 40,88)</text>
+    <text x="306" y="398" xml:space="preserve">  PixelText(4, 4, "SCORE 0", #eeeeee)</text>
+    <text x="306" y="424">]</text>
+
+    <text x="306" y="476"><tspan fill="#7e849c">$ </tspan><tspan fill="#a85a00">yokan gate</tspan><tspan fill="#4a5068"> app.py --script "keydown:left,advance:33"</tspan></text>
+    <text x="306" y="502" fill="#15804a">GATE OK — 341 dump lines identical in both runs</text>
+
+    <text x="306" y="554"><tspan fill="#7e849c">$ </tspan></text>
+  </g>
+  <rect x="324" y="541" width="8" height="17" fill="#3f4560" fill-opacity="0.7"/>
+
+  <!-- caption -->
+  <text class="sans" x="40" y="78" font-size="20" font-weight="600" fill="#1d2030">The loop</text>
+  <text class="sans lbl" x="40" y="101">every answer is text</text>
+
+  <!-- ===== the agent and the loop (left) ===== -->
+  <circle cx="112" cy="320" r="60" fill="none" stroke="#5f45cc" stroke-width="1.5" stroke-opacity="0.65"/>
+  <!-- glyph -->
+  <rect x="88" y="302" width="48" height="38" rx="11" fill="#ffffff" stroke="#5f45cc" stroke-width="2"/>
+  <rect x="100" y="314" width="6" height="13" rx="3" fill="#5f45cc"/>
+  <rect x="118" y="314" width="6" height="13" rx="3" fill="#5f45cc"/>
+  <line x1="112" y1="302" x2="112" y2="293" stroke="#5f45cc" stroke-width="2"/>
+  <circle cx="112" cy="290" r="3" fill="#5f45cc"/>
+  <rect x="81" y="316" width="4" height="10" rx="2" fill="#5f45cc"/>
+  <rect x="139" y="316" width="4" height="10" rx="2" fill="#5f45cc"/>
+  <text class="sans lbl" x="112" y="404" text-anchor="middle">the agent</text>
+
+  <!-- feed: agent → app.py → the prompt -->
+  <path d="M154,278 C172,252 190,226 207,197" fill="none" stroke="#5f45cc" stroke-width="2"/>
+  <path d="M204,161 C216,138 244,108 280,108" fill="none" stroke="#5f45cc" stroke-width="2" marker-end="url(#ah-lav)"/>
+  <g transform="translate(196,162)">
+    <path d="M0,0 H16 L26,10 V34 H0 Z" fill="#f4f5f9" stroke="#5f45cc" stroke-width="1.6"/>
+    <path d="M16,0 V10 H26" fill="none" stroke="#5f45cc" stroke-width="1.6"/>
+  </g>
+  <text class="sans lbl" x="184" y="172" text-anchor="end">writes</text>
+  <text class="mono" x="184" y="192" text-anchor="end" font-size="14.5" fill="#1d2030">app.py</text>
+
+  <!-- return: what came back → the agent -->
+  <path d="M280,545 C220,545 190,400 154,362" fill="none" stroke="#5f45cc" stroke-width="2" marker-end="url(#ah-lav)"/>
+  <text class="sans" x="222" y="545" text-anchor="end" font-size="16" font-weight="600" fill="#5f45cc">reads the text</text>
+  <text class="sans lbl" x="222" y="566" text-anchor="end">edits, goes round again</text>
+
+  <!-- ===== the right gutter: fast vs. compile ===== -->
+  <path d="M976,100 H982 V430 H976" fill="none" stroke="#1a63c4" stroke-width="1.75"/>
+  <text class="sans hd" x="996" y="118" fill="#1a63c4">about 1 second each</text>
+  <text class="sans lbl" x="996" y="140">no compiler, no window</text>
+  <text class="sans lbl" x="996" y="160">run on every edit</text>
+  <line x1="982" y1="263" x2="990" y2="263" stroke="#1a63c4" stroke-width="1.75"/>
+  <text class="sans lbl" x="996" y="268">silence: in the dialect</text>
+
+  <path d="M976,464 H982 V508 H976" fill="none" stroke="#a85a00" stroke-width="1.75"/>
+  <text class="sans hd" x="996" y="478" fill="#a85a00">a compile</text>
+  <text class="sans lbl" x="996" y="500">both runs, byte-compared</text>
+  <text class="sans lbl" x="996" y="520">when the change is done</text>
+
+  <!-- ===== ship ===== -->
+  <circle cx="744" cy="497" r="3" fill="#15804a"/>
+  <path d="M744,497 H898 a12,12 0 0 1 12,12 V626" fill="none" stroke="#15804a" stroke-width="2" stroke-opacity="0.8" marker-end="url(#ah-grn)"/>
+  <rect x="888" y="632" width="44" height="44" rx="12" fill="#e3f5ea" stroke="#15804a" stroke-width="2"/>
+  <rect x="899" y="646" width="22" height="16" rx="3" fill="none" stroke="#15804a" stroke-width="1.6" stroke-opacity="0.85"/>
+  <line x1="899" y1="651" x2="921" y2="651" stroke="#15804a" stroke-width="1.6" stroke-opacity="0.85"/>
+  <text class="sans" x="946" y="651" font-size="17" font-weight="600" fill="#15804a">ship</text>
+  <text class="sans lbl" x="946" y="671">a native binary</text>
+</svg>

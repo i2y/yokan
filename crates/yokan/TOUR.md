@@ -1313,6 +1313,7 @@ Handlers, store methods and value classes are ordinary Python too, so the parts 
 What a test like this checks is the development run, which is CPython.
 Whether the shipped binary agrees is the other half, and that is what `yokan gate` answers — the same script through both runs, byte-compared.
 The two are complementary: a unit test says the app does the right thing, and the gate says the compiled app does the same thing.
+How `check`, `show` and the gate fit together into a loop an agent can work on its own is written up at [Building with an agent](https://i2y.github.io/yokan/agents/).
 
 ## Headless runs and the gate
 
