@@ -53,6 +53,8 @@ gate panels  ./bin/wakakusa gate demo/panels.rb --script "select:stack,dump,clic
 gate roster  ./bin/wakakusa gate demo/roster.rb --script "select:member 7,dump,click:score,dump,click:score,dump"
 gate dashboard ./bin/wakakusa gate demo/dashboard.rb --script "advance:1000,advance:1000,dump"
 # The shared properties on every element; the middle steps are inert while locked.
+gate loading ./bin/wakakusa gate demo/loading.rb --script "click:step,click:step,dump,click:busy"
+gate filter  ./bin/wakakusa gate demo/filter.rb --script "select:crit,dump,select:all,dump"
 gate shared  ./bin/wakakusa gate demo/shared.rb --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
