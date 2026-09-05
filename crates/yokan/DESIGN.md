@@ -40,8 +40,10 @@ collected in the tour's closing section, What does not work yet.
 - **Refusals teach.** An error names what to write instead.
 - **Determinism at every boundary.** Wherever the two runs could
   disagree on incidental order or formatting, the design picks one
-  answer for both: dicts iterate in key order, float text renders
-  as CPython's `str()`, seeded random draws the same sequence.
+  answer for both: dicts iterate in insertion order (a Rust crate's
+  `HashMap` has none to inherit, so it is sorted as it crosses),
+  float text renders as CPython's `str()`, seeded random draws the
+  same sequence.
 
 ## The dialect's shape
 

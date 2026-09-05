@@ -442,9 +442,11 @@ def tally():
   overflow abort the statement in both runs; the app lives on.
   `int ** int` takes a non-negative literal exponent.
 - Dicts: `prices["cherry"] = 200` writes a key, `d().get(k,
-  default)` reads, `"k" in d()` tests, `len(d())` counts, `for k in
-  sorted(d())` iterates in key order. Bare `d[k]` and bare
-  iteration are refused.
+  default)` reads, `"k" in d()` tests, `len(d())` counts. `for k in
+  d()` walks the keys in insertion order, the order Python walks
+  them in; `.keys()`, `.values()` and `.items()` do too, and `for k
+  in sorted(d())` is how you ask for key order. Bare `d[k]` is
+  refused.
 - Lists: `xs[i]` reads an element with Python's meaning (a
   negative index counts from the back, past the end aborts the
   statement); `xs[i] = v` writes one. `len(xs)`, `Cart.xs` and
@@ -776,8 +778,6 @@ transformations and misreports store methods; use pyright.
 Same list as the tour's closing section; each is refused with its
 reason.
 
-- Iterating a dict in insertion order (compiled dicts are
-  key-ordered): use `sorted(d())`.
 - Bare `d[k]` reads: use `.get(key, default)`.
 - Reading a local assigned in one branch only.
 - A local, a parameter or a loop variable with a FIELD's name inside a
@@ -816,8 +816,6 @@ reason.
   `s[a:b]` and `in` are in).
 - Format specs beyond fill, align, sign, width, `,`, precision and
   `d` / `f` / `e` / `%` / `s`.
-- Iterating a dict's `.values()` / `.items()` (insertion order in
-  Python, key order compiled): iterate `sorted(d())`.
 - Nested defs (no closures — helpers go at module level) and a
   conditional expression inside a view.
 - `print`: stdout carries the headless dump, so `log("…")` writes
@@ -826,8 +824,12 @@ reason.
   that is not one container (a top-level `if`, or several elements
   — wrap them in a `column`). Callbacks and State parameters work:
   the component becomes a view per call site.
-- `tuple` and `set`: a tuple has no compiled shape, and a Python
-  set iterates in an order the compiled side would not reproduce.
+- `set`: a Python set iterates in an order the compiled side would
+  not reproduce, so it is refused rather than reordered; a `list`
+  covers it. A tuple is in (see Tuples above), but only where its
+  shape is written out — a tuple a Rust crate would answer is not
+  carried yet, which is why `re.findall` refuses a pattern with two
+  groups or more.
 - `@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals.
 - Standard library: reading a time back from text, file metadata
   and copy/rename, streaming or binary downloads, nested json
