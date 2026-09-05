@@ -64,6 +64,11 @@ pub type PixieReloadFn = extern "C" fn() -> i32;
 /// The app's completion: the id of a piece of work that has finished.
 /// Called on the window's thread, never on the one that did the work.
 pub type PixieTaskFn = extern "C" fn(i64);
+/// A shortcut, a menu item, a key or a dropped file reaching the app.
+/// These are declared before the app runs and outlive every build, so
+/// they are numbered in a list of their own.
+pub type PixieBindingFn = extern "C" fn(i64);
+
 /// A turn for the app's own threads. Called while the engine waits for
 /// work to finish, because a language whose threads are scheduled by
 /// its own runtime gets no turn at all while this library is on the
@@ -90,6 +95,13 @@ thread_local! {
     static WATCH: RefCell<Option<(String, PixieReloadFn)>> = const { RefCell::new(None) };
     static TASK_FN: Cell<Option<PixieTaskFn>> = const { Cell::new(None) };
     static PUMP_FN: Cell<Option<PixiePumpFn>> = const { Cell::new(None) };
+    static BINDING_FN: Cell<Option<PixieBindingFn>> = const { Cell::new(None) };
+    /// Declared before the app runs, installed once there is a World.
+    static PENDING_BINDINGS: RefCell<Vec<Binding>> = const { RefCell::new(Vec::new()) };
+    /// The last string the engine was asked for: what is on the
+    /// clipboard, or the path a person chose. Read out a character at
+    /// a time, for the reason the text an event carried is.
+    static ANSWER: RefCell<Vec<char>> = const { RefCell::new(Vec::new()) };
     /// Work the app has started that the engine has not yet handed to
     /// the async tier: that takes a World, and the app started it from
     /// inside a handler.
@@ -964,6 +976,143 @@ fn after_callback(w: &mut World) {
     }
 }
 
+/// What an app asked to be told about, before it started running.
+enum Binding {
+    Shortcut(String, i64),
+    AnyKey(i64),
+    Menu(String, String, i64),
+    FileDrop(i64),
+}
+
+/// Registers the function a shortcut, a menu item, a key or a dropped
+/// file reaches.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_set_binding_handler(f: PixieBindingFn) {
+    BINDING_FN.with(|c| c.set(Some(f)));
+}
+
+fn ring(w: &mut World, id: i64, text: &str) {
+    EVENT_TEXT.with(|c| *c.borrow_mut() = text.chars().collect());
+    if let Some(f) = BINDING_FN.with(|c| c.get()) {
+        f(id);
+    }
+    after_callback(w);
+}
+
+/// A chord, spelled the way the platform spells it ("cmd+s").
+///
+/// # Safety
+/// `chord` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_shortcut(chord: *const c_char, handler: i64) {
+    let chord = unsafe { text_arg(chord) };
+    PENDING_BINDINGS.with(|b| b.borrow_mut().push(Binding::Shortcut(chord, handler)));
+}
+
+/// Every key, which arrives as the chord it was.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_on_key(handler: i64) {
+    PENDING_BINDINGS.with(|b| b.borrow_mut().push(Binding::AnyKey(handler)));
+}
+
+/// One item in the application's menu bar. Declaration order is menu
+/// order.
+///
+/// # Safety
+/// `menu` and `item` are NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_menu_item(menu: *const c_char, item: *const c_char, handler: i64) {
+    let menu = unsafe { text_arg(menu) };
+    let item = unsafe { text_arg(item) };
+    PENDING_BINDINGS.with(|b| b.borrow_mut().push(Binding::Menu(menu, item, handler)));
+}
+
+/// What happens to a file dragged onto the window: the handler is told
+/// its path.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_on_file_drop(handler: i64) {
+    PENDING_BINDINGS.with(|b| b.borrow_mut().push(Binding::FileDrop(handler)));
+}
+
+fn install_bindings(rt: &Runtime) {
+    for b in PENDING_BINDINGS.with(|b| b.take()) {
+        rt.with(move |w: &mut World| match b {
+            Binding::Shortcut(chord, id) => pixie_kernel::keys::bind(
+                w,
+                &chord,
+                Rc::new(move |w: &mut World| ring(w, id, "")),
+            ),
+            Binding::AnyKey(id) => pixie_kernel::keys::on_key(
+                w,
+                Rc::new(move |w: &mut World, chord: Str| ring(w, id, chord.as_str())),
+            ),
+            Binding::Menu(menu, item, id) => pixie_kernel::menu::item(
+                w,
+                &menu,
+                &item,
+                Rc::new(move |w: &mut World| ring(w, id, "")),
+            ),
+            Binding::FileDrop(id) => pixie_kernel::drop::on_file(
+                w,
+                Rc::new(move |w: &mut World, path: Str| ring(w, id, path.as_str())),
+            ),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// What the desktop can be asked for. A string comes back a character at
+// a time: see `pixie_event_text_length` for why it cannot simply be
+// returned.
+
+fn answer_with(text: &str) {
+    ANSWER.with(|c| *c.borrow_mut() = text.chars().collect());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_answer_length() -> i64 {
+    ANSWER.with(|c| c.borrow().len() as i64)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_answer_char(i: i64) -> i64 {
+    if i < 0 {
+        return 0;
+    }
+    ANSWER.with(|c| c.borrow().get(i as usize).map_or(0, |ch| *ch as i64))
+}
+
+/// # Safety
+/// `text` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_clipboard_set(text: *const c_char) {
+    let text = unsafe { text_arg(text) };
+    pixie_kernel::clipboard::set(&text);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_clipboard_get() {
+    let text = pixie_kernel::clipboard::get();
+    answer_with(text.as_str());
+}
+
+/// The platform's own panel. A dialog waits for a person, so it belongs
+/// inside `task`; a headless script answers it with `file:<path>`.
+///
+/// # Safety
+/// `label` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_dialog(save: i32, label: *const c_char) {
+    let label = unsafe { text_arg(label) };
+    let kind = if save != 0 {
+        pixie_kernel::dialog::Kind::Save
+    } else {
+        pixie_kernel::dialog::Kind::Open
+    };
+    let path = pixie_kernel::dialog::ask(kind, &label);
+    answer_with(&path);
+}
+
 /// Registers the function a timer's tick reaches.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_set_timer_handler(f: PixieTimerFn) {
@@ -1039,6 +1188,7 @@ fn headless(build: PixieBuildFn, script: &str, light: bool) -> String {
     let rt = Runtime::new(w);
     CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
     install_timers(&rt);
+    install_bindings(&rt);
     let _ = rt.with(|w| w.take_dirty_views());
     rt.with(|w: &mut World| pixie_kernel::theme::set_light(w, light));
     let mut tree = rt.with(|w| pixie_kernel::build_prepared(w, h));
@@ -1083,6 +1233,8 @@ pub unsafe extern "C" fn pixie_run(
     let rt = Runtime::new(w);
     CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
     install_timers(&rt);
+    install_bindings(&rt);
+    pixie_kernel::dialog::windowed();
     let win = if width > 0.0 || height > 0.0 {
         Some((width, height))
     } else {

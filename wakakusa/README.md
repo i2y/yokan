@@ -129,7 +129,7 @@ on_done(job) { @answer = task_answer }   # back on it, when that is done
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — twenty-four apps, with `demo/screenshots/` showing what
+- `demo/` — thirty-five apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers

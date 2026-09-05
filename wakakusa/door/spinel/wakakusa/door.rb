@@ -22,11 +22,13 @@ module PixieC
     typedef void (*pixie_timer_fn)(long);
     typedef void (*pixie_task_fn)(long);
     typedef void (*pixie_pump_fn)(void);
+    typedef void (*pixie_binding_fn)(long);
     void pixie_set_event_handler(pixie_event_fn f);
     void pixie_set_row_builder(pixie_row_fn f);
     void pixie_set_timer_handler(pixie_timer_fn f);
     void pixie_set_task_handler(pixie_task_fn f);
     void pixie_set_pump_handler(pixie_pump_fn f);
+    void pixie_set_binding_handler(pixie_binding_fn f);
     int pixie_run(const char *title, double w, double h, double pad, pixie_build_fn build);
   C
   ffi_callback :build_fn, [], :long
@@ -35,6 +37,7 @@ module PixieC
   ffi_callback :timer_fn, [:long], :void
   ffi_callback :task_fn, [:long], :void
   ffi_callback :pump_fn, [], :void
+  ffi_callback :binding_fn, [:long], :void
   ffi_func :pixie_el, [:int32], :long
   ffi_func :pixie_str, [:long, :int32, :str], :void
   ffi_func :pixie_num, [:long, :int32, :double], :void
@@ -59,6 +62,16 @@ module PixieC
   ffi_func :pixie_task, [], :long
   ffi_func :pixie_task_done, [:long], :void
   ffi_func :pixie_set_pump_handler, [:pump_fn], :void
+  ffi_func :pixie_set_binding_handler, [:binding_fn], :void
+  ffi_func :pixie_shortcut, [:str, :long], :void
+  ffi_func :pixie_on_key, [:long], :void
+  ffi_func :pixie_menu_item, [:str, :str, :long], :void
+  ffi_func :pixie_on_file_drop, [:long], :void
+  ffi_func :pixie_answer_length, [], :long
+  ffi_func :pixie_answer_char, [:long], :long
+  ffi_func :pixie_clipboard_set, [:str], :void
+  ffi_func :pixie_clipboard_get, [], :void
+  ffi_func :pixie_dialog, [:int32, :str], :void
   ffi_func :pixie_run, [:str, :double, :double, :double, :build_fn], :int
 end
 
@@ -76,5 +89,6 @@ def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_timer_handler(method(:wakakusa_tick))
   PixieC.pixie_set_task_handler(method(:wakakusa_task_done))
   PixieC.pixie_set_pump_handler(method(:wakakusa_pump))
+  PixieC.pixie_set_binding_handler(method(:wakakusa_binding))
   PixieC.pixie_run(title, width, height, padding, method(:wakakusa_build))
 end

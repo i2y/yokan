@@ -55,6 +55,11 @@ gate cards   ./bin/wakakusa gate demo/cards.rb --script "click:+1,click:+10,dump
 gate styled  ./bin/wakakusa gate demo/styled.rb --script "click:+1,dump,click:flip,dump"
 gate panels  ./bin/wakakusa gate demo/panels.rb --script "select:stack,dump,click:about,dump,click:close"
 gate roster  ./bin/wakakusa gate demo/roster.rb --script "select:member 7,dump,click:score,dump,click:score,dump"
+gate about   ./bin/wakakusa gate demo/about.rb --script "click:copy link,dump,click:Website"
+gate keys    ./bin/wakakusa gate demo/keys.rb --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
+# The picker needs something on disk to choose and to drop.
+mkdir -p demo/.gate && echo "a file the picker can read" > demo/.gate/fs_probe.txt
+gate picker  ./bin/wakakusa gate demo/picker.rb --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
 gate flow    ./bin/wakakusa gate demo/flow.rb --script "click:step,click:tally,dump,click:bump3,click:find,dump"
 gate moods   ./bin/wakakusa gate demo/moods.rb --script "click:flip,click:pick,click:describe,dump,click:track,click:clear,click:describe,dump,click:wipe,dump"
 gate calc    ./bin/wakakusa gate demo/calc.rb --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="

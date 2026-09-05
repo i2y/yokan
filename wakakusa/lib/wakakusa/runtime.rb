@@ -31,6 +31,9 @@ $wakakusa_app = nil
 # the `run` at the bottom of it must not start a second one or throw
 # away the object whose state the person has been building up.
 $wakakusa_running = false
+# What the app asked to be told about before it started. These outlive
+# every build, so they are numbered in a list of their own.
+$wakakusa_bindings = []
 # Work the app started, and what it answered. The lock is the one place
 # the window's thread and a worker meet.
 $wakakusa_task_dones = []
@@ -108,6 +111,87 @@ end
 # What the work answered. Read it from the handler `on_done:` names.
 def task_answer
   $wakakusa_task_lock.synchronize { $wakakusa_task_results[$wakakusa_task_current] }
+end
+
+# A shortcut, a menu item, a key or a dropped file reached the app.
+def wakakusa_binding(id)
+  $wakakusa_bindings[id].call
+end
+
+def wakakusa_bind(work)
+  $wakakusa_bindings.push(work)
+  $wakakusa_bindings.length - 1
+end
+
+# A chord, spelled the way the platform spells it ("cmd+s").
+def shortcut(chord, &blk)
+  return if blk.nil?
+
+  PixieC.pixie_shortcut(chord, wakakusa_bind(proc { blk.call }))
+end
+
+# Every key, which arrives as the chord it was.
+def on_key(&blk)
+  return if blk.nil?
+
+  PixieC.pixie_on_key(wakakusa_bind(proc { blk.call(wakakusa_event_text) }))
+end
+
+# One item in the application's menu bar. Declaration order is menu
+# order.
+def menu_item(menu, item, &blk)
+  return if blk.nil?
+
+  PixieC.pixie_menu_item(menu, item, wakakusa_bind(proc { blk.call }))
+end
+
+# What happens to a file dragged onto the window: the block is told its
+# path.
+def on_file_drop(&blk)
+  return if blk.nil?
+
+  PixieC.pixie_on_file_drop(wakakusa_bind(proc { blk.call(wakakusa_event_text) }))
+end
+
+# The last string the engine was asked for, a character at a time. See
+# `wakakusa_event_text` for why it does not simply come back whole.
+def wakakusa_answer
+  points = []
+  n = PixieC.pixie_answer_length
+  i = 0
+  while i < n
+    points.push(PixieC.pixie_answer_char(i))
+    i += 1
+  end
+  points.pack("U*")
+end
+
+# The system clipboard. A window exchanges it with the platform; a
+# headless run keeps it to itself, so a copy and a paste are a checked
+# interaction like any other.
+module Clipboard
+  def self.set(text)
+    PixieC.pixie_clipboard_set(text)
+  end
+
+  def self.get
+    PixieC.pixie_clipboard_get
+    wakakusa_answer
+  end
+end
+
+# The platform's own panels. A dialog waits for a person, so it belongs
+# inside `task`; a headless script answers one with `file:<path>`.
+module Dialog
+  def self.open(title = "")
+    PixieC.pixie_dialog(0, title)
+    wakakusa_answer
+  end
+
+  def self.save(name = "")
+    PixieC.pixie_dialog(1, name)
+    wakakusa_answer
+  end
 end
 
 # A timer came due.

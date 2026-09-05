@@ -33,6 +33,16 @@ module PixieC
   extern "long pixie_task(void)"
   extern "void pixie_task_done(long)"
   extern "void pixie_set_pump_handler(void*)"
+  extern "void pixie_set_binding_handler(void*)"
+  extern "void pixie_shortcut(const char*, long)"
+  extern "void pixie_on_key(long)"
+  extern "void pixie_menu_item(const char*, const char*, long)"
+  extern "void pixie_on_file_drop(long)"
+  extern "long pixie_answer_length(void)"
+  extern "long pixie_answer_char(long)"
+  extern "void pixie_clipboard_set(const char*)"
+  extern "void pixie_clipboard_get(void)"
+  extern "void pixie_dialog(int, const char*)"
   extern "void pixie_every(double, long)"
   extern "int pixie_run(const char*, double, double, double, void*)"
 end
@@ -61,6 +71,9 @@ WAKAKUSA_TASK_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
 ) { |id| wakakusa_task_done(id) }
 WAKAKUSA_PUMP_CB = Fiddle::Closure::BlockCaller.new(Fiddle::TYPE_VOID, []) { wakakusa_pump }
+WAKAKUSA_BINDING_CB = Fiddle::Closure::BlockCaller.new(
+  Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
+) { |id| wakakusa_binding(id) }
 WAKAKUSA_RELOAD_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_INT, []
 ) { wakakusa_reload }
@@ -86,6 +99,7 @@ def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_timer_handler(WAKAKUSA_TIMER_CB)
   PixieC.pixie_set_task_handler(WAKAKUSA_TASK_CB)
   PixieC.pixie_set_pump_handler(WAKAKUSA_PUMP_CB)
+  PixieC.pixie_set_binding_handler(WAKAKUSA_BINDING_CB)
   # Only the interpreted run watches: a compiled app is what it is.
   PixieC.pixie_watch($0, WAKAKUSA_RELOAD_CB) if File.file?($0)
   PixieC.pixie_run(title, width, height, padding, WAKAKUSA_BUILD_CB)
