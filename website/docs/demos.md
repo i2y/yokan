@@ -6035,7 +6035,7 @@ shows a finished transcript — its launch state is an empty table.
                 segmented(options=jobs(), selected=job_ix(), on_change=pick_job)
                 spacer()
                 button("transcribe", on_click=start, disabled=busy())
-            progress(pct(), width=520.0, label=note())
+            progress(pct(), label=note())
             with scroll_view(height=260.0):
                 with data_table():
                     # The two time columns are given a WIDTH rather than a
@@ -6061,7 +6061,7 @@ shows a finished transcript — its launch state is an empty table.
 
 
     if __name__ == "__main__":
-        run(view, title="transcribe", width=760, height=560)
+        run(view, title="transcribe", width=900, height=560)
     ```
 <!-- source -->
 
