@@ -29,7 +29,7 @@ class Alerts
   end
 
   def alert_row(i)
-    text(@visible[i], size: 12.0, mono: true)
+    text(@visible[i], size: 12.0)
   end
 
   def view

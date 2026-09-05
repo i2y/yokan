@@ -88,8 +88,8 @@ meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — twenty-one apps. `tools/gate_all.sh` — all of them, both
-  runs.
+- `demo/` — twenty-one apps, with `demo/screenshots/` showing what
+  each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers
 
