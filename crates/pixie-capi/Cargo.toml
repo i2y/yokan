@@ -17,3 +17,8 @@ crate-type = ["staticlib", "cdylib"]
 [dependencies]
 pixie-kernel.workspace = true
 pixie-engine-gpui = { path = "../pixie-engine-gpui" }
+
+# The table test reads wakakusa/elements.toml with a real parser, so a
+# mistake in the generator's own reader cannot pass quietly.
+[dev-dependencies]
+toml = { workspace = true }
