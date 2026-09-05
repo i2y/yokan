@@ -111,6 +111,9 @@ state came from. A timer keeps the one it was given.
 
 ```ruby
 every(1.0) { app.tick }   # before `run`; both runs tick off one clock
+
+job = task { something_slow }        # off the window's thread
+on_done(job) { @answer = task_answer }   # back on it, when that is done
 ```
 
 ## The pieces
@@ -126,7 +129,7 @@ every(1.0) { app.tick }   # before `run`; both runs tick off one clock
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — twenty-three apps, with `demo/screenshots/` showing what
+- `demo/` — twenty-four apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers
@@ -158,7 +161,12 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 - No drawing surface: the canvas and its commands are not in the
   vocabulary, so neither are the two games.
-- No way yet to do work off the window's thread.
+- Work off the window's thread is there, but a compiled run only gets
+  to it while the engine is waiting on it: a thread scheduled by Ruby's
+  own runtime gets no turn while the engine is on the stack, which it
+  is from `run` until the window closes. The engine hands one back on
+  every poll, so a task finishes; a thread the app starts for its own
+  reasons, outside `task`, will not run.
 - Three shapes an app has to be written in, because the compiler
   cannot yet take the others, each refused by name with the rewrite in
   the message. State lives on the app object rather than in globals. A

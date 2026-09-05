@@ -29,6 +29,10 @@ module PixieC
   extern "void pixie_set_row_builder(void*)"
   extern "void pixie_set_timer_handler(void*)"
   extern "void pixie_watch(const char*, void*)"
+  extern "void pixie_set_task_handler(void*)"
+  extern "long pixie_task(void)"
+  extern "void pixie_task_done(long)"
+  extern "void pixie_set_pump_handler(void*)"
   extern "void pixie_every(double, long)"
   extern "int pixie_run(const char*, double, double, double, void*)"
 end
@@ -53,6 +57,10 @@ WAKAKUSA_ROW_CB = Fiddle::Closure::BlockCaller.new(
 WAKAKUSA_TIMER_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
 ) { |id| wakakusa_tick(id) }
+WAKAKUSA_TASK_CB = Fiddle::Closure::BlockCaller.new(
+  Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
+) { |id| wakakusa_task_done(id) }
+WAKAKUSA_PUMP_CB = Fiddle::Closure::BlockCaller.new(Fiddle::TYPE_VOID, []) { wakakusa_pump }
 WAKAKUSA_RELOAD_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_INT, []
 ) { wakakusa_reload }
@@ -76,6 +84,8 @@ def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_event_handler(WAKAKUSA_EVENT_CB)
   PixieC.pixie_set_row_builder(WAKAKUSA_ROW_CB)
   PixieC.pixie_set_timer_handler(WAKAKUSA_TIMER_CB)
+  PixieC.pixie_set_task_handler(WAKAKUSA_TASK_CB)
+  PixieC.pixie_set_pump_handler(WAKAKUSA_PUMP_CB)
   # Only the interpreted run watches: a compiled app is what it is.
   PixieC.pixie_watch($0, WAKAKUSA_RELOAD_CB) if File.file?($0)
   PixieC.pixie_run(title, width, height, padding, WAKAKUSA_BUILD_CB)

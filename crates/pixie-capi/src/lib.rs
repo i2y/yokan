@@ -31,8 +31,8 @@ use std::rc::Rc;
 
 use pixie_engine_gpui::{ReloadWatch, run_app};
 use pixie_kernel::{
-    BoolListener, Component, Element, ErasedHandle, FloatListener, IntListener, LazyRows, List,
-    Listener, Runtime, Str, TextListener, World, mount,
+    AsyncCtx, BoolListener, Component, Element, ErasedHandle, FloatListener, IntListener,
+    LazyRows, List, Listener, Runtime, Str, TextListener, World, mount,
 };
 
 mod vocab;
@@ -61,6 +61,14 @@ pub type PixieTimerFn = extern "C" fn(i64);
 /// The app's reloader: read the app's file again, answering non-zero
 /// when it took. Only a windowed run ever calls it.
 pub type PixieReloadFn = extern "C" fn() -> i32;
+/// The app's completion: the id of a piece of work that has finished.
+/// Called on the window's thread, never on the one that did the work.
+pub type PixieTaskFn = extern "C" fn(i64);
+/// A turn for the app's own threads. Called while the engine waits for
+/// work to finish, because a language whose threads are scheduled by
+/// its own runtime gets no turn at all while this library is on the
+/// stack — and this library is on the stack for the life of the app.
+pub type PixiePumpFn = extern "C" fn();
 
 /// A slot in the build arena: an element being written, one finished
 /// and waiting to be consumed, or one already taken.
@@ -80,6 +88,16 @@ thread_local! {
     static PENDING_TIMERS: RefCell<Vec<(f64, i64)>> = const { RefCell::new(Vec::new()) };
     /// The file to watch and what to call when it changes.
     static WATCH: RefCell<Option<(String, PixieReloadFn)>> = const { RefCell::new(None) };
+    static TASK_FN: Cell<Option<PixieTaskFn>> = const { Cell::new(None) };
+    static PUMP_FN: Cell<Option<PixiePumpFn>> = const { Cell::new(None) };
+    /// Work the app has started that the engine has not yet handed to
+    /// the async tier: that takes a World, and the app started it from
+    /// inside a handler.
+    static PENDING_TASKS: RefCell<Vec<(i64, std::sync::Arc<std::sync::atomic::AtomicBool>)>> =
+        const { RefCell::new(Vec::new()) };
+    /// The World, reachable from inside a spawned future, where no
+    /// borrow of it is held.
+    static CURRENT_CTX: RefCell<Option<AsyncCtx>> = const { RefCell::new(None) };
     /// What the event now being delivered carried. Written just before
     /// the callback and read back by it.
     static EVENT_INT: Cell<i64> = const { Cell::new(0) };
@@ -262,9 +280,7 @@ fn fire(w: &mut World, handler: i64, kind: i64, i: i64, d: f64, s: &str) {
     if let Some(f) = EVENT_FN.with(|c| c.get()) {
         f(handler, kind);
     }
-    if let Some(hv) = CURRENT_VIEW.with(|c| c.get()) {
-        w.mark_view_dirty(hv);
-    }
+    after_callback(w);
 }
 
 /// What the event being delivered carried. Valid for the length of the
@@ -849,6 +865,105 @@ pub extern "C" fn pixie_set_row_builder(f: PixieRowFn) {
     ROW_FN.with(|c| c.set(Some(f)));
 }
 
+/// Registers the function a finished piece of work reaches.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_set_task_handler(f: PixieTaskFn) {
+    TASK_FN.with(|c| c.set(Some(f)));
+}
+
+/// The flags a worker finishes through. Global rather than
+/// thread-local on purpose: the thread that finishes the work is not
+/// the one that started it, and this is the only thing the two share.
+static TASK_SLOTS: std::sync::Mutex<Vec<(i64, std::sync::Arc<std::sync::atomic::AtomicBool>)>> =
+    std::sync::Mutex::new(Vec::new());
+static NEXT_TASK: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1);
+
+/// Start a piece of work: answers the number the app hands back when it
+/// is done. The app runs the work on a thread of its own; the engine
+/// only promises to tell it, on the window's thread, once
+/// `pixie_task_done` has been called.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_task() -> i64 {
+    let id = NEXT_TASK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    TASK_SLOTS
+        .lock()
+        .expect("task slots poisoned")
+        .push((id, flag.clone()));
+    PENDING_TASKS.with(|t| t.borrow_mut().push((id, flag)));
+    id
+}
+
+/// The work is finished. Called from whichever thread did it, and the
+/// only call in this file that may be.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_task_done(id: i64) {
+    let mut slots = TASK_SLOTS.lock().expect("task slots poisoned");
+    let Some(ix) = slots.iter().position(|(i, _)| *i == id) else {
+        return;
+    };
+    let (_, flag) = slots.remove(ix);
+    drop(slots);
+    flag.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// Registers the call that gives the app's own threads a turn.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_set_pump_handler(f: PixiePumpFn) {
+    PUMP_FN.with(|c| c.set(Some(f)));
+}
+
+/// Waiting for work, and handing the app a turn each time it is asked
+/// whether the work is done. Without that turn a caller whose threads
+/// its own runtime schedules would never run the work at all: this
+/// library is on its stack from `pixie_run` until the window closes.
+struct Waiting(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl std::future::Future for Waiting {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<()> {
+        if self.0.load(std::sync::atomic::Ordering::Acquire) {
+            return std::task::Poll::Ready(());
+        }
+        if let Some(f) = PUMP_FN.with(|c| c.get()) {
+            f();
+        }
+        std::task::Poll::Pending
+    }
+}
+
+/// Hand the work the app just started to the async tier, which settles
+/// it between a script's steps and between a window's frames.
+fn drain_tasks(w: &mut World) {
+    for (id, flag) in PENDING_TASKS.with(|t| t.take()) {
+        w.spawn(async move {
+            Waiting(flag).await;
+            if let Some(f) = TASK_FN.with(|c| c.get()) {
+                f(id);
+            }
+            // Inside Runtime::turn, so no borrow of the World is held:
+            // reach it through the stored context for the rebuild.
+            let ctx = CURRENT_CTX.with(|c| c.borrow().clone());
+            if let Some(ctx) = ctx {
+                ctx.with(after_callback);
+            }
+        });
+    }
+}
+
+/// What follows every call into the app: work it started is handed on,
+/// and the view is marked for rebuilding.
+fn after_callback(w: &mut World) {
+    drain_tasks(w);
+    if let Some(hv) = CURRENT_VIEW.with(|c| c.get()) {
+        w.mark_view_dirty(hv);
+    }
+}
+
 /// Registers the function a timer's tick reaches.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_set_timer_handler(f: PixieTimerFn) {
@@ -892,9 +1007,7 @@ fn install_timers(rt: &Runtime) {
                     if let Some(f) = TIMER_FN.with(|c| c.get()) {
                         f(handler);
                     }
-                    if let Some(hv) = CURRENT_VIEW.with(|c| c.get()) {
-                        w.mark_view_dirty(hv);
-                    }
+                    after_callback(w);
                 }),
             );
         });
@@ -924,6 +1037,7 @@ fn headless(build: PixieBuildFn, script: &str, light: bool) -> String {
     let h = mount(&mut w, CView { build }, &[]);
     CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
     let rt = Runtime::new(w);
+    CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
     install_timers(&rt);
     let _ = rt.with(|w| w.take_dirty_views());
     rt.with(|w: &mut World| pixie_kernel::theme::set_light(w, light));
@@ -967,6 +1081,7 @@ pub unsafe extern "C" fn pixie_run(
     let h = mount(&mut w, CView { build }, &[]);
     CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
     let rt = Runtime::new(w);
+    CURRENT_CTX.with(|c| *c.borrow_mut() = Some(rt.ctx()));
     install_timers(&rt);
     let win = if width > 0.0 || height > 0.0 {
         Some((width, height))

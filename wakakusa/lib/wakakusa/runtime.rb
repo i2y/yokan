@@ -31,6 +31,12 @@ $wakakusa_app = nil
 # the `run` at the bottom of it must not start a second one or throw
 # away the object whose state the person has been building up.
 $wakakusa_running = false
+# Work the app started, and what it answered. The lock is the one place
+# the window's thread and a worker meet.
+$wakakusa_task_dones = []
+$wakakusa_task_results = []
+$wakakusa_task_lock = Mutex.new
+$wakakusa_task_current = nil
 # Timers are declared before the app runs and live for as long as it
 # does, so they keep a list of their own that a build never clears.
 $wakakusa_timers = []
@@ -52,6 +58,56 @@ end
 # registered under it runs.
 def wakakusa_on_event(id, _kind)
   $wakakusa_handlers[id].call
+end
+
+# Run `work` off the window's thread. When it is done the app's
+# `on_done` method is called ON the window's thread, with what the work
+# answered. Nothing inside the work may touch the app's state or the
+# screen — the handler is where that belongs, and it is the reason the
+# answer comes back this way rather than being written from the worker.
+def task(&work)
+  return 0 if work.nil?
+
+  id = PixieC.pixie_task
+  Thread.new do
+    answer = work.call
+    $wakakusa_task_lock.synchronize { $wakakusa_task_results[id] = answer }
+    PixieC.pixie_task_done(id)
+  end
+  id
+end
+
+# What to do when that work is finished. The block runs on the window's
+# thread, and `task_answer` inside it is what the work answered.
+def on_done(job, &blk)
+  return if blk.nil?
+
+  $wakakusa_task_dones[job] = blk
+end
+
+# The engine is waiting for work and is handing us a turn. Without it
+# nothing else in this program would ever run: the engine is on the
+# stack from `run` until the window closes, and a thread scheduled by
+# Ruby's own runtime gets no turn while that is true.
+def wakakusa_pump
+  Thread.pass
+end
+
+# The engine says a piece of work is finished, on the window's thread.
+# The block is called with nothing and asks for the answer itself: what
+# the work answered has no type known in advance, and a call whose
+# argument cannot be typed is a call a compiled run cannot make.
+def wakakusa_task_done(id)
+  blk = $wakakusa_task_dones[id]
+  return if blk.nil?
+
+  $wakakusa_task_current = id.to_i
+  blk.call
+end
+
+# What the work answered. Read it from the handler `on_done:` names.
+def task_answer
+  $wakakusa_task_lock.synchronize { $wakakusa_task_results[$wakakusa_task_current] }
 end
 
 # A timer came due.
