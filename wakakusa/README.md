@@ -188,6 +188,14 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
   watcher) is an ordinary `Thread`, and what it produces should be
   picked up by a timer rather than written into the app's state from
   the worker.
+- The two runs also differ in how much a thread costs the window, and
+  the shipped one is the better half. Two seconds of arithmetic in each
+  of two threads takes two seconds in the compiled run — they are on
+  two cores, and the window goes on drawing at its usual rate. The same
+  app under CRuby takes twice that, because the interpreter runs one
+  thread at a time, and the window stops until the work is done. So a
+  long computation can look worse while you are writing the app than it
+  will when you ship it.
 - Three shapes an app has to be written in, because the compiler
   cannot yet take the others, each refused by name with the rewrite in
   the message. State lives on the app object rather than in globals. A
