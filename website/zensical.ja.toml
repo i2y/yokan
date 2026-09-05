@@ -23,6 +23,8 @@ nav = [
     { "ライブラリと crate" = "tour-lib.md" },
     { "検証とリリース" = "tour-ship.md" },
   ] },
+  { "型" = "types.md" },
+  { "Python との行き来" = "escapes.md" },
   { "エージェントと作る" = "agents.md" },
   { "デモ" = "demos.md" },
   { "対応状況" = "support.md" },

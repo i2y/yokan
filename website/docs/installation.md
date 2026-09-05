@@ -7,6 +7,7 @@ the PEP 723 header and uv does the rest:
 
 ```python
 # /// script
+# requires-python = ">=3.14"
 # dependencies = ["yokan"]
 # ///
 from yokan import State, button, column, run, text

@@ -23,6 +23,8 @@ nav = [
     { "Libraries and crates" = "tour-lib.md" },
     { "Verify and ship" = "tour-ship.md" },
   ] },
+  { Types = "types.md" },
+  { "Crossing to Python" = "escapes.md" },
   { "Building with an agent" = "agents.md" },
   { Demos = "demos.md" },
   { Coverage = "support.md" },

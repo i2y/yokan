@@ -7,6 +7,7 @@ PEP 723 のヘッダに依存を書けば、あとは uv が揃えます。
 
 ```python
 # /// script
+# requires-python = ">=3.14"
 # dependencies = ["yokan"]
 # ///
 from yokan import State, button, column, run, text
