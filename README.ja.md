@@ -70,6 +70,26 @@ Yokan はそれを Python でやり、さらに開発版とリリース版が同
 状態の持ち方は 3 つだけで、書き方は[言語ツアー](crates/yokan/TOUR.ja.md)が一周で案内します。
 付属デモは 58 本あり、全部スクリーンショット付きの[ギャラリー](crates/yokan/demo/README.ja.md)から入れます。
 
+### 移植した二本
+
+付属デモのうち二本は、Python で書かれたアプリを移植したものです。
+配るアプリがどれだけ Python を積むかという意味で、ちょうど両端にあたります。
+
+Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました。
+同じドット絵のキャンバス、同じ 30fps、押しっぱなしのキーの読み方もそのままです。
+できあがるバイナリに Python は一行も入りません。
+キー操作とフレームを並べたスクリプトが両方の実行を再生するので、点が入るところまで含めて全フレームをゲートが比べます（`crates/yokan/demo/shooter.py` と `crates/yokan/demo/jump.py`）。
+
+<img src="docs/assets/shooter.gif" width="180"> <img src="docs/assets/jump.gif" width="320">
+
+もう一方の端が Buzz の画面と流れです。
+録音のファイルを窓に落とし、モデルと言語を選び、進み具合を見て、区間の表を読み、TXT と SRT と VTT に書き出します。
+文字起こしをするのは Whisper で、`@py` の中で埋め込みの CPython が動かす本物の Python です。
+`--bundle --app` を付ければ自分のランタイムを抱えた `.app` になるので、受け取る人は何も入れずに済みます。
+ゲートは文字起こしの本文も、書き出した SRT も、バイト単位で比べます（`crates/yokan/demo/transcribe/`）。
+
+![録音を文字起こしした画面。区間ごとの時刻と本文が表に並び、TXT と SRT と VTT に書き出せる](docs/assets/transcribe.png)
+
 ## 全体像
 
 同じソースが、二つの道で動きます。

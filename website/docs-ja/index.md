@@ -106,6 +106,35 @@ Python 自身のモジュール（`math`、`re`、`datetime` など）は、開�
 
 ---
 
+## 移植した二本
+
+付属デモのうち二本は、Python で書かれたアプリを移植したものです。
+配るアプリがどれだけ Python を積むかという意味で、ちょうど両端にあたります。
+
+Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました。
+同じドット絵のキャンバス、同じ 30fps、押しっぱなしのキーの読み方もそのままです。
+できあがるバイナリに Python は一行も入りません。
+キー操作とフレームを並べたスクリプトが両方の実行を再生するので、ゲートが全フレームを比べます。
+
+<img src="images/demos/shooter.gif" width="180"> <img src="images/demos/jump.gif" width="320">
+
+*[`demo/shooter`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/shooter.py)
+と [`demo/jump`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/jump.py)。
+Pyxel の例二本を、キャンバスに移したものです。*
+
+もう一方の端が Buzz の画面と流れです。
+録音のファイルを窓に落とし、モデルと言語を選び、進み具合を見て、区間の表を読み、TXT と SRT と VTT に書き出します。
+文字起こしをするのは Whisper で、`@py` の中で埋め込みの CPython が動かす本物の Python です。
+`--bundle --app` を付ければ自分のランタイムを抱えた `.app` になります。
+ゲートは文字起こしの本文も、書き出した SRT も、バイト単位で比べます。
+
+![録音を文字起こしした画面。区間ごとの時刻と本文が表に並び、TXT と SRT と VTT に書き出せる](images/demos/transcribe.png)
+
+*[`demo/transcribe`](https://github.com/i2y/yokan/tree/main/crates/yokan/demo/transcribe)。
+Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだものです。*
+
+---
+
 
 ## エージェントに書かせるなら
 

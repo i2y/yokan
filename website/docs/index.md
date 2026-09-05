@@ -122,6 +122,37 @@ Yokan cannot do yet is listed, with reasons, in
 
 ---
 
+## Two ports
+
+Two of the bundled demos are ports of apps written in Python, and
+they sit at opposite ends of how much Python the shipped app carries.
+
+Pyxel's example games are ported almost line for line: the same pixel
+canvas, the same thirty frames a second, the same keys read while
+they are held. The binary carries no Python at all, and a script of
+keystrokes and frames replays both runs, so the gate compares every
+frame of the game.
+
+<img src="images/demos/shooter.gif" width="180"> <img src="images/demos/jump.gif" width="320">
+
+*[`demo/shooter`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/shooter.py)
+and [`demo/jump`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/jump.py)
+— Pyxel's two examples, ported to the canvas.*
+
+At the other end is Buzz's screen and its flow: drop a recording,
+pick a model and a language, watch it work, read the segments, export
+TXT / SRT / VTT. The transcription is Whisper — real Python, running
+on an embedded CPython through `@py` — and `--bundle --app` makes a
+`.app` that carries its own runtime. The gate compares the transcript
+and the SRT it writes, byte for byte.
+
+![A recording transcribed: its segments in a table with timestamps, and TXT / SRT / VTT export](images/demos/transcribe.png)
+
+*[`demo/transcribe`](https://github.com/i2y/yokan/tree/main/crates/yokan/demo/transcribe)
+— Buzz's screen and flow, with mlx-whisper inside the escape.*
+
+---
+
 
 ## When an agent is writing it
 

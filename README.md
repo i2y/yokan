@@ -86,6 +86,30 @@ the [language tour](crates/yokan/TOUR.md) walks the whole surface
 in one pass. There are 58 bundled demos, all screenshotted in the
 [gallery](crates/yokan/demo/README.md).
 
+### Two ports
+
+Two of those demos are ports of apps written in Python, and they sit
+at opposite ends of how much Python the shipped app carries.
+
+Pyxel's example games are ported almost line for line: the same pixel
+canvas, the same thirty frames a second, the same keys read while
+they are held. The binary carries no Python at all. A script of
+keystrokes and frames replays both runs, so the gate compares every
+frame of the game — including the ones where the score moves
+(`crates/yokan/demo/shooter.py`, `crates/yokan/demo/jump.py`).
+
+<img src="docs/assets/shooter.gif" width="180"> <img src="docs/assets/jump.gif" width="320">
+
+At the other end is Buzz's screen and its flow: drop a recording,
+pick a model and a language, watch it work, read the segments, export
+TXT / SRT / VTT. The transcription is Whisper — real Python, running
+on an embedded CPython through `@py` — and `--bundle --app` makes a
+`.app` that carries its own runtime, so the person receiving it needs
+nothing installed. The gate compares the transcript and the SRT it
+writes, byte for byte (`crates/yokan/demo/transcribe/`).
+
+![A recording transcribed: its segments in a table with timestamps, and TXT / SRT / VTT export](docs/assets/transcribe.png)
+
 ## The whole picture
 
 One source, two roads to run it.
