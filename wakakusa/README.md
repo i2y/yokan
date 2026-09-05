@@ -88,7 +88,7 @@ meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — eighteen apps. `tools/gate_all.sh` — all of them, both
+- `demo/` — twenty-one apps. `tools/gate_all.sh` — all of them, both
   runs.
 
 ## Numbers
@@ -102,7 +102,7 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 | `cc` link of the compiled run | 0.29 s |
 | the compiled binary | 15.0 MB |
 | one gate round, engine already built | 1.8 s |
-| every demo, both runs | 31 s |
+| every demo, both runs | 36 s |
 
 ## How to start
 
