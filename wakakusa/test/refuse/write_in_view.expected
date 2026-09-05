@@ -1,0 +1,3 @@
+test/refuse/write_in_view.rb:9:5: Wakakusa cannot take this — a view only reads. Move the write into a handler — the block on a button, or a method the app calls from one
+        @seen = @seen + 1
+        ^

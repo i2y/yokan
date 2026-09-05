@@ -1,0 +1,3 @@
+test/refuse/global_from_block.rb:7:29: Wakakusa cannot take this — `$name` is a global, and a compiled run cannot write one from inside a block. The app's state belongs on the app: write `@name` in a class with a `view` method, and hand it to `run`
+        text_field($name) { |s| $name = s }
+                                ^

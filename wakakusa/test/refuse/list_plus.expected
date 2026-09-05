@@ -1,0 +1,3 @@
+test/refuse/list_plus.rb:9:5: Wakakusa cannot take this — growing a list with `+ [...]` answers something different in a compiled run. Copy it and push: `items = @items.dup`, `items.push(...)`, `@items = items`
+        @items = @items + [t]
+        ^

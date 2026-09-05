@@ -1,0 +1,3 @@
+test/refuse/handler_as_proc.rb:9:18: Wakakusa cannot take this — `on_click:` takes a symbol naming one of the app's own methods (`on_click: :bump`), or leave it out and write the block instead. A compiled run receives a proc given here as a number
+        button("+1", on_click: proc { @n += 1 })
+                     ^

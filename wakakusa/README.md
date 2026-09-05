@@ -88,7 +88,7 @@ meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — seventeen apps. `tools/gate_all.sh` — all of them, both
+- `demo/` — eighteen apps. `tools/gate_all.sh` — all of them, both
   runs.
 
 ## Numbers
@@ -120,17 +120,18 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 - No drawing surface: the canvas and its commands are not in the
   vocabulary, so neither are the two games.
-- No live reload, no timers, and no way to do work off the window's
-  thread.
+- No live reload, and no way to do work off the window's thread. A
+  timer works: `every(1.0) { … }` before `run`, ticking off the clock
+  both runs share.
 - Three shapes an app has to be written in, because the compiler
-  cannot yet take the others. State lives on the app object rather
-  than in globals. A handler is a literal block, or a symbol naming
-  one of the app's own methods — a proc handed through a keyword
-  argument arrives broken. And a list grows by copying (`list.dup`
-  then `push`) rather than by `list + [item]`.
-- `check` accepts everything. Those three shapes, and the handful of
-  other things the compiler gets wrong, are reproduced and reported
-  upstream, but nothing refuses them by name yet — so the gate is what
-  catches them.
+  cannot yet take the others, each refused by name with the rewrite in
+  the message. State lives on the app object rather than in globals. A
+  handler is a literal block, or a symbol naming one of the app's own
+  methods — a proc handed through a keyword argument arrives broken.
+  And a list grows by copying (`list.dup` then `push`) rather than by
+  `list + [item]`.
+- `check` names those three shapes and three more, with the line and
+  what to write instead, but it does not yet see everything the
+  compiler gets wrong; the gate is still what catches the rest.
 - macOS only. The binary carries the engine it draws with, so even a
   small app weighs about 15 MB.

@@ -157,10 +157,20 @@ end
 
 # --- the commands -----------------------------------------------------------
 
-def cmd_check(_app, _opts)
-  # The refusals go here: what an app writes that Wakakusa cannot take,
-  # named with the line and what to write instead. Today every app
-  # passes, and `gate` is what catches a difference between the runs.
+# What the app writes that Wakakusa cannot take, named with the line.
+# Nothing is printed when there is nothing to say, so it is quiet in
+# the sweep and loud exactly when it matters.
+def check(app)
+  $LOAD_PATH.unshift(File.join(ROOT, "lib")) unless $LOAD_PATH.include?(File.join(ROOT, "lib"))
+  require "wakakusa/check"
+  lines = File.readlines(app)
+  refusals = Wakakusa::Check.run(app)
+  refusals.each { |r| warn Wakakusa.render(r, lines) }
+  refusals
+end
+
+def cmd_check(app, _opts)
+  exit 1 unless check(app).empty?
 end
 
 def cmd_run(app, _opts)
@@ -174,12 +184,16 @@ def cmd_translate(app, _opts)
 end
 
 def cmd_build(app, _opts)
+  exit 1 unless check(app).empty?
+
   bin = build(app)
   puts "built: #{rel(bin)} (#{size_of(bin)})"
   puts "  not gate-checked — `gate` with a script proves the two runs agree"
 end
 
 def cmd_gate(app, opts)
+  exit 1 unless check(app).empty?
+
   script = opts[:script]
   a = interpreted(app, script).chomp
   bin = build(app)

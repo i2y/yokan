@@ -24,6 +24,14 @@ if ! ruby tools/gen.rb --check; then
 fi
 echo "OK   vocabulary"
 
+# Every refusal has a fixture and the message it must print.
+if ! ./tools/refuse_test.sh > /dev/null; then
+  echo "FAIL refusals"
+  ./tools/refuse_test.sh
+  exit 1
+fi
+echo "OK   refusals"
+
 # Scripted gates, with the same steps Yokan's sweep drives its own
 # copy of each demo with, wherever the verbs exist here.
 gate counter ./bin/wakakusa gate demo/counter.rb --script "click:+1,dump,input:Momo\, again"

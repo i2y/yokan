@@ -282,6 +282,31 @@ def gen_elements
   out
 end
 
+
+# --- lib/wakakusa/table.rb ---------------------------------------------------
+
+def gen_table
+  out = +""
+  out << banner("")
+  out << "\n"
+  out << "# What the checker reads: which keywords each element takes, and\n"
+  out << "# which of them name a handler.\n"
+  out << "module WK\n"
+  out << "  RIDERS = %w[#{RIDERS.map { |r| r.fetch("name") }.join(" ")}].freeze\n"
+  out << "\n  ELEMENTS = {\n"
+  ELEMENTS.each do |el|
+    own = el.fetch("props").map { |p| p.fetch("name") }
+    own -= ["row"] if el.fetch("props").any? { |p| p["type"] == "rows" }
+    allowed = own + RIDERS.map { |r| r.fetch("name") } - (el["owns_label"] ? ["a11y_label"] : [])
+    out << "    \"#{el.fetch("name")}\" => %w[#{allowed.uniq.sort.join(" ")}],\n"
+  end
+  out << "  }.freeze\n"
+  handlers = ELEMENTS.flat_map { |el| el.fetch("props").select { |p| handler?(p) }.map { |p| p.fetch("name") } }
+  out << "\n  HANDLERS = %w[#{handlers.uniq.sort.join(" ")}].freeze\n"
+  out << "end\n"
+  out
+end
+
 # --- crates/pixie-capi/src/vocab.rs -------------------------------------------
 
 def rust_str(s) = s.inspect
@@ -359,6 +384,7 @@ end
 FILES = {
   File.join(ROOT, "lib", "wakakusa", "keys.rb") => gen_keys,
   File.join(ROOT, "lib", "wakakusa", "elements.rb") => gen_elements,
+  File.join(ROOT, "lib", "wakakusa", "table.rb") => gen_table,
   File.join(REPO, "crates", "pixie-capi", "src", "vocab.rs") => gen_rust,
 }.freeze
 
