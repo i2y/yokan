@@ -1,0 +1,19 @@
+# pixie's kernel + gpui engine behind a C ABI, so a language that is not
+# Python can drive the same engine: an interpreted run opens the cdylib,
+# the compiled run links the staticlib, and both see ONE library — which
+# is what lets a gate over the two runs mean anything. Wakakusa
+# (`wakakusa/`) is the first caller; the face is pixie's, and any other
+# language's door uses it as it stands.
+[package]
+name = "pixie-capi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "pixie_capi"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+pixie-kernel.workspace = true
+pixie-engine-gpui = { path = "../pixie-engine-gpui" }

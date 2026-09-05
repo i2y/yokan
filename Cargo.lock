@@ -4167,6 +4167,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixie-capi"
+version = "0.1.0"
+dependencies = [
+ "pixie-engine-gpui",
+ "pixie-kernel",
+]
+
+[[package]]
 name = "pixie-cli"
 version = "0.1.0"
 dependencies = [
