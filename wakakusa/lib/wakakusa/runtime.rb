@@ -27,6 +27,10 @@ $wakakusa_rows = []
 $wakakusa_frames = []
 $wakakusa_row_index = 0
 $wakakusa_app = nil
+# Set once the window is up. A reload reads the app's file again, and
+# the `run` at the bottom of it must not start a second one or throw
+# away the object whose state the person has been building up.
+$wakakusa_running = false
 # Timers are declared before the app runs and live for as long as it
 # does, so they keep a list of their own that a build never clears.
 $wakakusa_timers = []
@@ -197,6 +201,9 @@ end
 # Under PIXIE_SCRIPT there is no window: the engine builds the tree,
 # prints it, replays the script and returns.
 def run(app, title: "wakakusa", width: 0.0, height: 0.0, padding: -1.0)
+  return if $wakakusa_running
+
+  $wakakusa_running = true
   $wakakusa_app = app
   wakakusa_start(title, width, height, padding)
 end

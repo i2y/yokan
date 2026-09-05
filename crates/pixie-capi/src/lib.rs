@@ -29,7 +29,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, c_char};
 use std::rc::Rc;
 
-use pixie_engine_gpui::run_app;
+use pixie_engine_gpui::{ReloadWatch, run_app};
 use pixie_kernel::{
     BoolListener, Component, Element, ErasedHandle, FloatListener, IntListener, LazyRows, List,
     Listener, Runtime, Str, TextListener, World, mount,
@@ -58,6 +58,9 @@ pub type PixieEventFn = extern "C" fn(i64, i64);
 pub type PixieRowFn = extern "C" fn(i64, i64) -> i64;
 /// The app's timer: the id of the tick that just came due.
 pub type PixieTimerFn = extern "C" fn(i64);
+/// The app's reloader: read the app's file again, answering non-zero
+/// when it took. Only a windowed run ever calls it.
+pub type PixieReloadFn = extern "C" fn() -> i32;
 
 /// A slot in the build arena: an element being written, one finished
 /// and waiting to be consumed, or one already taken.
@@ -75,6 +78,8 @@ thread_local! {
     /// Timers are declared before the app runs, so they wait here for
     /// the World to exist.
     static PENDING_TIMERS: RefCell<Vec<(f64, i64)>> = const { RefCell::new(Vec::new()) };
+    /// The file to watch and what to call when it changes.
+    static WATCH: RefCell<Option<(String, PixieReloadFn)>> = const { RefCell::new(None) };
     /// What the event now being delivered carried. Written just before
     /// the callback and read back by it.
     static EVENT_INT: Cell<i64> = const { Cell::new(0) };
@@ -850,6 +855,22 @@ pub extern "C" fn pixie_set_timer_handler(f: PixieTimerFn) {
     TIMER_FN.with(|c| c.set(Some(f)));
 }
 
+/// Watch `path` and call `f` when it changes, so a window can pick up
+/// an edit to the app without being restarted. Declared before
+/// `pixie_run`, and only a windowed run acts on it: a headless one is
+/// over before an edit could arrive.
+///
+/// # Safety
+/// `path` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_watch(path: *const c_char, f: PixieReloadFn) {
+    let path = unsafe { text_arg(path) };
+    if path.is_empty() {
+        return;
+    }
+    WATCH.with(|w| *w.borrow_mut() = Some((path, f)));
+}
+
 /// Ask for `handler` to be told every `seconds`. Declared before
 /// `pixie_run`; the engine fires it off the same clock a frame and a
 /// script's `advance:` move, so both runs tick the same number of
@@ -952,7 +973,13 @@ pub unsafe extern "C" fn pixie_run(
     } else {
         None
     };
-    run_app(rt, h, &title, None, win, (padding >= 0.0).then_some(padding));
+    // The engine polls the file and calls back on the window's own
+    // thread, so the door can read Ruby there as it does anywhere else.
+    let watch = WATCH.with(|c| c.borrow_mut().take()).map(|(path, f)| ReloadWatch {
+        path: std::path::PathBuf::from(path),
+        reload: Box::new(move |_w: &mut World| f() != 0),
+    });
+    run_app(rt, h, &title, watch, win, (padding >= 0.0).then_some(padding));
     0
 }
 

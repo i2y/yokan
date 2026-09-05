@@ -28,6 +28,7 @@ module PixieC
   extern "void pixie_set_event_handler(void*)"
   extern "void pixie_set_row_builder(void*)"
   extern "void pixie_set_timer_handler(void*)"
+  extern "void pixie_watch(const char*, void*)"
   extern "void pixie_every(double, long)"
   extern "int pixie_run(const char*, double, double, double, void*)"
 end
@@ -52,10 +53,30 @@ WAKAKUSA_ROW_CB = Fiddle::Closure::BlockCaller.new(
 WAKAKUSA_TIMER_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
 ) { |id| wakakusa_tick(id) }
+WAKAKUSA_RELOAD_CB = Fiddle::Closure::BlockCaller.new(
+  Fiddle::TYPE_INT, []
+) { wakakusa_reload }
+
+# The app's file changed. Reading it again redefines the app's class,
+# and the object the window is holding is an instance of that same
+# class — so it answers with the new `view` and keeps every value it
+# had. The `run` at the bottom of the file returns at once.
+#
+# A file that does not parse leaves the window on what it had; the
+# error goes to the terminal and the next save is tried afresh.
+def wakakusa_reload
+  load($0)
+  1
+rescue ScriptError, StandardError => e
+  warn "wakakusa: #{e.class}: #{e.message}"
+  0
+end
 
 def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_event_handler(WAKAKUSA_EVENT_CB)
   PixieC.pixie_set_row_builder(WAKAKUSA_ROW_CB)
   PixieC.pixie_set_timer_handler(WAKAKUSA_TIMER_CB)
+  # Only the interpreted run watches: a compiled app is what it is.
+  PixieC.pixie_watch($0, WAKAKUSA_RELOAD_CB) if File.file?($0)
   PixieC.pixie_run(title, width, height, padding, WAKAKUSA_BUILD_CB)
 end

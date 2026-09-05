@@ -98,6 +98,21 @@ meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 `theme`, `animate`, `easing`, `enter`, `exit`, `col_span`, `row_span`,
 `role`, `a11y_label`, `tooltip`.
 
+## While you are writing it
+
+`wakakusa run` watches the app's file. Save, and the window picks the
+edit up: the class is read again, the object the window is holding is
+an instance of that same class, so it answers with the new `view` and
+keeps every value it had. A file that does not parse leaves the window
+on what it had and says so in the terminal.
+
+`initialize` is not run again, which is the point — that is where the
+state came from. A timer keeps the one it was given.
+
+```ruby
+every(1.0) { app.tick }   # before `run`; both runs tick off one clock
+```
+
 ## The pieces
 
 - `crates/pixie-capi` (in the substrate, not here) — the engine behind
@@ -143,9 +158,7 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 - No drawing surface: the canvas and its commands are not in the
   vocabulary, so neither are the two games.
-- No live reload, and no way to do work off the window's thread. A
-  timer works: `every(1.0) { … }` before `run`, ticking off the clock
-  both runs share.
+- No way yet to do work off the window's thread.
 - Three shapes an app has to be written in, because the compiler
   cannot yet take the others, each refused by name with the rewrite in
   the message. State lives on the app object rather than in globals. A
