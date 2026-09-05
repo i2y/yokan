@@ -2033,3 +2033,21 @@ bundle already ships. The escape module points `sys.executable` at
 `sys.prefix/bin/python3` whenever that exists, which answers for the
 unbundled build too — there the prefix is the interpreter it was
 linked against.
+
+## A declared width is a width (2026-09-05)
+
+Looking at the transcript table closely enough to photograph it: the
+row with the longest line had its time columns 17 px to the left of
+every other row's, so the columns were not columns. A `Text` carrying
+`width:` set the box and nothing else, and flexbox shrinks by default
+— so the one row that could not fit paid for it by squeezing the two
+cells that had asked for a fixed size. `Sized` has always set
+`flex_shrink_0` beside its width, with a comment saying why; the
+`Text` rider now does the same.
+
+Two things this does not fix, and they are the same thing: a table
+row that cannot fit still overflows, and what overflows is clipped by
+the table rather than wrapped. Letting the grown cell shrink below its
+content (the `min-width: 0` flexbox move) would wrap it instead, and
+that changes every grown text in every app, so it is not something to
+land while looking at one table.

@@ -1632,9 +1632,13 @@ fn render_el_in<C: Component>(
             }
             // After `align`, so an explicit width wins over the
             // `w_full()` alignment asks for — the alignment still
-            // applies, inside the fixed box.
+            // applies, inside the fixed box. It does not shrink,
+            // either: a declared width that a crowded Row could
+            // squeeze is not a width, and a table's columns stop
+            // lining up the moment one row is wider than the rest.
+            // `Sized` has carried the same pair from the start.
             if *width > 0.0 {
-                d = d.w(px(*width as f32));
+                d = d.w(px(*width as f32)).flex_shrink_0();
             }
             if *grow > 0.0 {
                 d = d.flex_grow(*grow as f32).items_end();
