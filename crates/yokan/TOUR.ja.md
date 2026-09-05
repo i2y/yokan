@@ -47,6 +47,7 @@ Yokan のアプリは普通の Python ファイルです。
 
 ```python
 # /// script
+# requires-python = ">=3.14"
 # dependencies = ["yokan"]
 # ///
 from yokan import State, button, column, run, text

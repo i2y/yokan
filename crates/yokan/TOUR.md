@@ -49,6 +49,7 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 
 ```python
 # /// script
+# requires-python = ">=3.14"
 # dependencies = ["yokan"]
 # ///
 from yokan import State, button, column, run, text

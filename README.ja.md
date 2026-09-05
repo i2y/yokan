@@ -20,6 +20,7 @@ Yokan（羊羹）は、静的に型付けされた Python のサブセットを�
 
 ```python
 # /// script
+# requires-python = ">=3.14"
 # dependencies = ["yokan"]
 # ///
 from yokan import State, button, column, run, text
