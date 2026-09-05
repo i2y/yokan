@@ -1082,6 +1082,124 @@ pub extern "C" fn pixie_answer_char(i: i64) -> i64 {
     ANSWER.with(|c| c.borrow().get(i as usize).map_or(0, |ch| *ch as i64))
 }
 
+// ---------------------------------------------------------------------------
+// A database. It sits here for the reason the clipboard does: both of a
+// door's runs have to reach one implementation, and this library is the
+// only thing they share. Values cross as text, and a cell is read out
+// the way every other string is.
+
+thread_local! {
+    /// Values bound to the next statement, and the rows the last query
+    /// answered.
+    static SQL_PARAMS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static SQL_ROWS: RefCell<Vec<Vec<String>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Bind one value to the next statement. Text a person typed can never
+/// become part of the statement this way.
+///
+/// # Safety
+/// `value` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_sqlite_bind(value: *const c_char) {
+    let value = unsafe { text_arg(value) };
+    SQL_PARAMS.with(|p| p.borrow_mut().push(value));
+}
+
+fn sql_params() -> Vec<String> {
+    SQL_PARAMS.with(|p| p.take())
+}
+
+/// Run a statement. Answers how many rows it changed, or -1.
+///
+/// # Safety
+/// `path` and `sql` are NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_sqlite_exec(path: *const c_char, sql: *const c_char) -> i64 {
+    let path = unsafe { text_arg(path) };
+    let sql = unsafe { text_arg(sql) };
+    let params = sql_params();
+    let Ok(db) = rusqlite::Connection::open(&path) else {
+        return -1;
+    };
+    let bound: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    match db.execute(&sql, bound.as_slice()) {
+        Ok(n) => n as i64,
+        Err(_) => -1,
+    }
+}
+
+/// Run a query and keep its rows. Answers how many there are, or -1.
+/// Every value comes back as text, which is what a column's affinity
+/// converts on the way in.
+///
+/// # Safety
+/// `path` and `sql` are NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_sqlite_query(path: *const c_char, sql: *const c_char) -> i64 {
+    let path = unsafe { text_arg(path) };
+    let sql = unsafe { text_arg(sql) };
+    let params = sql_params();
+    SQL_ROWS.with(|r| r.borrow_mut().clear());
+    let Ok(db) = rusqlite::Connection::open(&path) else {
+        return -1;
+    };
+    let Ok(mut stmt) = db.prepare(&sql) else {
+        return -1;
+    };
+    let width = stmt.column_count();
+    let bound: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let Ok(mut rows) = stmt.query(bound.as_slice()) else {
+        return -1;
+    };
+    let mut out: Vec<Vec<String>> = Vec::new();
+    while let Ok(Some(row)) = rows.next() {
+        let mut cells = Vec::with_capacity(width);
+        for i in 0..width {
+            cells.push(match row.get_ref(i) {
+                Ok(rusqlite::types::ValueRef::Null) => String::new(),
+                Ok(rusqlite::types::ValueRef::Integer(v)) => v.to_string(),
+                Ok(rusqlite::types::ValueRef::Real(v)) => v.to_string(),
+                Ok(rusqlite::types::ValueRef::Text(v)) => {
+                    String::from_utf8_lossy(v).into_owned()
+                }
+                Ok(rusqlite::types::ValueRef::Blob(v)) => {
+                    String::from_utf8_lossy(v).into_owned()
+                }
+                Err(_) => String::new(),
+            });
+        }
+        out.push(cells);
+    }
+    let n = out.len() as i64;
+    SQL_ROWS.with(|r| *r.borrow_mut() = out);
+    n
+}
+
+/// How many columns the last query answered.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_sqlite_columns() -> i64 {
+    SQL_ROWS.with(|r| r.borrow().first().map_or(0, |row| row.len() as i64))
+}
+
+/// Put one cell of the last query where a string is read from.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_sqlite_cell(row: i64, col: i64) {
+    let cell = SQL_ROWS.with(|r| {
+        let r = r.borrow();
+        if row < 0 || col < 0 {
+            return String::new();
+        }
+        r.get(row as usize)
+            .and_then(|cells| cells.get(col as usize))
+            .cloned()
+            .unwrap_or_default()
+    });
+    answer_with(&cell);
+}
+
 /// # Safety
 /// `text` is NULL or NUL-terminated.
 #[unsafe(no_mangle)]
@@ -1145,7 +1263,26 @@ pub extern "C" fn pixie_every(seconds: f64, handler: i64) {
 }
 
 /// Hand the queued timers to the engine, now that there is a World.
+///
+/// One of them is the engine's own: a tick that gives the app's threads
+/// a turn and changes nothing. Without it a thread the app started for
+/// its own reasons would never run at all in a compiled app, because
+/// this library is on the stack from `pixie_run` until the window
+/// closes and a runtime that schedules its own threads gets no say
+/// while that is true. It marks nothing dirty, so a window that is
+/// otherwise still stays still.
 fn install_timers(rt: &Runtime) {
+    rt.with(|w: &mut World| {
+        pixie_kernel::timer::every(
+            w,
+            8.0,
+            Rc::new(|_w: &mut World| {
+                if let Some(f) = PUMP_FN.with(|c| c.get()) {
+                    f();
+                }
+            }),
+        );
+    });
     for (seconds, handler) in PENDING_TIMERS.with(|t| t.take()) {
         let ms = seconds * 1000.0;
         rt.with(move |w: &mut World| {

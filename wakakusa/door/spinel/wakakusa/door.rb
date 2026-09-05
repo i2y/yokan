@@ -72,6 +72,11 @@ module PixieC
   ffi_func :pixie_clipboard_set, [:str], :void
   ffi_func :pixie_clipboard_get, [], :void
   ffi_func :pixie_dialog, [:int32, :str], :void
+  ffi_func :pixie_sqlite_bind, [:str], :void
+  ffi_func :pixie_sqlite_exec, [:str, :str], :long
+  ffi_func :pixie_sqlite_query, [:str, :str], :long
+  ffi_func :pixie_sqlite_columns, [], :long
+  ffi_func :pixie_sqlite_cell, [:long, :long], :void
   ffi_func :pixie_run, [:str, :double, :double, :double, :build_fn], :int
 end
 

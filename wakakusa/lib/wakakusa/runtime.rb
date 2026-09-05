@@ -212,6 +212,42 @@ def save_dialog(name = "")
   wakakusa_answer
 end
 
+# A database. Both runs call one implementation, which is the whole
+# reason it is reached through the engine rather than through a gem.
+#
+# Write `?` in the statement and put the values beside it: text a person
+# typed can never become part of the statement that way. Every value
+# comes back as text, and the column's affinity converts on the way in.
+def sqlite_exec(path, sql, params = [])
+  params.each { |v| PixieC.pixie_sqlite_bind(v.to_s) }
+  PixieC.pixie_sqlite_exec(path, sql)
+end
+
+def sqlite_rows(path, sql, params = [])
+  params.each { |v| PixieC.pixie_sqlite_bind(v.to_s) }
+  count = PixieC.pixie_sqlite_query(path, sql)
+  width = PixieC.pixie_sqlite_columns
+  rows = []
+  r = 0
+  while r < count
+    cells = []
+    c = 0
+    while c < width
+      PixieC.pixie_sqlite_cell(r, c)
+      cells.push(wakakusa_answer)
+      c += 1
+    end
+    rows.push(cells)
+    r += 1
+  end
+  rows
+end
+
+# The first column of each row, which is what most queries want.
+def sqlite_column(path, sql, params = [])
+  sqlite_rows(path, sql, params).map { |cells| cells[0] }
+end
+
 # A timer came due.
 def wakakusa_tick(id)
   $wakakusa_timers[id].call

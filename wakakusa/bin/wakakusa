@@ -27,14 +27,15 @@ TARGET = ENV["CARGO_TARGET_DIR"] || File.expand_path("~/.cache/pixie/target")
 
 # From `cargo rustc -p pixie-capi --release -- --print native-static-libs`,
 # with its duplicates removed and in its order. `-lc` and `-lSystem` are
-# cc's own, and `-lc++` is the engine's C++ lower half, which that list
-# does not mention. Re-run the command after a dependency change.
+# cc's own; `-lc++` is the engine's C++ lower half and `-lsqlite3` the
+# platform's database, neither of which that list mentions. Re-run the
+# command after a dependency change.
 FRAMEWORKS = %w[
   -framework ApplicationServices -framework CoreFoundation -framework CoreVideo
   -framework AppKit -framework CoreText -framework Carbon -framework Security
   -framework Foundation -framework UserNotifications -framework CoreLocation
   -framework QuartzCore -framework CoreGraphics -framework OpenGL -framework Metal
-  -lobjc -liconv -lc++ -lm
+  -lobjc -liconv -lc++ -lm -lsqlite3
 ].freeze
 
 USAGE = <<~TXT

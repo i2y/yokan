@@ -55,6 +55,12 @@ gate cards   ./bin/wakakusa gate demo/cards.rb --script "click:+1,click:+10,dump
 gate styled  ./bin/wakakusa gate demo/styled.rb --script "click:+1,dump,click:flip,dump"
 gate panels  ./bin/wakakusa gate demo/panels.rb --script "select:stack,dump,click:about,dump,click:close"
 gate roster  ./bin/wakakusa gate demo/roster.rb --script "select:member 7,dump,click:score,dump,click:score,dump"
+gate reader  ./bin/wakakusa gate demo/reader.rb --script "click:fetch,dump"
+gate csv_viewer ./bin/wakakusa gate demo/csv_viewer.rb --script "input:momo,dump,input:zzz,dump"
+# The two that keep a database: each run starts from the same nothing.
+gate dbnotes ./bin/wakakusa gate demo/dbnotes.rb --fresh demo/.gate/notes.db --script "click:setup,click:load,dump"
+# The ledger types a name with an apostrophe, which only a BOUND value survives.
+gate ledger  ./bin/wakakusa gate demo/ledger.rb --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
 gate stdlib  ./bin/wakakusa gate demo/stdlib.rb --script "click:measure,click:stats,click:sift,click:count,click:combine,click:stamp,click:parse,click:csv,click:words,click:set,dump,click:write,click:scan,dump"
 gate about   ./bin/wakakusa gate demo/about.rb --script "click:copy link,dump,click:Website"
 gate keys    ./bin/wakakusa gate demo/keys.rb --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"

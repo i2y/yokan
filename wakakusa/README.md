@@ -112,14 +112,28 @@ state came from. A timer keeps the one it was given.
 ```ruby
 every(1.0) { app.tick }   # before `run`; both runs tick off one clock
 
-job = task { something_slow }        # off the window's thread
-on_done(job) { @answer = task_answer }   # back on it, when that is done
+# Neither call waits: `task` starts the work and answers a number,
+# `on_done` only says what to do later. The handler ends here and the
+# window carries on; the block runs on the window's thread once the
+# work has finished.
+job = task { something_slow }
+on_done(job) { @answer = task_answer }
 ```
 
 Ruby's own standard library is in both runs — `File`, `Dir`, `JSON`,
-`CSV`, `Time`, `Math`, everything `Enumerable` answers — so there is no
-library of ours in front of it. `demo/stdlib.rb` and `demo/files.rb`
-are there to hold it to that.
+`CSV`, `Time`, `Math`, `Net::HTTP`, sockets, threads, everything
+`Enumerable` answers — so there is no library of ours in front of it.
+`demo/stdlib.rb`, `demo/files.rb` and `demo/reader.rb` are there to
+hold it to that.
+
+A database is the exception. It reaches the same sqlite through the
+engine, because a database is no use unless both runs read the one
+file the same way:
+
+```ruby
+sqlite_exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [name, yen, cat])
+rows = sqlite_rows(DB, "SELECT name, amount FROM expenses ORDER BY rowid")
+```
 
 ## The pieces
 
@@ -134,7 +148,7 @@ are there to hold it to that.
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — thirty-six apps, with `demo/screenshots/` showing what
+- `demo/` — forty apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers

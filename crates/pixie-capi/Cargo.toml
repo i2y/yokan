@@ -17,6 +17,10 @@ crate-type = ["staticlib", "cdylib"]
 [dependencies]
 pixie-kernel.workspace = true
 pixie-engine-gpui = { path = "../pixie-engine-gpui" }
+# A database has to be reachable from both of a door's runs, and the
+# only thing both of them share is this library. The platform's own
+# sqlite is what is linked, so the two runs are talking to one copy.
+rusqlite = "0.32"
 
 # The table test reads wakakusa/elements.toml with a real parser, so a
 # mistake in the generator's own reader cannot pass quietly.
