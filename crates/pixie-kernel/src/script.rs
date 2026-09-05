@@ -69,7 +69,7 @@ pub fn settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
         flush(rt, view, tree);
         spins += 1;
         if spins > 300_000 {
-            panic!("async tasks did not settle within ~5 minutes");
+            crate::script_refusal!("async tasks did not settle within ~5 minutes");
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
@@ -181,7 +181,7 @@ pub fn run<C: Component>(
             let light = match name {
                 "light" => true,
                 "dark" => false,
-                _ => panic!("unknown theme `{name}`"),
+                _ => crate::script_refusal!("unknown theme `{name}`"),
             };
             rt.with(|w: &mut World| theme::set_light(w, light));
             *tree = rt.with(|w| build_prepared(w, view));
@@ -206,7 +206,7 @@ pub fn run<C: Component>(
         } else if let Some(ms) = step.strip_prefix("advance:") {
             let ms: f64 = ms
                 .parse()
-                .unwrap_or_else(|_| panic!("bad advance step `{step}`"));
+                .unwrap_or_else(|_| crate::script_refusal!("bad advance step `{step}`"));
             rt.with(|w: &mut World| {
                 anim::advance(w, ms);
                 // The clock moved, so the timers that were due in that
@@ -230,15 +230,15 @@ pub fn run<C: Component>(
             let (n, label) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
-                    .unwrap_or_else(|| panic!("bad click step `{step}`"));
+                    .unwrap_or_else(|| crate::script_refusal!("bad click step `{step}`"));
                 let ix: usize = a
                     .parse()
-                    .unwrap_or_else(|_| panic!("bad click index `{step}`"));
+                    .unwrap_or_else(|_| crate::script_refusal!("bad click index `{step}`"));
                 (ix, b)
             } else if let Some(t) = rest.strip_prefix(':') {
                 (0usize, t)
             } else {
-                panic!("unknown script step `{step}`");
+                crate::script_refusal!("unknown script step `{step}`");
             };
             if let Some(f) = rt.with(|w| tree.find_button_nth(w, label, n)) {
                 crate::contain("click handler", || rt.with(|w: &mut World| f(w)));
@@ -247,13 +247,13 @@ pub fn run<C: Component>(
                     .with(|w| tree.find_toggle_nth(w, label, n))
                     .unwrap_or_else(|| {
                         if n == 0 {
-                            panic!("no button or toggle `{label}`")
+                            crate::script_refusal!("no button or toggle `{label}`")
                         } else {
-                            panic!("no button or toggle `{label}` #{n}")
+                            crate::script_refusal!("no button or toggle `{label}` #{n}")
                         }
                     });
                 let f = on_toggle
-                    .unwrap_or_else(|| panic!("toggle `{label}` has no onToggle"));
+                    .unwrap_or_else(|| crate::script_refusal!("toggle `{label}` has no onToggle"));
                 crate::contain("click handler", || {
                     rt.with(|w: &mut World| f(w, !checked))
                 });
@@ -262,23 +262,23 @@ pub fn run<C: Component>(
             let (n, text) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
-                    .unwrap_or_else(|| panic!("bad input step `{step}`"));
+                    .unwrap_or_else(|| crate::script_refusal!("bad input step `{step}`"));
                 let ix: usize = a
                     .parse()
-                    .unwrap_or_else(|_| panic!("bad input index `{step}`"));
+                    .unwrap_or_else(|_| crate::script_refusal!("bad input index `{step}`"));
                 (ix, b)
             } else if let Some(t) = rest.strip_prefix(':') {
                 (0usize, t)
             } else {
-                panic!("unknown script step `{step}`");
+                crate::script_refusal!("unknown script step `{step}`");
             };
             let target = rt
                 .with(|w| tree.find_input(w, n))
-                .unwrap_or_else(|| panic!("no input field #{n}"));
+                .unwrap_or_else(|| crate::script_refusal!("no input field #{n}"));
             match target {
                 crate::InputTarget::Text { on_change, .. } => {
                     let f = on_change
-                        .unwrap_or_else(|| panic!("TextField #{n} has no onTextChanged"));
+                        .unwrap_or_else(|| crate::script_refusal!("TextField #{n} has no onTextChanged"));
                     crate::contain("input handler", || {
                         rt.with(|w: &mut World| f(w, Str::from(text)))
                     });
@@ -300,7 +300,7 @@ pub fn run<C: Component>(
                         let v = crate::number_snap(min, max, snap_step, v);
                         if v != value {
                             let f = on_change
-                                .unwrap_or_else(|| panic!("NumberField #{n} has no onChange"));
+                                .unwrap_or_else(|| crate::script_refusal!("NumberField #{n} has no onChange"));
                             crate::contain("input handler", || {
                                 rt.with(|w: &mut World| f(w, v))
                             });
@@ -318,7 +318,7 @@ pub fn run<C: Component>(
                         let v = crate::int_snap(min, max, snap_step, v);
                         if v != value {
                             let f = on_change
-                                .unwrap_or_else(|| panic!("IntField #{n} has no onChange"));
+                                .unwrap_or_else(|| crate::script_refusal!("IntField #{n} has no onChange"));
                             crate::contain("input handler", || {
                                 rt.with(|w: &mut World| f(w, v))
                             });
@@ -355,7 +355,7 @@ pub fn run<C: Component>(
                 rt.with(|w: &mut World| crate::keys::fire(w, chord))
             });
             if !matches!(fired, Some(true)) {
-                panic!("no shortcut or key handler for `{chord}`");
+                crate::script_refusal!("no shortcut or key handler for `{chord}`");
             }
             let tap = crate::keys::normalize(chord);
             let key = tap.rsplit('-').next().unwrap_or(&tap).to_string();
@@ -369,7 +369,7 @@ pub fn run<C: Component>(
                 rt.with(|w: &mut World| crate::drop::fire(w, path))
             });
             if !matches!(took, Some(true)) {
-                panic!("nothing takes a dropped file (`on_file_drop`)");
+                crate::script_refusal!("nothing takes a dropped file (`on_file_drop`)");
             }
         } else if let Some(path) = step.strip_prefix("file:") {
             // The answer the next file dialog gets. A headless run has
@@ -383,24 +383,24 @@ pub fn run<C: Component>(
                 rt.with(|w: &mut World| crate::menu::pick(w, name))
             });
             if !matches!(picked, Some(true)) {
-                panic!("no menu item `{name}`");
+                crate::script_refusal!("no menu item `{name}`");
             }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {
                 r.parse()
-                    .unwrap_or_else(|_| panic!("bad submit index `{step}`"))
+                    .unwrap_or_else(|_| crate::script_refusal!("bad submit index `{step}`"))
             } else if rest.is_empty() {
                 0
             } else {
-                panic!("unknown script step `{step}`");
+                crate::script_refusal!("unknown script step `{step}`");
             };
             let target = rt
                 .with(|w| tree.find_input(w, n))
-                .unwrap_or_else(|| panic!("no input field #{n}"));
+                .unwrap_or_else(|| crate::script_refusal!("no input field #{n}"));
             match target {
                 crate::InputTarget::Text { value, on_submit, .. } => {
                     let f =
-                        on_submit.unwrap_or_else(|| panic!("TextField #{n} has no onSubmitted"));
+                        on_submit.unwrap_or_else(|| crate::script_refusal!("TextField #{n} has no onSubmitted"));
                     crate::contain("submit handler", || {
                         rt.with(|w: &mut World| f(w, value))
                     });
@@ -416,23 +416,23 @@ pub fn run<C: Component>(
             let (n, raw) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
-                    .unwrap_or_else(|| panic!("bad slide step `{step}`"));
+                    .unwrap_or_else(|| crate::script_refusal!("bad slide step `{step}`"));
                 let ix: usize = a
                     .parse()
-                    .unwrap_or_else(|_| panic!("bad slide index `{step}`"));
+                    .unwrap_or_else(|_| crate::script_refusal!("bad slide index `{step}`"));
                 (ix, b)
             } else if let Some(v) = rest.strip_prefix(':') {
                 (0usize, v)
             } else {
-                panic!("unknown script step `{step}`");
+                crate::script_refusal!("unknown script step `{step}`");
             };
             let val: f64 = raw
                 .parse()
-                .unwrap_or_else(|_| panic!("bad slide value `{step}`"));
+                .unwrap_or_else(|_| crate::script_refusal!("bad slide value `{step}`"));
             let (min, max, snap_step, change) = rt
                 .with(|w| tree.find_slider(w, n))
-                .unwrap_or_else(|| panic!("no Slider #{n}"));
-            let f = change.unwrap_or_else(|| panic!("Slider #{n} has no onChange"));
+                .unwrap_or_else(|| crate::script_refusal!("no Slider #{n}"));
+            let f = change.unwrap_or_else(|| crate::script_refusal!("Slider #{n} has no onChange"));
             // The same clamp-and-snap the engine's pointer math runs,
             // so a scripted slide and a real drag land on identical
             // values.
@@ -448,29 +448,29 @@ pub fn run<C: Component>(
             let (n, label) = if let Some(r) = rest.strip_prefix('@') {
                 let (a, b) = r
                     .split_once(':')
-                    .unwrap_or_else(|| panic!("bad select step `{step}`"));
+                    .unwrap_or_else(|| crate::script_refusal!("bad select step `{step}`"));
                 let ix: usize = a
                     .parse()
-                    .unwrap_or_else(|_| panic!("bad select index `{step}`"));
+                    .unwrap_or_else(|_| crate::script_refusal!("bad select index `{step}`"));
                 (ix, b)
             } else if let Some(t) = rest.strip_prefix(':') {
                 (0usize, t)
             } else {
-                panic!("unknown script step `{step}`");
+                crate::script_refusal!("unknown script step `{step}`");
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| panic!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table)"));
+                .unwrap_or_else(|| crate::script_refusal!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)
-                .unwrap_or_else(|| panic!("chooser #{n} has no option `{label}`"));
-            let f = on_select.unwrap_or_else(|| panic!("chooser #{n} has no onSelect"));
+                .unwrap_or_else(|| crate::script_refusal!("chooser #{n} has no option `{label}`"));
+            let f = on_select.unwrap_or_else(|| crate::script_refusal!("chooser #{n} has no onSelect"));
             crate::contain("select handler", || {
                 rt.with(|w: &mut World| f(w, ix as i64))
             });
         } else {
-            panic!("unknown script step `{step}`");
+            crate::script_refusal!("unknown script step `{step}`");
         }
         flush(rt, view, tree);
         settle(rt, view, tree);

@@ -2053,3 +2053,42 @@ the table rather than wrapped. Letting the grown cell shrink below its
 content (the `min-width: 0` flexbox move) would wrap it instead, and
 that changes every grown text in every app, so it is not something to
 land while looking at one table.
+
+## An intended panic is quiet; a bug is loud (2026-09-05)
+
+The entry above about a panic reaching the command line as one line
+took the Python traceback off. What it left was the Rust hook's own
+four: a thread name, `crates/pixie-kernel/src/script.rs:250:29`, the
+message, and the backtrace note — with the useful line repeated
+underneath by the caller. So the loop's fast half still handed its
+reader four lines of substrate internals for one word of content, and
+the reason the entry gave for removing the traceback ("`show` and
+`gate` are often read by an agent, and a traceback costs it a turn")
+applied unchanged to what remained.
+
+The distinction needed was already written down. `contain`'s note says
+panics outside a handler, a task or a view "stay loud on purpose: they
+indicate compiler bugs, not app-reachable states" — the default hook
+simply had no way to know which it was looking at. It does now: a
+thread-local flag, set for the duration of `contain` and by
+`script_refusal!`, and a hook installed on first use that prints
+nothing while the flag is up and delegates to the default otherwise.
+The flag is consumed as it is read, so the next panic on that thread
+is loud again unless it says otherwise.
+
+The 36 authored `panic!`s in the script harness are that macro now.
+They were never compiler bugs: a `click:` on a label no button carries
+is a refusal, the same category as the ones `check` prints, and it
+aborts the run for the reason it always did — a step that quietly did
+nothing would pass as a green run. What changed is that the refusal
+travels alone.
+
+`RUST_BACKTRACE` turns the whole arrangement off. Whoever asks for a
+backtrace is hunting a compiler bug and wants every panic loud,
+including the contained ones that print their own line.
+
+What this does not do is make a script refusal a value instead of an
+unwind. That is the shape it wants — a refusal is data, and the
+harness could return it the way `check` returns one — but it is a
+signature change through every embedder of the script harness, and it
+is not worth doing while looking at four lines of output.

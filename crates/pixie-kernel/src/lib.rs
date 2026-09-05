@@ -3702,6 +3702,63 @@ pub fn view_error_element() -> Element {
     el
 }
 
+thread_local! {
+    /// Set while a panic is one the design intends: a statement inside
+    /// `contain`, or a script step naming something the app does not
+    /// have. Those already report themselves in one line, so the hook
+    /// below prints nothing for them and stays loud for everything
+    /// else, which is what `contain`'s own note promises.
+    static QUIET_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Teach the panic hook the difference the rest of this file already
+/// draws. Without it the default hook covers an intended failure with
+/// a thread name, an internal file:line and a backtrace note — four
+/// lines whose one useful word is repeated underneath by the caller.
+/// `show` and `gate` are read by an agent, and four lines cost it a
+/// turn. Installed once, from whichever intended failure comes first.
+///
+/// `RUST_BACKTRACE` turns it off: whoever asks for a backtrace is
+/// hunting a compiler bug and wants every panic loud.
+fn install_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        if std::env::var_os("RUST_BACKTRACE").is_some() {
+            return;
+        }
+        let default = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            // Consume the flag: the unwind is leaving, and the next
+            // panic on this thread is loud again unless it says so.
+            if QUIET_PANIC.with(|q| q.replace(false)) {
+                return;
+            }
+            default(info);
+        }));
+    });
+}
+
+/// Arm the quiet hook for the refusal about to be raised. Called by
+/// `script_refusal!`; not meant to be written by hand.
+#[doc(hidden)]
+pub fn begin_script_refusal() {
+    install_panic_hook();
+    QUIET_PANIC.with(|q| q.set(true));
+}
+
+/// A script step named something the app does not have (`click:` on a
+/// label no button carries, a chord nothing is bound to). It aborts
+/// the run on purpose, because a step that quietly did nothing would
+/// pass as a green run — but it is a refusal, not a compiler bug, so
+/// the message travels to the command line alone.
+#[macro_export]
+macro_rules! script_refusal {
+    ($($arg:tt)*) => {{
+        $crate::begin_script_refusal();
+        panic!($($arg)*)
+    }};
+}
+
 /// Build a view so a panic inside it collapses to `view_error_element`
 /// instead of killing the process.
 ///
@@ -3721,7 +3778,11 @@ pub fn contain_view(f: impl FnOnce() -> Element) -> Element {
 /// Panics outside a handler, a task or a view stay loud on purpose:
 /// they indicate compiler bugs, not app-reachable states.
 pub fn contain<R>(what: &str, f: impl FnOnce() -> R) -> Option<R> {
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+    install_panic_hook();
+    let prev = QUIET_PANIC.with(|q| q.replace(true));
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    QUIET_PANIC.with(|q| q.set(prev));
+    match caught {
         Ok(v) => Some(v),
         Err(e) => {
             let msg = e
