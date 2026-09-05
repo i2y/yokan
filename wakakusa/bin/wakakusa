@@ -38,13 +38,16 @@ FRAMEWORKS = %w[
 ].freeze
 
 USAGE = <<~TXT
-  usage: wakakusa <command> <app.rb> [--script "step,step"]
+  usage: wakakusa <command> <app.rb> [--script "step,step"] [--fresh <path>]
 
     check      what the app writes that Wakakusa cannot take
     run        run it interpreted, in a window
     translate  emit the C the compiled run is built from
     build      build the native binary
     gate       run it both ways headless and compare the two runs
+
+  --fresh deletes a path before EACH run, so an app that keeps a file
+  or a database starts both runs from the same nothing. Repeatable.
 TXT
 
 def die(msg)
@@ -151,6 +154,11 @@ def interpreted(app, script)
           what: "the interpreted run")
 end
 
+# What each run must find missing when it starts.
+def wipe(paths)
+  paths.each { |p| FileUtils.rm_rf(p) }
+end
+
 def size_of(path)
   format("%.1f MB", File.size(path) / 1_000_000.0)
 end
@@ -195,8 +203,10 @@ def cmd_gate(app, opts)
   exit 1 unless check(app).empty?
 
   script = opts[:script]
+  wipe(opts[:fresh])
   a = interpreted(app, script).chomp
   bin = build(app)
+  wipe(opts[:fresh])
   b = capture({ "PIXIE_SCRIPT" => script }, bin, what: "the compiled run").chomp
 
   if a == b
@@ -226,11 +236,12 @@ die "no command\n\n#{USAGE}" if mode.nil?
 die "unknown command `#{mode}`\n\n#{USAGE}" unless COMMANDS.include?(mode)
 
 app = nil
-opts = { script: "" }
+opts = { script: "", fresh: [] }
 until ARGV.empty?
   arg = ARGV.shift
   case arg
   when "--script" then opts[:script] = ARGV.shift.to_s
+  when "--fresh" then opts[:fresh].push(ARGV.shift.to_s)
   when /\A--/ then die "unknown option `#{arg}`\n\n#{USAGE}"
   else
     die "wakakusa #{mode} takes one app" unless app.nil?
@@ -241,6 +252,9 @@ die "wakakusa #{mode} takes an app: wakakusa #{mode} demo/counter.rb" if app.nil
 die "no such file: #{app}" unless File.file?(app)
 if !opts[:script].empty? && %w[check run translate build].include?(mode)
   die "#{mode} takes no --script — replaying a script is the gate's job"
+end
+if !opts[:fresh].empty? && mode != "gate"
+  die "--fresh belongs to gate: it is there so the two runs start alike"
 end
 
 send("cmd_#{mode}", app, opts)
