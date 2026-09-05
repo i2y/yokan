@@ -116,7 +116,10 @@ Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました�
 できあがるバイナリに Python は一行も入りません。
 キー操作とフレームを並べたスクリプトが両方の実行を再生するので、ゲートが全フレームを比べます。
 
-<img src="images/demos/shooter.gif" width="180"> <img src="images/demos/jump.gif" width="320">
+<p align="center">
+  <img src="images/demos/shooter.gif" width="240" align="middle">
+  <img src="images/demos/jump.gif" width="320" align="middle">
+</p>
 
 *[`demo/shooter`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/shooter.py)
 と [`demo/jump`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/jump.py)。

@@ -98,7 +98,10 @@ keystrokes and frames replays both runs, so the gate compares every
 frame of the game — including the ones where the score moves
 (`crates/yokan/demo/shooter.py`, `crates/yokan/demo/jump.py`).
 
-<img src="docs/assets/shooter.gif" width="180"> <img src="docs/assets/jump.gif" width="320">
+<p align="center">
+  <img src="docs/assets/shooter.gif" width="240" align="middle">
+  <img src="docs/assets/jump.gif" width="320" align="middle">
+</p>
 
 At the other end is Buzz's screen and its flow: drop a recording,
 pick a model and a language, watch it work, read the segments, export

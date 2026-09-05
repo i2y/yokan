@@ -133,7 +133,10 @@ they are held. The binary carries no Python at all, and a script of
 keystrokes and frames replays both runs, so the gate compares every
 frame of the game.
 
-<img src="images/demos/shooter.gif" width="180"> <img src="images/demos/jump.gif" width="320">
+<p align="center">
+  <img src="images/demos/shooter.gif" width="240" align="middle">
+  <img src="images/demos/jump.gif" width="320" align="middle">
+</p>
 
 *[`demo/shooter`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/shooter.py)
 and [`demo/jump`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/jump.py)

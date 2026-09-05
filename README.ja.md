@@ -80,7 +80,10 @@ Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました�
 できあがるバイナリに Python は一行も入りません。
 キー操作とフレームを並べたスクリプトが両方の実行を再生するので、点が入るところまで含めて全フレームをゲートが比べます（`crates/yokan/demo/shooter.py` と `crates/yokan/demo/jump.py`）。
 
-<img src="docs/assets/shooter.gif" width="180"> <img src="docs/assets/jump.gif" width="320">
+<p align="center">
+  <img src="docs/assets/shooter.gif" width="240" align="middle">
+  <img src="docs/assets/jump.gif" width="320" align="middle">
+</p>
 
 もう一方の端が Buzz の画面と流れです。
 録音のファイルを窓に落とし、モデルと言語を選び、進み具合を見て、区間の表を読み、TXT と SRT と VTT に書き出します。
