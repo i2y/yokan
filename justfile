@@ -104,6 +104,29 @@ expected *modules:
 coverage *modules:
     cd {{pkg}} && uv run tools/stdlib_coverage.py {{modules}}
 
+# ---- wakakusa --------------------------------------------------------------
+
+# Wakakusa (`wakakusa/`) is Ruby on the same engine: its own language,
+# sharing the substrate and nothing else. Its gate makes the same
+# promise this one does — the interpreted run and the compiled one,
+# one script, byte-compared.
+
+# Fetch and build the spinel Wakakusa is pinned to (once per machine).
+wakakusa-spinel:
+    ./wakakusa/tools/spinel_setup.sh
+
+# Build pixie's C face, the one library both Wakakusa runs drive.
+wakakusa-capi:
+    cargo build --release -p pixie-capi
+
+# Run one Ruby app through both runs and byte-compare the screens.
+wakakusa-gate app script='':
+    cd wakakusa && ./bin/wakakusa gate {{app}} {{ if script == '' { '' } else { '--script "' + script + '"' } }}
+
+# Every Wakakusa demo, both runs.
+wakakusa-sweep:
+    ./wakakusa/tools/gate_all.sh
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every
