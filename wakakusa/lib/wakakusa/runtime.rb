@@ -23,6 +23,9 @@ $wakakusa_handlers = []
 $wakakusa_rows = []
 $wakakusa_row_index = 0
 $wakakusa_app = nil
+# Timers are declared before the app runs and live for as long as it
+# does, so they keep a list of their own that a build never clears.
+$wakakusa_timers = []
 
 # The text an event carried, built from the characters the engine counts
 # out. It does not cross as a string for the same reason.
@@ -41,6 +44,20 @@ end
 # registered under it runs.
 def wakakusa_on_event(id, _kind)
   $wakakusa_handlers[id].call
+end
+
+# A timer came due.
+def wakakusa_tick(id)
+  $wakakusa_timers[id].call
+end
+
+# Ask to be told every `seconds`. Declared before `run`; both runs tick
+# off the same clock, a frame in a window and an `advance:` in a script.
+def every(seconds, &blk)
+  return if blk.nil?
+
+  $wakakusa_timers.push(blk)
+  PixieC.pixie_every(seconds, $wakakusa_timers.length - 1)
 end
 
 # The engine asks for one row of a list that builds its rows on demand.

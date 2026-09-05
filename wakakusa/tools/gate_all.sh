@@ -43,6 +43,7 @@ gate cards   ./bin/wakakusa gate demo/cards.rb --script "click:+1,click:+10,dump
 gate styled  ./bin/wakakusa gate demo/styled.rb --script "click:+1,dump,click:flip,dump"
 gate panels  ./bin/wakakusa gate demo/panels.rb --script "select:stack,dump,click:about,dump,click:close"
 gate roster  ./bin/wakakusa gate demo/roster.rb --script "select:member 7,dump,click:score,dump,click:score,dump"
+gate dashboard ./bin/wakakusa gate demo/dashboard.rb --script "advance:1000,advance:1000,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

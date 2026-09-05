@@ -19,13 +19,16 @@ module PixieC
     typedef long (*pixie_build_fn)(void);
     typedef void (*pixie_event_fn)(long, long);
     typedef long (*pixie_row_fn)(long, long);
+    typedef void (*pixie_timer_fn)(long);
     void pixie_set_event_handler(pixie_event_fn f);
     void pixie_set_row_builder(pixie_row_fn f);
+    void pixie_set_timer_handler(pixie_timer_fn f);
     int pixie_run(const char *title, double w, double h, double pad, pixie_build_fn build);
   C
   ffi_callback :build_fn, [], :long
   ffi_callback :event_fn, [:long, :long], :void
   ffi_callback :row_fn, [:long, :long], :long
+  ffi_callback :timer_fn, [:long], :void
   ffi_func :pixie_el, [:int32], :long
   ffi_func :pixie_str, [:long, :int32, :str], :void
   ffi_func :pixie_num, [:long, :int32, :double], :void
@@ -44,6 +47,8 @@ module PixieC
   ffi_func :pixie_event_text_char, [:long], :long
   ffi_func :pixie_set_event_handler, [:event_fn], :void
   ffi_func :pixie_set_row_builder, [:row_fn], :void
+  ffi_func :pixie_set_timer_handler, [:timer_fn], :void
+  ffi_func :pixie_every, [:double, :long], :void
   ffi_func :pixie_run, [:str, :double, :double, :double, :build_fn], :int
 end
 
@@ -58,5 +63,6 @@ end
 def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_event_handler(method(:wakakusa_on_event))
   PixieC.pixie_set_row_builder(method(:wakakusa_row_build))
+  PixieC.pixie_set_timer_handler(method(:wakakusa_tick))
   PixieC.pixie_run(title, width, height, padding, method(:wakakusa_build))
 end

@@ -56,6 +56,8 @@ pub type PixieEventFn = extern "C" fn(i64, i64);
 /// The app's row builder: a handler id and a row number, answered with
 /// that row's element handle.
 pub type PixieRowFn = extern "C" fn(i64, i64) -> i64;
+/// The app's timer: the id of the tick that just came due.
+pub type PixieTimerFn = extern "C" fn(i64);
 
 /// A slot in the build arena: an element being written, one finished
 /// and waiting to be consumed, or one already taken.
@@ -69,6 +71,10 @@ thread_local! {
     static ARENA: RefCell<Vec<Slot>> = const { RefCell::new(Vec::new()) };
     static EVENT_FN: Cell<Option<PixieEventFn>> = const { Cell::new(None) };
     static ROW_FN: Cell<Option<PixieRowFn>> = const { Cell::new(None) };
+    static TIMER_FN: Cell<Option<PixieTimerFn>> = const { Cell::new(None) };
+    /// Timers are declared before the app runs, so they wait here for
+    /// the World to exist.
+    static PENDING_TIMERS: RefCell<Vec<(f64, i64)>> = const { RefCell::new(Vec::new()) };
     /// What the event now being delivered carried. Written just before
     /// the callback and read back by it.
     static EVENT_INT: Cell<i64> = const { Cell::new(0) };
@@ -838,6 +844,42 @@ pub extern "C" fn pixie_set_row_builder(f: PixieRowFn) {
     ROW_FN.with(|c| c.set(Some(f)));
 }
 
+/// Registers the function a timer's tick reaches.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_set_timer_handler(f: PixieTimerFn) {
+    TIMER_FN.with(|c| c.set(Some(f)));
+}
+
+/// Ask for `handler` to be told every `seconds`. Declared before
+/// `pixie_run`; the engine fires it off the same clock a frame and a
+/// script's `advance:` move, so both runs tick the same number of
+/// times.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_every(seconds: f64, handler: i64) {
+    PENDING_TIMERS.with(|t| t.borrow_mut().push((seconds, handler)));
+}
+
+/// Hand the queued timers to the engine, now that there is a World.
+fn install_timers(rt: &Runtime) {
+    for (seconds, handler) in PENDING_TIMERS.with(|t| t.take()) {
+        let ms = seconds * 1000.0;
+        rt.with(move |w: &mut World| {
+            pixie_kernel::timer::every(
+                w,
+                ms,
+                Rc::new(move |w: &mut World| {
+                    if let Some(f) = TIMER_FN.with(|c| c.get()) {
+                        f(handler);
+                    }
+                    if let Some(hv) = CURRENT_VIEW.with(|c| c.get()) {
+                        w.mark_view_dirty(hv);
+                    }
+                }),
+            );
+        });
+    }
+}
+
 #[derive(Clone)]
 struct CView {
     build: PixieBuildFn,
@@ -861,6 +903,7 @@ fn headless(build: PixieBuildFn, script: &str, light: bool) -> String {
     let h = mount(&mut w, CView { build }, &[]);
     CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
     let rt = Runtime::new(w);
+    install_timers(&rt);
     let _ = rt.with(|w| w.take_dirty_views());
     rt.with(|w: &mut World| pixie_kernel::theme::set_light(w, light));
     let mut tree = rt.with(|w| pixie_kernel::build_prepared(w, h));
@@ -903,6 +946,7 @@ pub unsafe extern "C" fn pixie_run(
     let h = mount(&mut w, CView { build }, &[]);
     CURRENT_VIEW.with(|c| c.set(Some(h.erase())));
     let rt = Runtime::new(w);
+    install_timers(&rt);
     let win = if width > 0.0 || height > 0.0 {
         Some((width, height))
     } else {

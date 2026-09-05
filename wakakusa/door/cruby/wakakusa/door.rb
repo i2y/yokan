@@ -27,6 +27,8 @@ module PixieC
   extern "long pixie_event_text_char(long)"
   extern "void pixie_set_event_handler(void*)"
   extern "void pixie_set_row_builder(void*)"
+  extern "void pixie_set_timer_handler(void*)"
+  extern "void pixie_every(double, long)"
   extern "int pixie_run(const char*, double, double, double, void*)"
 end
 
@@ -47,9 +49,13 @@ WAKAKUSA_EVENT_CB = Fiddle::Closure::BlockCaller.new(
 WAKAKUSA_ROW_CB = Fiddle::Closure::BlockCaller.new(
   Fiddle::TYPE_LONG, [Fiddle::TYPE_LONG, Fiddle::TYPE_LONG]
 ) { |h, i| wakakusa_row_build(h, i) }
+WAKAKUSA_TIMER_CB = Fiddle::Closure::BlockCaller.new(
+  Fiddle::TYPE_VOID, [Fiddle::TYPE_LONG]
+) { |id| wakakusa_tick(id) }
 
 def wakakusa_start(title, width, height, padding)
   PixieC.pixie_set_event_handler(WAKAKUSA_EVENT_CB)
   PixieC.pixie_set_row_builder(WAKAKUSA_ROW_CB)
+  PixieC.pixie_set_timer_handler(WAKAKUSA_TIMER_CB)
   PixieC.pixie_run(title, width, height, padding, WAKAKUSA_BUILD_CB)
 end
