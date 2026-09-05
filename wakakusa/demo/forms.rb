@@ -11,7 +11,7 @@ class Forms
     @fruit = 0
     @sizes = ["small", "medium", "large"]
     @size = 1
-    @tabs = ["general", "details", "about"]
+    @tabs = ["General", "Details", "About"]
     @tab = 0
     @note = ""
   end
@@ -34,13 +34,14 @@ class Forms
       radio_group(options: @sizes, selected: @size) { |i| @size = i },
       tab_bar(labels: @tabs, active: @tab) { |i| @tab = i },
       panel,
-      text("volume #{@volume}, #{@fruits[@fruit]}, #{@sizes[@size]}", size: 12.0),
-      text_field(@note, placeholder: "a note") { |t| @note = t },
+      text_field(@note, placeholder: "notes (enter writes a newline)",
+                 multiline: true, rows: 3.0) { |t| @note = t },
+      text("dark=#{@dark}  wifi=#{@wifi}  vol=#{format("%.1f", @volume)}"),
+      text("fruit##{@fruit}  size##{@size}  tab##{@tab}"),
       spacing: 10.0,
-      padding: 14.0,
-      theme: @dark ? "dark" : "light"
+      padding: 14.0
     )
   end
 end
 
-run(Forms.new, title: "forms")
+run(Forms.new, title: "forms", width: 460.0, height: 420.0)

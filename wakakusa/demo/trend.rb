@@ -4,32 +4,27 @@ require "wakakusa"
 
 class Trend
   def initialize
-    @seed = 3
-    @steps = 0
+    @values = [3.0, 5.0, 2.0]
+    @limit = 4.5
   end
 
-  def values
-    out = []
-    n = @seed
-    8.times do
-      n = (n * 7 + 13) % 50
-      out.push(n.to_f)
-    end
-    out
-  end
-
-  def stir
-    @seed = (@seed * 5 + 1) % 97
-    @steps += 1
+  def bump
+    values = @values.dup
+    values.push(8.0)
+    @values = values
   end
 
   def view
     column(
-      text("Trend", size: 18.0, bold: true),
-      text("seed #{@seed}, #{@steps} stirs", size: 12.0, color: "#8a8f98"),
-      line_chart(values, height: 120.0),
-      bar_chart(values, height: 90.0),
-      button("stir") { stir },
+      text("points: #{@values.length}", size: 14.0),
+      line_chart(@values, height: 120.0),
+      bar_chart(@values, height: 90.0),
+      text("limit: #{format("%.1f", @limit)}", size: 12.0, color: "#8a8f98"),
+      row(
+        button("add point") { bump },
+        button("raise limit") { @limit += 0.5 },
+        spacing: 8.0
+      ),
       spacing: 10.0,
       padding: 14.0
     )

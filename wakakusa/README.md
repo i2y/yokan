@@ -13,57 +13,83 @@ interaction script, and compares what they drew, byte for byte — so
 "it worked while I was writing it" and "it works as shipped" are one
 claim, not two.
 
-## What runs today
+## What an app looks like
 
-One file, `demo/counter.rb`. Containers take their children as
-arguments and a handler is a block at the leaf:
+An app is an object. Its state is its instance variables, `view`
+answers one element, and a handler is a block that closes over it.
 
 ```ruby
 require "wakakusa"
 
-$count = 0
+class Counter
+  def initialize
+    @count = 0
+    @name = ""
+  end
 
-def view
-  column(
-    text("count: #{$count}", size: 34.0),
-    row(
-      button("+1") { $count += 1 },
-      button("+10") { $count += 10 },
-      button("reset") { $count = 0 },
-      spacing: 8.0
-    ),
-    spacing: 12.0,
-    padding: 16.0
-  )
+  def view
+    column(
+      text("count: #{@count}", size: 34.0),
+      row(
+        button("+1") { @count += 1 },
+        button("+10") { @count += 10 },
+        button("reset") { @count = 0 },
+        spacing: 8.0
+      ),
+      text_field(@name, placeholder: "your name") { |s| @name = s },
+      text("hello, #{@name}"),
+      spacing: 12.0,
+      padding: 16.0
+    )
+  end
 end
 
-run("counter") { view }
+run(Counter.new, title: "counter")
 ```
-
-Both runs open the same window (`screenshots/`), and driven headless
-by `--script "click:+1,click:+10,dump"` they print the same three
-lines:
 
 ```console
-$ wakakusa gate demo/counter.rb --script "click:+1,click:+10,dump"
+$ wakakusa gate demo/counter.rb --script "click:+1,dump,input:Momo"
 GATE OK — 3 dump lines identical in both runs
-  script:   click:+1,click:+10,dump
+  script:   click:+1,dump,input:Momo
   emitted:  demo/.gate/counter.c
-  binary:   demo/.gate/counter (14.9 MB)
+  binary:   demo/.gate/counter (15.0 MB)
 ```
+
+## The vocabulary
+
+Thirty-two elements: text and button, the fields and the four
+choosers, the boxes that arrange (column, row, grid, stack, the panes
+that scroll), the two charts, the two lists that build their rows on
+demand, and the small pieces — spacer, divider, spinner, link,
+progress, image, svg, modal.
+
+They are written once, in `elements.toml`: every element, every
+keyword it takes, its type and its default. `tools/gen.rb` turns that
+one table into the Ruby an app calls, the numbers the two sides of the
+engine's C face count with, and the engine's own constants — so an
+element cannot come to mean one thing in Ruby and another where it is
+drawn. Adding one is a row in the table and an arm in the engine.
+
+Fifteen properties ride on every element under one name and one
+meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
+`theme`, `animate`, `easing`, `enter`, `exit`, `col_span`, `row_span`,
+`role`, `a11y_label`, `tooltip`.
 
 ## The pieces
 
 - `crates/pixie-capi` (in the substrate, not here) — the engine behind
   a C ABI. The interpreted run opens it as a shared library, the
   compiled run links the static one, and both then drive exactly the
-  same code. Elements cross as integer handles, handlers as integer
-  ids; the engine never holds a Ruby object.
-- `door/cruby/wakakusa.rb`, `door/spinel/wakakusa.rb` — the two doors.
-  Below the ABI, the declarations each run needs; above it, the same
-  Ruby word for word, which the sweep checks before it gates anything.
+  same code. An element is opened, written into by number and closed;
+  handlers are numbers the door hands out. The engine never holds a
+  Ruby object.
+- `lib/` — the same Ruby in both runs: the generated element methods,
+  and the registries a build starts over.
+- `door/cruby/`, `door/spinel/` — one file each, holding the ABI
+  declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — the apps. `tools/gate_all.sh` — all of them, both runs.
+- `demo/` — seventeen apps. `tools/gate_all.sh` — all of them, both
+  runs.
 
 ## Numbers
 
@@ -72,11 +98,11 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 | what | value |
 |---|---|
 | the engine's crate, rebuilt after an edit | 2.6 s |
-| the compiler's C output (door + app) | under 10 ms, 25 KB |
+| the compiler's C output (the library and an app) | under 10 ms, 100 KB |
 | `cc` link of the compiled run | 0.29 s |
-| the compiled binary | 14.9 MB |
-| one gate round, engine already built | 1.5 s |
-| the engine, static / shared | 75.1 MB / 14.3 MB |
+| the compiled binary | 15.0 MB |
+| one gate round, engine already built | 1.8 s |
+| every demo, both runs | 31 s |
 
 ## How to start
 
@@ -92,12 +118,19 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 ## What does not work yet
 
-- Four elements of the engine's eighteen, and none of the shared
-  properties: no styling, no theme, no text field.
-- No live reload, no timers, no background work, and state lives in a
-  global rather than an object.
-- `check` accepts everything. The shapes the compiler gets wrong are
-  known and reproduced, but nothing refuses them by name yet, so the
-  gate is what catches them.
+- No drawing surface: the canvas and its commands are not in the
+  vocabulary, so neither are the two games.
+- No live reload, no timers, and no way to do work off the window's
+  thread.
+- Three shapes an app has to be written in, because the compiler
+  cannot yet take the others. State lives on the app object rather
+  than in globals. A handler is a literal block, or a symbol naming
+  one of the app's own methods — a proc handed through a keyword
+  argument arrives broken. And a list grows by copying (`list.dup`
+  then `push`) rather than by `list + [item]`.
+- `check` accepts everything. Those three shapes, and the handful of
+  other things the compiler gets wrong, are reproduced and reported
+  upstream, but nothing refuses them by name yet — so the gate is what
+  catches them.
 - macOS only. The binary carries the engine it draws with, so even a
   small app weighs about 15 MB.

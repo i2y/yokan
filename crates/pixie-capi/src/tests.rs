@@ -2,6 +2,7 @@
 //! protocol, and the table against the arms.
 
 use super::*;
+use std::ffi::CString;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 /// The app's state, on the app's side of the ABI — where a door keeps

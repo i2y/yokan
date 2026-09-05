@@ -36,11 +36,13 @@ gate quantities ./bin/wakakusa gate demo/quantities.rb --script "input@0:3,input
 gate table   ./bin/wakakusa gate demo/table.rb --script "click:refresh,dump,click:refresh"
 gate todo    ./bin/wakakusa gate demo/todo.rb --script "input:eggs,submit,dump,click:done,dump"
 gate mixer   ./bin/wakakusa gate demo/mixer.rb --script "click:+1,click:mute,dump,input:live set,dump"
-gate trend   ./bin/wakakusa gate demo/trend.rb --script "click:stir,dump"
+gate trend   ./bin/wakakusa gate demo/trend.rb --script "click:add point,dump,click:raise limit,dump"
 gate edges   ./bin/wakakusa gate demo/edges.rb --script "click:oob,dump,click:grow,click:grow,click:partial,dump"
 gate points  ./bin/wakakusa gate demo/points.rb --script "click:right,click:measure,dump,click:swap,dump"
 gate cards   ./bin/wakakusa gate demo/cards.rb --script "click:+1,click:+10,dump"
 gate styled  ./bin/wakakusa gate demo/styled.rb --script "click:+1,dump,click:flip,dump"
+gate panels  ./bin/wakakusa gate demo/panels.rb --script "select:stack,dump,click:about,dump,click:close"
+gate roster  ./bin/wakakusa gate demo/roster.rb --script "select:member 7,dump,click:score,dump,click:score,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]
