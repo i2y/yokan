@@ -116,6 +116,11 @@ job = task { something_slow }        # off the window's thread
 on_done(job) { @answer = task_answer }   # back on it, when that is done
 ```
 
+Ruby's own standard library is in both runs — `File`, `Dir`, `JSON`,
+`CSV`, `Time`, `Math`, everything `Enumerable` answers — so there is no
+library of ours in front of it. `demo/stdlib.rb` and `demo/files.rb`
+are there to hold it to that.
+
 ## The pieces
 
 - `crates/pixie-capi` (in the substrate, not here) — the engine behind
@@ -129,7 +134,7 @@ on_done(job) { @answer = task_answer }   # back on it, when that is done
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — thirty-five apps, with `demo/screenshots/` showing what
+- `demo/` — thirty-six apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers
@@ -161,12 +166,14 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 - No drawing surface: the canvas and its commands are not in the
   vocabulary, so neither are the two games.
-- Work off the window's thread is there, but a compiled run only gets
-  to it while the engine is waiting on it: a thread scheduled by Ruby's
-  own runtime gets no turn while the engine is on the stack, which it
-  is from `run` until the window closes. The engine hands one back on
-  every poll, so a task finishes; a thread the app starts for its own
-  reasons, outside `task`, will not run.
+- A thread the app starts for its own reasons runs, but how far it gets
+  is not something the two runs agree about: one is on the clock the
+  machine keeps and the other on the clock a script sets. That is why
+  `task` exists — the engine waits for the answer, so both runs reach
+  the same place before the next step. Anything perpetual (a poller, a
+  watcher) is an ordinary `Thread`, and what it produces should be
+  picked up by a timer rather than written into the app's state from
+  the worker.
 - Three shapes an app has to be written in, because the compiler
   cannot yet take the others, each refused by name with the rewrite in
   the message. State lives on the app object rather than in globals. A
