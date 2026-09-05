@@ -703,6 +703,12 @@ $ yokan translate app.py                              # the .pix the build compi
 $ yokan version                                       # package, checkout, build tree
 ```
 
+`PIXIE_SCRIPT` is an environment variable that the development run and
+a release binary both read: set it and the app skips the window, dumps
+the screen, replays the steps, dumps again and exits. `gate` and
+`show --script` set it for you. The name is the substrate's, because
+the harness that reads it is pixie's.
+
 Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
 `slide[@n]:<value>`, `select[@n]:<label>`, `key:<chord>`,
 `keydown:<key>` / `keyup:<key>`, `menu:<item>`, `file:<path>`,

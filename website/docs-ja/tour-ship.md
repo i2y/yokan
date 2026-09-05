@@ -112,6 +112,14 @@ $ uv run --with pytest python -m pytest
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
+`PIXIE_SCRIPT` は環境変数です。
+Yokan のアプリはどれもこれを読みます。
+開発実行でも、リリースビルドのバイナリでも同じです。
+指定するとアプリはウィンドウを開かず、画面をダンプし、書いたステップを再生し、もう一度画面をダンプして終了します。
+`yokan gate` と `yokan show --script` が内部で設定しているのもこれなので、同じスクリプトの文字列が三か所とも同じように使えます。
+名前が Yokan ではないのは、これを読む仕組みが Yokan のものではないからです。
+Yokan が経由する基盤である [pixie](https://github.com/i2y/yokan/blob/main/docs/PIXIE.md) のもので、あちらでも同じ綴りです。
+
 ステップの語彙は `click[@n]:<ラベル>`（ボタン、リンク、表の列見出し）、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`（選択肢のある要素の項目、または表の行を先頭セルで）、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump`。
 `@n` はツリー順で n 番目の一致を選ぶので、同じラベルのボタンが並ぶ行にも届きます（`click@2:削除`）。
 `dump` はその時点の画面を出力します。これで途中の状態も検査対象になり、最初と最後だけを見る形ではなくなります。

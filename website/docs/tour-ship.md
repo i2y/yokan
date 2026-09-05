@@ -100,6 +100,11 @@ Running without a window is where verification starts.
 $ PIXIE_SCRIPT="click:+1,input:Momo" uv run app.py
 ```
 
+`PIXIE_SCRIPT` is an environment variable, and every Yokan app reads it — the development run and a release binary alike.
+Set it and the app skips the window: it dumps the screen, replays the steps you listed, dumps the screen again, and exits.
+It is what `yokan gate` and `yokan show --script` set for you, so one script text works in all three places.
+The name is the substrate's because the code that reads it is: the harness belongs to [pixie](https://github.com/i2y/yokan/blob/main/docs/PIXIE.md), the layer Yokan compiles through, and is spelled the same way there.
+
 The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's column header), `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>` (a chooser's option, or a table's row by its first cell), `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
 `@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
