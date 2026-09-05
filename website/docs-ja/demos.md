@@ -12,7 +12,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 `transcribe` は依存を自分で宣言しているので `uv run demo/transcribe/app.py` がそれを取ってきます。
 初めて文字起こしをするときに Whisper のモデルを取得し、ゲートはスイープではなく単独（`just transcribe-gate`）で走ります。
 `app` と `csv_viewer` の 2 本は辞書 state を使う開発専用デモで、ゲート対象外です（[今できないこと](tour-ship.md#今できないこと)参照）。
-スクリーンショットはすべて初期状態（起動直後）のものです。
+スクリーンショットはすべて初期状態（起動直後）のものですが、`transcribe` だけは文字起こしを終えた状態です。
+起動直後は表が空で、何も伝わらないからです。
 
 ## まず動きを見る
 
@@ -6032,15 +6033,19 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
             progress(pct(), width=520.0, label=note())
             with scroll_view(height=260.0):
                 with data_table():
+                    # The two time columns are given a WIDTH rather than a
+                    # share: a share is what is left after the content, so
+                    # a longer timestamp in one row would move that row's
+                    # text and the column would stop being a column.
                     with row(spacing=8):
-                        text("start", grow=1.0)
-                        text("end", grow=1.0)
-                        text("text", grow=8.0)
+                        text("start", width=56.0, align="right")
+                        text("end", width=56.0, align="right")
+                        text("text", grow=1.0)
                     for s in segs():
                         with row(spacing=8):
-                            text(f"{s.start:.2f}", grow=1.0)
-                            text(f"{s.end:.2f}", grow=1.0)
-                            text(s.text, grow=8.0)
+                            text(f"{s.start:.2f}", width=56.0, align="right")
+                            text(f"{s.end:.2f}", width=56.0, align="right")
+                            text(s.text, grow=1.0)
             with row(spacing=8):
                 text("export", size=13, color="#8a8f98")
                 button("TXT", on_click=export_txt)

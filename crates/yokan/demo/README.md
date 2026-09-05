@@ -18,7 +18,8 @@ Whisper model the first time it transcribes, and is gated on its own
 Two demos — `app` and `csv_viewer` —
 use dict state and are development-only by design (see the tour's
 [What does not work yet](../TOUR.md#what-does-not-work-yet)); they are listed here, not gated. All screenshots show
-the initial state, right after launch.
+the initial state, right after launch, except `transcribe`, which
+shows a finished transcript — its launch state is an empty table.
 
 ## Start here
 

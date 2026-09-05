@@ -13,7 +13,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 `transcribe` は依存を自分で宣言しているので `uv run demo/transcribe/app.py` がそれを取ってきます。
 初めて文字起こしをするときに Whisper のモデルを取得し、ゲートはスイープではなく単独（`just transcribe-gate`）で走ります。
 `app` と `csv_viewer` の 2 本は辞書 state を使う開発専用デモで、ゲート対象外です（ツアーの[今できないこと](../TOUR.ja.md#今できないこと)参照）。
-スクリーンショットはすべて初期状態（起動直後）のものです。
+スクリーンショットはすべて初期状態（起動直後）のものですが、`transcribe` だけは文字起こしを終えた状態です。
+起動直後は表が空で、何も伝わらないからです。
 
 ## まず動きを見る
 

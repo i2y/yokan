@@ -289,15 +289,19 @@ def view():
         progress(pct(), width=520.0, label=note())
         with scroll_view(height=260.0):
             with data_table():
+                # The two time columns are given a WIDTH rather than a
+                # share: a share is what is left after the content, so
+                # a longer timestamp in one row would move that row's
+                # text and the column would stop being a column.
                 with row(spacing=8):
-                    text("start", grow=1.0)
-                    text("end", grow=1.0)
-                    text("text", grow=8.0)
+                    text("start", width=56.0, align="right")
+                    text("end", width=56.0, align="right")
+                    text("text", grow=1.0)
                 for s in segs():
                     with row(spacing=8):
-                        text(f"{s.start:.2f}", grow=1.0)
-                        text(f"{s.end:.2f}", grow=1.0)
-                        text(s.text, grow=8.0)
+                        text(f"{s.start:.2f}", width=56.0, align="right")
+                        text(f"{s.end:.2f}", width=56.0, align="right")
+                        text(s.text, grow=1.0)
         with row(spacing=8):
             text("export", size=13, color="#8a8f98")
             button("TXT", on_click=export_txt)
