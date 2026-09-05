@@ -21,11 +21,11 @@ class Keys
   end
 
   def copy_count
-    Clipboard.set("count=#{@count}")
+    clipboard_set("count=#{@count}")
   end
 
   def paste
-    @pasted = Clipboard.get
+    @pasted = clipboard_get
   end
 
   def typed(key)

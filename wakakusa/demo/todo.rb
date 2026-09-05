@@ -29,7 +29,7 @@ class Todo
     column(
       text("todo — #{@items.length} items", size: 16.0),
       text_field(@draft, placeholder: "add and press enter",
-                 on_submit: :add) { |t| @draft = t },
+                 on_submit: -> { add(event_text) }) { |t| @draft = t },
       list_view(@items.length, item_height: 26.0, height: 280.0) { |i| line(i) },
       button("clear") { @items = [] },
       spacing: 10.0,

@@ -101,7 +101,7 @@ def handler?(prop) = prop.key?("handler")
 
 # What a prop's Ruby default reads as at the call site.
 def ruby_default(prop)
-  return "nil" if handler?(prop)
+  return "WK_IGNORE_#{const(prop.fetch("handler"))}" if handler?(prop)
   d = prop["default"]
   case prop.fetch("type")
   when "str" then d.inspect
@@ -154,7 +154,10 @@ end
 def prop_lines(prop)
   name = prop.fetch("name")
   key = "WK::K_#{const(name)}"
-  return ["  wakakusa_send_#{prop.fetch("handler")}(el, #{key}, #{name}) unless #{name}.nil?"] if handler?(prop)
+  if handler?(prop)
+    h = prop.fetch("handler")
+    return ["  wakakusa_proc_#{h}(el, #{key}, #{name}) unless #{name}.equal?(WK_IGNORE_#{const(h)})"]
+  end
 
   case prop.fetch("type")
   when "strs"
@@ -214,6 +217,16 @@ def gen_elements
   out = +""
   out << banner("")
   out << "\n"
+  out << "# A handler keyword that was not written holds one of these. They\n"
+  out << "# are the shape a handler of that kind has, so the keyword always\n"
+  out << "# holds a block and never a nothing: a compiled run cannot call one\n"
+  out << "# whose type it had to guess. Identity is what tells them apart\n"
+  out << "# from a handler an app actually wrote.\n"
+  PAYLOADS.each_key do |name|
+    args = name == "none" ? "" : " |v| "
+    out << "WK_IGNORE_#{const(name)} = proc {#{args}}\n"
+  end
+  out << "\n"
   out << "# One method per element. Its own keywords are spelled out; the\n"
   out << "# keywords every element takes ride in `riders` and are applied\n"
   out << "# below, so an element's own `width` wins over the box's.\n"
@@ -243,10 +256,10 @@ def gen_elements
         # the two paths stay apart here rather than meeting in a local.
         k = "WK::K_#{const(p.fetch("name"))}"
         h = p.fetch("handler")
-        out << "  if #{p.fetch("name")}.nil?\n"
+        out << "  if #{p.fetch("name")}.equal?(WK_IGNORE_#{const(h)})\n"
         out << "    wakakusa_on_#{h}(el, #{k}, &blk) unless blk.nil?\n"
         out << "  else\n"
-        out << "    wakakusa_send_#{h}(el, #{k}, #{p.fetch("name")})\n"
+        out << "    wakakusa_proc_#{h}(el, #{k}, #{p.fetch("name")})\n"
         out << "  end\n"
       else
         prop_lines(p).each { |l| out << l << "\n" }

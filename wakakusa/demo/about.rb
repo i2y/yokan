@@ -14,7 +14,7 @@ class About
       link("Source", "https://github.com/i2y/yokan")
       link("Docs", "https://i2y.github.io/yokan/tour/")
       button("copy link") do
-        Clipboard.set("https://github.com/i2y/yokan")
+        clipboard_set("https://github.com/i2y/yokan")
         @status = "copied"
       end
       text "status: #{@status}"

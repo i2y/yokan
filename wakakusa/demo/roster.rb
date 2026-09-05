@@ -53,7 +53,8 @@ class Roster
       table(["name", "team", "score"], @names.length,
             widths: [2.0, 1.0, 1.0], height: 220.0,
             selected: @sel, sort: @sort, descending: @desc,
-            on_select: :pick, on_sort: :sort_by) { |i| line(i) },
+            on_select: -> { pick(event_index) },
+            on_sort: -> { sort_by(event_index) }) { |i| line(i) },
       text(@line.empty? ? "nobody picked" : @line, size: 12.0),
       spacing: 10.0,
       padding: 14.0

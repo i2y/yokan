@@ -113,6 +113,24 @@ def task_answer
   $wakakusa_task_lock.synchronize { $wakakusa_task_results[$wakakusa_task_current] }
 end
 
+# What the event now being delivered carried. A block is handed it, and
+# a proc given through a keyword asks for it here.
+def event_text
+  wakakusa_event_text
+end
+
+def event_number
+  PixieC.pixie_event_num
+end
+
+def event_index
+  PixieC.pixie_event_int
+end
+
+def event_on?
+  PixieC.pixie_event_int != 0
+end
+
 # A shortcut, a menu item, a key or a dropped file reached the app.
 def wakakusa_binding(id)
   $wakakusa_bindings[id].call
@@ -169,29 +187,29 @@ end
 # The system clipboard. A window exchanges it with the platform; a
 # headless run keeps it to itself, so a copy and a paste are a checked
 # interaction like any other.
-module Clipboard
-  def self.set(text)
-    PixieC.pixie_clipboard_set(text)
-  end
+#
+# Plain methods rather than a `Clipboard` module: everything here shares
+# a namespace with the app, and an app is entitled to call a class of
+# its own `Dialog`.
+def clipboard_set(text)
+  PixieC.pixie_clipboard_set(text)
+end
 
-  def self.get
-    PixieC.pixie_clipboard_get
-    wakakusa_answer
-  end
+def clipboard_get
+  PixieC.pixie_clipboard_get
+  wakakusa_answer
 end
 
 # The platform's own panels. A dialog waits for a person, so it belongs
 # inside `task`; a headless script answers one with `file:<path>`.
-module Dialog
-  def self.open(title = "")
-    PixieC.pixie_dialog(0, title)
-    wakakusa_answer
-  end
+def open_dialog(title = "")
+  PixieC.pixie_dialog(0, title)
+  wakakusa_answer
+end
 
-  def self.save(name = "")
-    PixieC.pixie_dialog(1, name)
-    wakakusa_answer
-  end
+def save_dialog(name = "")
+  PixieC.pixie_dialog(1, name)
+  wakakusa_answer
 end
 
 # A timer came due.
@@ -262,28 +280,28 @@ def wakakusa_on_float(el, key, &blk)
   wakakusa_work(el, key, proc { blk.call(PixieC.pixie_event_num) })
 end
 
-# The other way to name a handler: a symbol, which is the name of one of
-# the app's own methods. A block cannot be handed through a keyword —
-# a compiled run receives the address rather than the block, silently —
-# so a second handler on the same element is written this way instead.
-def wakakusa_send_none(el, key, name)
-  wakakusa_work(el, key, proc { $wakakusa_app.send(name) })
+# The other way to give a handler: a proc, for the second handler on an
+# element, where the block is already spoken for. It is called with
+# nothing and asks for what the event carried itself — a proc handed
+# through a keyword does not receive an argument in a compiled run.
+def wakakusa_proc_none(el, key, cb)
+  wakakusa_work(el, key, proc { cb.call })
 end
 
-def wakakusa_send_text(el, key, name)
-  wakakusa_work(el, key, proc { $wakakusa_app.send(name, wakakusa_event_text) })
+def wakakusa_proc_text(el, key, cb)
+  wakakusa_work(el, key, proc { cb.call })
 end
 
-def wakakusa_send_bool(el, key, name)
-  wakakusa_work(el, key, proc { $wakakusa_app.send(name, PixieC.pixie_event_int != 0) })
+def wakakusa_proc_bool(el, key, cb)
+  wakakusa_work(el, key, proc { cb.call })
 end
 
-def wakakusa_send_int(el, key, name)
-  wakakusa_work(el, key, proc { $wakakusa_app.send(name, PixieC.pixie_event_int) })
+def wakakusa_proc_int(el, key, cb)
+  wakakusa_work(el, key, proc { cb.call })
 end
 
-def wakakusa_send_float(el, key, name)
-  wakakusa_work(el, key, proc { $wakakusa_app.send(name, PixieC.pixie_event_num) })
+def wakakusa_proc_float(el, key, cb)
+  wakakusa_work(el, key, proc { cb.call })
 end
 
 def wakakusa_rows(el, key, &blk)

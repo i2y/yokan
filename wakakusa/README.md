@@ -170,8 +170,11 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 - Three shapes an app has to be written in, because the compiler
   cannot yet take the others, each refused by name with the rewrite in
   the message. State lives on the app object rather than in globals. A
-  handler is a literal block, or a symbol naming one of the app's own
-  methods — a proc handed through a keyword argument arrives broken.
+  handler is a literal block. The second handler on an element, where
+  the block is already spoken for, is a proc of no arguments that asks
+  for what the event carried (`on_submit: -> { add(event_text) }`) — a
+  proc given through a keyword is not handed anything in a compiled
+  run.
   And a list grows by copying (`list.dup` then `push`) rather than by
   `list + [item]`.
 - `check` names those three shapes and five more, with the line and

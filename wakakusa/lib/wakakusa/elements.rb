@@ -1,6 +1,17 @@
 # Generated from elements.toml by tools/gen.rb. Do not edit by hand;
 # edit the table and run `tools/gen.rb`.
 
+# A handler keyword that was not written holds one of these. They
+# are the shape a handler of that kind has, so the keyword always
+# holds a block and never a nothing: a compiled run cannot call one
+# whose type it had to guess. Identity is what tells them apart
+# from a handler an app actually wrote.
+WK_IGNORE_NONE = proc {}
+WK_IGNORE_TEXT = proc { |v| }
+WK_IGNORE_BOOL = proc { |v| }
+WK_IGNORE_INT = proc { |v| }
+WK_IGNORE_FLOAT = proc { |v| }
+
 # One method per element. Its own keywords are spelled out; the
 # keywords every element takes ride in `riders` and are applied
 # below, so an element's own `width` wins over the box's.
@@ -34,16 +45,16 @@ def text(text, size: 0.0, color: "", align: "", grow: 0.0, bold: false,
 end
 
 # A button. The block runs when it is pressed.
-def button(label, on_click: nil, width: 0.0, height: 0.0, size: 0.0,
-           background: "", grow: 0.0, color: "", hover_background: "",
-           active_background: "", border_radius: 0.0, border_width: 0.0,
-           border_color: "", basis: 0.0, **riders, &blk)
+def button(label, on_click: WK_IGNORE_NONE, width: 0.0, height: 0.0,
+           size: 0.0, background: "", grow: 0.0, color: "",
+           hover_background: "", active_background: "", border_radius: 0.0,
+           border_width: 0.0, border_color: "", basis: 0.0, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_BUTTON)
   PixieC.pixie_str(el, WK::K_LABEL, label)
-  if on_click.nil?
+  if on_click.equal?(WK_IGNORE_NONE)
     wakakusa_on_none(el, WK::K_ON_CLICK, &blk) unless blk.nil?
   else
-    wakakusa_send_none(el, WK::K_ON_CLICK, on_click)
+    wakakusa_proc_none(el, WK::K_ON_CLICK, on_click)
   end
   PixieC.pixie_num(el, WK::K_WIDTH, width) if width != 0.0
   PixieC.pixie_num(el, WK::K_HEIGHT, height) if height != 0.0
@@ -63,17 +74,18 @@ end
 
 # A line a person types into. `on_change` fires per keystroke, `on_submit`
 # when they press enter; `multiline` makes it a paragraph field.
-def text_field(value, placeholder: "", on_change: nil, on_submit: nil,
-               multiline: false, rows: 0.0, **riders, &blk)
+def text_field(value, placeholder: "", on_change: WK_IGNORE_TEXT,
+               on_submit: WK_IGNORE_TEXT, multiline: false, rows: 0.0,
+               **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_TEXT_FIELD)
   PixieC.pixie_str(el, WK::K_VALUE, value)
   PixieC.pixie_str(el, WK::K_PLACEHOLDER, placeholder) if placeholder != ""
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_TEXT)
     wakakusa_on_text(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_text(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_text(el, WK::K_ON_CHANGE, on_change)
   end
-  wakakusa_send_text(el, WK::K_ON_SUBMIT, on_submit) unless on_submit.nil?
+  wakakusa_proc_text(el, WK::K_ON_SUBMIT, on_submit) unless on_submit.equal?(WK_IGNORE_TEXT)
   PixieC.pixie_bool(el, WK::K_MULTILINE, multiline ? 1 : 0) if multiline != false
   PixieC.pixie_num(el, WK::K_ROWS, rows) if rows != 0.0
   wakakusa_riders(el, riders, false)
@@ -204,8 +216,8 @@ end
 # A table whose rows are built on demand, laid on tracks whose shares are
 # `widths`. `on_select` receives the row clicked, `on_sort` the header.
 def table(columns, count, widths: [], item_height: 24.0, height: 0.0,
-          grow: 0.0, selected: -1, on_select: nil, sort: -1,
-          descending: false, on_sort: nil, **riders, &blk)
+          grow: 0.0, selected: -1, on_select: WK_IGNORE_INT, sort: -1,
+          descending: false, on_sort: WK_IGNORE_INT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_TABLE)
   columns.each { |v| PixieC.pixie_push_str(el, WK::K_COLUMNS, v) }
   PixieC.pixie_int(el, WK::K_COUNT, count)
@@ -215,10 +227,10 @@ def table(columns, count, widths: [], item_height: 24.0, height: 0.0,
   PixieC.pixie_num(el, WK::K_HEIGHT, height) if height != 0.0
   PixieC.pixie_num(el, WK::K_GROW, grow) if grow != 0.0
   PixieC.pixie_int(el, WK::K_SELECTED, selected) if selected != -1
-  wakakusa_send_int(el, WK::K_ON_SELECT, on_select) unless on_select.nil?
+  wakakusa_proc_int(el, WK::K_ON_SELECT, on_select) unless on_select.equal?(WK_IGNORE_INT)
   PixieC.pixie_int(el, WK::K_SORT, sort) if sort != -1
   PixieC.pixie_bool(el, WK::K_DESCENDING, descending ? 1 : 0) if descending != false
-  wakakusa_send_int(el, WK::K_ON_SORT, on_sort) unless on_sort.nil?
+  wakakusa_proc_int(el, WK::K_ON_SORT, on_sort) unless on_sort.equal?(WK_IGNORE_INT)
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
@@ -303,101 +315,103 @@ def progress(value, width: 0.0, height: 0.0, label: "", indeterminate: false,
 end
 
 # A box a person ticks. The block receives the new state.
-def checkbox(label, checked: false, on_change: nil, **riders, &blk)
+def checkbox(label, checked: false, on_change: WK_IGNORE_BOOL, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_CHECKBOX)
   PixieC.pixie_str(el, WK::K_LABEL, label)
   PixieC.pixie_bool(el, WK::K_CHECKED, checked ? 1 : 0) if checked != false
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_BOOL)
     wakakusa_on_bool(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_bool(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_bool(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, true)
   wakakusa_done(el)
 end
 
 # A switch a person flips. The block receives the new state.
-def switch(label, checked: false, on_change: nil, **riders, &blk)
+def switch(label, checked: false, on_change: WK_IGNORE_BOOL, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_SWITCH)
   PixieC.pixie_str(el, WK::K_LABEL, label)
   PixieC.pixie_bool(el, WK::K_CHECKED, checked ? 1 : 0) if checked != false
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_BOOL)
     wakakusa_on_bool(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_bool(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_bool(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, true)
   wakakusa_done(el)
 end
 
 # A track a person drags. The block receives the new number.
-def slider(value: 0.0, min: 0.0, max: 1.0, step: 0.0, on_change: nil,
-           **riders, &blk)
+def slider(value: 0.0, min: 0.0, max: 1.0, step: 0.0,
+           on_change: WK_IGNORE_FLOAT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_SLIDER)
   PixieC.pixie_num(el, WK::K_VALUE, value) if value != 0.0
   PixieC.pixie_num(el, WK::K_MIN, min) if min != 0.0
   PixieC.pixie_num(el, WK::K_MAX, max) if max != 1.0
   PixieC.pixie_num(el, WK::K_STEP, step) if step != 0.0
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_FLOAT)
     wakakusa_on_float(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_float(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_float(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
 
 # A drop-down. The block receives the chosen index.
-def select(options: [], selected: 0, on_change: nil, **riders, &blk)
+def select(options: [], selected: 0, on_change: WK_IGNORE_INT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_SELECT)
   options.each { |v| PixieC.pixie_push_str(el, WK::K_OPTIONS, v) }
   PixieC.pixie_int(el, WK::K_SELECTED, selected) if selected != 0
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_INT)
     wakakusa_on_int(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
 
 # A column of radio buttons. The block receives the chosen index.
-def radio_group(options: [], selected: 0, on_change: nil, **riders, &blk)
+def radio_group(options: [], selected: 0, on_change: WK_IGNORE_INT, **riders,
+                &blk)
   el = PixieC.pixie_el(WK::KIND_RADIO_GROUP)
   options.each { |v| PixieC.pixie_push_str(el, WK::K_OPTIONS, v) }
   PixieC.pixie_int(el, WK::K_SELECTED, selected) if selected != 0
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_INT)
     wakakusa_on_int(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
 
 # A row of joined toggle buttons. The block receives the chosen index.
-def segmented(options: [], selected: 0, on_change: nil, **riders, &blk)
+def segmented(options: [], selected: 0, on_change: WK_IGNORE_INT, **riders,
+              &blk)
   el = PixieC.pixie_el(WK::KIND_SEGMENTED)
   options.each { |v| PixieC.pixie_push_str(el, WK::K_OPTIONS, v) }
   PixieC.pixie_int(el, WK::K_SELECTED, selected) if selected != 0
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_INT)
     wakakusa_on_int(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
 
 # A row of tabs. The block receives the chosen index.
-def tab_bar(labels: [], active: 0, on_change: nil, **riders, &blk)
+def tab_bar(labels: [], active: 0, on_change: WK_IGNORE_INT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_TAB_BAR)
   labels.each { |v| PixieC.pixie_push_str(el, WK::K_LABELS, v) }
   PixieC.pixie_int(el, WK::K_ACTIVE, active) if active != 0
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_INT)
     wakakusa_on_int(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
@@ -406,35 +420,35 @@ end
 # A field for a number: enter or leaving it commits, text that is not a
 # number is dropped. `min`/`max` both 0 is unbounded, `step` 0 is free.
 def number_field(value, min: 0.0, max: 0.0, step: 0.0, placeholder: "",
-                 on_change: nil, **riders, &blk)
+                 on_change: WK_IGNORE_FLOAT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_NUMBER_FIELD)
   PixieC.pixie_num(el, WK::K_VALUE, value)
   PixieC.pixie_num(el, WK::K_MIN, min) if min != 0.0
   PixieC.pixie_num(el, WK::K_MAX, max) if max != 0.0
   PixieC.pixie_num(el, WK::K_STEP, step) if step != 0.0
   PixieC.pixie_str(el, WK::K_PLACEHOLDER, placeholder) if placeholder != ""
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_FLOAT)
     wakakusa_on_float(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_float(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_float(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)
 end
 
 # The same field for a whole number.
-def int_field(value, min: 0, max: 0, step: 1, placeholder: "", on_change: nil,
-              **riders, &blk)
+def int_field(value, min: 0, max: 0, step: 1, placeholder: "",
+              on_change: WK_IGNORE_INT, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_INT_FIELD)
   PixieC.pixie_int(el, WK::K_VALUE, value)
   PixieC.pixie_int(el, WK::K_MIN, min) if min != 0
   PixieC.pixie_int(el, WK::K_MAX, max) if max != 0
   PixieC.pixie_int(el, WK::K_STEP, step) if step != 1
   PixieC.pixie_str(el, WK::K_PLACEHOLDER, placeholder) if placeholder != ""
-  if on_change.nil?
+  if on_change.equal?(WK_IGNORE_INT)
     wakakusa_on_int(el, WK::K_ON_CHANGE, &blk) unless blk.nil?
   else
-    wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
+    wakakusa_proc_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
   wakakusa_done(el)

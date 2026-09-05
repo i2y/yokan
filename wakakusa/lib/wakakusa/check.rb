@@ -91,10 +91,11 @@ module Wakakusa
           next if name.nil?
 
           if WK::HANDLERS.include?(name)
-            unless assoc.value.is_a?(Prism::SymbolNode)
-              refuse(assoc, "`#{name}:` takes a symbol naming one of the app's own methods " \
-                            "(`#{name}: :bump`), or leave it out and write the block instead. " \
-                            "A compiled run receives a proc given here as a number")
+            unless proc_like?(assoc.value)
+              refuse(assoc, "`#{name}:` takes a proc of no arguments, written out here " \
+                            "(`#{name}: -> { add(event_text) }`), or leave it out and write " \
+                            "the block instead. A proc given through a keyword is not handed " \
+                            "what the event carried in a compiled run, so it asks for it")
             end
           elsif !WK::ELEMENTS.fetch(element).include?(name)
             refuse(assoc, "`#{element}` has no `#{name}:`. It takes " \
@@ -169,6 +170,20 @@ module Wakakusa
       return key.unescaped if key.is_a?(Prism::SymbolNode)
 
       nil
+    end
+
+    # `-> { … }` or `proc { … }`, written where it is given, and taking
+    # nothing: what the event carried is asked for inside it.
+    def proc_like?(node)
+      return no_parameters?(node.parameters) if node.is_a?(Prism::LambdaNode)
+      return false unless node.is_a?(Prism::CallNode) && %i[proc lambda].include?(node.name)
+      return false unless node.block.is_a?(Prism::BlockNode)
+
+      no_parameters?(node.block.parameters)
+    end
+
+    def no_parameters?(params)
+      params.nil? || params.parameters.nil? || params.parameters.requireds.empty?
     end
 
     def grows_a_list?(value, name)

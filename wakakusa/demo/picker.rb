@@ -23,12 +23,12 @@ class Picker
   end
 
   def open_one
-    job = task { Dialog.open("Choose a file") }
+    job = task { open_dialog("Choose a file") }
     on_done(job) { took(task_answer) }
   end
 
   def save_as
-    job = task { Dialog.save("notes.txt") }
+    job = task { save_dialog("notes.txt") }
     on_done(job) do
       path = task_answer
       unless path.empty?

@@ -6,7 +6,7 @@ class App
   end
 
   def view
-    button("+1", on_click: proc { @n += 1 })
+    button("+1", on_click: :bump)
   end
 end
 
