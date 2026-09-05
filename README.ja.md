@@ -74,7 +74,10 @@ Yokan はそれを Python でやり、さらに開発版とリリース版が同
 土台の名前が **pixie**（Yokan が経由する基盤言語）で、リリースの途中に挟まる `.pix` はその読めるソースです。
 生成された `.pix` を開けば、自分のアプリが何にコンパイルされたのかを目で確かめられます。
 
-![Yokan の全体像: ひとつのソース、開発は VM の速いループ、リリースは VM なしのネイティブバイナリ（@py があるときだけ CPython を同梱）、共有の土台、そしてゲート](docs/assets/architecture-ja.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-ja.svg">
+  <img alt="Yokan の全体像: ひとつのソース、開発は VM の速いループ、リリースは VM なしのネイティブバイナリ（@py があるときだけ CPython を同梱）、共有の土台、そしてゲート" src="docs/assets/architecture-ja-light.svg">
+</picture>
 
 ## 検証の仕組み
 

@@ -33,7 +33,9 @@
   <path d="M660 166 C 730 190, 810 196, 865 214" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
 
   <!-- lane captions -->
+  <rect x="229.8" y="190" width="190.5" height="16" fill="#14161f"/>
   <text x="325" y="202" text-anchor="middle" font-size="13.5" fill="#5da9e8" font-weight="700">develop — uv run app.py</text>
+  <rect x="756.3" y="190" width="237.4" height="16" fill="#14161f"/>
   <text x="875" y="202" text-anchor="middle" font-size="13.5" fill="#e8b34a" font-weight="700">release — yokan build --release</text>
 
   <!-- ============ develop lane: the VM loop ============ -->
@@ -51,7 +53,7 @@
   <path d="M 325 342 A 54 54 0 1 1 278 369" fill="none" stroke="#5da9e8" stroke-width="2.4" marker-end="url(#arB)"/>
   <text x="325" y="391" text-anchor="middle" font-size="20" font-weight="800" fill="#e8eaf2">≈1 ms</text>
   <text x="325" y="411" text-anchor="middle" font-size="11.5" fill="#9aa0b5">state kept</text>
-  <text x="325" y="330" text-anchor="middle" font-size="12.5" font-weight="600" fill="#bcd6ee">save</text>
+  <text x="338" y="327" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">save</text>
   <text x="404" y="420" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">the whole app updates</text>
   <text x="246" y="420" text-anchor="end" font-size="12.5" font-weight="600" fill="#bcd6ee">edit</text>
 
@@ -70,7 +72,7 @@
   <rect x="685" y="308" width="380" height="86" rx="12" fill="#2a8f63" opacity="0.28" filter="url(#glow)"/>
   <rect x="685" y="308" width="380" height="86" rx="12" fill="#12291f" stroke="#2f7c58" stroke-width="1.8"/>
   <text x="875" y="342" text-anchor="middle" font-size="17.5" font-weight="700" fill="#7fe0b2">native binary</text>
-  <text x="875" y="366" text-anchor="middle" font-size="12.5" fill="#a9c7b8">libpython not linked · 10.4 MB · starts in 4.7 ms</text>
+  <text x="875" y="366" text-anchor="middle" font-size="11.5" fill="#a9c7b8">libpython not linked · 11.3 MB stripped · starts in 4.7 ms</text>
 
   <path d="M875 394 L875 424" fill="none" stroke="#3f79b3" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arB)"/>
 

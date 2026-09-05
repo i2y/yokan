@@ -89,7 +89,10 @@ One source, two roads to run it.
 Both roads stand on the same Rust foundation, which is what makes the final comparison meaningful.
 That foundation is **pixie**, the substrate language Yokan compiles through, and the `.pix` in the middle of the release road is its readable source — open the generated `.pix` and you can see, with your own eyes, what your app compiled to.
 
-![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](docs/assets/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture.svg">
+  <img alt="How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate" src="docs/assets/architecture-light.svg">
+</picture>
 
 ## How the check works
 

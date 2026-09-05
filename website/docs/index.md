@@ -37,7 +37,9 @@ substrate language Yokan compiles through; the `.pix` in the middle
 of the release road is its readable source, so you can open it and
 see what your app compiled to (`yokan translate app.py` prints it).
 
-![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg)
+![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture.svg#only-dark)
+
+![How Yokan runs your app: one typed source, the VM's fast loop while you develop, a native binary without the VM at release (CPython bundled only for @py), one shared foundation, one gate](images/architecture-light.svg#only-light)
 
 ---
 

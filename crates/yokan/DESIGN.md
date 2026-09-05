@@ -1869,3 +1869,25 @@ per colour scheme, and translated — four files apiece. The theme ships
 only half of the `#only-dark` / `#only-light` pair (it hides the dark
 picture on a light page and nothing the other way), so the other half
 is one rule in the site's own stylesheet.
+
+## A diagram is drawn twice, or it is drawn for one reader (2026-09-05)
+
+The architecture picture on the landing page had one colour scheme,
+and on a light page it was a dark rectangle punched into it. It has a
+light twin now, and so does its Japanese copy — the same file with
+every colour substituted, nothing moved, which is what keeps the two
+honest about each other. The `<picture>` element carries the pair in
+the README, where GitHub picks by the reader's scheme.
+
+Two collisions surfaced while looking at it closely enough to remap
+it: the `save` label sat under the arrowhead pointing at it, and the
+two lane captions had an arrow shaft running through the words. The
+label moved beside the arrow; the captions knock the shaft out behind
+them. Both were there in the dark original — a picture that is only
+ever read in one scheme gets looked at half as often.
+
+The native binary's size in that picture was also stale (10.4 MB was
+the old stripped figure; it is 11.3 MB stripped now). A number inside
+a diagram is not reached by any of the checks that keep prose honest,
+which is an argument for keeping numbers out of pictures — or for
+reading the picture whenever the number moves.
