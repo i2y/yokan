@@ -12395,7 +12395,20 @@ def tier_a(path: str, tr: "Translator", script: str) -> str:
             on_start = getattr(getattr(module, tr.on_start[1]), tr.on_start[2])
         else:
             on_start = getattr(module, tr.on_start[1])
-    return yokan.headless(getattr(module, tr.view.name), state, script, on_start=on_start)
+    try:
+        return yokan.headless(
+            getattr(module, tr.view.name), state, script, on_start=on_start
+        )
+    except BaseException as e:  # noqa: BLE001
+        # A step the app has no handler for panics in the kernel, on
+        # purpose: a typo that quietly did nothing would pass as a
+        # green run. What reaches here, though, is a Rust panic wrapped
+        # in a Python traceback, and the one line worth reading is
+        # buried in it. Print that line alone — this is the half of the
+        # loop an agent reads, and a traceback costs it a turn.
+        if type(e).__name__ != "PanicException":
+            raise
+        sys.exit(f"{path}: {e}")
 
 
 def do_show(args, tr: "Translator") -> None:
