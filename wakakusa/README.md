@@ -55,6 +55,29 @@ GATE OK — 3 dump lines identical in both runs
   binary:   demo/.gate/counter (15.0 MB)
 ```
 
+Children can be written the other way round, as the container's block,
+which is closer to how a Ruby library would usually put it. Both
+spellings build the same tree — `demo/counter.rb` and
+`demo/blockform.rb` are the same screen, and the sweep gates both.
+
+```ruby
+  def view
+    column(spacing: 12.0, padding: 16.0) {
+      text "count: #{@count}", size: 34.0
+      row(spacing: 8.0) {
+        button("+1") { @count += 1 }
+        button("reset") { @count = 0 }
+      }
+    }
+  end
+```
+
+Inside a view the block is ordinary Ruby: `if`, `unless`, a ternary, a
+loop, a method that answers part of the screen. The one shape that is
+refused is a block written inside a loop's block — a compiled run has
+lost the loop's variables by then — and `check` says so with the line
+and the rewrite. `demo/control.rb` is the whole story in one screen.
+
 ## The vocabulary
 
 Thirty-two elements: text and button, the fields and the four
@@ -88,7 +111,7 @@ meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — twenty-one apps, with `demo/screenshots/` showing what
+- `demo/` — twenty-three apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers
@@ -130,7 +153,7 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
   methods — a proc handed through a keyword argument arrives broken.
   And a list grows by copying (`list.dup` then `push`) rather than by
   `list + [item]`.
-- `check` names those three shapes and three more, with the line and
+- `check` names those three shapes and five more, with the line and
   what to write instead, but it does not yet see everything the
   compiler gets wrong; the gate is still what catches the rest.
 - macOS only. The binary carries the engine it draws with, so even a

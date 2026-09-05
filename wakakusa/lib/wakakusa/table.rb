@@ -41,5 +41,8 @@ module WK
     "divider" => %w[a11y_label animate col_span color disabled easing enter exit height max_width min_width role row_span theme thickness tooltip width],
   }.freeze
 
+  # The elements whose block writes their children, not a handler.
+  CONTAINERS = %w[column row grid grid_cell stack scroll_view h_scroll_view data_table modal].freeze
+
   HANDLERS = %w[on_change on_click on_select on_sort on_submit].freeze
 end

@@ -30,7 +30,7 @@ def text(text, size: 0.0, color: "", align: "", grow: 0.0, bold: false,
   PixieC.pixie_num(el, WK::K_BORDER_WIDTH, border_width) if border_width != 0.0
   PixieC.pixie_str(el, WK::K_BORDER_COLOR, border_color) if border_color != ""
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A button. The block runs when it is pressed.
@@ -58,7 +58,7 @@ def button(label, on_click: nil, width: 0.0, height: 0.0, size: 0.0,
   PixieC.pixie_str(el, WK::K_BORDER_COLOR, border_color) if border_color != ""
   PixieC.pixie_num(el, WK::K_BASIS, basis) if basis != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A line a person types into. `on_change` fires per keystroke, `on_submit`
@@ -77,12 +77,13 @@ def text_field(value, placeholder: "", on_change: nil, on_submit: nil,
   PixieC.pixie_bool(el, WK::K_MULTILINE, multiline ? 1 : 0) if multiline != false
   PixieC.pixie_num(el, WK::K_ROWS, rows) if rows != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Its children down the page.
 def column(*kids, spacing: -1.0, padding: 0.0, background: "", grow: 0.0,
-           border_radius: 0.0, border_width: 0.0, border_color: "", **riders)
+           border_radius: 0.0, border_width: 0.0, border_color: "", **riders,
+           &blk)
   el = PixieC.pixie_el(WK::KIND_COLUMN)
   PixieC.pixie_num(el, WK::K_SPACING, spacing) if spacing != -1.0
   PixieC.pixie_num(el, WK::K_PADDING, padding) if padding != 0.0
@@ -91,14 +92,15 @@ def column(*kids, spacing: -1.0, padding: 0.0, background: "", grow: 0.0,
   PixieC.pixie_num(el, WK::K_BORDER_RADIUS, border_radius) if border_radius != 0.0
   PixieC.pixie_num(el, WK::K_BORDER_WIDTH, border_width) if border_width != 0.0
   PixieC.pixie_str(el, WK::K_BORDER_COLOR, border_color) if border_color != ""
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Its children across the page.
 def row(*kids, spacing: -1.0, padding: 0.0, background: "", grow: 0.0,
-        border_radius: 0.0, border_width: 0.0, border_color: "", **riders)
+        border_radius: 0.0, border_width: 0.0, border_color: "", **riders,
+        &blk)
   el = PixieC.pixie_el(WK::KIND_ROW)
   PixieC.pixie_num(el, WK::K_SPACING, spacing) if spacing != -1.0
   PixieC.pixie_num(el, WK::K_PADDING, padding) if padding != 0.0
@@ -107,16 +109,16 @@ def row(*kids, spacing: -1.0, padding: 0.0, background: "", grow: 0.0,
   PixieC.pixie_num(el, WK::K_BORDER_RADIUS, border_radius) if border_radius != 0.0
   PixieC.pixie_num(el, WK::K_BORDER_WIDTH, border_width) if border_width != 0.0
   PixieC.pixie_str(el, WK::K_BORDER_COLOR, border_color) if border_color != ""
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Its children on tracks. `columns` counts the tracks; `col_span` on a
 # child covers more than one.
 def grid(*kids, columns: 2, rows: 0, spacing: -1.0, padding: 0.0,
          background: "", grow: 0.0, border_radius: 0.0, border_width: 0.0,
-         border_color: "", **riders)
+         border_color: "", **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_GRID)
   PixieC.pixie_int(el, WK::K_COLUMNS, columns) if columns != 2
   PixieC.pixie_int(el, WK::K_ROWS, rows) if rows != 0
@@ -127,61 +129,61 @@ def grid(*kids, columns: 2, rows: 0, spacing: -1.0, padding: 0.0,
   PixieC.pixie_num(el, WK::K_BORDER_RADIUS, border_radius) if border_radius != 0.0
   PixieC.pixie_num(el, WK::K_BORDER_WIDTH, border_width) if border_width != 0.0
   PixieC.pixie_str(el, WK::K_BORDER_COLOR, border_color) if border_color != ""
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # The span written out: this and `col_span:` on the child itself are the
 # same tree.
-def grid_cell(*kids, **riders)
+def grid_cell(*kids, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_GRID_CELL)
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Its children on top of one another.
-def stack(*kids, **riders)
+def stack(*kids, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_STACK)
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A pane that scrolls when its children do not fit.
-def scroll_view(*kids, height: 0.0, **riders)
+def scroll_view(*kids, height: 0.0, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_SCROLL_VIEW)
   PixieC.pixie_num(el, WK::K_HEIGHT, height) if height != 0.0
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A pane that scrolls sideways.
-def h_scroll_view(*kids, **riders)
+def h_scroll_view(*kids, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_H_SCROLL_VIEW)
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # The first `row` child is the header; the later ones are data rows,
 # shaded in alternation, in a frame that comes with the element.
-def data_table(*kids, **riders)
+def data_table(*kids, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_DATA_TABLE)
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A panel over the rest of the window while `open`.
-def modal(*kids, open: true, **riders)
+def modal(*kids, open: true, **riders, &blk)
   el = PixieC.pixie_el(WK::KIND_MODAL)
   PixieC.pixie_bool(el, WK::K_OPEN, open ? 1 : 0) if open != true
-  wakakusa_children(el, kids)
+  wakakusa_children(el, wakakusa_collect(kids, &blk))
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Rows built on demand: the builder is called for the rows in view, not
@@ -196,7 +198,7 @@ def list_view(count, item_height: 24.0, height: 0.0, virtualized: true,
   PixieC.pixie_bool(el, WK::K_VIRTUALIZED, virtualized ? 1 : 0) if virtualized != true
   PixieC.pixie_num(el, WK::K_GROW, grow) if grow != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A table whose rows are built on demand, laid on tracks whose shares are
@@ -218,7 +220,7 @@ def table(columns, count, widths: [], item_height: 24.0, height: 0.0,
   PixieC.pixie_bool(el, WK::K_DESCENDING, descending ? 1 : 0) if descending != false
   wakakusa_send_int(el, WK::K_ON_SORT, on_sort) unless on_sort.nil?
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A picture from a file.
@@ -228,7 +230,7 @@ def image(source, width: 0.0, height: 0.0, **riders)
   PixieC.pixie_num(el, WK::K_WIDTH, width) if width != 0.0
   PixieC.pixie_num(el, WK::K_HEIGHT, height) if height != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A drawing from an SVG file, painted at any size.
@@ -238,7 +240,7 @@ def svg(source, width: 0.0, height: 0.0, **riders)
   PixieC.pixie_num(el, WK::K_WIDTH, width) if width != 0.0
   PixieC.pixie_num(el, WK::K_HEIGHT, height) if height != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Bars. `min`/`max` both 0 take the range from the data; `axis` draws
@@ -261,7 +263,7 @@ def bar_chart(data = [], labels: [], width: 0.0, height: 0.0, min: 0.0,
   end
   colors.each { |v| PixieC.pixie_push_str(el, WK::K_COLORS, v) }
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A line. Same arguments as the bars, and `series` draws several lines.
@@ -283,7 +285,7 @@ def line_chart(data = [], labels: [], width: 0.0, height: 0.0, min: 0.0,
   end
   colors.each { |v| PixieC.pixie_push_str(el, WK::K_COLORS, v) }
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A track filled to `value` (0 to 1); `indeterminate` sweeps instead, for
@@ -297,7 +299,7 @@ def progress(value, width: 0.0, height: 0.0, label: "", indeterminate: false,
   PixieC.pixie_str(el, WK::K_LABEL, label) if label != ""
   PixieC.pixie_bool(el, WK::K_INDETERMINATE, indeterminate ? 1 : 0) if indeterminate != false
   wakakusa_riders(el, riders, true)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A box a person ticks. The block receives the new state.
@@ -311,7 +313,7 @@ def checkbox(label, checked: false, on_change: nil, **riders, &blk)
     wakakusa_send_bool(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, true)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A switch a person flips. The block receives the new state.
@@ -325,7 +327,7 @@ def switch(label, checked: false, on_change: nil, **riders, &blk)
     wakakusa_send_bool(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, true)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A track a person drags. The block receives the new number.
@@ -342,7 +344,7 @@ def slider(value: 0.0, min: 0.0, max: 1.0, step: 0.0, on_change: nil,
     wakakusa_send_float(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A drop-down. The block receives the chosen index.
@@ -356,7 +358,7 @@ def select(options: [], selected: 0, on_change: nil, **riders, &blk)
     wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A column of radio buttons. The block receives the chosen index.
@@ -370,7 +372,7 @@ def radio_group(options: [], selected: 0, on_change: nil, **riders, &blk)
     wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A row of joined toggle buttons. The block receives the chosen index.
@@ -384,7 +386,7 @@ def segmented(options: [], selected: 0, on_change: nil, **riders, &blk)
     wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A row of tabs. The block receives the chosen index.
@@ -398,7 +400,7 @@ def tab_bar(labels: [], active: 0, on_change: nil, **riders, &blk)
     wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A field for a number: enter or leaving it commits, text that is not a
@@ -417,7 +419,7 @@ def number_field(value, min: 0.0, max: 0.0, step: 0.0, placeholder: "",
     wakakusa_send_float(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # The same field for a whole number.
@@ -435,7 +437,7 @@ def int_field(value, min: 0, max: 0, step: 1, placeholder: "", on_change: nil,
     wakakusa_send_int(el, WK::K_ON_CHANGE, on_change)
   end
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Text that opens a page when clicked. There is no handler: opening a page
@@ -446,7 +448,7 @@ def link(label, url, size: 0.0, **riders)
   PixieC.pixie_str(el, WK::K_URL, url)
   PixieC.pixie_num(el, WK::K_SIZE, size) if size != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A turning ring, for work with no known length.
@@ -454,7 +456,7 @@ def spinner(size: 0.0, **riders)
   el = PixieC.pixie_el(WK::KIND_SPINNER)
   PixieC.pixie_num(el, WK::K_SIZE, size) if size != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # Takes the space its parent has left over; 0 is one share.
@@ -462,7 +464,7 @@ def spacer(grow: 0.0, **riders)
   el = PixieC.pixie_el(WK::KIND_SPACER)
   PixieC.pixie_num(el, WK::K_GROW, grow) if grow != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # A rule across its parent: level in a column, upright in a row.
@@ -471,7 +473,7 @@ def divider(color: "", thickness: 0.0, **riders)
   PixieC.pixie_str(el, WK::K_COLOR, color) if color != ""
   PixieC.pixie_num(el, WK::K_THICKNESS, thickness) if thickness != 0.0
   wakakusa_riders(el, riders, false)
-  PixieC.pixie_end(el)
+  wakakusa_done(el)
 end
 
 # The keywords every element takes. An element that owns one of

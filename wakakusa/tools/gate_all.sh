@@ -35,6 +35,10 @@ echo "OK   refusals"
 # Scripted gates, with the same steps Yokan's sweep drives its own
 # copy of each demo with, wherever the verbs exist here.
 gate counter ./bin/wakakusa gate demo/counter.rb --script "click:+1,dump,input:Momo\, again"
+# The same screen written the other way: a container's children as a block.
+gate blockform ./bin/wakakusa gate demo/blockform.rb --script "click:+1,dump,input:Momo\, again"
+# Ordinary Ruby inside a view: if, unless, a ternary, a loop.
+gate control ./bin/wakakusa gate demo/control.rb --script "click:pick 1,dump,click:hint,click:tab 2,dump"
 gate forms   ./bin/wakakusa gate demo/forms.rb --script "click:Dark mode,slide:7,select:banana"
 gate layout  ./bin/wakakusa gate demo/layout.rb --script "click:ping"
 gate labels  ./bin/wakakusa gate demo/labels.rb --script "dump,click:save,dump"

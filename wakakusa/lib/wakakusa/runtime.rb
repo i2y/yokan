@@ -21,6 +21,10 @@
 # the wrapper ever crosses that call, and it takes no arguments at all.
 $wakakusa_handlers = []
 $wakakusa_rows = []
+# The children being collected, when an element is being written as a
+# block. Empty means the app is writing its children as arguments, and
+# then nothing below does anything at all.
+$wakakusa_frames = []
 $wakakusa_row_index = 0
 $wakakusa_app = nil
 # Timers are declared before the app runs and live for as long as it
@@ -73,6 +77,7 @@ end
 def wakakusa_build
   $wakakusa_handlers = []
   $wakakusa_rows = []
+  $wakakusa_frames = []
   $wakakusa_app.view
 end
 
@@ -142,6 +147,31 @@ def wakakusa_rows(el, key, &blk)
 
   $wakakusa_rows.push(proc { blk.call($wakakusa_row_index) })
   PixieC.pixie_rows(el, key, $wakakusa_rows.length - 1)
+end
+
+# An element is finished. If a container is collecting, it joins that
+# container's children; either way its handle is the answer.
+def wakakusa_done(el)
+  h = PixieC.pixie_end(el)
+  frame = $wakakusa_frames.last
+  frame.push(h) unless frame.nil?
+  h
+end
+
+# The children of a container: the ones handed to it as arguments, then
+# the ones its block wrote. An element handed over as an argument was
+# already collected by whatever container is open, so it is taken back
+# out — it belongs to this one now.
+def wakakusa_collect(kids, &blk)
+  frame = $wakakusa_frames.last
+  unless frame.nil?
+    kids.each { |h| frame.delete(h) }
+  end
+  return kids if blk.nil?
+
+  $wakakusa_frames.push([])
+  blk.call
+  kids + $wakakusa_frames.pop
 end
 
 def wakakusa_children(el, kids)

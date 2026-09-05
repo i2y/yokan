@@ -33,18 +33,36 @@ module Wakakusa
       @block_params = []
       @in_view = 0
       @in_block = 0
+      # The blocks open around here: an element's own, or a loop's.
+      @block_kinds = []
       super()
     end
 
     # --- the rules ----------------------------------------------------------
 
+    # A block on a container writes that container's children, so the
+    # view is still being written inside it. A block anywhere else is a
+    # handler, and a handler is where a write belongs.
     def visit_block_node(node)
-      names = block_parameter_names(node)
-      @block_params.push(names)
-      @in_block += 1
-      super
-      @in_block -= 1
+      enter_block(node, false)
+    end
+
+    def enter_block(node, container, element: false)
+      # A block written on an element, inside a loop's block: the
+      # compiled run loses the loop's variables before it ever runs.
+      if element && @block_kinds.include?(:loop)
+        refuse(node, "a block on an element cannot be written inside a loop: a compiled run " \
+                     "has lost the loop's variables by the time it runs. Move this into a " \
+                     "method that takes what it needs (`def line(item, i)`), and call that " \
+                     "from the loop")
+      end
+      @block_kinds.push(element ? :element : :loop)
+      @block_params.push(block_parameter_names(node))
+      @in_block += 1 unless container
+      node.body&.accept(self)
+      @in_block -= 1 unless container
       @block_params.pop
+      @block_kinds.pop
     end
 
     # A global written from a block's own argument. The compiled run
@@ -83,6 +101,14 @@ module Wakakusa
                           "#{WK::ELEMENTS.fetch(element).join(", ")}")
           end
         end
+      end
+
+      if node.block.is_a?(Prism::BlockNode)
+        node.receiver&.accept(self)
+        node.arguments&.accept(self)
+        on_element = node.receiver.nil? && WK::ELEMENTS.key?(element)
+        enter_block(node.block, on_element && WK::CONTAINERS.include?(element), element: on_element)
+        return
       end
       super
     end
