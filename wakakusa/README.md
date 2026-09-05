@@ -49,7 +49,7 @@ $ wakakusa gate demo/counter.rb --script "click:+1,click:+10,dump"
 GATE OK — 3 dump lines identical in both runs
   script:   click:+1,click:+10,dump
   emitted:  demo/.gate/counter.c
-  binary:   demo/.gate/counter (35.4 MB)
+  binary:   demo/.gate/counter (14.9 MB)
 ```
 
 ## The pieces
@@ -73,8 +73,8 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 |---|---|
 | the engine's crate, rebuilt after an edit | 2.6 s |
 | the compiler's C output (door + app) | under 10 ms, 25 KB |
-| `cc` link of the compiled run | 0.32 s |
-| the compiled binary | 35.4 MB |
+| `cc` link of the compiled run | 0.29 s |
+| the compiled binary | 14.9 MB |
 | one gate round, engine already built | 1.5 s |
 | the engine, static / shared | 75.1 MB / 14.3 MB |
 
@@ -99,5 +99,5 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 - `check` accepts everything. The shapes the compiler gets wrong are
   known and reproduced, but nothing refuses them by name yet, so the
   gate is what catches them.
-- macOS only. The compiled binary links the whole engine, so its size
-  is the engine's.
+- macOS only. The binary carries the engine it draws with, so even a
+  small app weighs about 15 MB.
