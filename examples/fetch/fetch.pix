@@ -1,10 +1,21 @@
 store Loader {
   state status : String = "idle"
   state content : String = ""
+  state pct : Float = 0.0
+  state step : String = "-"
+  state heard : Int = 0
 
-  async fn fetch(path: String) {
+  # A task exists so the window keeps drawing while something slow
+  # happens elsewhere, which leaves the app with nothing to show but
+  # a spinner. `@progress` names the method that hears the other
+  # half: the work says where it has got to, from wherever it is
+  # running, and the report arrives here as an ordinary handler with
+  # the World in hand.
+  async fn fetch(path: String) @progress(onProgress) {
     status = "loading"
+    Progress.report(0.25, "waiting")
     await Clock.sleepMs(200)
+    Progress.report(0.75, "reading")
     case await Fs.readToString(path) {
       when ok(text) {
         content = text
@@ -14,6 +25,16 @@ store Loader {
         status = "error: #{e}"
       }
     }
+    Progress.report(1.0, "done")
+  }
+
+  # Counting them is what makes "every report is heard" a checked
+  # claim rather than a promise: three go out, three arrive, and the
+  # dump says so in both tiers.
+  fn onProgress(fraction: Float, note: String) {
+    pct = fraction
+    step = note
+    heard += 1
   }
 }
 
@@ -26,6 +47,8 @@ view Main {
       Button { text: "fetch"; onClick: Loader.fetch(path) }
     }
     Text { text: "status: #{Loader.status}" }
+    Text { text: "step: #{Loader.step} #{Loader.pct} heard=#{Loader.heard}" }
+    ProgressBar { value: Loader.pct }
     Text { text: Loader.content }
   }
 }

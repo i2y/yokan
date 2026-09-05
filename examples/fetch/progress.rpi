@@ -1,0 +1,8 @@
+# What a task says about itself while it runs. Hand-written rather
+# than generated — one function of the kernel's own, callable from
+# wherever the work is: the async body between its steps, or the
+# worker thread an `await` put a bound Rust fn on.
+
+class Progress {
+  static fn report(fraction: Float, note: String) @rust("pixie_kernel::progress::report")
+}

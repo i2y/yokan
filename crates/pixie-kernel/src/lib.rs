@@ -61,6 +61,7 @@ pub mod drop;
 pub mod frames;
 pub mod keys;
 pub mod menu;
+pub mod progress;
 pub mod quit;
 pub mod script;
 pub mod theme;

@@ -910,6 +910,13 @@ impl<C: Component> Root<C> {
 
     /// One async-executor turn plus the reactive tail.
     fn pump_tick(&mut self, cx: &mut Context<Self>) {
+        // What the running work has said about itself since the last
+        // tick. It is drained before the turn so a report that came in
+        // with the value is heard while the task is still alive.
+        if pixie_kernel::progress::any() {
+            self.runtime
+                .with(|w| pixie_kernel::progress::drain(w));
+        }
         self.runtime.turn();
         let view = self.view;
         let tree = self.runtime.with(|w| {

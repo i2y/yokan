@@ -50,9 +50,15 @@ pub fn anim_settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Eleme
 
 /// Spin the async tier to completion (bounded — a task that never
 /// completes is a harness misuse, not a hang).
+///
+/// This is also where a running task's reports are heard: the window
+/// drains them on its pump, and a headless run has this loop instead.
 pub fn settle<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
     let mut spins = 0usize;
     while rt.has_tasks() {
+        if crate::progress::any() {
+            rt.with(|w: &mut World| crate::progress::drain(w));
+        }
         rt.turn();
         flush(rt, view, tree);
         spins += 1;

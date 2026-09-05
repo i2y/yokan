@@ -1047,6 +1047,10 @@ struct MethodCtx<'a> {
     /// Nesting depth of `for`/`while` — `break`/`continue` outside
     /// a loop are named errors, not rustc surprises.
     loop_depth: usize,
+    /// The enclosing `async fn` carries `@progress(handler)`, so
+    /// `__task` names its progress id in scope: the worker an
+    /// `await` spawns inherits it, and the resumption re-claims it.
+    progress_task: bool,
 }
 
 impl<'a> MethodCtx<'a> {
@@ -3628,6 +3632,33 @@ fn emit_await_dispatch(
                 owned.push(v);
                 call_sites.push(format!("__args{n}.{i}"));
             }
+            // A list crosses as the owned `Vec<T>` the sync adapter
+            // already builds — one vocabulary for both call shapes,
+            // and every element type it admits is `Send`.
+            RustTy::List(inner) => {
+                let Some(conv) = binding_arg_elem_conv(inner, cx.enums, cx.structs) else {
+                    return err(
+                        a.span,
+                        format!(
+                            "a `List<{}>` cannot cross a binding — a list of numbers, \
+                             bools, strings, bytes, or a type the `.rpi` mapped with \
+                             `@rust(..)` can",
+                            inner.render()
+                        ),
+                    );
+                };
+                owned.push(format!("({v}).iter().map({conv}).collect::<Vec<_>>()"));
+                call_sites.push(format!("__args{n}.{i}"));
+            }
+            // And a declared struct or enum as the Rust value its
+            // `.rpi` corresponds to.
+            RustTy::Named(nm) => {
+                let Some(conv) = named_arg_conv(nm, cx.enums, cx.structs) else {
+                    return err(a.span, unmapped_type_msg(nm, cx.enums, cx.structs));
+                };
+                owned.push(format!("({conv})(&({v}))"));
+                call_sites.push(format!("__args{n}.{i}"));
+            }
             _ => {
                 return err(a.span, "this argument type is not adaptable in `await` yet (M2)");
             }
@@ -3648,9 +3679,18 @@ fn emit_await_dispatch(
     } else {
         call
     };
+    // The worker inherits the task's progress id, so anything the
+    // awaited work reports — a Rust fn's own call, or a `@py`
+    // escape's Python — is addressed to the handler that is waiting
+    // for it rather than dropped on the floor.
+    let claim = if cx.progress_task {
+        "pixie_kernel::progress::set_current(__task); "
+    } else {
+        ""
+    };
     writeln!(
         out,
-        "{ind}pixie_kernel::spawn_worker(move || {{ __h{n}.complete({sent}); }});"
+        "{ind}pixie_kernel::spawn_worker(move || {{ {claim}__h{n}.complete({sent}); }});"
     )
     .unwrap();
     // The worker completes the native value (Send); conversion to
@@ -3670,7 +3710,63 @@ fn emit_await_dispatch(
             RetConv::Pass => format!("__c{n}.await"),
         }
     };
+    // Coming back: this thread is the task's again (another task may
+    // have run while it was suspended), and everything the work said
+    // is heard BEFORE the line after the `await` — which is what lets
+    // an app write its ending after the work's last word.
+    let conv = if cx.progress_task {
+        format!(
+            "{{ let __r = {conv}; pixie_kernel::progress::set_current(__task); \
+             __ctx.with(|w: &mut World| pixie_kernel::progress::drain(w)); __r }}"
+        )
+    } else {
+        conv
+    };
     Ok(conv)
+}
+
+/// `async fn load(..) @progress(onProgress)` — the method that hears
+/// what the task says about itself while it runs. Answers the Rust
+/// name of that method, once it has been checked to exist and to take
+/// exactly the fraction and the note.
+fn progress_handler<'a>(
+    m: &ast::FnDecl,
+    info: &ClassInfo<'a>,
+    class_names: &std::collections::HashSet<String>,
+) -> Result<Option<String>, EmitError> {
+    let Some(a) = m.attributes.iter().find(|a| a.name.name == "progress") else {
+        return Ok(None);
+    };
+    let Some(name) = a.args.first().map(|s| s.trim().trim_matches('"').to_string()) else {
+        return err(
+            a.span,
+            "`@progress(handler)` names the method that hears the task's reports",
+        );
+    };
+    let Some(h) = info.methods.iter().find(|x| x.name.name == name) else {
+        return err(
+            a.span,
+            format!("`{}` has no method `{name}` to report to", info.name),
+        );
+    };
+    if h.is_async {
+        return err(a.span, format!("`{name}` is a task itself — a progress handler is an ordinary method"));
+    }
+    let tys: Vec<RustTy> = h
+        .params
+        .iter()
+        .map(|q| lower_type(&q.ty, class_names))
+        .collect::<Result<_, _>>()?;
+    if tys.as_slice() != [RustTy::Float, RustTy::Str] {
+        return err(
+            a.span,
+            format!(
+                "a progress handler takes the fraction and the note — \
+                 `fn {name}(fraction: Float, note: String)`"
+            ),
+        );
+    }
+    Ok(Some(camel_to_snake(&name)))
 }
 
 /// Emit the spawned-task body of an `async fn`.
@@ -7516,6 +7612,7 @@ impl<'a> Program<'a> {
             fallible_ret: false,
             nullable_ret: false,
             loop_depth: 0,
+            progress_task: false,
         }
     }
 }
@@ -8106,6 +8203,13 @@ fn emit_free_fn(
             return err(
                 f.span,
                 "async fns don't declare return types yet (M2): spawned tasks are fire-and-forget",
+            );
+        }
+        if let Some(a) = f.attributes.iter().find(|a| a.name.name == "progress") {
+            return err(
+                a.span,
+                "`@progress` belongs on a store's `async fn`: the handler it names is a \
+                 method of that store",
             );
         }
         let mut cx = p.method_ctx(&p.empty_class, &f.params);
@@ -9169,6 +9273,8 @@ fn emit_class(info: &ClassInfo, p: &Program, out: &mut String) -> Result<(), Emi
             // Call sites stay sync: the method spawns its body as a
             // task and returns immediately.
             let mut cx = p.method_ctx(info, &m.params);
+            let reports = progress_handler(m, info, &p.class_names)?;
+            cx.progress_task = reports.is_some();
             write!(out, "    fn {}(self, w: &mut World", camel_to_snake(&m.name.name)).unwrap();
             for param in &m.params {
                 write!(
@@ -9181,10 +9287,31 @@ fn emit_class(info: &ClassInfo, p: &Program, out: &mut String) -> Result<(), Emi
             }
             writeln!(out, ") {{").unwrap();
             writeln!(out, "        let __ctx = w.async_ctx();").unwrap();
+            // The id is claimed and the handler attached BEFORE the
+            // body is spawned, so the first thing the work says has
+            // somewhere to land.
+            if let Some(h) = &reports {
+                writeln!(out, "        let __task = pixie_kernel::progress::new_task();").unwrap();
+                writeln!(
+                    out,
+                    "        pixie_kernel::progress::begin(w, __task, std::rc::Rc::new(move |w: &mut World, __f: f64, __n: Str| {{ self.{h}(w, __f, __n); }}));"
+                )
+                .unwrap();
+            }
             writeln!(out, "        w.spawn(async move {{").unwrap();
+            if reports.is_some() {
+                writeln!(out, "            pixie_kernel::progress::set_current(__task);").unwrap();
+            }
             let mut body_s = String::new();
             emit_async_body(body, &mut cx, &mut body_s, "            ")?;
             out.push_str(&body_s);
+            if reports.is_some() {
+                writeln!(
+                    out,
+                    "            __ctx.with(|w: &mut World| pixie_kernel::progress::end(w, __task));"
+                )
+                .unwrap();
+            }
             writeln!(out, "        }});").unwrap();
             writeln!(out, "    }}").unwrap();
             continue;

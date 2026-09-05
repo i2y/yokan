@@ -161,6 +161,13 @@ Early but real. Working today:
   windowed and headless; a built-in HTTP client rides it
   (`await Http.get(url)` / `getBytes` → `Bytes` / `post` /
   `getWith(url, headers)` with `Map<String, String>` headers).
+- **A task that says where it is** — `async fn load(..)
+  @progress(onProgress)` names the method that hears the work while
+  it runs. `Progress.report(fraction, note)` is callable from the
+  async body between its steps or from the worker thread an `await`
+  put the work on; the handler runs on the UI thread with the World
+  in hand. Every report is heard, and the last one lands before the
+  line after the `await`.
 - **Declarations that run themselves** — `fn tick @every(1000)` is a
   repeating callback, `fn save @key("cmd-s")` is a shortcut and
   `fn save @menu("File", "Save")` is an item in the application's

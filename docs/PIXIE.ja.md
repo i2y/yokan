@@ -151,6 +151,13 @@ ln -sfn "$(pwd)/extensions/vscode-pixie" ~/.vscode/extensions/pixie-language-dev
   クライアントがその上に乗ります(`await Http.get(url)` /
   `getBytes` → `Bytes` / `post` / `Map<String, String>` ヘッダ付き
   `getWith`)。
+- **どこまで進んだかを伝える task** — `async fn load(..)
+  @progress(onProgress)` は、走っている仕事の報告を受け取るメソッドを
+  名指しします。`Progress.report(fraction, note)` を呼ぶ場所は、
+  await と await のあいだの async 本体でも、`await` が仕事を載せた
+  ワーカースレッドでもかまいません。受け取るハンドラは World を
+  手にした UI スレッドで走ります。報告はすべて届き、最後のひとつは
+  `await` の次の行より先に届きます。
 - **自分で走る宣言** — `fn tick @every(1000)` は繰り返し呼ばれる
   コールバック、`fn save @key("cmd-s")` はショートカット、
   `fn save @menu("File", "Save")` はアプリケーションのメニューバーの
