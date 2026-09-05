@@ -696,6 +696,8 @@ class Translator:
         self.in_async = False     # translating a task's body: stdlib calls await
         self.async_hit = False    # ...and the function around it is async
         self.async_handlers = set()   # handler names emitted as `async fn`
+        self.progress_handlers = {}   # async handler name -> the method hearing its reports
+        self.progress_hit = None      # (name, params, stmts) waiting for its enclosing fn
         self.escape_structs = set()   # value classes crossing an @py signature
         self.timers = []          # module-level every(seconds, fn) declarations
         self.in_try = False       # inside a try body: a raise would be caught there
@@ -1582,7 +1584,21 @@ class Translator:
             tail = f" {ret}" if ret is not None else ""
             kw = "async fn" if self.async_hit else "fn"
             self.async_hit = False
-            head = f"  {kw} {emitted}({sig}){tail} {{" if params else f"  {kw} {emitted}{tail} {{"
+            # A task started from a store method reports to a method of
+            # the same store.
+            mark = ""
+            if self.progress_hit is not None:
+                pname, pparams, pstmts = self.progress_hit
+                self.progress_hit = None
+                psig = ", ".join(f"{n}: {t}" for n, t in pparams)
+                self.stores[node.name]["methods"].append(
+                    [f"  fn {pname}({psig}) {{", *[f"    {l}" for l in pstmts], "  }"]
+                )
+                mark = f" @progress({pname})"
+            head = (
+                f"  {kw} {emitted}({sig}){tail}{mark} {{" if params
+                else f"  {kw} {emitted}{tail}{mark} {{"
+            )
             self.stores[node.name]["methods"].append([head, *[f"    {l}" for l in stmts], "  }"])
             self.stores[node.name]["method_names"].add(m.name)
 
@@ -3879,6 +3895,7 @@ class Translator:
             (None, "formatStr", "v: String, spec: String", "String", "py_format_str", "pure"),
             (None, "log", "msg: String", "Int", "log_line"),
             (None, "quit", "", "Int", "quit_app"),
+            (None, "report", "fraction: Float, note: String", "Int", "progress_report"),
             (None, "abort", "msg: String", "Int", "py_abort"),
             (None, "listSortedStr", "xs: List<String>", "List<String>", "py_list_sorted_str", "pure"),
             (None, "listSortedInt", "xs: List<Int>", "List<Int>", "py_list_sorted_int", "pure"),
@@ -5427,7 +5444,22 @@ class Translator:
                     node, "call @py functions from handlers and hold the result in a State — views stay pure"
                 )
             args = ", ".join(self.expr(a, ctx, param) for a in node.args)
-            return f"Escapes.{self._camel(node.func.id)}({args})"
+            call = f"Escapes.{self._camel(node.func.id)}({args})"
+            if self.in_async and self.pre_lines is not None:
+                # Inside a task, the escape is AWAITED: Python runs on
+                # the pool the way a standard-library call does, and
+                # the window keeps drawing through it. Without this a
+                # minute of Python froze the compiled app while the
+                # interpreted one stayed live — the same program,
+                # two behaviours.
+                tmp = f"__a{len(self.handler_locals)}"
+                self.handler_locals.add(tmp)
+                rt = self.escapes[node.func.id]["ret"][0]
+                if rt:
+                    self.typed_locals[tmp] = rt
+                self.pre_lines.append(f"var {tmp} = await {call}")
+                return tmp
+            return call
         if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)):
             # Python-semantics arithmetic: the native side calls the
             # Py statics (exactly CPython's results, zero divisors
@@ -7352,6 +7384,7 @@ class Translator:
         if self.async_hit:
             self.async_handlers.add(name)
             self.async_hit = False
+        self._claim_progress(name)
         self.handlers.append((name, [(n, t) for n, t, _v in extras], stmts))
         return f"App.{name}({', '.join(v for _n, _t, v in extras)})"
 
@@ -7437,6 +7470,7 @@ class Translator:
         if self.async_hit:
             self.async_handlers.add(name)
             self.async_hit = False
+        self._claim_progress(name)
         self.handlers.append((name, ity if param else None, stmts))
         return f"App.{name}({iname})" if param else f"App.{name}()"
 
@@ -7507,6 +7541,7 @@ class Translator:
             if self.async_hit:
                 self.async_handlers.add(name)
                 self.async_hit = False
+            self._claim_progress(name)
             sig = ([("t", ity)] if cell_uses_param else []) + [
                 (n, (self.comp_params or {}).get(n, "String")) for n in cell_reads
             ]
@@ -8170,6 +8205,28 @@ class Translator:
             name = f"__q{len(self.handler_locals)}"
             self.handler_locals.add(name)
             return [f"var {name} = Py.quit()"]
+        # `report(fraction, note)` — the work's own voice. It is heard
+        # by the `on_progress=` of the task it runs inside; called
+        # anywhere else it does nothing, which is the same answer in
+        # both runs.
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "report")
+        ):
+            call = stmt.value
+            if len(call.args) != 2 or call.keywords:
+                raise Untranslatable(
+                    call, "report() takes the fraction (0.0 to 1.0) and a note"
+                )
+            self.uses_stdlib = True
+            name = f"__rp{len(self.handler_locals)}"
+            self.handler_locals.add(name)
+            frac = self.expr(call.args[0], "store", param)
+            if self._num_ty(call.args[0], "store", param) == "Int":
+                frac = f"Py.floatOfInt({frac})"
+            note = self.expr(call.args[1], "store", param)
+            return [f"var {name} = Py.report({frac}, {note})"]
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
@@ -8263,6 +8320,7 @@ class Translator:
         work = args[0] if args else kw.get("work")
         on_done = args[1] if len(args) > 1 else kw.get("on_done")
         on_error = args[2] if len(args) > 2 else kw.get("on_error")
+        on_progress = kw.get("on_progress")
         if work is None:
             raise Untranslatable(call, "task(work, on_done=...) takes the work to run")
         if on_error is not None:
@@ -8286,6 +8344,9 @@ class Translator:
         else:
             raise Untranslatable(work, "task's work is a module-level def or a lambda that takes no arguments")
 
+        self._task_work_is_free_of_state(work if isinstance(work, ast.Lambda) else self.defs[work.id])
+        if on_progress is not None:
+            self._progress_lines(on_progress)
         prev_async, prev_hit = self.in_async, self.async_hit
         self.in_async = True
         try:
@@ -8327,6 +8388,74 @@ class Translator:
         for st in body:
             out += self._stmt(st, None)
         return out
+
+    def _task_work_is_free_of_state(self, work):
+        """A task's work runs OFF the UI thread — a Python worker in
+        the development run — and app state does not travel there.
+        The compiled run would read it on the UI thread and agree with
+        nothing, so the reach is refused by name here instead of
+        surfacing as an interpreter panic in one run only."""
+        owners = set(self.state) | set(self.stores) | set(self.model_instances)
+        for n in ast.walk(work):
+            if isinstance(n, ast.Name) and n.id in owners:
+                raise Untranslatable(
+                    n,
+                    f"a task's work runs off the UI thread, where `{n.id}` cannot be "
+                    f"reached — read it before the task and hand it in "
+                    f"(`v = {n.id}()` above, then `task(lambda: work(v), ...)`), and "
+                    "write what comes back in `on_done`",
+                )
+
+    def _progress_lines(self, on_progress):
+        """`on_progress`'s body, translated as the method the task's
+        reports reach. It takes the fraction and the note; the work
+        makes them with `report(...)`, from wherever it is running."""
+        if isinstance(on_progress, ast.Lambda):
+            if len(on_progress.args.args) != 2:
+                raise Untranslatable(
+                    on_progress, "on_progress takes the fraction and the note"
+                )
+            names = [a.arg for a in on_progress.args.args]
+            body = [at(ast.Expr(on_progress.body), on_progress.body)]
+        elif isinstance(on_progress, ast.Name) and on_progress.id in self.defs:
+            d = self.defs[on_progress.id]
+            if len(d.args.args) != 2:
+                raise Untranslatable(
+                    on_progress,
+                    f"`{on_progress.id}` takes the fraction and the note — two arguments",
+                )
+            names = [a.arg for a in d.args.args]
+            body = d.body
+        else:
+            raise Untranslatable(
+                on_progress, "on_progress is a two-argument lambda or a module-level def"
+            )
+        prev_locals, prev_typed = self.handler_locals, self.typed_locals
+        prev_dead, prev_pre = self.dead_locals, self.pre_lines
+        self.handler_locals = set(names)
+        self.typed_locals = {**prev_typed, names[0]: "Float", names[1]: "String"}
+        self.dead_locals = {}
+        self.pre_lines = None
+        try:
+            stmts = []
+            for st in body:
+                stmts += self._stmt(st, None)
+        finally:
+            self.handler_locals, self.typed_locals = prev_locals, prev_typed
+            self.dead_locals, self.pre_lines = prev_dead, prev_pre
+        name = f"p{len(self.handlers)}"
+        self.progress_hit = (name, [(names[0], "Float"), (names[1], "String")], stmts)
+
+    def _claim_progress(self, owner: str):
+        """Attach the progress method translated for the task inside
+        `owner` — a store method of its own, and the `@progress(..)`
+        mark on the fn that spawns the task."""
+        if self.progress_hit is None:
+            return
+        name, params, stmts = self.progress_hit
+        self.progress_hit = None
+        self.handlers.append((name, params, stmts))
+        self.progress_handlers[owner] = name
 
     EXC_BROAD = ("RuntimeError", "Exception", "BaseException")
 
@@ -9024,7 +9153,8 @@ class Translator:
             okline = f"{target} = {t_var}.value"
         elif kind in ("cell", "selffield"):
             okline = f"{target} = {t_var}.value"
-        lines = pre + [f"var {t_var} = Escapes.try{k}({args})"]
+        awaited = "await " if self.in_async else ""
+        lines = pre + [f"var {t_var} = {awaited}Escapes.try{k}({args})"]
         lines.append(f"if {t_var}.tag == 0 {{")
         if okline:
             lines.append(f"  {okline}")
@@ -11145,6 +11275,8 @@ class Translator:
                 if name in self.menu_handlers:
                     m, it = self.menu_handlers[name]
                     mark = f' @menu("{m}", "{it}")'
+                if name in self.progress_handlers:
+                    mark = f" @progress({self.progress_handlers[name]})"
                 if isinstance(param, list):
                     sig = f"  {kw} {name}({', '.join(f'{n}: {t}' for n, t in param)}){mark} {{"
                 else:
@@ -11936,9 +12068,11 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         rpi.append("  var msg : String")
         rpi.append("}")
     open(os.path.join(proj, ".pixie", "rpi", "escapes.rpi"), "w").write("\n".join(rpi) + "\n")
+    kernel_dir = os.path.join(repo(), "crates", "pixie-kernel")
     open(os.path.join(proj, "escapes", "Cargo.toml"), "w").write(
         '[package]\nname = "escapes"\nversion = "0.1.0"\nedition = "2024"\n\n'
-        '[dependencies]\npyo3 = { version = "0.26", features = ["auto-initialize"] }\n\n[workspace]\n'
+        '[dependencies]\npyo3 = { version = "0.26", features = ["auto-initialize"] }\n'
+        f'pixie-kernel = {{ path = "{kernel_dir}" }}\n\n[workspace]\n'
     )
     dataclasses_py = []
     for sname in sorted(tr.escape_structs):
@@ -11996,9 +12130,33 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         "    });",
         "}",
         "",
+        "/// `from yokan import report` inside an escape. The escape",
+        "/// runs under an embedded CPython that has no yokan package,",
+        "/// so the door is put where the import will look for it — and",
+        "/// it reaches the same kernel channel the interpreted run's",
+        "/// `report` does, which is what makes one line of Python mean",
+        "/// the same thing in both runs.",
+        "#[pyfunction]",
+        '#[pyo3(name = "report")]',
+        "fn py_report(fraction: f64, note: &str) -> i64 {",
+        "    pixie_kernel::progress::report(fraction, note);",
+        "    0",
+        "}",
+        "",
+        "fn install_yokan(py: Python<'_>) -> PyResult<()> {",
+        '    let y = pyo3::types::PyModule::new(py, "yokan")?;',
+        "    y.add_function(wrap_pyfunction!(py_report, &y)?)?;",
+        '    py.import("sys")?.getattr("modules")?.set_item("yokan", &y)?;',
+        "    Ok(())",
+        "}",
+        "",
         "fn module(py: Python<'_>) -> &'static Py<PyAny> {",
         "    ensure_env();",
         "    MODULE.get_or_init(|| {",
+        "        install_yokan(py).unwrap_or_else(|e| {",
+        "            e.print(py);",
+        '            panic!("yokan door failed to install")',
+        "        });",
         '        let c = std::ffi::CString::new(SRC).expect("src");',
         '        let f = std::ffi::CString::new("escapes.py").expect("name");',
         '        let m = std::ffi::CString::new("pixie_escapes").expect("mod");',

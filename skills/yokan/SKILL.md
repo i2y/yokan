@@ -635,9 +635,20 @@ numpy).
 continuation on it; headless runs wait for it, and it is the last
 statement of its handler (in Python the statements after it run
 first). Both runs do it: a Python thread during development, and
-in the compiled app the standard-library calls inside the work are
-awaited, which is what moves them. `on_error=` is not compiled —
-catch a failing call with `try` / `except` around it.
+in the compiled app the calls inside the work are awaited, which is
+what moves them — the standard library, and a `@py` escape too, so a
+minute of Python keeps the window drawing. `on_error=` is not
+compiled — catch a failing call with `try` / `except` around it. The
+work does NOT read app state: it runs off the UI thread, so read
+what it needs above the task, hand the value in, and write what
+comes back in `on_done`.
+
+`on_progress=` hears the work while it runs. The work says where it
+has got to with `report(fraction, note)` — from its own body, or
+from inside a `@py` escape it called (`from yokan import report`
+there) — and the handler takes `(fraction: float, note: str)` on the
+UI thread. Every report is heard and the last lands before
+`on_done`; outside a task `report` does nothing.
 
 `every(seconds, cb)` is a timer DECLARED at module level (or under
 the `__main__` guard) and started with the app. Both runs fire it

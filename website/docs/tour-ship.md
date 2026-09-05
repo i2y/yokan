@@ -189,6 +189,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused. Startup work goes in a def passed as `run(view, on_start=setup)`.
 - **Starting a timer from a handler.** A timer is a declaration (`every(1.0, tick)` at module level), so what a handler changes is what the tick reads.
 - **`task`'s `on_error=`.** The failure path waits on the error union; catch a failing standard-library call with `try` / `except` around the call.
+- **Stopping a task once it has started.** `report` says where the work is; nothing says stop, so a task runs to its end.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.

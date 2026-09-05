@@ -252,6 +252,7 @@ struct TaskSpec {
     work: Py<PyAny>,
     on_done: Option<Py<PyAny>>,
     on_error: Option<Py<PyAny>>,
+    on_progress: Option<Py<PyAny>>,
 }
 
 /// Adopt queued `ui.task` calls into the World's task queue. Called
@@ -264,18 +265,53 @@ fn drain_spawns(w: &mut World) {
     for spec in specs {
         let (handle, completion) =
             pixie_kernel::completion::<Result<Py<PyAny>, Py<PyAny>>>();
-        let work = spec.work;
+        let TaskSpec {
+            work,
+            on_done,
+            on_error,
+            on_progress,
+        } = spec;
+        // A task that is listened to gets an id, and the worker
+        // running its work inherits it — so `report(..)` from inside
+        // the work reaches THIS task's handler, the way the compiled
+        // run's `@progress` does.
+        let task_id = match on_progress {
+            Some(cb) => {
+                let id = pixie_kernel::progress::new_task();
+                pixie_kernel::progress::begin(
+                    w,
+                    id,
+                    Rc::new(move |_w: &mut World, f: f64, note: Str| {
+                        Python::attach(|py| {
+                            if let Err(e) = cb.call1(py, (f, note.as_str())) {
+                                e.print(py);
+                            }
+                        });
+                    }),
+                );
+                id
+            }
+            None => 0,
+        };
         pixie_kernel::spawn_worker(move || {
+            pixie_kernel::progress::set_current(task_id);
             let r = Python::attach(|py| {
                 work.call0(py)
                     .map_err(|e| e.into_value(py).into_any())
             });
             handle.complete(r);
         });
-        let on_done = spec.on_done;
-        let on_error = spec.on_error;
         w.spawn(async move {
             let r = completion.await;
+            // Everything the work said is heard before what it
+            // ANSWERED: the app's ending runs after the work's last
+            // word, in both runs.
+            if task_id != 0 {
+                let ctx = CURRENT_CTX.with(|c| c.borrow().clone());
+                if let Some(ctx) = ctx {
+                    ctx.with(|w: &mut World| pixie_kernel::progress::end(w, task_id));
+                }
+            }
             Python::attach(|py| match r {
                 Ok(v) => {
                     if let Some(f) = &on_done {
@@ -1800,10 +1836,31 @@ element_fn! {
 /// (or `on_error(exception)`) on the UI thread, followed by a rebuild.
 /// Callable from anywhere: handlers, timer ticks, other task
 /// callbacks, or before `run()`.
-#[pyfunction(signature = (work, on_done=None, on_error=None))]
-fn task(work: Py<PyAny>, on_done: Option<Py<PyAny>>, on_error: Option<Py<PyAny>>) -> PyResult<()> {
-    PENDING_SPAWNS.with(|t| t.borrow_mut().push(TaskSpec { work, on_done, on_error }));
+#[pyfunction(signature = (work, on_done=None, on_error=None, on_progress=None))]
+fn task(
+    work: Py<PyAny>,
+    on_done: Option<Py<PyAny>>,
+    on_error: Option<Py<PyAny>>,
+    on_progress: Option<Py<PyAny>>,
+) -> PyResult<()> {
+    PENDING_SPAWNS.with(|t| {
+        t.borrow_mut().push(TaskSpec {
+            work,
+            on_done,
+            on_error,
+            on_progress,
+        })
+    });
     Ok(())
+}
+
+/// `report(fraction, note)` — the work's own voice, callable from
+/// whatever thread the work runs on. It reaches the `on_progress=` of
+/// the task it is inside; outside one it does nothing, which is what
+/// the compiled run does too.
+#[pyfunction] #[pyo3(name = "report")]
+fn py_report(py: Python<'_>, fraction: f64, note: &str) -> i64 {
+    py.detach(|| yokan_stdlib::progress_report(fraction, note))
 }
 
 // ---------------------------------------------------------------------------
@@ -3008,6 +3065,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_submodule(&stringsm)?;
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
     m.add_function(wrap_pyfunction!(py_quit, m)?)?;
+    m.add_function(wrap_pyfunction!(py_report, m)?)?;
     let clipm = PyModule::new(m.py(), "clipboard")?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_set_text, &clipm)?)?;
     clipm.add_function(wrap_pyfunction!(py_clipboard_get_text, &clipm)?)?;

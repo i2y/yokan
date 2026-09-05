@@ -1166,9 +1166,27 @@ def start():
 `on_error=` runs during development only; a failing standard-library call is caught with `try` / `except` around the call itself.
 
 `work` must not build UI elements; it just returns a value, and `task` is the last statement of its handler (in Python the statements after it run before the work finishes).
+It must not read app state either — it runs off the UI thread, where state cannot be reached: read what it needs above the task, hand the value in, and write what comes back in `on_done`.
 Headless runs wait for task completion before taking the next step, so flows containing tasks are testable.
-Both runs do the same thing with it: during development the work is a Python thread, and the compiled app awaits the standard-library calls inside it, which is what puts them on the engine's pool.
-Pure computation inside a task stays where it is written — what moves off the UI thread is the `fs`, `sqlite`, `http` or `time.sleep_ms` call.
+Both runs do the same thing with it: during development the work is a Python thread, and the compiled app awaits the calls inside it, which is what puts them on the engine's pool.
+Pure computation stays where it is written — what moves off the UI thread is the `fs`, `sqlite`, `http` or `time.sleep` call, and a `@py` escape, which is how a minute of Python keeps the window drawing.
+
+The work is not silent while it runs.
+`report(fraction, note)` says where it has got to — from the work itself, or from inside a `@py` escape it called — and `on_progress` hears it on the UI thread like any other handler.
+
+```python
+def moved(fraction: float, note: str):
+    done.set(fraction)
+    step.set(note)
+
+
+def start():
+    task(count_primes, on_done=counted, on_progress=moved)
+```
+
+Inside an escape, `report` is imported the way anything else is: `from yokan import report`.
+Every report is heard, and the last one lands before `on_done` does; called outside a task it does nothing.
+What a report *says* is the work's business and may depend on the machine, but that it arrives is not — so counting them is something the gate can compare.
 
 `every(seconds, cb)` is a timer, declared at module level (or under the `__main__` guard) and started with the app.
 
@@ -1412,6 +1430,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused. Startup work goes in a def passed as `run(view, on_start=setup)`.
 - **Starting a timer from a handler.** A timer is a declaration (`every(1.0, tick)` at module level), so what a handler changes is what the tick reads.
 - **`task`'s `on_error=`.** The failure path waits on the error union; catch a failing standard-library call with `try` / `except` around the call.
+- **Stopping a task once it has started.** `report` says where the work is; nothing says stop, so a task runs to its end.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
 - **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.

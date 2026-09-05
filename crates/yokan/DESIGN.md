@@ -1914,3 +1914,68 @@ light-to-dark ladder read against a dark ground, and on a white one
 the top face dissolves. The ladder moves down one step; the geometry
 does not move at all. The header keeps the dark mark, because the
 header is black in both schemes.
+
+## What the work says while it runs (2026-09-05)
+
+A task exists so the window keeps drawing while something slow happens
+somewhere else, which leaves the app with nothing to show but a
+spinner: the only news it gets is the value at the end. `task(work,
+on_done=…, on_progress=…)` adds the other half of the conversation.
+The work says where it has got to with `report(fraction, note)`, from
+wherever it is running — the work's own body, or the Python inside a
+`@py` escape — and `on_progress` hears it on the UI thread, as an
+ordinary handler with the state in reach.
+
+**The report is data, and the handler runs where every handler runs.**
+A fraction and a line of text go onto a queue from whatever thread the
+work is on; nothing else crosses. The queue is drained where a World
+is already in hand — the window's pump, the headless settle, and the
+moment an `await` comes back — so a report is an ordinary state change
+and the view rebuilds from it the way it does from a click. Nothing
+touches the app from two threads.
+
+**Reports are addressed to a task, not to the program.** The task
+claims an id when it starts; the worker its `await` spawns inherits
+that id, and so does the escape's Python running on it. Two tasks
+reporting at once stay apart, and a `report` outside a task does
+nothing at all — the same silence in both runs, because there is no
+handler to reach.
+
+**Every report is heard, and the last one lands before `on_done`.**
+That is what makes progress checkable rather than decorative: the
+demos print how many arrived, and the gate compares the number. The
+ordering is not a hope — coming back from an `await` drains the queue
+before the line after it runs, and the end of a task drains it once
+more before the handler is dropped. What a report SAYS is the work's
+business and may be timing-dependent; that it arrives is not.
+
+The substrate carries this as `@progress(handler)` on a store's
+`async fn`: the method named there hears what the task reports.
+`examples/fetch` reports between its two awaits and counts what it
+heard, so both pixie tiers check the path too.
+
+## A task's Python is awaited too (2026-09-05)
+
+The translator wrapped the standard-library calls inside a task in
+`await`, which is what moves them off the UI thread — but an `@py`
+escape was left as a plain call. The compiled app therefore ran a
+minute of Python on the UI thread and froze, while the development run
+stayed live: the same program, two behaviours, and the gate could not
+see it because a frozen window still dumps the right screen. An escape
+inside a task is awaited now, the try-wrapped form as well.
+
+Two adapters were missing under `await` for this to work: a `List<T>`
+argument and a value class crossing to the worker. Both already had
+their conversion for the synchronous call, so both directions read the
+same vocabulary rather than growing a second one.
+
+`demo/pyjob.py` is the shape in miniature — a slow Python job in an
+escape, run through a task, reporting from the worker thread it landed
+on. `demo/pystats.py` calls numpy the same way now.
+
+**A task's work does not touch app state.** It runs off the UI thread,
+where the development run's `State` cannot be read at all; the
+compiled run would read it on the UI thread and agree with nothing.
+The reach is refused by name — read the value before the task, hand it
+in, and write what comes back in `on_done` — rather than reaching the
+user as an interpreter panic in one run only.

@@ -3843,6 +3843,20 @@ pub fn clipboard_get_text() -> String {
 // the tick that saw them, so a tick reads a tap once however many
 // frames the key stays down.
 
+// ---- progress ------------------------------------------------------
+// What the work says about itself while it runs. A task hands the
+// slow half to a worker so the window keeps drawing, which leaves the
+// app with nothing to show but a spinner; this is the other half of
+// the conversation. The report is data — a fraction and a note — and
+// the handler that hears it runs on the UI thread, so both runs see
+// the same thing happen in the same place.
+
+pub fn progress_report(fraction: f64, note: &str) -> i64 {
+    pixie_kernel::progress::report(fraction, note);
+    0
+}
+
+
 pub fn keys_down(key: &str) -> bool {
     pixie_kernel::keys::down(key)
 }

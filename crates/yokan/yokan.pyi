@@ -473,7 +473,14 @@ def task(
     work: Callable[[], Any],
     on_done: Optional[Callable[[Any], Any]] = None,
     on_error: Optional[Callable[[BaseException], Any]] = None,
+    on_progress: Optional[Callable[[float, str], Any]] = None,
 ) -> None: ...
+# What the work says about itself while it runs: how far along, and
+# what it is doing. It reaches the `on_progress=` of the task it is
+# inside — from the work itself or from a `@py` escape's Python, on
+# whatever thread that is — and the handler runs on the UI thread.
+# Called outside a task it does nothing.
+def report(fraction: float, note: str) -> None: ...
 def py(f: Callable[P, R]) -> Callable[P, R]: ...
 # A line on stderr, from either run. `print` writes to stdout, which
 # is where a headless run's screen dump goes, so the dialect asks for
