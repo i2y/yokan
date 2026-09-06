@@ -65,6 +65,15 @@ sub import {
     # The caller's package.
     my $pkg = caller;
     no strict 'refs';
+    # `method add :Sig(Int => Str) ($n)`. perl hands an attribute to the
+    # class the sub was compiled into and expects to be told which ones
+    # it did not understand; `Sig` is understood and does nothing at run
+    # time. The types are read out of the source by the translator, and
+    # the compiled run is what holds the app to them.
+    *{"${pkg}::MODIFY_CODE_ATTRIBUTES"} = sub {
+        my ($class, $code, @attrs) = @_;
+        return grep { !/\ASig\b/ } @attrs;
+    };
     for my $name (@VOCAB) {
         my $from = defined &{"Rakugan::Elements::$name"} ? "Rakugan::Elements::$name"
                  : $name eq 'run'                          ? 'Rakugan::Runtime::run'

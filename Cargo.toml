@@ -21,6 +21,7 @@ members = [
     "crates/pixie-capi",
     "crates/yokan",
     "crates/yokan-stdlib",
+    "crates/rakugan-stdlib",
 ]
 resolver = "2"
 

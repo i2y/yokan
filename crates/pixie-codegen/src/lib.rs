@@ -4009,6 +4009,17 @@ fn lower_view_display(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
     Ok(cast_if_widened(&lower_view_display_inner(e, cx)?, e.span))
 }
 
+/// An argument handed to a static fn from inside a view. A repeater
+/// binds its row by reference — reading it displays fine, but a
+/// parameter is an owned value, so the row is cloned on the way in.
+fn lower_view_arg(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
+    let v = lower_view_display_inner(e, cx)?;
+    Ok(match &e.kind {
+        ExprKind::Ident(n) if cx.is_loop_var(n) => format!("{v}.clone()"),
+        _ => v,
+    })
+}
+
 fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
     match &e.kind {
         ExprKind::Int(v) => Ok(format!("{v}i64")),
@@ -4093,7 +4104,7 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
                 if i > 0 {
                     call.push_str(", ");
                 }
-                call.push_str(&lower_view_display_inner(a, cx)?);
+                call.push_str(&lower_view_arg(a, cx)?);
             }
             call.push(')');
             Ok(call)

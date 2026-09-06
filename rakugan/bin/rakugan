@@ -208,12 +208,18 @@ sub check {
 }
 
 # The .pix project the compiled run is built from, next to the app.
+# An app that reaches a twin of one of Perl's own answers carries the
+# crate that holds them, and the door that declares it.
 sub translate {
     my ($app, $tr) = @_;
     my $proj = File::Spec->catdir(gate_dir($app), stem($app));
     make_path("$proj/src");
+    make_path("$proj/.pixie/rpi");
     write_file("$proj/src/main.pix", $tr->{pix});
-    write_file("$proj/pixie.toml", Rakugan::Translator::project_toml(stem($app), $tr->{window}));
+    my $stdlib = $tr->{stdlib} ? "$REPO/crates/rakugan-stdlib" : undef;
+    unlink glob "$proj/.pixie/rpi/*.rpi";
+    write_file("$proj/.pixie/rpi/rakugan-stdlib.rpi", Rakugan::Translator::stdlib_rpi()) if $stdlib;
+    write_file("$proj/pixie.toml", Rakugan::Translator::project_toml(stem($app), $tr->{window}, $stdlib));
     return $proj;
 }
 
