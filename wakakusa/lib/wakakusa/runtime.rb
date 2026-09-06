@@ -92,8 +92,16 @@ end
 # nothing else in this program would ever run: the engine is on the
 # stack from `run` until the window closes, and a thread scheduled by
 # Ruby's own runtime gets no turn while that is true.
+# The engine calls this while it waits, so the app's own threads get a
+# turn. It has to be `sleep`, not `Thread.pass`: a compiled run is
+# inside a foreign call here, and a thread created inside one — which
+# is every thread an app starts, since handlers are called from the
+# engine — is not scheduled by `Thread.pass` while that call is still
+# on the stack. `sleep 0` is what reaches the scheduler. Without it a
+# `task` started from a handler can sit unrun until the engine returns,
+# which a headless run only leaves after the script is over.
 def wakakusa_pump
-  Thread.pass
+  sleep 0
 end
 
 # The engine says a piece of work is finished, on the window's thread.
