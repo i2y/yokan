@@ -18,6 +18,7 @@ members = [
     "crates/pixie-cli",
     "crates/pixie-lsp",
     "crates/pixie-engine-gpui",
+    "crates/pixie-capi",
     "crates/yokan",
     "crates/yokan-stdlib",
 ]

@@ -1,0 +1,3 @@
+test/refuse/block_in_loop.rb:12:22: Wakakusa cannot take this — a block on an element cannot be written inside a loop: a compiled run has lost the loop's variables by the time it runs. Move this into a method that takes what it needs (`def line(item, i)`), and call that from the loop
+            button(name) { @picked = i }
+                         ^

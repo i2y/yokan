@@ -1,0 +1,412 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# The Wakakusa command: one Ruby app, five things you can do to it.
+#
+#   wakakusa check     demo/counter.rb
+#   wakakusa run       demo/counter.rb
+#   wakakusa translate demo/counter.rb
+#   wakakusa build     demo/counter.rb
+#   wakakusa gate      demo/counter.rb --script "click:+1,dump"
+#
+# `gate` is the one that matters. It runs the app twice — CRuby through
+# the door's Fiddle declarations, and the spinel-compiled binary through
+# the same C ABI linked in — with one interaction script, and compares
+# the two transcripts byte for byte. Everything else is a step of that
+# round you may want on its own.
+#
+# This program runs under CRuby only; it is the tooling, not an app, so
+# it never has to be something spinel can compile.
+
+require "fileutils"
+require "open3"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)          # wakakusa/
+REPO = File.expand_path("..", ROOT)             # the checkout
+TARGET = ENV["CARGO_TARGET_DIR"] || File.expand_path("~/.cache/pixie/target")
+
+# From `cargo rustc -p pixie-capi --release -- --print native-static-libs`,
+# with its duplicates removed and in its order. `-lc` and `-lSystem` are
+# cc's own; `-lc++` is the engine's C++ lower half and `-lsqlite3` the
+# platform's database, neither of which that list mentions. Re-run the
+# command after a dependency change.
+FRAMEWORKS = %w[
+  -framework ApplicationServices -framework CoreFoundation -framework CoreVideo
+  -framework AppKit -framework CoreText -framework Carbon -framework Security
+  -framework Foundation -framework UserNotifications -framework CoreLocation
+  -framework QuartzCore -framework CoreGraphics -framework OpenGL -framework Metal
+  -lobjc -liconv -lc++ -lm -lsqlite3
+].freeze
+
+USAGE = <<~TXT
+  usage: wakakusa <command> <app.rb> [--script "step,step"] [--fresh <path>]
+
+    check      what the app writes that Wakakusa cannot take
+    run        run it interpreted, in a window
+    translate  emit the C the compiled run is built from
+    build      build the native binary [--release] [--app]
+    gate       run it both ways headless and compare the two runs
+
+  --release drops the symbol table, which is a fifth of the file.
+  --app wraps the binary in a macOS application bundle under dist/,
+  double-clickable, with <stem>.icns or <stem>.png as its icon if one
+  sits beside the app.
+
+  --fresh deletes a path before EACH run, so an app that keeps a file
+  or a database starts both runs from the same nothing. Repeatable.
+TXT
+
+def die(msg)
+  warn "wakakusa: #{msg}"
+  exit 1
+end
+
+# --- where the two halves come from -----------------------------------------
+
+# An app is read with the shared half on the load path and one door
+# beside it: the door decides which run this is, and nothing above it
+# knows the difference.
+def load_path(kind)
+  ["-I", File.join(ROOT, "lib"), "-I", File.join(ROOT, "door", kind)]
+end
+
+# The pinned spinel, built by tools/spinel_setup.sh — which is also the
+# one place the SHA is written, so nothing here can drift from it.
+def spinel_dir
+  @spinel_dir ||= begin
+    dir = ENV["SPINEL_DIR"] ||
+          `#{File.join(ROOT, "tools", "spinel_setup.sh")} --path`.strip
+    unless File.executable?(File.join(dir, "spinel"))
+      die "no spinel in #{dir} — run `just wakakusa-spinel` once to fetch and build it"
+    end
+    dir
+  end
+end
+
+# pixie's C face: one library, opened by the interpreted run and linked
+# by the compiled one. Built here so neither run can be a version behind.
+def engine
+  @engine ||= begin
+    ok = system({ "CARGO_TARGET_DIR" => TARGET },
+                "cargo", "build", "--release", "-q", "-p", "pixie-capi",
+                chdir: REPO)
+    die "the engine did not build" unless ok
+    File.join(TARGET, "release")
+  end
+end
+
+# --- the steps --------------------------------------------------------------
+
+def gate_dir(app)
+  dir = File.join(File.dirname(File.expand_path(app)), ".gate")
+  FileUtils.mkdir_p(dir)
+  dir
+end
+
+def stem(app)
+  File.basename(app, ".rb")
+end
+
+# Success is silent: what a tool prints on the way is noise beside the
+# gate's own answer, and everything it printed is shown when it fails.
+def sh!(*cmd, what:)
+  out, status = Open3.capture2e(*cmd)
+  return if status.success?
+  warn out unless out.empty?
+  die "#{what} failed"
+end
+
+# Paths under the working directory read better short.
+def rel(path)
+  here = "#{Dir.pwd}/"
+  path.start_with?(here) ? path.delete_prefix(here) : path
+end
+
+def capture(env, *cmd, what:)
+  out, err, status = Open3.capture3(env, *cmd)
+  unless status.success?
+    warn trim(err) unless err.strip.empty?
+    die "#{what} failed"
+  end
+  out
+end
+
+# What a failed run is worth reading. A refusal says its line and then
+# the process aborts where it stands, because a panic cannot cross the
+# call that brought the engine in; under CRuby the abort then brings a
+# page of interpreter crash report with it. The line is the message.
+def trim(err)
+  lines = err.lines.take_while { |l| !l.include?("[BUG]") && !l.start_with?("fatal runtime error") }
+  lines.join.strip
+end
+
+def translate(app)
+  c = File.join(gate_dir(app), "#{stem(app)}.c")
+  # CRuby is what an app is measured against, and CRuby grows an integer
+  # past a machine word rather than raising, so the compiled run is
+  # built to do the same. spinel picks one mode per binary.
+  sh!(File.join(spinel_dir, "spinel"), *load_path("spinel"),
+      "--int-overflow=promote", "-c", "-o", c,
+      File.expand_path(app), what: "spinel")
+  c
+end
+
+# Which of the compiler's own packages this app asked for. Only the
+# ones with something compiled in them need an object at the link; the
+# rest are Ruby the compiler has already read.
+#
+# Letting the compiler do the whole link would pick these itself, and
+# the runtime too. It also drags in a package nobody asked for and
+# fails to build it, so the link stays here.
+def packages(app)
+  named = [app, *Dir[File.join(ROOT, "lib", "wakakusa", "*.rb")]]
+          .flat_map { |f| File.read(f).scan(/^\s*require ["']([a-z0-9_]+)["']/).flatten }
+  named.uniq.filter_map do |name|
+    o = File.join(spinel_dir, "packages", name, "sp_#{name}_mt.o")
+    o if File.exist?(o)
+  end
+end
+
+# The engine's lower half needs its frameworks, and `-dead_strip` keeps
+# the binary the size of the app rather than the size of the engine
+# (measured on the counter: 35.4 MB to 14.9 MB). The threaded runtime
+# is not optional: every app has `task` behind it.
+def build(app, release: false)
+  c = translate(app)
+  bin = File.join(gate_dir(app), stem(app))
+  sh!("cc", "-O2", "-w", "-Wl,-dead_strip", "-DSP_THREADS", "-ftls-model=initial-exec",
+      "-I#{spinel_dir}/lib", "-I#{spinel_dir}/lib/regexp", c,
+      *packages(app), "#{spinel_dir}/lib/libspinel_rt_mt.a",
+      "#{engine}/libpixie_capi.a", *FRAMEWORKS, "-lpthread",
+      "-o", bin, what: "cc")
+  # The symbol table is a fifth of the file and nothing on the machine
+  # it ships to reads it. A gate build keeps it: the round is a
+  # comparison, and a crash there is one to read.
+  sh!("strip", bin, what: "strip") if release
+  bin
+end
+
+# --- shipping ---------------------------------------------------------------
+
+# The window's title, read off the app's own `run` line. It names the
+# bundle and shows in the menu bar, and nothing else in this program
+# needs it, so reading the source beats starting the app to ask.
+def window_title(app)
+  m = File.read(app).match(/\brun\([^)]*\btitle:\s*(["'])(.*?)\1/m)
+  m ? m[2] : stem(app)
+end
+
+# An icon rides along when <stem>.icns or <stem>.png sits beside the
+# app. A PNG goes through the only pipeline macOS offers: sips writes
+# every size into an iconset and iconutil packs it. If either balks the
+# bundle simply has no icon, which is not worth failing a build over.
+def install_icon(app, res)
+  dir = File.dirname(File.expand_path(app))
+  dest = File.join(res, "icon.icns")
+  icns = File.join(dir, "#{stem(app)}.icns")
+  png = File.join(dir, "#{stem(app)}.png")
+  if File.file?(icns)
+    FileUtils.cp(icns, dest)
+  elsif File.file?(png)
+    return "" unless png_to_icns(png, dest)
+  else
+    return ""
+  end
+  "  <key>CFBundleIconFile</key>\n  <string>icon</string>\n"
+end
+
+def png_to_icns(png, dest)
+  Dir.mktmpdir do |td|
+    iconset = File.join(td, "app.iconset")
+    FileUtils.mkdir_p(iconset)
+    [16, 32, 128, 256, 512].each do |base|
+      [1, 2].each do |scale|
+        px = (base * scale).to_s
+        name = "icon_#{base}x#{base}#{scale == 1 ? "" : "@2x"}.png"
+        ok = quietly("sips", "-z", px, px, png, "--out", File.join(iconset, name))
+        return false unless ok
+      end
+    end
+    quietly("iconutil", "-c", "icns", iconset, "-o", dest)
+  end
+end
+
+def quietly(*cmd)
+  system(*cmd, out: File::NULL, err: File::NULL)
+end
+
+# `--app`: a macOS application bundle under dist/, beside the app. The
+# binary carries the engine and the compiled Ruby, and links nothing
+# but the system's own libraries, so the bundle is the whole program:
+# it runs on a machine with neither Ruby nor the compiler installed.
+def app_bundle(app, bin)
+  title = window_title(app)
+  safe = title.gsub(/[^A-Za-z0-9 ._-]/, "").strip
+  safe = stem(app) if safe.empty?
+  root = File.join(File.dirname(File.expand_path(app)), "dist", "#{safe}.app")
+  macos = File.join(root, "Contents", "MacOS")
+  res = File.join(root, "Contents", "Resources")
+  FileUtils.rm_rf(root)
+  FileUtils.mkdir_p([macos, res])
+  FileUtils.cp(bin, File.join(macos, stem(app)))
+  File.write(File.join(root, "Contents", "Info.plist"), plist(title, stem(app), install_icon(app, res)))
+  # Ad-hoc signed, like every other artifact here: unsigned, macOS
+  # refuses to open it at all.
+  sh!("codesign", "--force", "-s", "-", root, what: "codesign")
+  root
+end
+
+def plist(title, exe, icon_line)
+  <<~XML
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>CFBundleName</key>
+      <string>#{title}</string>
+      <key>CFBundleDisplayName</key>
+      <string>#{title}</string>
+      <key>CFBundleExecutable</key>
+      <string>#{exe}</string>
+      <key>CFBundleIdentifier</key>
+      <string>com.wakakusa.#{exe}</string>
+      <key>CFBundlePackageType</key>
+      <string>APPL</string>
+      <key>CFBundleShortVersionString</key>
+      <string>0.1.0</string>
+      <key>CFBundleVersion</key>
+      <string>0.1.0</string>
+      <key>LSMinimumSystemVersion</key>
+      <string>11.0</string>
+      <key>NSHighResolutionCapable</key>
+      <true/>
+    #{icon_line.chomp}
+    </dict>
+    </plist>
+  XML
+end
+
+def dir_size(root)
+  total = Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
+             .select { |f| File.file?(f) }
+             .sum { |f| File.size(f) }
+  format("%.1f MB", total / 1_000_000.0)
+end
+
+def interpreted(app, script)
+  capture({ "PIXIE_SCRIPT" => script, "PIXIE_CAPI" => "#{engine}/libpixie_capi.dylib" },
+          "ruby", *load_path("cruby"), File.expand_path(app),
+          what: "the interpreted run")
+end
+
+# What each run must find missing when it starts.
+def wipe(paths)
+  paths.each { |p| FileUtils.rm_rf(p) }
+end
+
+def size_of(path)
+  format("%.1f MB", File.size(path) / 1_000_000.0)
+end
+
+# --- the commands -----------------------------------------------------------
+
+# What the app writes that Wakakusa cannot take, named with the line.
+# Nothing is printed when there is nothing to say, so it is quiet in
+# the sweep and loud exactly when it matters.
+def check(app)
+  $LOAD_PATH.unshift(File.join(ROOT, "lib")) unless $LOAD_PATH.include?(File.join(ROOT, "lib"))
+  require "wakakusa/check"
+  lines = File.readlines(app)
+  refusals = Wakakusa::Check.run(app)
+  refusals.each { |r| warn Wakakusa.render(r, lines) }
+  refusals
+end
+
+def cmd_check(app, _opts)
+  exit 1 unless check(app).empty?
+end
+
+def cmd_run(app, _opts)
+  exec({ "PIXIE_CAPI" => "#{engine}/libpixie_capi.dylib" },
+       "ruby", *load_path("cruby"), File.expand_path(app))
+end
+
+def cmd_translate(app, _opts)
+  c = translate(app)
+  puts "emitted: #{rel(c)}"
+end
+
+def cmd_build(app, opts)
+  exit 1 unless check(app).empty?
+
+  bin = build(app, release: opts[:release])
+  puts "built: #{rel(bin)} (#{size_of(bin)})"
+  puts "bundle: #{rel(root = app_bundle(app, bin))} (#{dir_size(root)})" if opts[:app]
+  puts "  not gate-checked — `gate` with a script proves the two runs agree"
+end
+
+def cmd_gate(app, opts)
+  exit 1 unless check(app).empty?
+
+  script = opts[:script]
+  wipe(opts[:fresh])
+  a = interpreted(app, script).chomp
+  bin = build(app)
+  wipe(opts[:fresh])
+  b = capture({ "PIXIE_SCRIPT" => script }, bin, what: "the compiled run").chomp
+
+  if a == b
+    puts "GATE OK — #{a.lines.length} dump lines identical in both runs"
+    puts "  script:   #{script.empty? ? "(none — startup dump only)" : script}"
+    puts "  emitted:  #{rel(File.join(gate_dir(app), "#{stem(app)}.c"))}"
+    puts "  binary:   #{rel(bin)} (#{size_of(bin)})"
+  else
+    puts "GATE FAILED — the two runs diverge:"
+    al = a.lines.map(&:chomp)
+    bl = b.lines.map(&:chomp)
+    [al.length, bl.length].max.times do |i|
+      next if al[i] == bl[i]
+      puts "  cruby:    #{al[i] || "(no line)"}"
+      puts "  compiled: #{bl[i] || "(no line)"}"
+    end
+    exit 1
+  end
+end
+
+# --- the argument line ------------------------------------------------------
+
+COMMANDS = %w[check run translate build gate].freeze
+
+mode = ARGV.shift
+die "no command\n\n#{USAGE}" if mode.nil?
+die "unknown command `#{mode}`\n\n#{USAGE}" unless COMMANDS.include?(mode)
+
+app = nil
+opts = { script: "", fresh: [], release: false, app: false }
+until ARGV.empty?
+  arg = ARGV.shift
+  case arg
+  when "--script" then opts[:script] = ARGV.shift.to_s
+  when "--fresh" then opts[:fresh].push(ARGV.shift.to_s)
+  when "--release" then opts[:release] = true
+  when "--app" then opts[:app] = true
+  when /\A--/ then die "unknown option `#{arg}`\n\n#{USAGE}"
+  else
+    die "wakakusa #{mode} takes one app" unless app.nil?
+    app = arg
+  end
+end
+die "wakakusa #{mode} takes an app: wakakusa #{mode} demo/counter.rb" if app.nil?
+die "no such file: #{app}" unless File.file?(app)
+if !opts[:script].empty? && %w[check run translate build].include?(mode)
+  die "#{mode} takes no --script — replaying a script is the gate's job"
+end
+if !opts[:fresh].empty? && mode != "gate"
+  die "--fresh belongs to gate: it is there so the two runs start alike"
+end
+if (opts[:release] || opts[:app]) && mode != "build"
+  die "--release and --app belong to build: they are how an app ships"
+end
+
+send("cmd_#{mode}", app, opts)

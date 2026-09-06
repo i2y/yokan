@@ -3711,6 +3711,25 @@ thread_local! {
     static QUIET_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// Set by an embedder that cannot catch the refusal itself, so the
+/// hook says the line instead of leaving it to an unwind that will
+/// never arrive. See `speak_refusals`.
+static SPEAK_REFUSALS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Print an intended refusal here rather than leaving it to the
+/// caller.
+///
+/// A command-line host catches the unwind and prints the one line
+/// itself, which is why the hook below is silent. A host reached
+/// through a C ABI cannot: a panic crossing an `extern "C"` frame
+/// aborts where it stands, and the silence would be the whole of the
+/// message. Such a host calls this once, before it starts, and gets
+/// the line back.
+pub fn speak_refusals() {
+    install_panic_hook();
+    SPEAK_REFUSALS.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Teach the panic hook the difference the rest of this file already
 /// draws. Without it the default hook covers an intended failure with
 /// a thread name, an internal file:line and a backtrace note — four
@@ -3731,6 +3750,15 @@ fn install_panic_hook() {
             // Consume the flag: the unwind is leaving, and the next
             // panic on this thread is loud again unless it says so.
             if QUIET_PANIC.with(|q| q.replace(false)) {
+                if SPEAK_REFUSALS.load(std::sync::atomic::Ordering::Relaxed) {
+                    let what = info
+                        .payload()
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| info.payload().downcast_ref::<&str>().copied())
+                        .unwrap_or("a step this app cannot take");
+                    eprintln!("script: {what}");
+                }
                 return;
             }
             default(info);

@@ -1,0 +1,3 @@
+test/refuse/handler_as_proc.rb:9:18: Wakakusa cannot take this — `on_click:` takes a proc of no arguments, written out here (`on_click: -> { add(event_text) }`), or leave it out and write the block instead. A proc given through a keyword is not handed what the event carried in a compiled run, so it asks for it
+        button("+1", on_click: :bump)
+                     ^

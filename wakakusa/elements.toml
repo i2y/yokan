@@ -1,0 +1,498 @@
+# Wakakusa's vocabulary, written once.
+#
+# Everything an app can say to the engine is here: the elements, the
+# keyword arguments each of them takes, their types and defaults, which
+# arguments are handlers and what a handler receives. `tools/gen.rb`
+# reads this file and writes the Ruby methods, the key numbers both
+# sides count with, and the Rust constants; a Rust test reads it too and
+# fails if a kind or a key has no arm on the other side. Adding an
+# element is an entry here and one arm in `materialize`.
+#
+# The types: `str` `num` `int` `bool` are single values, `strs` `nums`
+# are lists of them, `nums2` a list of lists, and `rows` is the pair a
+# lazy list takes: a count, with the block building row i. A prop with
+# `pos = true` is written before the keywords, in the order it appears.
+#
+# `handler` names what the block receives: `none` (it is called with
+# nothing), `text`, `bool`, `int` or `float`.
+#
+# `children = true` means the element takes elements as its arguments.
+# `native` says which sides the element sizes for itself: those are its
+# own props and the box rider leaves them alone, which is what keeps a
+# button's width where a person put it.
+
+# --- the riders ------------------------------------------------------------
+#
+# The keyword arguments EVERY element takes, under one name and one
+# meaning. They are wrappers around the element, not fields repeated on
+# thirty of them, so they are written here once. `presence = true` marks
+# the four whose box is built because somebody WROTE the property: a
+# width that reads 0.0 this frame still makes a box, and a width nobody
+# wrote does not.
+
+[[rider]]
+name = "width"
+type = "num"
+presence = true
+owned = "size,width"
+
+[[rider]]
+name = "height"
+type = "num"
+presence = true
+owned = "size,height"
+
+[[rider]]
+name = "min_width"
+type = "num"
+presence = true
+
+[[rider]]
+name = "max_width"
+type = "num"
+presence = true
+
+[[rider]]
+name = "disabled"
+type = "bool"
+default = false
+
+[[rider]]
+name = "theme"
+type = "str"
+default = ""
+
+[[rider]]
+name = "animate"
+type = "num"
+default = 0.0
+
+[[rider]]
+name = "easing"
+type = "str"
+default = ""
+
+[[rider]]
+name = "enter"
+type = "bool"
+default = false
+
+[[rider]]
+name = "exit"
+type = "bool"
+default = false
+
+[[rider]]
+name = "col_span"
+type = "int"
+default = 1
+
+[[rider]]
+name = "row_span"
+type = "int"
+default = 1
+
+[[rider]]
+name = "role"
+type = "str"
+default = ""
+
+[[rider]]
+name = "a11y_label"
+type = "str"
+default = ""
+owned = "label"
+
+[[rider]]
+name = "tooltip"
+type = "str"
+default = ""
+
+# --- the elements ----------------------------------------------------------
+
+[[element]]
+name = "text"
+native = "width"
+doc = "A run of text. `wrap` is \"\", \"nowrap\" or \"ellipsis\"; a background with padding and a radius makes a pill."
+props = [
+  { name = "text", type = "str", pos = true },
+  { name = "size", type = "num", default = 0.0 },
+  { name = "color", type = "str", default = "" },
+  { name = "align", type = "str", default = "" },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "bold", type = "bool", default = false },
+  { name = "italic", type = "bool", default = false },
+  { name = "mono", type = "bool", default = false },
+  { name = "underline", type = "bool", default = false },
+  { name = "wrap", type = "str", default = "" },
+  { name = "max_lines", type = "int", default = 0 },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "background", type = "str", default = "" },
+  { name = "padding", type = "num", default = 0.0 },
+  { name = "border_radius", type = "num", default = 0.0 },
+  { name = "border_width", type = "num", default = 0.0 },
+  { name = "border_color", type = "str", default = "" },
+]
+
+[[element]]
+name = "button"
+native = "size"
+doc = "A button. The block runs when it is pressed."
+primary = "on_click"
+props = [
+  { name = "label", type = "str", pos = true },
+  { name = "on_click", handler = "none" },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "size", type = "num", default = 0.0 },
+  { name = "background", type = "str", default = "" },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "color", type = "str", default = "" },
+  { name = "hover_background", type = "str", default = "" },
+  { name = "active_background", type = "str", default = "" },
+  { name = "border_radius", type = "num", default = 0.0 },
+  { name = "border_width", type = "num", default = 0.0 },
+  { name = "border_color", type = "str", default = "" },
+  { name = "basis", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "text_field"
+doc = "A line a person types into. `on_change` fires per keystroke, `on_submit` when they press enter; `multiline` makes it a paragraph field."
+primary = "on_change"
+props = [
+  { name = "value", type = "str", pos = true },
+  { name = "placeholder", type = "str", default = "" },
+  { name = "on_change", handler = "text" },
+  { name = "on_submit", handler = "text" },
+  { name = "multiline", type = "bool", default = false },
+  { name = "rows", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "column"
+children = true
+doc = "Its children down the page."
+props = [
+  { name = "spacing", type = "num", default = -1.0 },
+  { name = "padding", type = "num", default = 0.0 },
+  { name = "background", type = "str", default = "" },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "border_radius", type = "num", default = 0.0 },
+  { name = "border_width", type = "num", default = 0.0 },
+  { name = "border_color", type = "str", default = "" },
+]
+
+[[element]]
+name = "row"
+children = true
+doc = "Its children across the page."
+props = [
+  { name = "spacing", type = "num", default = -1.0 },
+  { name = "padding", type = "num", default = 0.0 },
+  { name = "background", type = "str", default = "" },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "border_radius", type = "num", default = 0.0 },
+  { name = "border_width", type = "num", default = 0.0 },
+  { name = "border_color", type = "str", default = "" },
+]
+
+[[element]]
+name = "grid"
+children = true
+doc = "Its children on tracks. `columns` counts the tracks; `col_span` on a child covers more than one."
+props = [
+  { name = "columns", type = "int", default = 2 },
+  { name = "rows", type = "int", default = 0 },
+  { name = "spacing", type = "num", default = -1.0 },
+  { name = "padding", type = "num", default = 0.0 },
+  { name = "background", type = "str", default = "" },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "border_radius", type = "num", default = 0.0 },
+  { name = "border_width", type = "num", default = 0.0 },
+  { name = "border_color", type = "str", default = "" },
+]
+
+[[element]]
+name = "grid_cell"
+children = true
+doc = "The span written out: this and `col_span:` on the child itself are the same tree."
+props = []
+
+[[element]]
+name = "stack"
+children = true
+doc = "Its children on top of one another."
+props = []
+
+[[element]]
+name = "scroll_view"
+children = true
+native = "height"
+doc = "A pane that scrolls when its children do not fit."
+props = [
+  { name = "height", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "h_scroll_view"
+children = true
+doc = "A pane that scrolls sideways."
+props = []
+
+[[element]]
+name = "data_table"
+children = true
+doc = "The first `row` child is the header; the later ones are data rows, shaded in alternation, in a frame that comes with the element."
+props = []
+
+[[element]]
+name = "modal"
+children = true
+doc = "A panel over the rest of the window while `open`."
+props = [
+  { name = "open", type = "bool", default = true },
+]
+
+[[element]]
+name = "list_view"
+native = "height"
+doc = "Rows built on demand: the builder is called for the rows in view, not for all of them."
+props = [
+  { name = "count", type = "int", pos = true },
+  { name = "row", type = "rows", pos = true },
+  { name = "item_height", type = "num", default = 24.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "virtualized", type = "bool", default = true },
+  { name = "grow", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "table"
+native = "height"
+doc = "A table whose rows are built on demand, laid on tracks whose shares are `widths`. `on_select` receives the row clicked, `on_sort` the header."
+props = [
+  { name = "columns", type = "strs", pos = true },
+  { name = "count", type = "int", pos = true },
+  { name = "row", type = "rows", pos = true },
+  { name = "widths", type = "nums", default = [] },
+  { name = "item_height", type = "num", default = 24.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "grow", type = "num", default = 0.0 },
+  { name = "selected", type = "int", default = -1 },
+  { name = "on_select", handler = "int" },
+  { name = "sort", type = "int", default = -1 },
+  { name = "descending", type = "bool", default = false },
+  { name = "on_sort", handler = "int" },
+]
+
+[[element]]
+name = "image"
+native = "size"
+doc = "A picture from a file."
+props = [
+  { name = "source", type = "str", pos = true },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "svg"
+native = "size"
+doc = "A drawing from an SVG file, painted at any size."
+props = [
+  { name = "source", type = "str", pos = true },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "bar_chart"
+native = "size"
+doc = "Bars. `min`/`max` both 0 take the range from the data; `axis` draws ticks and gridlines; `series` draws several groups."
+props = [
+  { name = "data", type = "nums", pos = true, default = [] },
+  { name = "labels", type = "strs", default = [] },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "min", type = "num", default = 0.0 },
+  { name = "max", type = "num", default = 0.0 },
+  { name = "axis", type = "bool", default = false },
+  { name = "color", type = "str", default = "" },
+  { name = "series", type = "nums2", default = [] },
+  { name = "colors", type = "strs", default = [] },
+]
+
+[[element]]
+name = "line_chart"
+native = "size"
+doc = "A line. Same arguments as the bars, and `series` draws several lines."
+props = [
+  { name = "data", type = "nums", pos = true, default = [] },
+  { name = "labels", type = "strs", default = [] },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "min", type = "num", default = 0.0 },
+  { name = "max", type = "num", default = 0.0 },
+  { name = "axis", type = "bool", default = false },
+  { name = "color", type = "str", default = "" },
+  { name = "series", type = "nums2", default = [] },
+  { name = "colors", type = "strs", default = [] },
+]
+
+[[element]]
+name = "progress"
+native = "size"
+owns_label = true
+doc = "A track filled to `value` (0 to 1); `indeterminate` sweeps instead, for work with no known length."
+props = [
+  { name = "value", type = "num", pos = true },
+  { name = "width", type = "num", default = 0.0 },
+  { name = "height", type = "num", default = 0.0 },
+  { name = "label", type = "str", default = "" },
+  { name = "indeterminate", type = "bool", default = false },
+]
+
+[[element]]
+name = "checkbox"
+owns_label = true
+doc = "A box a person ticks. The block receives the new state."
+primary = "on_change"
+props = [
+  { name = "label", type = "str", pos = true },
+  { name = "checked", type = "bool", default = false },
+  { name = "on_change", handler = "bool" },
+]
+
+[[element]]
+name = "switch"
+owns_label = true
+doc = "A switch a person flips. The block receives the new state."
+primary = "on_change"
+props = [
+  { name = "label", type = "str", pos = true },
+  { name = "checked", type = "bool", default = false },
+  { name = "on_change", handler = "bool" },
+]
+
+[[element]]
+name = "slider"
+doc = "A track a person drags. The block receives the new number."
+primary = "on_change"
+props = [
+  { name = "value", type = "num", default = 0.0 },
+  { name = "min", type = "num", default = 0.0 },
+  { name = "max", type = "num", default = 1.0 },
+  { name = "step", type = "num", default = 0.0 },
+  { name = "on_change", handler = "float" },
+]
+
+[[element]]
+name = "select"
+doc = "A drop-down. The block receives the chosen index."
+primary = "on_change"
+props = [
+  { name = "options", type = "strs", default = [] },
+  { name = "selected", type = "int", default = 0 },
+  { name = "on_change", handler = "int" },
+]
+
+[[element]]
+name = "radio_group"
+doc = "A column of radio buttons. The block receives the chosen index."
+primary = "on_change"
+props = [
+  { name = "options", type = "strs", default = [] },
+  { name = "selected", type = "int", default = 0 },
+  { name = "on_change", handler = "int" },
+]
+
+[[element]]
+name = "segmented"
+doc = "A row of joined toggle buttons. The block receives the chosen index."
+primary = "on_change"
+props = [
+  { name = "options", type = "strs", default = [] },
+  { name = "selected", type = "int", default = 0 },
+  { name = "on_change", handler = "int" },
+]
+
+[[element]]
+name = "tab_bar"
+doc = "A row of tabs. The block receives the chosen index."
+primary = "on_change"
+props = [
+  { name = "labels", type = "strs", default = [] },
+  { name = "active", type = "int", default = 0 },
+  { name = "on_change", handler = "int" },
+]
+
+[[element]]
+name = "number_field"
+doc = "A field for a number: enter or leaving it commits, text that is not a number is dropped. `min`/`max` both 0 is unbounded, `step` 0 is free."
+primary = "on_change"
+props = [
+  { name = "value", type = "num", pos = true },
+  { name = "min", type = "num", default = 0.0 },
+  { name = "max", type = "num", default = 0.0 },
+  { name = "step", type = "num", default = 0.0 },
+  { name = "placeholder", type = "str", default = "" },
+  { name = "on_change", handler = "float" },
+]
+
+[[element]]
+name = "int_field"
+doc = "The same field for a whole number."
+primary = "on_change"
+props = [
+  { name = "value", type = "int", pos = true },
+  { name = "min", type = "int", default = 0 },
+  { name = "max", type = "int", default = 0 },
+  { name = "step", type = "int", default = 1 },
+  { name = "placeholder", type = "str", default = "" },
+  { name = "on_change", handler = "int" },
+]
+
+[[element]]
+name = "link"
+doc = "Text that opens a page when clicked. There is no handler: opening a page is not the app's state."
+props = [
+  { name = "label", type = "str", pos = true },
+  { name = "url", type = "str", pos = true },
+  { name = "size", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "spinner"
+doc = "A turning ring, for work with no known length."
+props = [
+  { name = "size", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "spacer"
+doc = "Takes the space its parent has left over; 0 is one share."
+props = [
+  { name = "grow", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "divider"
+doc = "A rule across its parent: level in a column, upright in a row."
+props = [
+  { name = "color", type = "str", default = "" },
+  { name = "thickness", type = "num", default = 0.0 },
+]
+
+[[element]]
+name = "canvas"
+native = "size"
+paints = true
+doc = "A grid of virtual pixels, painted by the commands written in its block. A color here is a NUMBER: the index of a color in `palette`, which is how drawing code written for a pixel machine ports line for line. `scale` is how many logical pixels one virtual pixel takes."
+props = [
+  { name = "width", type = "int", pos = true },
+  { name = "height", type = "int", pos = true },
+  { name = "scale", type = "int", default = 1 },
+  { name = "background", type = "int", default = 0 },
+  { name = "palette", type = "strs", default = [] },
+]
