@@ -20,6 +20,7 @@
 
 require "fileutils"
 require "open3"
+require "tmpdir"
 
 ROOT = File.expand_path("..", __dir__)          # wakakusa/
 REPO = File.expand_path("..", ROOT)             # the checkout
@@ -44,8 +45,13 @@ USAGE = <<~TXT
     check      what the app writes that Wakakusa cannot take
     run        run it interpreted, in a window
     translate  emit the C the compiled run is built from
-    build      build the native binary
+    build      build the native binary [--release] [--app]
     gate       run it both ways headless and compare the two runs
+
+  --release drops the symbol table, which is a fifth of the file.
+  --app wraps the binary in a macOS application bundle under dist/,
+  double-clickable, with <stem>.icns or <stem>.png as its icon if one
+  sits beside the app.
 
   --fresh deletes a path before EACH run, so an app that keeps a file
   or a database starts both runs from the same nothing. Repeatable.
@@ -154,7 +160,7 @@ end
 # the binary the size of the app rather than the size of the engine
 # (measured on the counter: 35.4 MB to 14.9 MB). The threaded runtime
 # is not optional: every app has `task` behind it.
-def build(app)
+def build(app, release: false)
   c = translate(app)
   bin = File.join(gate_dir(app), stem(app))
   sh!("cc", "-O2", "-w", "-Wl,-dead_strip", "-DSP_THREADS", "-ftls-model=initial-exec",
@@ -162,7 +168,118 @@ def build(app)
       *packages(app), "#{spinel_dir}/lib/libspinel_rt_mt.a",
       "#{engine}/libpixie_capi.a", *FRAMEWORKS, "-lpthread",
       "-o", bin, what: "cc")
+  # The symbol table is a fifth of the file and nothing on the machine
+  # it ships to reads it. A gate build keeps it: the round is a
+  # comparison, and a crash there is one to read.
+  sh!("strip", bin, what: "strip") if release
   bin
+end
+
+# --- shipping ---------------------------------------------------------------
+
+# The window's title, read off the app's own `run` line. It names the
+# bundle and shows in the menu bar, and nothing else in this program
+# needs it, so reading the source beats starting the app to ask.
+def window_title(app)
+  m = File.read(app).match(/\brun\([^)]*\btitle:\s*(["'])(.*?)\1/m)
+  m ? m[2] : stem(app)
+end
+
+# An icon rides along when <stem>.icns or <stem>.png sits beside the
+# app. A PNG goes through the only pipeline macOS offers: sips writes
+# every size into an iconset and iconutil packs it. If either balks the
+# bundle simply has no icon, which is not worth failing a build over.
+def install_icon(app, res)
+  dir = File.dirname(File.expand_path(app))
+  dest = File.join(res, "icon.icns")
+  icns = File.join(dir, "#{stem(app)}.icns")
+  png = File.join(dir, "#{stem(app)}.png")
+  if File.file?(icns)
+    FileUtils.cp(icns, dest)
+  elsif File.file?(png)
+    return "" unless png_to_icns(png, dest)
+  else
+    return ""
+  end
+  "  <key>CFBundleIconFile</key>\n  <string>icon</string>\n"
+end
+
+def png_to_icns(png, dest)
+  Dir.mktmpdir do |td|
+    iconset = File.join(td, "app.iconset")
+    FileUtils.mkdir_p(iconset)
+    [16, 32, 128, 256, 512].each do |base|
+      [1, 2].each do |scale|
+        px = (base * scale).to_s
+        name = "icon_#{base}x#{base}#{scale == 1 ? "" : "@2x"}.png"
+        ok = quietly("sips", "-z", px, px, png, "--out", File.join(iconset, name))
+        return false unless ok
+      end
+    end
+    quietly("iconutil", "-c", "icns", iconset, "-o", dest)
+  end
+end
+
+def quietly(*cmd)
+  system(*cmd, out: File::NULL, err: File::NULL)
+end
+
+# `--app`: a macOS application bundle under dist/, beside the app. The
+# binary carries the engine and the compiled Ruby, and links nothing
+# but the system's own libraries, so the bundle is the whole program:
+# it runs on a machine with neither Ruby nor the compiler installed.
+def app_bundle(app, bin)
+  title = window_title(app)
+  safe = title.gsub(/[^A-Za-z0-9 ._-]/, "").strip
+  safe = stem(app) if safe.empty?
+  root = File.join(File.dirname(File.expand_path(app)), "dist", "#{safe}.app")
+  macos = File.join(root, "Contents", "MacOS")
+  res = File.join(root, "Contents", "Resources")
+  FileUtils.rm_rf(root)
+  FileUtils.mkdir_p([macos, res])
+  FileUtils.cp(bin, File.join(macos, stem(app)))
+  File.write(File.join(root, "Contents", "Info.plist"), plist(title, stem(app), install_icon(app, res)))
+  # Ad-hoc signed, like every other artifact here: unsigned, macOS
+  # refuses to open it at all.
+  sh!("codesign", "--force", "-s", "-", root, what: "codesign")
+  root
+end
+
+def plist(title, exe, icon_line)
+  <<~XML
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>CFBundleName</key>
+      <string>#{title}</string>
+      <key>CFBundleDisplayName</key>
+      <string>#{title}</string>
+      <key>CFBundleExecutable</key>
+      <string>#{exe}</string>
+      <key>CFBundleIdentifier</key>
+      <string>com.wakakusa.#{exe}</string>
+      <key>CFBundlePackageType</key>
+      <string>APPL</string>
+      <key>CFBundleShortVersionString</key>
+      <string>0.1.0</string>
+      <key>CFBundleVersion</key>
+      <string>0.1.0</string>
+      <key>LSMinimumSystemVersion</key>
+      <string>11.0</string>
+      <key>NSHighResolutionCapable</key>
+      <true/>
+    #{icon_line.chomp}
+    </dict>
+    </plist>
+  XML
+end
+
+def dir_size(root)
+  total = Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
+             .select { |f| File.file?(f) }
+             .sum { |f| File.size(f) }
+  format("%.1f MB", total / 1_000_000.0)
 end
 
 def interpreted(app, script)
@@ -208,11 +325,12 @@ def cmd_translate(app, _opts)
   puts "emitted: #{rel(c)}"
 end
 
-def cmd_build(app, _opts)
+def cmd_build(app, opts)
   exit 1 unless check(app).empty?
 
-  bin = build(app)
+  bin = build(app, release: opts[:release])
   puts "built: #{rel(bin)} (#{size_of(bin)})"
+  puts "bundle: #{rel(root = app_bundle(app, bin))} (#{dir_size(root)})" if opts[:app]
   puts "  not gate-checked — `gate` with a script proves the two runs agree"
 end
 
@@ -253,12 +371,14 @@ die "no command\n\n#{USAGE}" if mode.nil?
 die "unknown command `#{mode}`\n\n#{USAGE}" unless COMMANDS.include?(mode)
 
 app = nil
-opts = { script: "", fresh: [] }
+opts = { script: "", fresh: [], release: false, app: false }
 until ARGV.empty?
   arg = ARGV.shift
   case arg
   when "--script" then opts[:script] = ARGV.shift.to_s
   when "--fresh" then opts[:fresh].push(ARGV.shift.to_s)
+  when "--release" then opts[:release] = true
+  when "--app" then opts[:app] = true
   when /\A--/ then die "unknown option `#{arg}`\n\n#{USAGE}"
   else
     die "wakakusa #{mode} takes one app" unless app.nil?
@@ -272,6 +392,9 @@ if !opts[:script].empty? && %w[check run translate build].include?(mode)
 end
 if !opts[:fresh].empty? && mode != "gate"
   die "--fresh belongs to gate: it is there so the two runs start alike"
+end
+if (opts[:release] || opts[:app]) && mode != "build"
+  die "--release and --app belong to build: they are how an app ships"
 end
 
 send("cmd_#{mode}", app, opts)

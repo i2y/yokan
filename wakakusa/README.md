@@ -135,6 +135,21 @@ sqlite_exec(DB, "INSERT INTO expenses VALUES (?, ?, ?)", [name, yen, cat])
 rows = sqlite_rows(DB, "SELECT name, amount FROM expenses ORDER BY rowid")
 ```
 
+## When you ship it
+
+`wakakusa build --release --app` writes a macOS application bundle
+beside the app. The binary carries the engine and the compiled Ruby and
+links nothing but the system's own libraries, so the bundle is the whole
+program: it opens on a machine with neither Ruby nor the compiler
+installed. A `<stem>.png` or `<stem>.icns` next to the app becomes its
+icon.
+
+```console
+$ wakakusa build demo/todo.rb --release --app
+built:  demo/.gate/todo (11.5 MB)
+bundle: demo/dist/todo.app (11.7 MB)
+```
+
 ## The pieces
 
 - `crates/pixie-capi` (in the substrate, not here) — the engine behind
@@ -160,7 +175,10 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 | the engine's crate, rebuilt after an edit | 2.6 s |
 | the compiler's C output (the library and an app) | under 10 ms, 100 KB |
 | `cc` link of the compiled run | 0.29 s |
-| the compiled binary | 15.0 MB |
+| the compiled binary | 15.2 MB |
+| the shipped binary (`--release`) | 11.5 MB |
+| the application bundle | 11.7 MB |
+| launch to a window on screen | under 0.3 s |
 | one gate round, engine already built | 1.8 s |
 | every demo, both runs | 36 s |
 
