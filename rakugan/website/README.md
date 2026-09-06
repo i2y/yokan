@@ -67,6 +67,9 @@ first screen changes.
 
 ## Where it deploys
 
-`site_url` is `https://i2y.github.io/rakugan/`: the site is written to
-stand on its own, as its own repository's Pages site. Until that
-repository exists, build it here and read it locally.
+`site_url` is `https://i2y.github.io/yokan/rakugan/`. One repository
+means one Pages site, so Yokan's is the root and this one sits under it;
+`.github/workflows/docs.yml` builds all three on a push to `main` and
+deploys them as one artifact. The site is still written to stand on its
+own: moving it to `i2y/rakugan` means changing `site_url` and the two
+`extra.alternate` links, and nothing else.

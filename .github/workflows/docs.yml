@@ -1,14 +1,27 @@
 name: docs
 
-# Build the Zensical site (website/ -> website/build/) and deploy it
-# to GitHub Pages on every push to main. Pages must be enabled with
-# "GitHub Actions" as the source in the repo settings.
+# Build the three Zensical sites and deploy them to GitHub Pages as one
+# artifact on every push to main. Pages must be enabled with "GitHub
+# Actions" as the source in the repo settings.
+#
+# One repository, so one Pages site: Yokan's is the root and the other
+# two languages sit under it.
+#
+#   website/          -> https://i2y.github.io/yokan/           (+ /ja/)
+#   wakakusa/website/ -> https://i2y.github.io/yokan/wakakusa/  (+ /ja/)
+#   rakugan/website/  -> https://i2y.github.io/yokan/rakugan/   (+ /ja/)
+#
+# Each site's `site_url` and language-switcher links are written for the
+# path above, so moving one to a repository of its own means changing
+# those two places and nothing else.
 
 on:
   push:
     branches: [main]
     paths:
       - "website/**"
+      - "wakakusa/website/**"
+      - "rakugan/website/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -32,17 +45,51 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build site (English, then Japanese into build/ja)
+      # Each site builds both of its languages through its own build.sh,
+      # which enforces the order: English cleans build/, Japanese then
+      # writes build/ja.
+      - name: Build Yokan's site (English, then Japanese into build/ja)
         run: |
           cd website
           uv venv .venv
           uv pip install --python .venv/bin/python zensical
           ./build.sh
 
+      - name: Build Wakakusa's site
+        run: |
+          cd wakakusa/website
+          uv venv .venv
+          uv pip install --python .venv/bin/python zensical
+          ./build.sh
+
+      - name: Build Rakugan's site
+        run: |
+          cd rakugan/website
+          uv venv .venv
+          uv pip install --python .venv/bin/python zensical
+          ./build.sh
+
+      # One artifact: Yokan at the root, the other two under it. Copied
+      # rather than built in place, so no site's build.sh has to know
+      # about the others.
+      - name: Assemble the three into one tree
+        run: |
+          mkdir -p site
+          cp -R website/build/. site/
+          mkdir -p site/wakakusa site/rakugan
+          cp -R wakakusa/website/build/. site/wakakusa/
+          cp -R rakugan/website/build/. site/rakugan/
+          test -f site/index.html
+          test -f site/ja/index.html
+          test -f site/wakakusa/index.html
+          test -f site/wakakusa/ja/index.html
+          test -f site/rakugan/index.html
+          test -f site/rakugan/ja/index.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: website/build
+          path: site
 
   deploy:
     needs: build

@@ -1,6 +1,6 @@
 [project]
 site_name = "Wakakusa"
-site_url = "https://i2y.github.io/wakakusa/"
+site_url = "https://i2y.github.io/yokan/wakakusa/"
 site_description = "Ruby desktop apps, shipped as one native binary: what runs under CRuby is what ships, and `wakakusa gate` compares the two runs byte for byte."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
@@ -34,12 +34,12 @@ nav = [
 
 [[project.extra.alternate]]
 name = "English"
-link = "/wakakusa/"
+link = "/yokan/wakakusa/"
 lang = "en"
 
 [[project.extra.alternate]]
 name = "日本語"
-link = "/wakakusa/ja/"
+link = "/yokan/wakakusa/ja/"
 lang = "ja"
 
 [project.theme]

@@ -144,14 +144,14 @@ wakakusa-site-gen:
     cd wakakusa/website && ruby tools/elements_page.rb && ruby tools/demos_page.rb
     ruby wakakusa/website/tools/site_check.rb
 
-# The pages carry absolute links (site_url ends in /wakakusa/), so the
-# build has to sit under that path or every link 404s — hence the
-# symlinked docroot. Port 8002, so Yokan's site can stay up on 8001.
+# The pages carry absolute links (site_url ends in /yokan/wakakusa/), so
+# the build has to sit under that path or every link 404s — hence the
+# nested docroot. Port 8002, so Yokan's site can stay up on 8001.
 #
-# Build the Wakakusa documentation site and read it at localhost:8002/wakakusa/.
+# Build the Wakakusa documentation site and read it at localhost:8002/yokan/wakakusa/.
 wakakusa-site-serve: wakakusa-site
-    @mkdir -p wakakusa/website/.serve && ln -sfn ../build wakakusa/website/.serve/wakakusa
-    @echo "http://localhost:8002/wakakusa/  ·  http://localhost:8002/wakakusa/ja/"
+    @mkdir -p wakakusa/website/.serve/yokan && ln -sfn ../../build wakakusa/website/.serve/yokan/wakakusa
+    @echo "http://localhost:8002/yokan/wakakusa/  ·  http://localhost:8002/yokan/wakakusa/ja/"
     python3 -m http.server 8002 -d wakakusa/website/.serve
 
 # Rakugan is Perl 5 on the same engine: its compiled run is a translation
@@ -189,14 +189,14 @@ rakugan-site-gen:
         && perl tools/demos_page.pl && perl tools/refusals_page.pl
     perl rakugan/website/tools/site_check.pl
 
-# The pages carry absolute links (site_url ends in /rakugan/), so the
-# build has to sit under that path or every link 404s — hence the
-# symlinked docroot. Port 8003, so Yokan's and Wakakusa's can stay up.
+# The pages carry absolute links (site_url ends in /yokan/rakugan/), so
+# the build has to sit under that path or every link 404s — hence the
+# nested docroot. Port 8003, so Yokan's and Wakakusa's can stay up.
 #
-# Build the Rakugan documentation site and read it at localhost:8003/rakugan/.
+# Build the Rakugan documentation site and read it at localhost:8003/yokan/rakugan/.
 rakugan-site-serve: rakugan-site
-    @mkdir -p rakugan/website/.serve && ln -sfn ../build rakugan/website/.serve/rakugan
-    @echo "http://localhost:8003/rakugan/  ·  http://localhost:8003/rakugan/ja/"
+    @mkdir -p rakugan/website/.serve/yokan && ln -sfn ../../build rakugan/website/.serve/yokan/rakugan
+    @echo "http://localhost:8003/yokan/rakugan/  ·  http://localhost:8003/yokan/rakugan/ja/"
     python3 -m http.server 8003 -d rakugan/website/.serve
 
 # ---- documentation site ----------------------------------------------------

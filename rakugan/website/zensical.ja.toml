@@ -1,6 +1,6 @@
 [project]
 site_name = "Rakugan"
-site_url = "https://i2y.github.io/rakugan/ja/"
+site_url = "https://i2y.github.io/yokan/rakugan/ja/"
 site_description = "Perl のデスクトップアプリを 1 本のネイティブバイナリにして配る。perl で動かした実行とコンパイルしたバイナリを、rakugan gate が 1 バイトずつ突き合わせる。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
@@ -34,12 +34,12 @@ nav = [
 
 [[project.extra.alternate]]
 name = "English"
-link = "/rakugan/"
+link = "/yokan/rakugan/"
 lang = "en"
 
 [[project.extra.alternate]]
 name = "日本語"
-link = "/rakugan/ja/"
+link = "/yokan/rakugan/ja/"
 lang = "ja"
 
 [project.theme]

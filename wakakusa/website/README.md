@@ -58,6 +58,9 @@ the pages' absolute links are written for.
 
 ## Where it deploys
 
-`site_url` is `https://i2y.github.io/wakakusa/`: the site is written
-to stand on its own, as its own repository's Pages site. Until that
-repository exists, build it here and read it locally.
+`site_url` is `https://i2y.github.io/yokan/wakakusa/`. One repository
+means one Pages site, so Yokan's is the root and this one sits under it;
+`.github/workflows/docs.yml` builds all three on a push to `main` and
+deploys them as one artifact. The site is still written to stand on its
+own: moving it to `i2y/wakakusa` means changing `site_url` and the two
+`extra.alternate` links, and nothing else.
