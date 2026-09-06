@@ -118,14 +118,14 @@ constants are written from the same table by its own generator.
 
 ## What is in today
 
-Twenty-seven demos gate green — the counter, the todo list, a
+Thirty-eight demos gate green — the counter, the todo list, a
 calculator on two layouts, a roster that sorts, charts, a dashboard
 driven by a timer, work done off the window's thread — and every one
 of them is a line-by-line port of the same app in the two sibling
-languages, so the screens can be compared side by side. Twenty-one of
-the twenty-seven windows are pixel-identical to Wakakusa's; of the six
-that are not, three are alive when the picture is taken and three are
-differences this port meant (one of them is perl printing `0` where
+languages, so the screens can be compared side by side. Twenty-eight of
+the thirty-eight windows are pixel-identical to Wakakusa's; of the ten
+that are not, three are alive when the picture is taken and the rest
+are differences this port meant (one of them is perl printing `0` where
 Ruby prints `0.0`, which is perl being right about perl).
 
 What an app can write:
@@ -153,6 +153,21 @@ What an app can write:
   live reload: edit the file while the window is open and the class is
   redefined under the object it already has.
 
+- **Perl's own functions.** `length` `substr` `index` `uc` `lc`
+  `ucfirst` `reverse` `join` `split` `abs` `sqrt` `sprintf`, POSIX's
+  `floor` `ceil` `fmod` `strftime`, List::Util's `sum` `max` `min`
+  `uniq` `first`, and regular expressions — `=~`, `s///`, `split /…/`,
+  `$1` and `$+{name}`. Where the name is Perl's, perl's output is the
+  specification: every one of them is held to a table of 1,019 rows
+  that perl itself printed, and the sweep fails when a table is not
+  what perl says now.
+- **The framework's own.** Files, a database with bound values, JSON
+  read by path, the clipboard, the keyboard and the menu bar, dialogs,
+  and sound. One implementation answers both runs: the compiled one
+  links it through pixie's binding door and the interpreted one
+  reaches the same Rust through the engine's C face, so what the gate
+  compares is one library answering twice.
+
 What it refuses, it refuses by name. Twenty of those refusals have a
 file in `test/refuse/` that triggers them and the message they must
 print word for word, and the sweep checks them before it gates
@@ -160,9 +175,9 @@ anything: an unsorted walk of a hash, `say` and `print`, a string
 `eval`, `local`, `wantarray`, `each`, `tie`, `"az"++`, a string where
 a number is wanted, a view that calls a method, and the rest.
 
-Still to come, in the order Wakakusa took them: the standard library's
-twins, files and databases, the keyboard and the menu bar, the canvas,
-`--release` and a double-clickable bundle, and the tour.
+Still to come, in the order Wakakusa took them: the canvas and the two
+games, `--release` and a double-clickable bundle, the tour, and the
+site.
 
 ## The name
 
