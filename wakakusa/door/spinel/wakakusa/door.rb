@@ -46,6 +46,20 @@ module PixieC
   ffi_func :pixie_push_str, [:long, :int32, :str], :void
   ffi_func :pixie_push_num, [:long, :int32, :double], :void
   ffi_func :pixie_list_break, [:long, :int32], :void
+  ffi_func :pixie_op_pixel, [:long, :long, :long, :long], :void
+  ffi_func :pixie_op_line, [:long, :long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_rect, [:long, :long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_rect_outline, [:long, :long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_circle, [:long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_circle_outline, [:long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_triangle, [:long, :long, :long, :long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_triangle_outline, [:long, :long, :long, :long, :long, :long, :long, :long], :void
+  ffi_func :pixie_op_sprite, [:long, :long, :long, :str, :long, :long, :long, :long, :long, :int32, :int32], :void
+  ffi_func :pixie_op_pixel_text, [:long, :long, :long, :str, :long], :void
+  ffi_func :pixie_quit, [], :void
+  ffi_func :pixie_key_down, [:str], :int32
+  ffi_func :pixie_key_pressed, [:str], :int32
+  ffi_func :pixie_key_released, [:str], :int32
   ffi_func :pixie_on, [:long, :int32, :long], :void
   ffi_func :pixie_rows, [:long, :int32, :long], :void
   ffi_func :pixie_children, [:long, :int_array, :size_t], :void

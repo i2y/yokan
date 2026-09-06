@@ -124,9 +124,21 @@ def rel(path)
 end
 
 def capture(env, *cmd, what:)
-  out = IO.popen(env, cmd, &:read)
-  die "#{what} failed" unless $?.success?
+  out, err, status = Open3.capture3(env, *cmd)
+  unless status.success?
+    warn trim(err) unless err.strip.empty?
+    die "#{what} failed"
+  end
   out
+end
+
+# What a failed run is worth reading. A refusal says its line and then
+# the process aborts where it stands, because a panic cannot cross the
+# call that brought the engine in; under CRuby the abort then brings a
+# page of interpreter crash report with it. The line is the message.
+def trim(err)
+  lines = err.lines.take_while { |l| !l.include?("[BUG]") && !l.start_with?("fatal runtime error") }
+  lines.join.strip
 end
 
 def translate(app)

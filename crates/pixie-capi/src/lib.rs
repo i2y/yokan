@@ -32,7 +32,7 @@ use std::rc::Rc;
 use pixie_engine_gpui::{ReloadWatch, run_app};
 use pixie_kernel::{
     AsyncCtx, BoolListener, Component, Element, ErasedHandle, FloatListener, IntListener,
-    LazyRows, List, Listener, Runtime, Str, TextListener, World, mount,
+    LazyRows, List, Listener, Op, Runtime, Str, TextListener, World, mount, speak_refusals,
 };
 
 mod vocab;
@@ -136,6 +136,11 @@ struct Bag {
     handlers: Vec<(i32, i64)>,
     rows: Vec<(i32, i64)>,
     children: Vec<Element>,
+    // A canvas's drawing commands, in the order they were painted. They
+    // are not properties and not children: a command means nothing
+    // outside the canvas it was written in, so it rides on the bag of
+    // the canvas that is open.
+    ops: Vec<Op>,
     read: RefCell<Vec<i32>>,
 }
 
@@ -457,6 +462,151 @@ pub extern "C" fn pixie_list_break(el: i64, key: i32) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Painting a canvas.
+//
+// A command is not an element: it takes none of the riders, nothing can
+// click it and it means nothing outside a canvas. So it has no handle
+// and no `pixie_end` — it names the open canvas and is done. Every
+// coordinate is a whole virtual pixel and every color is an index into
+// the canvas's palette, which is what lets a frame written for a pixel
+// machine cross unchanged.
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_pixel(el: i64, x: i64, y: i64, color: i64) {
+    with_open(el, |b| b.ops.push(Op::Pixel { x, y, color }));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_line(el: i64, x1: i64, y1: i64, x2: i64, y2: i64, color: i64) {
+    with_open(el, |b| {
+        b.ops.push(Op::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            color,
+        })
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_rect(el: i64, x: i64, y: i64, w: i64, h: i64, color: i64) {
+    with_open(el, |b| b.ops.push(Op::Rect { x, y, w, h, color }));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_rect_outline(el: i64, x: i64, y: i64, w: i64, h: i64, color: i64) {
+    with_open(el, |b| b.ops.push(Op::RectOutline { x, y, w, h, color }));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_circle(el: i64, x: i64, y: i64, r: i64, color: i64) {
+    with_open(el, |b| b.ops.push(Op::Circle { x, y, r, color }));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_circle_outline(el: i64, x: i64, y: i64, r: i64, color: i64) {
+    with_open(el, |b| b.ops.push(Op::CircleOutline { x, y, r, color }));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_triangle(
+    el: i64,
+    x1: i64,
+    y1: i64,
+    x2: i64,
+    y2: i64,
+    x3: i64,
+    y3: i64,
+    color: i64,
+) {
+    with_open(el, |b| {
+        b.ops.push(Op::Triangle {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+            color,
+        })
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_op_triangle_outline(
+    el: i64,
+    x1: i64,
+    y1: i64,
+    x2: i64,
+    y2: i64,
+    x3: i64,
+    y3: i64,
+    color: i64,
+) {
+    with_open(el, |b| {
+        b.ops.push(Op::TriangleOutline {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+            color,
+        })
+    });
+}
+
+/// A rectangle of another image, copied in. `colkey` is the palette
+/// index that is treated as transparent, and `-1` means none.
+///
+/// # Safety
+/// `source` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn pixie_op_sprite(
+    el: i64,
+    x: i64,
+    y: i64,
+    source: *const c_char,
+    u: i64,
+    v: i64,
+    w: i64,
+    h: i64,
+    colkey: i64,
+    flip_x: i32,
+    flip_y: i32,
+) {
+    let source = Str::from(unsafe { text_arg(source) }.as_str());
+    with_open(el, |b| {
+        b.ops.push(Op::Sprite {
+            x,
+            y,
+            source,
+            u,
+            v,
+            w,
+            h,
+            colkey,
+            flip_x: flip_x != 0,
+            flip_y: flip_y != 0,
+        })
+    });
+}
+
+/// A line in the engine's own 4x6 font, laid out on the pixel grid.
+///
+/// # Safety
+/// `text` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_op_pixel_text(el: i64, x: i64, y: i64, text: *const c_char, color: i64) {
+    let text = Str::from(unsafe { text_arg(text) }.as_str());
+    with_open(el, |b| b.ops.push(Op::PixelText { x, y, text, color }));
+}
+
+// ---------------------------------------------------------------------------
+
 /// The handler this property calls: an integer the caller assigned.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_on(el: i64, key: i32, handler: i64) {
@@ -747,6 +897,16 @@ fn materialize(b: &Bag, children: Vec<Element>) -> Element {
         KIND_DIVIDER => Element::Divider {
             color: b.s(K_COLOR),
             thickness: b.n(K_THICKNESS),
+        },
+        // The commands were written into the bag while the canvas was
+        // open, so they arrive in the order they were painted.
+        KIND_CANVAS => Element::Canvas {
+            width: b.i(K_WIDTH),
+            height: b.i(K_HEIGHT),
+            scale: b.i(K_SCALE),
+            background: b.i(K_BACKGROUND),
+            palette: b.strs(K_PALETTE),
+            ops: b.ops.clone(),
         },
         other => err_text(&format!("no element numbered {other}")),
     }
@@ -1069,6 +1229,52 @@ fn answer_with(text: &str) {
     ANSWER.with(|c| *c.borrow_mut() = text.chars().collect());
 }
 
+/// The app asks to close its window.
+///
+/// The engine takes the request on its next frame. A headless run
+/// never takes it, so a script keeps running its steps and the two
+/// runs print the same dumps: a window closing is not something a dump
+/// can show, and a binary that exited halfway through a script would
+/// differ from the interpreted one for a reason the app never asked
+/// about.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_quit() {
+    pixie_kernel::quit::request();
+}
+
+/// Is this key held down right now?
+///
+/// The name is the key alone (`left`, `space`, `a`), never a chord: a
+/// game asks what the hands are doing, which is a different question
+/// from the one a shortcut answers. Read it in a timer, never in a
+/// view — a view that read the keyboard would draw one thing in a
+/// window and another under a script.
+///
+/// # Safety
+/// `name` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_key_down(name: *const c_char) -> i32 {
+    pixie_kernel::keys::down(&unsafe { text_arg(name) }) as i32
+}
+
+/// Did this key go down since the last frame? A held key answers once.
+///
+/// # Safety
+/// `name` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_key_pressed(name: *const c_char) -> i32 {
+    pixie_kernel::keys::pressed(&unsafe { text_arg(name) }) as i32
+}
+
+/// Did this key come up since the last frame?
+///
+/// # Safety
+/// `name` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_key_released(name: *const c_char) -> i32 {
+    pixie_kernel::keys::released(&unsafe { text_arg(name) }) as i32
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_answer_length() -> i64 {
     ANSWER.with(|c| c.borrow().len() as i64)
@@ -1359,6 +1565,10 @@ pub unsafe extern "C" fn pixie_run(
     build: PixieBuildFn,
 ) -> i32 {
     let title = unsafe { text_arg(title) };
+    // A refusal has to say its line here. It travels by panic, and a
+    // panic cannot cross the call that brought us in: it aborts where
+    // it stands, so nothing is left to catch it and speak.
+    speak_refusals();
     if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
         let light = std::env::var("PIXIE_THEME").is_ok_and(|v| v == "light");
         print!("{}", headless(build, &script, light));

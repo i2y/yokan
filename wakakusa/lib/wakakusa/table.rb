@@ -39,10 +39,12 @@ module WK
     "spinner" => %w[a11y_label animate col_span disabled easing enter exit height max_width min_width role row_span size theme tooltip width],
     "spacer" => %w[a11y_label animate col_span disabled easing enter exit grow height max_width min_width role row_span theme tooltip width],
     "divider" => %w[a11y_label animate col_span color disabled easing enter exit height max_width min_width role row_span theme thickness tooltip width],
+    "canvas" => %w[a11y_label animate background col_span disabled easing enter exit height max_width min_width palette role row_span scale theme tooltip width],
   }.freeze
 
-  # The elements whose block writes their children, not a handler.
-  CONTAINERS = %w[column row grid grid_cell stack scroll_view h_scroll_view data_table modal].freeze
+  # The elements whose block writes what is inside them, not a
+  # handler: children for most of them, drawing commands for a canvas.
+  CONTAINERS = %w[column row grid grid_cell stack scroll_view h_scroll_view data_table modal canvas].freeze
 
   HANDLERS = %w[on_change on_click on_select on_sort on_submit].freeze
 end

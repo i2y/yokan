@@ -490,6 +490,22 @@ def divider(color: "", thickness: 0.0, **riders)
   wakakusa_done(el)
 end
 
+# A grid of virtual pixels, painted by the commands written in its block.
+# A color here is a NUMBER: the index of a color in `palette`, which is
+# how drawing code written for a pixel machine ports line for line.
+# `scale` is how many logical pixels one virtual pixel takes.
+def canvas(width, height, scale: 1, background: 0, palette: [], **riders, &blk)
+  el = PixieC.pixie_el(WK::KIND_CANVAS)
+  PixieC.pixie_int(el, WK::K_WIDTH, width)
+  PixieC.pixie_int(el, WK::K_HEIGHT, height)
+  PixieC.pixie_int(el, WK::K_SCALE, scale) if scale != 1
+  PixieC.pixie_int(el, WK::K_BACKGROUND, background) if background != 0
+  palette.each { |v| PixieC.pixie_push_str(el, WK::K_PALETTE, v) }
+  wakakusa_paint(el, &blk)
+  wakakusa_riders(el, riders, false)
+  wakakusa_done(el)
+end
+
 # The keywords every element takes. An element that owns one of
 # these names under its own meaning never gets here: Ruby binds it
 # to that element's own keyword first.

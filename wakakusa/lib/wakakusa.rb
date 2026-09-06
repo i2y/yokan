@@ -5,4 +5,5 @@
 require "wakakusa/keys"
 require "wakakusa/door"
 require "wakakusa/elements"
+require "wakakusa/canvas"
 require "wakakusa/runtime"

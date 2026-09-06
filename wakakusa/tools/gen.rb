@@ -189,7 +189,8 @@ def signature(el)
   end
   props.reject { |p| p["pos"] }.each { |p| head << "#{p.fetch("name")}: #{ruby_default(p)}" }
   head << "**riders"
-  head << "&blk" if el["primary"] || el["children"] || props.any? { |p| p["type"] == "rows" }
+  head << "&blk" if el["primary"] || el["children"] || el["paints"] ||
+                   props.any? { |p| p["type"] == "rows" }
   head.join(", ")
 end
 
@@ -266,6 +267,7 @@ def gen_elements
       end
     end
     out << "  wakakusa_children(el, wakakusa_collect(kids, &blk))\n" if el["children"]
+    out << "  wakakusa_paint(el, &blk)\n" if el["paints"]
     out << "  wakakusa_riders(el, riders, #{!!el["owns_label"]})\n"
     out << "  wakakusa_done(el)\n"
     out << "end\n"
@@ -314,8 +316,9 @@ def gen_table
     out << "    \"#{el.fetch("name")}\" => %w[#{allowed.uniq.sort.join(" ")}],\n"
   end
   out << "  }.freeze\n"
-  containers = ELEMENTS.select { |el| el["children"] }.map { |el| el.fetch("name") }
-  out << "\n  # The elements whose block writes their children, not a handler.\n"
+  containers = ELEMENTS.select { |el| el["children"] || el["paints"] }.map { |el| el.fetch("name") }
+  out << "\n  # The elements whose block writes what is inside them, not a\n"
+  out << "  # handler: children for most of them, drawing commands for a canvas.\n"
   out << "  CONTAINERS = %w[#{containers.join(" ")}].freeze\n"
   handlers = ELEMENTS.flat_map { |el| el.fetch("props").select { |p| handler?(p) }.map { |p| p.fetch("name") } }
   out << "\n  HANDLERS = %w[#{handlers.uniq.sort.join(" ")}].freeze\n"

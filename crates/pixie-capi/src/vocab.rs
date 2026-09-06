@@ -49,6 +49,7 @@ pub const KIND_LINK: i32 = 29;
 pub const KIND_SPINNER: i32 = 30;
 pub const KIND_SPACER: i32 = 31;
 pub const KIND_DIVIDER: i32 = 32;
+pub const KIND_CANVAS: i32 = 33;
 
 pub const K_WIDTH: i32 = 1;
 pub const K_HEIGHT: i32 = 2;
@@ -120,6 +121,8 @@ pub const K_OPTIONS: i32 = 67;
 pub const K_ACTIVE: i32 = 68;
 pub const K_URL: i32 = 69;
 pub const K_THICKNESS: i32 = 70;
+pub const K_SCALE: i32 = 71;
+pub const K_PALETTE: i32 = 72;
 
 /// `(kind, key, value)` — what a property reads as when nobody wrote
 /// it. Kind 0 is a rider, which means the same on every element.
@@ -200,6 +203,8 @@ pub const DEF_INT: &[(i32, i32, i64)] = &[
     (KIND_INT_FIELD, K_MIN, 0),
     (KIND_INT_FIELD, K_MAX, 0),
     (KIND_INT_FIELD, K_STEP, 1),
+    (KIND_CANVAS, K_SCALE, 1),
+    (KIND_CANVAS, K_BACKGROUND, 0),
     (0, K_COL_SPAN, 1),
     (0, K_ROW_SPAN, 1),
 ];
@@ -287,6 +292,7 @@ pub const KINDS: &[(&str, i32)] = &[
     ("spinner", KIND_SPINNER),
     ("spacer", KIND_SPACER),
     ("divider", KIND_DIVIDER),
+    ("canvas", KIND_CANVAS),
 ];
 pub const KEYS: &[(&str, i32)] = &[
     ("width", K_WIDTH),
@@ -359,11 +365,13 @@ pub const KEYS: &[(&str, i32)] = &[
     ("active", K_ACTIVE),
     ("url", K_URL),
     ("thickness", K_THICKNESS),
+    ("scale", K_SCALE),
+    ("palette", K_PALETTE),
 ];
 
 /// The elements that size their own width and height,
 /// so the box rider leaves that side alone.
-pub const NATIVE_SIZE: &[i32] = &[KIND_BUTTON, KIND_IMAGE, KIND_SVG, KIND_BAR_CHART, KIND_LINE_CHART, KIND_PROGRESS];
+pub const NATIVE_SIZE: &[i32] = &[KIND_BUTTON, KIND_IMAGE, KIND_SVG, KIND_BAR_CHART, KIND_LINE_CHART, KIND_PROGRESS, KIND_CANVAS];
 
 /// The elements that size their own width,
 /// so the box rider leaves that side alone.

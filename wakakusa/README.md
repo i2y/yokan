@@ -80,11 +80,11 @@ and the rewrite. `demo/control.rb` is the whole story in one screen.
 
 ## The vocabulary
 
-Thirty-two elements: text and button, the fields and the four
+Thirty-three elements: text and button, the fields and the four
 choosers, the boxes that arrange (column, row, grid, stack, the panes
 that scroll), the two charts, the two lists that build their rows on
-demand, and the small pieces — spacer, divider, spinner, link,
-progress, image, svg, modal.
+demand, the small pieces — spacer, divider, spinner, link, progress,
+image, svg, modal — and the canvas.
 
 They are written once, in `elements.toml`: every element, every
 keyword it takes, its type and its default. `tools/gen.rb` turns that
@@ -97,6 +97,31 @@ Fifteen properties ride on every element under one name and one
 meaning: `width`, `height`, `min_width`, `max_width`, `disabled`,
 `theme`, `animate`, `easing`, `enter`, `exit`, `col_span`, `row_span`,
 `role`, `a11y_label`, `tooltip`.
+
+## Drawing, and the games
+
+`canvas` is a grid of virtual pixels painted by the commands in its
+block. Inside it a color is a number, the index of a color in the
+palette the app declares, which is what lets drawing code written for a
+pixel machine port line for line with its numbers unchanged.
+
+```ruby
+canvas(64, 40, scale: 6, background: 0, palette: PALETTE) {
+  rect(2, 2, 12, 6, 1)
+  circle(@ball_x, @ball_y, 3, 3)
+  pixel_text(2, 14, "FRAME #{@frame}", 3)
+}
+```
+
+The commands are not elements: nothing here can be clicked, themed,
+sized or animated, and a loop inside the canvas is the ordinary loop.
+A game asks what the hands are doing rather than waiting to be told, so
+`key_down`, `key_pressed` and `key_released` answer that — in a timer,
+never in a view.
+
+`demo/jump.rb` and `demo/shooter.rb` are two of Pyxel's own examples
+(Takashi Kitao, MIT), ported and gated. Both draw with sprites cut from
+the example's own image bank.
 
 ## While you are writing it
 
@@ -163,7 +188,7 @@ bundle: demo/dist/todo.app (11.7 MB)
 - `door/cruby/`, `door/spinel/` — one file each, holding the ABI
   declarations that run needs. One line differs between them.
 - `bin/wakakusa` — `check`, `run`, `translate`, `build`, `gate`.
-- `demo/` — forty apps, with `demo/screenshots/` showing what
+- `demo/` — forty-three apps, with `demo/screenshots/` showing what
   each one draws. `tools/gate_all.sh` — all of them, both runs.
 
 ## Numbers
@@ -196,8 +221,11 @@ $ ./bin/wakakusa run demo/counter.rb   # a window
 
 ## What does not work yet
 
-- No drawing surface: the canvas and its commands are not in the
-  vocabulary, so neither are the two games.
+- No sound. The engine has no audio verb, which is why the two games
+  are silent where their originals are not.
+- A seeded `Random` is not the same generator in the two runs, so a
+  program that wants one number sequence in both writes the generator
+  itself. The two games do, in six lines of arithmetic.
 - A thread the app starts for its own reasons runs, but how far it gets
   is not something the two runs agree about: one is on the clock the
   machine keeps and the other on the clock a script sets. That is why

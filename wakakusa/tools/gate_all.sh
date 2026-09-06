@@ -81,6 +81,17 @@ gate dashboard ./bin/wakakusa gate demo/dashboard.rb --script "advance:1000,adva
 gate loading ./bin/wakakusa gate demo/loading.rb --script "click:step,click:step,dump,click:busy"
 gate filter  ./bin/wakakusa gate demo/filter.rb --script "select:crit,dump,select:all,dump"
 gate shared  ./bin/wakakusa gate demo/shared.rb --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+gate canvas  ./bin/wakakusa gate demo/canvas.rb --script "advance:50,dump,keydown:left,advance:50,advance:50,dump,keyup:left,keydown:space,advance:50,keyup:space,dump"
+gate jump    ./bin/wakakusa gate demo/jump.rb --script "advance:34,advance:34,dump,keydown:right,advance:34,advance:34,advance:34,dump,keyup:right,advance:34,dump"
+gate shooter ./bin/wakakusa gate demo/shooter.rb --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
+
+# The tour teaches the vocabulary, so it has to hold to it: every
+# complete app in either language, through the same command.
+if ruby tools/tour_check.rb TOUR.md TOUR.ja.md > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   tour"
+else
+  fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
+fi
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

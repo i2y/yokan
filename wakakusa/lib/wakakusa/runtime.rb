@@ -163,6 +163,33 @@ def menu_item(menu, item, &blk)
   PixieC.pixie_menu_item(menu, item, wakakusa_bind(proc { blk.call }))
 end
 
+# Close the window. The engine takes the request on its next frame; a
+# headless run never takes it, so a script runs to its end and the two
+# runs print the same dumps.
+def quit
+  PixieC.pixie_quit
+end
+
+# What the hands are doing, for an app that draws frames. The name is
+# the key alone ("left", "space", "a"), never a chord: this is a
+# different question from the one a shortcut answers. Read it in a
+# timer, never in a view — a view that read the keyboard would draw one
+# thing in a window and another under a script, and the gate would be
+# comparing two different apps.
+def key_down(name)
+  PixieC.pixie_key_down(name) != 0
+end
+
+# Went down since the last frame. A key held answers once.
+def key_pressed(name)
+  PixieC.pixie_key_pressed(name) != 0
+end
+
+# Came up since the last frame.
+def key_released(name)
+  PixieC.pixie_key_released(name) != 0
+end
+
 # What happens to a file dragged onto the window: the block is told its
 # path.
 def on_file_drop(&blk)

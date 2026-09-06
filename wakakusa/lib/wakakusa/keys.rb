@@ -43,6 +43,7 @@ module WK
   KIND_SPINNER = 30
   KIND_SPACER = 31
   KIND_DIVIDER = 32
+  KIND_CANVAS = 33
 
   # The keyword arguments, numbered once across every element.
   K_WIDTH = 1
@@ -115,4 +116,6 @@ module WK
   K_ACTIVE = 68
   K_URL = 69
   K_THICKNESS = 70
+  K_SCALE = 71
+  K_PALETTE = 72
 end

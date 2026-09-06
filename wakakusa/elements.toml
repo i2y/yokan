@@ -483,3 +483,16 @@ props = [
   { name = "color", type = "str", default = "" },
   { name = "thickness", type = "num", default = 0.0 },
 ]
+
+[[element]]
+name = "canvas"
+native = "size"
+paints = true
+doc = "A grid of virtual pixels, painted by the commands written in its block. A color here is a NUMBER: the index of a color in `palette`, which is how drawing code written for a pixel machine ports line for line. `scale` is how many logical pixels one virtual pixel takes."
+props = [
+  { name = "width", type = "int", pos = true },
+  { name = "height", type = "int", pos = true },
+  { name = "scale", type = "int", default = 1 },
+  { name = "background", type = "int", default = 0 },
+  { name = "palette", type = "strs", default = [] },
+]
