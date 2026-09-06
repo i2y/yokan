@@ -221,6 +221,7 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 | the application bundle (`--app`) | 11.9 MB |
 | launch to a window on screen | 0.2 s |
 | one gate round, engine already built | 2.8 s |
+| the whole sweep: 41 demos, both tours, the site | 3 min 13 s |
 
 ## The tour and the site
 
