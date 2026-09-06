@@ -1229,6 +1229,39 @@ fn answer_with(text: &str) {
     ANSWER.with(|c| *c.borrow_mut() = text.chars().collect());
 }
 
+/// Leave a picture of every step behind, for a run with no window.
+///
+/// The dump already says what a frame IS, command by command, and that
+/// is what the gate compares. This answers the other question, the one
+/// asked while something is being built: what does it LOOK like. No
+/// window is involved, so it works over ssh, in CI, and while the
+/// screen is locked.
+///
+/// `WAKAKUSA_FRAMES` is the directory; `WAKAKUSA_FRAME_SCALE` draws
+/// the grid bigger than the app asks, so a 160x120 canvas comes back
+/// readable without the app changing.
+fn install_frames() {
+    let Ok(dir) = std::env::var("WAKAKUSA_FRAMES") else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let scale: i64 = std::env::var("WAKAKUSA_FRAME_SCALE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    let n = Cell::new(0usize);
+    pixie_kernel::frames::install(Box::new(move |el: &Element| {
+        let Some(png) = pixie_engine_gpui::canvas_png(el, scale) else {
+            return;
+        };
+        let i = n.get();
+        n.set(i + 1);
+        let _ = std::fs::write(format!("{dir}/{i:04}.png"), png);
+    }));
+}
+
 /// The app asks to close its window.
 ///
 /// The engine takes the request on its next frame. A headless run
@@ -1569,6 +1602,7 @@ pub unsafe extern "C" fn pixie_run(
     // panic cannot cross the call that brought us in: it aborts where
     // it stands, so nothing is left to catch it and speak.
     speak_refusals();
+    install_frames();
     if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
         let light = std::env::var("PIXIE_THEME").is_ok_and(|v| v == "light");
         print!("{}", headless(build, &script, light));

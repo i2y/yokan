@@ -318,6 +318,19 @@ run(app, title: "sky")
 
 `demo/jump.rb` と `demo/shooter.rb` は Pyxel 自身の例（Takashi Kitao、MIT）をこの語彙に移し、門に通したものです。
 
+キャンバスは窓なしで見られます。
+`WAKAKUSA_FRAMES=<dir>` を与えると、スクリプトの一手ごとに最初のキャンバスを PNG で書き出します。
+描くのは窓と同じ raster です。
+`WAKAKUSA_FRAME_SCALE` は、アプリを変えずに格子を大きく描かせます。
+dump が「その一コマが何であるか」を言うのに対して、これは「どう見えるか」を答えます。
+ssh 越しでも、CI の中でも、画面がロックされていても動きます。
+
+```console
+$ WAKAKUSA_FRAMES=frames PIXIE_SCRIPT="advance:34,advance:34" ./demo/.gate/jump
+$ ls frames
+0000.png  0001.png
+```
+
 ## すべての要素が取る keyword
 
 十五の性質が、一つの名前と一つの意味で、すべての要素に乗ります。

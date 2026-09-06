@@ -123,6 +123,11 @@ never in a view.
 (Takashi Kitao, MIT), ported and gated. Both draw with sprites cut from
 the example's own image bank.
 
+A canvas can be looked at without a window: `WAKAKUSA_FRAMES=<dir>`
+writes a PNG of it after every script step, drawn by the same
+rasterizer the window uses. The two GIFs in `demo/screenshots/` were
+recorded that way, from a script that plays the game.
+
 ## While you are writing it
 
 `wakakusa run` watches the app's file. Save, and the window picks the

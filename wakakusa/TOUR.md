@@ -327,6 +327,18 @@ keyboard would draw one thing in a window and another under a script.
 `demo/jump.rb` and `demo/shooter.rb` are two of Pyxel's own examples
 (Takashi Kitao, MIT), ported to this vocabulary and gated.
 
+A canvas can be looked at without a window. `WAKAKUSA_FRAMES=<dir>`
+writes a PNG of the first canvas after every script step, drawn by the
+same rasterizer the window uses, and `WAKAKUSA_FRAME_SCALE` draws the
+grid bigger than the app asks. The dump says what a frame IS; this says
+what it looks like, over ssh, in CI, or while the screen is locked.
+
+```console
+$ WAKAKUSA_FRAMES=frames PIXIE_SCRIPT="advance:34,advance:34" ./demo/.gate/jump
+$ ls frames
+0000.png  0001.png
+```
+
 ## The keywords every element takes
 
 Fifteen properties ride on every element under one name and one
