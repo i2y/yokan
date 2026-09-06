@@ -1079,7 +1079,9 @@ pub extern "C" fn pixie_task_done(id: i64) {
     flag.store(true, std::sync::atomic::Ordering::Release);
 }
 
-/// Registers the call that gives the app's own threads a turn.
+/// Registers the call that gives the app's own threads a turn. It is
+/// reached from `Waiting`, while the engine is waiting on work the app
+/// started, and from nowhere else.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_set_pump_handler(f: PixiePumpFn) {
     PUMP_FN.with(|c| c.set(Some(f)));
@@ -1089,6 +1091,14 @@ pub extern "C" fn pixie_set_pump_handler(f: PixiePumpFn) {
 /// whether the work is done. Without that turn a caller whose threads
 /// its own runtime schedules would never run the work at all: this
 /// library is on its stack from `pixie_run` until the window closes.
+///
+/// It is the only place that turn is handed over, and deliberately:
+/// here it is handed over because something is actually being waited
+/// for, where a clock would hand it out to an idle app forever. With
+/// the handler emptied out, a thread the app started keeps its full
+/// rate in both runs — down to one scheduler worker and an app that
+/// declares no timer at all — so nothing here is waiting on a turn
+/// that no longer comes.
 struct Waiting(std::sync::Arc<std::sync::atomic::AtomicBool>);
 
 impl std::future::Future for Waiting {
@@ -1503,25 +1513,14 @@ pub extern "C" fn pixie_every(seconds: f64, handler: i64) {
 
 /// Hand the queued timers to the engine, now that there is a World.
 ///
-/// One of them is the engine's own: a tick that gives the app's threads
-/// a turn and changes nothing. Without it a thread the app started for
-/// its own reasons would never run at all in a compiled app, because
-/// this library is on the stack from `pixie_run` until the window
-/// closes and a runtime that schedules its own threads gets no say
-/// while that is true. It marks nothing dirty, so a window that is
-/// otherwise still stays still.
+/// Only the app's own. The turn a language runtime's threads need is
+/// not a tick and must not be one: an 8 ms timer here was due at every
+/// frame of any display, so every frame counted as one — the tree
+/// rebuilt sixty times a second on a window where nothing was
+/// happening, and a key press spent by a frame instead of by the tick
+/// meant to read it. `Waiting` is where that turn is handed over now,
+/// and it is not on a clock at all.
 fn install_timers(rt: &Runtime) {
-    rt.with(|w: &mut World| {
-        pixie_kernel::timer::every(
-            w,
-            8.0,
-            Rc::new(|_w: &mut World| {
-                if let Some(f) = PUMP_FN.with(|c| c.get()) {
-                    f();
-                }
-            }),
-        );
-    });
     for (seconds, handler) in PENDING_TIMERS.with(|t| t.take()) {
         let ms = seconds * 1000.0;
         rt.with(move |w: &mut World| {

@@ -132,3 +132,29 @@ fn every_keyword_in_the_table_reaches_an_arm() {
         assert!(read.contains(&key), "the rider `{rname}` is never read");
     }
 }
+
+/// The app's timers, and only those. The turn a language runtime's own
+/// threads need is handed over by `Waiting`, while the engine waits on
+/// work the app started — never a tick: a timer in the World's list is
+/// what a frame asks about, and one shorter than a frame made every
+/// frame a rebuilt frame — the whole tree, sixty times a second, on a
+/// window where nothing was happening — and spent a key press per
+/// frame rather than per tick. Neither is visible to a gate, since a
+/// headless run fires a timer only at a script's `advance:`, so it is
+/// asserted here instead.
+#[test]
+fn only_the_app_declares_timers() {
+    let rt = Runtime::new(World::new());
+    install_timers(&rt);
+    assert!(
+        !rt.with(|w: &mut World| pixie_kernel::timer::any(w)),
+        "an app that declared no timer has none"
+    );
+
+    pixie_every(0.5, 3);
+    install_timers(&rt);
+    assert!(
+        rt.with(|w: &mut World| pixie_kernel::timer::any(w)),
+        "the one the app declared is installed"
+    );
+}

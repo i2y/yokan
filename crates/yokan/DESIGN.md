@@ -2092,3 +2092,51 @@ unwind. That is the shape it wants — a refusal is data, and the
 harness could return it the way `check` returns one — but it is a
 signature change through every embedder of the script harness, and it
 is not worth doing while looking at four lines of output.
+
+## The turn a runtime's threads need is not a tick (2026-09-06)
+
+The C face installed one timer of its own: 8 ms, calling into the door
+and doing nothing else. It is how a language runtime that schedules
+its own threads gets a turn, since the engine is on that runtime's
+stack from the moment the window opens until it closes.
+
+Being a timer is what made it wrong. A timer in the World's list is a
+TICK, and a frame builds when the theme flipped, when a tween is
+moving, when a tick actually fired, or when a view is dirty — the rule
+that exists so a display refreshing faster than an app ticks does not
+rebuild the tree for nothing. Eight milliseconds is shorter than a
+frame at any display rate, so the pump was due at every one of them
+and every frame was a rebuilt frame. A window with nothing happening
+in it rebuilt its whole tree sixty times a second, which in an
+interpreted run is sixty runs of the app's own `view`; the same window
+under the Python dialect, on the same engine, repainted not once.
+`fire_due` also spends the keys a tick saw, so a press landing between
+two of a game's own ticks was taken away before the tick meant to read
+it — the failure the keyboard entry avoids by spending per tick rather
+than per frame, reintroduced underneath it.
+
+Neither is visible to a gate. Headless, a timer fires only at a
+script's `advance:`, so both runs were wrong in the same way, which is
+the one thing a gate cannot see. What found them was asking the engine
+for its own count on an idle window.
+
+So the pump is not a timer — and, it turned out, not on a clock at
+all. Whether that turn is needed was measured rather than reasoned, by
+emptying the door's pump out and watching a thread the app started. It
+keeps its full rate in the interpreted run, where the FFI call releases
+the interpreter lock for its whole duration; and in the compiled run
+too, down to a single scheduler worker with an app that declares no
+timer at all — the case where every green thread is pinned to the
+worker the engine is sitting on, and the one that should have starved
+if anything did.
+
+The turn is handed over in one place now: `Waiting`, the future a
+started piece of work is awaited through, which calls the door each
+time it is asked whether that work is done. That is a turn handed over
+because something is being waited for, where a clock hands one to an
+idle app forever. It stays there rather than going altogether because
+that is the one moment a runtime that does need a turn would be denied
+one, and it costs nothing while nobody is waiting.
+
+An idle window now paints nothing at all, and an app's own timers are
+the only ticks it has.
