@@ -454,7 +454,7 @@ direction `weak` and the cycle breaks:
 ```ruby
 class Node {
   pub prop kids : List<Node>, default: []
-  pub weak prop parent : List<Node>, default: []   # the back-edge
+  pub weak prop parent : Node?, default: nil       # the back-edge
 }
 ```
 
