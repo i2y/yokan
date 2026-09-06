@@ -154,6 +154,22 @@ wakakusa-site-serve: wakakusa-site
     @echo "http://localhost:8002/wakakusa/  ·  http://localhost:8002/wakakusa/ja/"
     python3 -m http.server 8002 -d wakakusa/website/.serve
 
+# Rakugan is Perl 5 on the same engine: its compiled run is a translation
+# to .pix as Yokan's is, and its interpreted run opens pixie's C face
+# through an XS door as Wakakusa's does.
+#
+# Fetch and build the perl Rakugan is pinned to (once per machine).
+rakugan-perl:
+    ./rakugan/tools/perl_setup.sh
+
+# Run one Perl app through both runs and byte-compare the screens.
+rakugan-gate app script='':
+    cd rakugan && ./bin/rakugan gate {{app}} {{ if script == '' { '' } else { '--script "' + script + '"' } }}
+
+# Every Rakugan demo, both runs.
+rakugan-sweep:
+    ./rakugan/tools/gate_all.sh
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every

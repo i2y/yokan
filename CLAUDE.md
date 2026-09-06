@@ -19,6 +19,11 @@ builds native desktop apps. This repository holds both halves:
   its own gate, its own vocabulary table and its own demos, and it
   shares the engine with Yokan and nothing else. `pixie-capi` is
   pixie's, not Wakakusa's: a third language would use the same face.
+- **The third language** — `rakugan/`: Perl 5 (5.40 and newer, written
+  with the `class` feature) on the same engine. Its compiled run is a
+  translation to `.pix`, as Yokan's is; its interpreted run opens
+  `crates/pixie-capi` through an XS door, as Wakakusa's does. It has
+  its own gate and demos, and shares the substrate and nothing else.
 
 User-facing docs: `README.md` / `README.ja.md` (landing),
 `crates/yokan/TOUR*.md` (the language tour, one file per language
@@ -164,6 +169,32 @@ fetches and builds the pinned Ruby compiler into `~/.cache/spinel/<sha>`.
   refusal the fixtures no longer print, and gates the site's tour
   examples along with the repository's.
 
+## Commands — Rakugan
+
+Run these from `rakugan/`. `just rakugan-perl` once per machine fetches
+and builds the pinned perl (5.44.0) into `~/.cache/perl/<version>`; any
+perl of 5.40 or newer runs an app when `RAKUGAN_PERL` points at it. The
+command itself runs under whichever perl is first on the path and needs
+PPI from CPAN (the macOS system perl ships it).
+
+- `./bin/rakugan gate demo/counter.pl --script "click:+1,dump"` — **the
+  gate**: the app under perl through the XS door over pixie's C face,
+  and the binary pixie built from the translated `.pix`, driven by one
+  interaction script and byte-compared.
+- `check` (perl's own verdict first, then the translator's refusals;
+  nothing is printed when the app is inside the dialect), `run` (a
+  window), `translate` (emit the `.pix` project under `demo/.gate/`),
+  `build` (the native binary; `--release`).
+- `./tools/gate_all.sh` — the sweep: every demo. Run it before merging
+  anything under `rakugan/`.
+- The door (`door/Door.xs`) is built for the app's perl into
+  `~/.cache/rakugan/door/<version>/` by the command itself and rebuilt
+  when its sources change, so nothing under `rakugan/` is generated in
+  place except `demo/.gate/`.
+- A field's type is read from its initializer; a container that starts
+  empty says its type with `empty(Str)`. Types are spelled the way
+  Types::Standard spells them (`Int`, `Str`, `ArrayRef[Int]`).
+
 ## What to verify for which change
 
 - Translator / runtime / stdlib / demo change → the touched demo's
@@ -174,6 +205,9 @@ fetches and builds the pinned Ruby compiler into `~/.cache/spinel/<sha>`.
   demo's gate, then `wakakusa/tools/gate_all.sh`. A change to
   `elements.toml` or `tools/gen.rb` regenerates first; the sweep fails
   on a stale table.
+- Anything under `rakugan/` → the touched demo's gate, then
+  `rakugan/tools/gate_all.sh`. The translator is the checker there: a
+  new shape or a new refusal gets a gate line in the sweep.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
   from the dialect, and the wakakusa sweep if it is reachable from
