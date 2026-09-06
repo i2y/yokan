@@ -16,12 +16,13 @@ hide:
 <p class="wk-hero__lede">
 A compiler for Ruby desktop apps: <strong>what you run under CRuby is
 what it ships as a native binary, and each build verifies it</strong>.
-An app is a plain Ruby class; what Wakakusa adds is the methods that
-build the screen. While you are working, the real interpreter is
-answering; when you ship, the
-whole program becomes one native binary — and
-<code>wakakusa gate</code> drives both with the same script and
-compares what they drew, byte for byte.
+When you ship, <a href="https://github.com/matz/spinel">spinel</a> — an
+ahead-of-time Ruby compiler — takes your Ruby to C, and it links with
+the drawing engine into one binary; while you are working, the same
+file runs under CRuby, and <code>wakakusa gate</code> drives both with
+the same script and compares what they drew, byte for byte. An app is
+a plain Ruby class; what Wakakusa adds is the methods that build the
+screen.
 </p>
 
 <div class="wk-hero__cta" markdown>
@@ -198,8 +199,9 @@ end.
 -   :material-brush-variant: __A canvas, and the keyboard__
 
     A grid of virtual pixels painted command by command, colors by
-    palette index, keys read as a device from the tick — and a PNG of
-    any frame without opening a window at all.
+    palette index, keys read as a device from the tick, and a WAV played
+    with `audio_play` — and a PNG of any frame without opening a window
+    at all.
 
 -   :material-shield-check: __Refusals that teach__
 

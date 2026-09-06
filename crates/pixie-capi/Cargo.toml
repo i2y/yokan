@@ -21,6 +21,11 @@ pixie-engine-gpui = { path = "../pixie-engine-gpui" }
 # only thing both of them share is this library. The platform's own
 # sqlite is what is linked, so the two runs are talking to one copy.
 rusqlite = "0.32"
+# Sound, WAV only: a decoder for every format would weigh more than the
+# rest of an app. Not optional — one library serves both of a door's
+# runs, so a per-app feature would mean two different libraries and a
+# gate comparing them.
+rodio = { version = "0.22", default-features = false, features = ["playback", "wav"] }
 
 # The table test reads wakakusa/elements.toml with a real parser, so a
 # mistake in the generator's own reader cannot pass quietly.

@@ -129,8 +129,6 @@ Measured on macOS/arm64, with the shared build directory warm.
 
 ## What does not work yet
 
-- **No sound.** The engine has no audio verb, which is why the two
-  ported games are silent where their originals are not.
 - **A seeded `Random` is not the same generator in the two runs**, so a
   program that wants one sequence in both writes the generator itself.
   The two games do, in six lines of arithmetic.

@@ -14,7 +14,7 @@ hide:
 <p class="wk-hero__tag">Write Ruby. Ship native.</p>
 
 <!-- 日本語は行の折り返しが空白として描画されるので、リード文は一行で書く -->
-<p class="wk-hero__lede">Wakakusa（若草）は、Ruby のデスクトップアプリを作るコンパイラです。<strong>CRuby で動かしたものが、そのままネイティブバイナリとして配れます。それを、ビルドのたびに検証します</strong>。アプリは普通の Ruby のクラスで、若草が足すのは画面を組み立てる <code>text</code>、<code>button</code>、<code>column</code> といったメソッドです。作っているあいだは本物のインタプリタが動かし、リリースするとプログラム全体が一つのネイティブバイナリになります。その二つを <code>wakakusa gate</code> が同じスクリプトで動かし、描いたものを一バイトずつ突き合わせます。</p>
+<p class="wk-hero__lede">Wakakusa（若草）は、Ruby のデスクトップアプリを作るコンパイラです。<strong>CRuby で動かしたものが、そのままネイティブバイナリとして配れます。それを、ビルドのたびに検証します</strong>。リリースするときは、事前コンパイル方式の Ruby コンパイラ <a href="https://github.com/matz/spinel">spinel</a> が Ruby を C に変換し、描画エンジンごと 1 本のバイナリにします。作っているあいだは、同じファイルを本物のインタプリタ（CRuby）が動かします。その二つを <code>wakakusa gate</code> が同じスクリプトで動かし、描いたものを一バイトずつ突き合わせます。アプリは普通の Ruby のクラスで、若草が足すのは画面を組み立てる <code>text</code>、<code>button</code>、<code>column</code> といったメソッドです。</p>
 
 <div class="wk-hero__cta" markdown>
 [はじめる](installation.md){ .md-button .md-button--primary }
@@ -181,7 +181,7 @@ Pyxel 自身の例（Takashi Kitao、MIT）が二つ、デモに入っていま�
 
 -   :material-brush-variant: __キャンバスと、キーボード__
 
-    仮想的な画素の格子を、命令をひとつずつ並べて塗ります。色は palette の番号で、キーが押されているかどうかはタイマーの中で読みます。ウィンドウを開かずに、どのコマも PNG に書き出せます。
+    仮想的な画素の格子を、命令をひとつずつ並べて塗ります。色は palette の番号、キーが押されているかどうかはタイマーの中で読み、効果音は `audio_play` で鳴らします。ウィンドウを開かずに、どのコマも PNG に書き出せます。
 
 -   :material-shield-check: __直し方まで出る断り__
 

@@ -185,6 +185,21 @@ makes a dialog a checked interaction like any other.
 `demo/keys.rb` is the shortcuts and the menu bar under a script;
 `demo/picker.rb` is the dialogs and a dropped file.
 
+Sound is a file played and then forgotten:
+
+```ruby
+  audio_play("demo/assets/sound/blip.wav")         # as it was recorded
+  audio_play("demo/assets/sound/blast.wav", 0.4)   # at a level, 0.0 to 1.0
+  audio_stop
+```
+
+The call answers at once; nothing waits for the end of the sound. A run
+under a script is silent — a gate must not need a machine with speakers
+— and a machine with no audio device, or a file that cannot be read,
+plays nothing rather than failing the app. WAV is what the engine
+decodes. `demo/sound.rb` is the whole of it, and the two ported games
+use it.
+
 ## The window itself
 
 ```ruby

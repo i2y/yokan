@@ -155,6 +155,9 @@ CATALOGUE = [
   ["window", "about",
    "links that open a page, and the system clipboard",
    "ページを開くリンクと、システムのクリップボード"],
+  ["window", "sound",
+   "a WAV file played from a handler; a run under a script is silent, so the gate compares two silent runs",
+   "ハンドラから WAV ファイルを鳴らす。スクリプトの下では無音になるので、ゲートが突き合わせるのは画面だけ"],
 
   ["work", "dashboard",
    "a timer declared before the app runs, ticking in both runs (the gate steps it with `advance:`)",

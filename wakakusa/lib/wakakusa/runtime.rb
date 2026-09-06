@@ -239,6 +239,22 @@ def save_dialog(name = "")
   wakakusa_answer
 end
 
+# Sound. A WAV file is played and the call answers at once; nothing
+# waits for the end of it. `volume` is 1.0 for the file as it was
+# recorded and 0.25 for a quarter of it.
+#
+# A run under a script is silent, and a machine with no audio device or
+# a file that cannot be read plays nothing rather than failing the app.
+# Both runs go through the one library, so neither is louder than the
+# other and a gate needs no speakers.
+def audio_play(path, volume = 1.0)
+  PixieC.pixie_audio_play(path, volume)
+end
+
+def audio_stop
+  PixieC.pixie_audio_stop
+end
+
 # A database. Both runs call one implementation, which is the whole
 # reason it is reached through the engine rather than through a gem.
 #

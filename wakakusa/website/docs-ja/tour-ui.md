@@ -174,6 +174,21 @@ on_file_drop { |path| app.load(path) }
 
 `demo/keys.rb` が shortcut とメニューをスクリプトで動かし、`demo/picker.rb` がダイアログと落とされたファイルを見せます。
 
+音は、ファイルを鳴らして、あとは放っておく形です。
+
+```ruby
+  audio_play("demo/assets/sound/blip.wav")         # 録音そのままの大きさで
+  audio_play("demo/assets/sound/blast.wav", 0.4)   # 0.0 から 1.0 の音量で
+  audio_stop
+```
+
+呼び出しはすぐ返り、鳴り終わるのを待ちません。
+スクリプトの下では無音になります。
+ゲートが、スピーカーのあるマシンを要求してはいけないからです。
+音の出ないマシンや、読めないファイルでは、アプリを止めずに何も鳴りません。
+エンジンが読めるのは WAV です。
+`demo/sound.rb` がこの機能の全部で、移植した二つのゲームもこれを使っています。
+
 ## ウィンドウそのもの
 
 ```ruby

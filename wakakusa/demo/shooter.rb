@@ -5,17 +5,23 @@
 # https://github.com/kitao/pyxel), and `assets/shooter.png` is that
 # example's own image bank written out with Pyxel's palette.
 #
-# What is different, and why. There is no sound: the engine has no
-# audio verb yet. And the numbers come from a generator written here
-# rather than from `rand`, because a seeded `rand` gives the two runs
-# different sequences and a game whose enemies arrive in different
-# places is not one the gate can compare.
+# What is different, and why. The effects are WAV files written by
+# `tools/gen_sounds.rb` rather than the original's chiptune, since the
+# engine plays files; a run under a script is silent, so the gate still
+# compares two silent runs. And the numbers come from a generator
+# written here rather than from `rand`, because a seeded `rand` gives
+# the two runs different sequences and a game whose enemies arrive in
+# different places is not one the gate can compare.
 #
 # Arrows move, space fires, enter starts and restarts, q closes.
 require "wakakusa"
 
 WIDTH = 120
 HEIGHT = 160
+
+SND_SHOOT = "demo/assets/sound/shoot.wav"
+SND_BLAST = "demo/assets/sound/blast.wav"
+SND_OVER = "demo/assets/sound/over.wav"
 
 SCENE_TITLE = 0
 SCENE_PLAY = 1
@@ -202,7 +208,10 @@ class Game
     y += PLAYER_SPEED if key_down("down")
     @px = [[x, 0].max, WIDTH - PLAYER_WIDTH].min
     @py = [[y, 0].max, HEIGHT - PLAYER_HEIGHT].min
-    @bullets.push(Bullet.new(@px + 3, @py - 4)) if key_pressed("space")
+    return unless key_pressed("space")
+
+    @bullets.push(Bullet.new(@px + 3, @py - 4))
+    audio_play(SND_SHOOT, 0.35)
   end
 
   def move_bullets
@@ -271,9 +280,11 @@ class Game
     if @enemy_struck
       @blasts.push(Blast.new(e.x + 4, e.y + 4, BLAST_START_RADIUS))
       @score += 10
+      audio_play(SND_BLAST, 0.5)
     elsif rammed?(e)
       @blasts.push(Blast.new(@px + 4, @py + 4, BLAST_START_RADIUS))
       @player_struck = true
+      audio_play(SND_OVER, 0.6)
     else
       @live_enemies.push(e)
     end

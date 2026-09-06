@@ -1449,6 +1449,99 @@ pub extern "C" fn pixie_sqlite_cell(row: i64, col: i64) {
     answer_with(&cell);
 }
 
+// --- sound ------------------------------------------------------------------
+//
+// A file is played and the call answers at once; nothing waits for the
+// end of it. The device is opened on the first sound and kept, and the
+// players that have finished are swept the next time something plays.
+//
+// A SCRIPTED run is silent. A gate must not need a machine with
+// speakers, and a dump has no sound in it either way; both runs read the
+// same flag through this one library, so neither is louder than the
+// other. A machine with no audio device, or a file that cannot be read,
+// plays nothing rather than failing the app — the rule a missing sprite
+// already follows.
+
+struct Audio {
+    /// Kept alive: this IS the connection to the speakers.
+    _device: rodio::MixerDeviceSink,
+    mixer: rodio::mixer::Mixer,
+    playing: Vec<rodio::Player>,
+}
+
+static AUDIO: std::sync::LazyLock<std::sync::Mutex<Option<Audio>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+static AUDIO_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn silent_run() -> bool {
+    std::env::var("PIXIE_SCRIPT").is_ok()
+}
+
+/// Play a WAV file at a level: `1.0` is the file as it was recorded,
+/// `0.25` a quarter of it. Loud is the one mistake a sound cannot take
+/// back, so an app that plays something every frame should ask for less.
+/// Answers 0 always — there is nothing for the two runs to disagree
+/// about.
+///
+/// # Safety
+/// `path` is NULL or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pixie_audio_play(path: *const c_char, volume: f64) -> i64 {
+    let path = unsafe { text_arg(path) };
+    if silent_run() {
+        return 0;
+    }
+    let Ok(mut guard) = AUDIO.lock() else {
+        return 0;
+    };
+    if guard.is_none() {
+        if AUDIO_TRIED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return 0;
+        }
+        let Ok(device) = rodio::DeviceSinkBuilder::open_default_sink() else {
+            return 0;
+        };
+        let mixer = device.mixer().clone();
+        *guard = Some(Audio {
+            _device: device,
+            mixer,
+            playing: Vec::new(),
+        });
+    }
+    let Some(audio) = guard.as_mut() else {
+        return 0;
+    };
+    let Ok(file) = std::fs::File::open(&path) else {
+        return 0;
+    };
+    let Ok(source) = rodio::Decoder::try_from(file) else {
+        return 0;
+    };
+    audio.playing.retain(|p| !p.empty());
+    let player = rodio::Player::connect_new(&audio.mixer);
+    player.set_volume(volume.clamp(0.0, 1.0) as f32);
+    player.append(source);
+    audio.playing.push(player);
+    0
+}
+
+/// Stop everything that is playing.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_audio_stop() -> i64 {
+    if silent_run() {
+        return 0;
+    }
+    let Ok(mut guard) = AUDIO.lock() else {
+        return 0;
+    };
+    if let Some(audio) = guard.as_mut() {
+        for player in audio.playing.drain(..) {
+            player.stop();
+        }
+    }
+    0
+}
+
 /// # Safety
 /// `text` is NULL or NUL-terminated.
 #[unsafe(no_mangle)]

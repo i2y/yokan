@@ -128,6 +128,12 @@ never in a view.
 (Takashi Kitao, MIT), ported and gated. Both draw with sprites cut from
 the example's own image bank.
 
+Sound is a WAV file played and then forgotten — `audio_play(path)`,
+`audio_play(path, volume)`, `audio_stop`. A run under a script is
+silent, so a gate needs no speakers, and `tools/gen_sounds.rb` writes
+the demos' effects from arithmetic rather than shipping recordings
+nobody can regenerate.
+
 A canvas can be looked at without a window: `WAKAKUSA_FRAMES=<dir>`
 writes a PNG of it after every script step, drawn by the same
 rasterizer the window uses. The two GIFs in `demo/screenshots/` were
@@ -246,8 +252,6 @@ source. `just wakakusa-site-serve` builds it and serves both.
 
 ## What does not work yet
 
-- No sound. The engine has no audio verb, which is why the two games
-  are silent where their originals are not.
 - A seeded `Random` is not the same generator in the two runs, so a
   program that wants one number sequence in both writes the generator
   itself. The two games do, in six lines of arithmetic.

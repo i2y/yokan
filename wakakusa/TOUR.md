@@ -398,6 +398,21 @@ A dialog waits for a person, so it belongs inside `task`. A headless
 script answers one with a `file:<path>` step, which is what makes a
 dialog a checked interaction like any other.
 
+Sound is a file played and then forgotten:
+
+```ruby
+  audio_play("demo/assets/sound/blip.wav")         # as it was recorded
+  audio_play("demo/assets/sound/blast.wav", 0.4)   # at a level, 0.0 to 1.0
+  audio_stop
+```
+
+The call answers at once; nothing waits for the end of the sound. A run
+under a script is silent — a gate must not need a machine with speakers
+— and a machine with no audio device, or a file that cannot be read,
+plays nothing rather than failing the app. WAV is what the engine
+decodes. `demo/sound.rb` is the whole of it, and the two ported games
+use it.
+
 ## Ruby's own standard library
 
 Ruby's own library is in both runs — `File`, `Dir`, `JSON`, `CSV`,
@@ -551,8 +566,6 @@ with neither Ruby nor the compiler installed.
 
 ## What does not work yet
 
-- No sound. The engine has no audio verb, which is why the two ported
-  games are silent where their originals are not.
 - A seeded `Random` is not the same generator in the two runs, so a
   program that wants one sequence in both writes the generator itself.
   The two games do, in six lines of arithmetic.

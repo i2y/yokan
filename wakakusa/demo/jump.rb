@@ -8,12 +8,13 @@
 # background, and 12 still means the same color, because inside a
 # canvas a color is an index into the palette this file declares.
 #
-# What is different, and why. There is no sound: the engine has no
-# audio verb yet, so the three effects the original plays are gone. And
-# the numbers come from a generator written here rather than from
-# `rand`: a seeded `rand` gives the two runs different sequences, and a
-# game whose floors land in different places is not one the gate can
-# compare. Everything else is the game.
+# What is different, and why. The three effects are WAV files written
+# by `tools/gen_sounds.rb` rather than the original's chiptune, since
+# the engine plays files; a run under a script is silent, so the gate
+# still compares two silent runs. And the numbers come from a generator
+# written here rather than from `rand`: a seeded `rand` gives the two
+# runs different sequences, and a game whose floors land in different
+# places is not one the gate can compare. Everything else is the game.
 #
 # Left and right move; the rest is gravity.
 require "wakakusa"
@@ -22,6 +23,9 @@ WIDTH = 160
 HEIGHT = 120
 SKY = 12
 SHEET = "demo/assets/jump.png"
+SND_BOUNCE = "demo/assets/sound/jump.wav"
+SND_FRUIT = "demo/assets/sound/pickup.wav"
+SND_OVER = "demo/assets/sound/over.wav"
 
 PALETTE = [
   "#000000", "#2b335f", "#7e2072", "#19959c",
@@ -118,6 +122,7 @@ class Game
     @player_u = 16 if @dy > 0
     return if @py <= HEIGHT
 
+    audio_play(SND_OVER, 0.5) if @alive
     @alive = false
     return if @py <= 600
 
@@ -147,6 +152,7 @@ class Game
         alive = false
         @score += 10
         @dy = -12
+        audio_play(SND_BOUNCE, 0.5)
       end
     else
       y += 6
@@ -175,6 +181,7 @@ class Game
       alive = false
       @score += (kind + 1) * 100
       @dy = [@dy, -8].min
+      audio_play(SND_FRUIT, 0.5)
     end
     x -= 2
     if x < -40

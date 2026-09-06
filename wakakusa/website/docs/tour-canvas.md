@@ -117,11 +117,13 @@ a color is an index either way.
   <img src="images/demos/jump.gif" width="320" align="middle">
 </p>
 
-They are silent where the originals are not: the engine has no audio
-verb yet. And each writes its own six lines of arithmetic where the
-original seeds a generator, because a seeded `Random` is not the same
-generator in the two runs — a game whose frames cannot be compared
-would not be worth gating.
+Their effects are WAV files written by `tools/gen_sounds.rb` rather
+than the original's chiptune, since the engine plays files; a run under
+a script is silent, so the gate still compares two silent runs. And
+each writes its own six lines of arithmetic where the original seeds a
+generator, because a seeded `Random` is not the same generator in the
+two runs — a game whose frames cannot be compared would not be worth
+gating.
 
 ## Looking at a canvas with no window
 

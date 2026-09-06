@@ -57,6 +57,8 @@ module PixieC
   extern "void pixie_clipboard_set(const char*)"
   extern "void pixie_clipboard_get(void)"
   extern "void pixie_dialog(int, const char*)"
+  extern "long pixie_audio_play(const char*, double)"
+  extern "long pixie_audio_stop(void)"
   extern "void pixie_sqlite_bind(const char*)"
   extern "long pixie_sqlite_exec(const char*, const char*)"
   extern "long pixie_sqlite_query(const char*, const char*)"

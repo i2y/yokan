@@ -24,6 +24,14 @@ if ! ruby tools/gen.rb --check; then
 fi
 echo "OK   vocabulary"
 
+# The demos' sounds are generated from arithmetic; a WAV that is not
+# what its recipe writes is one nobody can regenerate.
+if ! ruby tools/gen_sounds.rb --check > /dev/null; then
+  echo "FAIL sounds (demo/assets/sound is behind tools/gen_sounds.rb)"
+  exit 1
+fi
+echo "OK   sounds"
+
 # Every refusal has a fixture and the message it must print.
 if ! ./tools/refuse_test.sh > /dev/null; then
   echo "FAIL refusals"
@@ -63,6 +71,8 @@ gate dbnotes ./bin/wakakusa gate demo/dbnotes.rb --fresh demo/.gate/notes.db --s
 gate ledger  ./bin/wakakusa gate demo/ledger.rb --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
 gate stdlib  ./bin/wakakusa gate demo/stdlib.rb --script "click:measure,click:stats,click:sift,click:count,click:combine,click:stamp,click:parse,click:csv,click:words,click:set,dump,click:write,click:scan,dump"
 gate about   ./bin/wakakusa gate demo/about.rb --script "click:copy link,dump,click:Website"
+# Sound: silent under a script, so what the two runs compare is the screen.
+gate sound   ./bin/wakakusa gate demo/sound.rb --script "click:jump,dump,slide:0.3,click:blast,click:stop,dump"
 gate keys    ./bin/wakakusa gate demo/keys.rb --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
 # The picker needs something on disk to choose and to drop.
 mkdir -p demo/.gate && echo "a file the picker can read" > demo/.gate/fs_probe.txt
