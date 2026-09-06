@@ -82,6 +82,8 @@ my (@methods, %method);     # name => { name, block, node, params, ret, kind, ..
 my @handlers;               # { id, params => [[name, ty]], body => [lines], async }
 my @timers;                 # { ms, body => [lines] }
 my @lifted;                 # the statics a conditional expression became
+my (@values, %value);       # the value classes: name => [{ name, ty, init }]
+my $app_class;              # the class `run` was handed
 my $app_var;                # `my $app = Class->new` at the top of the file
 my @app_stmts;              # every top-level statement, in order
 my $uses_pl;                # the twins of Perl's own functions were called
@@ -93,7 +95,9 @@ my $tmp;                    # a counter for the names this file makes up
 sub translate {
     my ($file) = @_;
     ($path, $class_name, $class_block, $run_word, $run_list, $view_block) = ($file);
-    (@fields, %field, %bag, @methods, %method, @handlers, @timers, @app_stmts, @lifted) = ();
+    (@fields, %field, %bag, @methods, %method, @handlers, @timers, @app_stmts, @lifted,
+     @values, %value) = ();
+    $app_class = undef;
     ($app_var, $uses_pl, $tmp) = (undef, 0, 0);
     open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
     my $src = do { local $/; <$fh> };
@@ -186,7 +190,7 @@ sub declarations {
         (my $name = $eaten->[0]->content) =~ s/\W.*//s;
         refuse($eaten->[0], "a method named `$name` reads as a regular expression to the parser; pick another name");
     }
-    my $pragma;
+    my ($pragma, %seen, @order);
     for my $st ($doc->schildren) {
         next if $st->isa('PPI::Statement::End') || $st->isa('PPI::Statement::Null');
         if ($st->isa('PPI::Statement::Include')) {
@@ -196,10 +200,11 @@ sub declarations {
         my @t = strip_semicolon(sig($st));
         while (@t) {
             if (is_word($t[0], 'class')) {
-                refuse($t[0], 'one class per app in this translator') if defined $class_name;
                 refuse($t[0], 'a class is written `class Name { ... }`')
                     unless @t >= 3 && is_word($t[1]) && $t[2]->isa('PPI::Structure::Block');
-                ($class_name, $class_block) = ($t[1]->content, $t[2]);
+                refuse($t[1], '`' . $t[1]->content . '` is declared twice') if $seen{ $t[1]->content };
+                $seen{ $t[1]->content } = $t[2];
+                push @order, $t[1]->content;
                 splice @t, 0, 3;
             } elsif (is_word($t[0], 'my')) {
                 my $n = app_decl(\@t);
@@ -220,9 +225,54 @@ sub declarations {
             }
         }
     }
-    die "$path: no `class` found — an app is a class with a `view` method, handed to `run`\n" unless defined $class_name;
+    die "$path: no `class` found — an app is a class with a `view` method, handed to `run`\n" unless @order;
     die "$path: no `run(...)` found — the last line hands the app to `run`\n" unless defined $run_word;
     die "$path: the file starts with `use Rakugan;` — it turns on what the dialect assumes and brings `run`\n" unless $pragma;
+    # The class `run` was handed is the app; any other is a value the
+    # app holds, and has no screen of its own.
+    if (!defined $app_class) {
+        my @a = split_args($run_list);
+        my $first = @a ? join('', map { $_->content } @{ $a[0]{toks} }) : '';
+        ($app_class) = $first =~ /\A(\w+)->new\z/;
+    }
+    refuse($run_word, 'the app is one of the classes in this file, handed to `run` as `Name->new`')
+        unless defined $app_class && $seen{$app_class};
+    ($class_name, $class_block) = ($app_class, $seen{$app_class});
+    value_class($_, $seen{$_}) for grep { $_ ne $app_class } @order;
+}
+
+# A class the app holds values of: fields and nothing else, each one
+# written where `new` can be given it and read back. It crosses to the
+# compiled run as a struct, which is a VALUE — two names for one of
+# these are two copies, where in perl they would be one object. A
+# method on one waits for the phase that brings them.
+sub value_class {
+    my ($name, $block) = @_;
+    my $pragma;
+    my @fields;
+    for my $st ($block->schildren) {
+        next if $st->isa('PPI::Statement::Null');
+        if ($st->isa('PPI::Statement::Include')) {
+            $pragma = 1 if ($st->module // '') eq 'Rakugan';
+            next;
+        }
+        my @t = strip_semicolon(sig($st));
+        next unless @t;
+        refuse($t[0], "`$name` holds values, so it is fields and nothing else; a class with a `view` "
+                    . 'is the app, and there is one of those')
+            unless is_word($t[0], 'field');
+        my $sym = $t[1];
+        refuse($t[0], 'a field of a value is written `field $x :param :reader = 0;`')
+            unless is_sym($sym, '$') && is_op($t[2], ':') && $t[3] && $t[3]->isa('PPI::Token::Label')
+                && $t[3]->content =~ /\Aparam\s*:\z/ && is_word($t[4], 'reader')
+                && is_op($t[5], '=') && @t >= 7;
+        my ($ty, $pix) = literal_run([@t[6 .. $#t]]);
+        push @fields, { name => substr($sym->content, 1), ty => $ty, init => $pix };
+    }
+    refuse($block, "`class $name` needs `use Rakugan;` as its first line") unless $pragma;
+    refuse($block, "`$name` holds nothing; a value class is one or more fields") unless @fields;
+    push @values, $name;
+    $value{$name} = \@fields;
 }
 
 # `my %PILL = (...)` — a hash of keywords — or `my $app = Class->new;`,
@@ -240,11 +290,11 @@ sub app_decl {
     }
     refuse($sym, '`$' . substr($sym->content, 1) . '` is declared twice') if defined $app_var;
     my ($eq, $cls, $arrow, $new, @rest) = @{$toks}[2 .. $#$toks];
+    $app_class = $cls->content if is_word($cls);
     refuse($sym, 'a `my $...` at the top of the file is the app itself (`my $app = '
                . ($class_name // 'Counter') . '->new;`), which is what a timer reaches its methods '
                . 'through; anything else an app holds is a field')
         unless is_op($eq, '=') && is_word($cls) && is_op($arrow, '->') && is_word($new, 'new');
-    refuse($cls, "the app is an instance of `$class_name`") unless $cls->content eq ($class_name // '');
     $app_var = substr $sym->content, 1;
     return 6;
 }
@@ -433,8 +483,16 @@ sub field {
         ($ty, $pix) = list_init(\@init, $sym);
     } elsif ($sym->raw_type eq '%') {
         ($ty, $pix) = hash_init(\@init, $sym);
+    } elsif (is_word($init[0]) && $value{ $init[0]->content }) {
+        my $env = { ctx => 'fn', vars => {}, nonneg => {}, at => $sym };
+        my $i = 0;
+        my $v = primary(\$i, \@init, $env);
+        refuse($init[$i], 'this does not continue the value') if $i < @init;
+        ($ty, $pix) = ($v->{ty}, $v->{pix});
     } else {
-        refuse($init[0], 'a scalar field starts as one literal') if @init > 2 || (@init == 2 && !is_op($init[0], '-'));
+        refuse($init[0], 'a scalar field starts as one literal, or as one of this file\'s own values '
+                       . '(`Point->new(x => 3, y => 4)`)')
+            if @init > 2 || (@init == 2 && !is_op($init[0], '-'));
         ($ty, $pix) = literal_run(\@init);
     }
     push @fields, $name;
@@ -814,7 +872,20 @@ sub primary {
         return { ty => 'Int', pix => "$v->{pix}.length - 1" };
     }
     if (is_word($t, 'true') || is_word($t, 'false')) { $$ip++; return { ty => 'Bool', pix => $t->content } }
-    if ($t->isa('PPI::Token::Word')) { return word_expr($ip, $toks, $env) }
+    if ($t->isa('PPI::Token::Word')) {
+        # `Point->new(x => 3, y => 4)` — a value of one of the file's
+        # own classes, built where it is written.
+        if ($value{ $t->content } && is_op($toks->[$$ip + 1], '->') && is_word($toks->[$$ip + 2], 'new')) {
+            my $list = $toks->[$$ip + 3];
+            refuse($t, "`$t->{content}` is built with the values of its fields: `"
+                     . $t->content . '->new(' . join(', ', map { "$_->{name} => ..." } @{ $value{ $t->content } })
+                     . ')`')
+                unless $list && $list->isa('PPI::Structure::List');
+            $$ip += 4;
+            return build_value($t, $list, $env);
+        }
+        return word_expr($ip, $toks, $env);
+    }
     if ($t->isa('PPI::Token::Symbol')) { return symbol_expr($ip, $toks, $env) }
     if ($t->isa('PPI::Structure::List')) {
         $$ip++;
@@ -845,6 +916,17 @@ sub symbol_expr {
         return method_call($word, $args, $env);
     }
     my $next = $toks->[$$ip];
+    if ($kind eq '$' && is_op($next, '->') && is_word($toks->[$$ip + 1])) {
+        my $v = read_var($t, $name, $env);
+        if (my $fields = $value{ $v->{ty} }) {
+            my $f = $toks->[$$ip + 1];
+            my ($fd) = grep { $_->{name} eq $f->content } @$fields;
+            refuse($f, "`$v->{ty}` has no field `" . $f->content . '`') unless $fd;
+            $$ip += 2;
+            refuse($toks->[$$ip], 'a value is read, not called') if is_sub($toks->[$$ip], '(');
+            return { ty => $fd->{ty}, pix => "$v->{pix}.$f->{content}" };
+        }
+    }
     if ($kind eq '$' && is_sub($next, '[')) {
         $$ip++;
         my $lv = read_list($t, $name, $env);
@@ -902,6 +984,30 @@ sub subscript_key {
     my $v = parse_expr(\@t, { %$env, at => $sub });
     refuse($sub, "a map here is read with a string (got $v->{ty})") unless $v->{ty} eq 'String';
     return $v->{pix};
+}
+
+# `Point->new(x => 3, y => 4)`, in the order the class declares them.
+sub build_value {
+    my ($word, $list, $env) = @_;
+    my $name = $word->content;
+    my %given;
+    for my $a (split_args($list)) {
+        refuse($a->{node}, "`$name` is built by naming its fields: `$name->new(x => 3)`") unless defined $a->{key};
+        refuse($a->{node}, "`$name` has no field `$a->{key}`")
+            unless grep { $_->{name} eq $a->{key} } @{ $value{$name} };
+        refuse($a->{node}, "`$name` was given `$a->{key}` twice") if exists $given{ $a->{key} };
+        $given{ $a->{key} } = $a;
+    }
+    my @vals;
+    for my $f (@{ $value{$name} }) {
+        my $a = $given{ $f->{name} }
+            or refuse($word, "`$name` is built with every one of its fields; `$f->{name}` is missing");
+        my $v = parse_expr($a->{toks}, { %$env, at => $a->{node} });
+        refuse($a->{node}, "`$name`'s `$f->{name}` holds a $f->{ty}, and this is a $v->{ty}")
+            unless $v->{ty} eq $f->{ty} || ($f->{ty} eq 'Float' && $v->{ty} eq 'Int');
+        push @vals, $v->{pix};
+    }
+    return { ty => $name, pix => "$name(" . join(', ', @vals) . ')' };
 }
 
 sub read_var {
@@ -2378,7 +2484,13 @@ sub fn_head {
 
 sub emit {
     my ($tree) = @_;
-    @out = ('store App {');
+    @out = ();
+    for my $name (@values) {
+        push @out, "struct $name {";
+        push @out, "  var $_->{name} : $_->{ty} = $_->{init}" for @{ $value{$name} };
+        push @out, '}', '';
+    }
+    push @out, 'store App {';
     push @out, "  state $_ : $field{$_}{ty} = $field{$_}{init}" for @fields;
     for my $m (@methods) {
         next if $m->{element} || !$m->{stateful};

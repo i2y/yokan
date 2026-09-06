@@ -118,21 +118,51 @@ constants are written from the same table by its own generator.
 
 ## What is in today
 
-Four demos gate green: the counter, `layout` (spacer and divider),
-`badges` (text as pills, bags of keywords, a method called from a
-handler) and `labels` (roles, accessible names, tooltips, a tween, a
-progress bar, the window's size). What the translator takes: one
-class; scalar fields with literal initializers and list fields
-(`("a", "b")` or `empty(Str)`); methods without parameters; handlers
-of every kind the elements have; `if` / `elsif` / `else` / `unless`
-and the conditional expression on the right of `=`; arithmetic,
-comparisons, `!`, `&&`, `||`; strings with holes for Int and Str
-fields; hashes of keywords at the top of the file; and the keywords
-every element takes, with `role` and `easing` checked against their
-vocabularies. Methods with parameters, lists that build their rows on
-demand, hash fields, `my` inside a method, loops, floats and bools in
-text, live reload, timers and work off the window's thread follow, in
-the order Wakakusa took.
+Twenty-five demos gate green — the counter, the todo list, a
+calculator on two layouts, a roster that sorts, charts, a dashboard
+driven by a timer, work done off the window's thread — and every one
+of them is a line-by-line port of the same app in the two sibling
+languages, so the screens can be compared side by side. Twenty-one of
+the twenty-seven windows are pixel-identical to Wakakusa's; of the six
+that are not, three are alive when the picture is taken and three are
+differences this port meant (one of them is perl printing `0` where
+Ruby prints `0.0`, which is perl being right about perl).
+
+What an app can write:
+
+- **The class.** Scalar, list and hash fields, their types read from
+  the initializers (`empty(Str)` for a container that starts empty);
+  `ADJUST` for what has to be worked out before the first screen;
+  methods with `:Sig(Int => Str)` for what they are called with and
+  what they answer. A second class in the file, with fields and no
+  `view`, is a value the app holds (`field $x :param :reader = 0`).
+- **The screen.** Every element in the table, the keywords each takes
+  and the ones every element takes; `if` / `unless` / `for` around the
+  parts of a view, which an app collects into a list and hands to a
+  container; a method that answers an element, which becomes a piece
+  of the compiled screen with a name of its own; `list_view` and
+  `table`, whose rows are built on demand.
+- **The rest of Perl the dialect takes.** `my` names, `for` and
+  `while` with `last` and `next`, `push` and the other things a list
+  takes, a hash read with a fallback (`$prices{$k} // 0`), string
+  interpolation including `$items[$i]` and `@{[ ... ]}`, arithmetic,
+  comparisons, `?:`, `sprintf`, and `0 + $s` for reading a string as
+  a number.
+- **What happens on its own.** `every(1.0, sub { ... })` before `run`,
+  `task(sub { ... }, on_done => ...)` on a thread of perl's own, and
+  live reload: edit the file while the window is open and the class is
+  redefined under the object it already has.
+
+What it refuses, it refuses by name. Twenty of those refusals have a
+file in `test/refuse/` that triggers them and the message they must
+print word for word, and the sweep checks them before it gates
+anything: an unsorted walk of a hash, `say` and `print`, a string
+`eval`, `local`, `wantarray`, `each`, `tie`, `"az"++`, a string where
+a number is wanted, a view that calls a method, and the rest.
+
+Still to come, in the order Wakakusa took them: the standard library's
+twins, files and databases, the keyboard and the menu bar, the canvas,
+`--release` and a double-clickable bundle, and the tour.
 
 ## The name
 
