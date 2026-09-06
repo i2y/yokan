@@ -14,6 +14,11 @@ builds native desktop apps. This repository holds both halves:
   language (`.pix` is the checked intermediate source Yokan emits),
   its compiler, kernel, and the gpui-based engine. Substrate work
   happens in this tree; pixie is not maintained anywhere else.
+- **The second language** — `wakakusa/`: Ruby on the same engine,
+  reached through `crates/pixie-capi`, the substrate's C face. It has
+  its own gate, its own vocabulary table and its own demos, and it
+  shares the engine with Yokan and nothing else. `pixie-capi` is
+  pixie's, not Wakakusa's: a third language would use the same face.
 
 User-facing docs: `README.md` / `README.ja.md` (landing),
 `crates/yokan/TOUR*.md` (the language tour, one file per language
@@ -126,15 +131,43 @@ Run these from `crates/yokan/` (they also work via
 - `cargo run -q -p pixie-rpi-gen -- <rustdoc.json> --bind
   mod=Class` derives a `.rpi` binding from rustdoc JSON.
 
+## Commands — Wakakusa
+
+Run these from `wakakusa/`. `just wakakusa-spinel` once per machine
+fetches and builds the pinned Ruby compiler into `~/.cache/spinel/<sha>`.
+
+- `./bin/wakakusa gate demo/counter.rb --script "click:+1,dump"` —
+  **the gate**, the same promise Yokan's makes: the app run under CRuby
+  and the app compiled to a native binary, driven by one interaction
+  script, byte-compared.
+- `check` (the refusals alone), `run` (a window, watching the file),
+  `translate` (emit the C), `build` (`--release` strips, `--app` wraps
+  it in a macOS bundle).
+- `./tools/gate_all.sh` — the sweep: every demo, then every complete
+  example in both tours. Run it before merging anything it touches.
+- `elements.toml` is THE table: every element, its keywords, their
+  types and defaults. `tools/gen.rb` writes the Ruby methods, the key
+  numbers both sides count with, and `crates/pixie-capi/src/vocab.rs`
+  from it, and `--check` fails when they are stale. Adding an element
+  is a row there and an arm in `materialize`.
+- `WAKAKUSA_FRAMES=<dir>` writes a PNG of a canvas after every script
+  step, drawn by the same rasterizer the window uses — the way to look
+  at drawn output with no window at all.
+
 ## What to verify for which change
 
 - Translator / runtime / stdlib / demo change → the touched demo's
   gate, then `gate_all.sh`, then pyright. A standard-library change
   also needs its module's ground-truth table (`cargo test -p
   yokan-stdlib`), regenerated first if the case set grew.
+- Anything under `wakakusa/`, or `crates/pixie-capi` → the touched
+  demo's gate, then `wakakusa/tools/gate_all.sh`. A change to
+  `elements.toml` or `tools/gen.rb` regenerates first; the sweep fails
+  on a stale table.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
-  from the dialect.
+  from the dialect, and the wakakusa sweep if it is reachable from
+  the C face. A change to `pixie-kernel` is reachable from both.
 - Anything visual → look at it: build, launch, screenshot, read the
   screenshot. A green gate proves the two runs agree, not that the
   window looks right. Kill stale binaries first
