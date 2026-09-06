@@ -104,5 +104,15 @@ gate canvas  ./bin/rakugan gate demo/canvas.pl --script "advance:50,dump,keydown
 gate jump    ./bin/rakugan gate demo/jump.pl --script "advance:34,advance:34,dump,keydown:right,advance:34,advance:34,advance:34,dump,keyup:right,advance:34,dump"
 gate shooter ./bin/rakugan gate demo/shooter.pl --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
 
+# The tour teaches the vocabulary, so it has to hold to it: every
+# complete app in either language, through the same command a demo goes
+# through. The site's tour pages are cut from these two files, so gating
+# them here gates both.
+if perl tools/tour_check.pl TOUR.md TOUR.ja.md > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   tour"
+else
+  fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
+fi
+
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]
