@@ -14,7 +14,7 @@ hide:
 <p class="wk-hero__tag">Write Ruby. Ship native.</p>
 
 <!-- 日本語は行の折り返しが空白として描画されるので、リード文は一行で書く -->
-<p class="wk-hero__lede">Wakakusa（若草）は、Ruby で書いたデスクトップアプリを 1 本のネイティブバイナリにして配ります。<strong>CRuby で動かしたものが、そのまま配れます。同じかどうかは <code>wakakusa gate</code> で確かめます</strong>。リリースするときは、事前コンパイル方式の Ruby コンパイラ <a href="https://github.com/matz/spinel">spinel</a> が Ruby を C に変換し、描画エンジンごと 1 本のバイナリにします。作っているあいだは、同じファイルを本物のインタプリタ（CRuby）が動かします。その二つを <code>wakakusa gate</code> が同じスクリプトで動かし、描いたものを一バイトずつ突き合わせます。アプリは普通の Ruby のクラスで、若草が足すのは画面を組み立てる <code>text</code>、<code>button</code>、<code>column</code> といったメソッドと、二つの実行が同じであることを確かめる仕組みです。</p>
+<p class="wk-hero__lede">Wakakusa（若草）は、Ruby で書いたデスクトップアプリを 1 本のネイティブバイナリにして配ります。<strong>CRuby で動かしたものが、そのまま配れます。同じかどうかは <code>wakakusa gate</code> で確かめます</strong>。リリースするときは、事前コンパイル方式の Ruby コンパイラ <a href="https://github.com/matz/spinel">spinel</a> が Ruby を C に変換し、描画エンジン（Zed エディタを支える <strong>gpui</strong>）ごと 1 本のバイナリにします。作っているあいだは、同じファイルを本物のインタプリタ（CRuby）が動かします。その二つを <code>wakakusa gate</code> が同じスクリプトで動かし、描いたものを一バイトずつ突き合わせます。アプリは普通の Ruby のクラスで、若草が足すのは画面を組み立てる <code>text</code>、<code>button</code>、<code>column</code> といったメソッドと、二つの実行が同じであることを確かめる仕組みです。</p>
 
 <div class="wk-hero__cta" markdown>
 [はじめる](installation.md){ .md-button .md-button--primary }

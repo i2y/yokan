@@ -20,7 +20,8 @@ Wakakusa turns a Ruby desktop app into one native binary:
 ship,
 <a href="https://github.com/matz/spinel">spinel</a> — an ahead-of-time
 Ruby compiler — takes your Ruby to C, and it links with the drawing
-engine into one binary; while you are working, the same file runs
+engine (<strong>gpui</strong>, the engine behind the Zed editor) into
+one binary; while you are working, the same file runs
 under CRuby, and <code>wakakusa gate</code> drives both with the same
 script and compares what they drew, byte for byte. An app is a plain
 Ruby class; what Wakakusa adds is the methods that build the screen,

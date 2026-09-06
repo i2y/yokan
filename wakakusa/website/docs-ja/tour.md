@@ -1,7 +1,7 @@
 # 最初のアプリ
 
 若草は、Ruby で書いたデスクトップアプリを 1 本のネイティブバイナリにして配ります。
-Ruby を C にするのは [spinel](https://github.com/matz/spinel)、画面を描くのは pixie のエンジンで、`wakakusa build` はその二つを結びます。
+Ruby を C にするのは [spinel](https://github.com/matz/spinel)、画面を描くのは、Zed エディタを支える **gpui** の上に組んだ pixie のエンジンで、`wakakusa build` はその二つを結びます。
 書いているあいだは、同じファイルを CRuby が動かします。
 配るバイナリと、書いているあいだの実行が同じプログラムかどうかは、`wakakusa gate` で確かめます。
 一つのスクリプトで両方を動かし、描いた画面を 1 バイトずつ突き合わせます。

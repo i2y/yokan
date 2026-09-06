@@ -6,8 +6,9 @@ you ran.**
 
 `wakakusa build` takes the app's Ruby through
 [spinel](https://github.com/matz/spinel) to C and links it with the
-drawing engine into one native binary. While you are working, the same
-file runs under CRuby instead, so it is the real interpreter answering.
+drawing engine — **gpui**, the engine behind the Zed editor — into one
+native binary. While you are working, the same file runs under CRuby
+instead, so it is the real interpreter answering.
 The gate drives both with one interaction script and compares what they
 drew, byte for byte — so "it worked while I was writing it" and "it
 works as shipped" are one claim, not two.

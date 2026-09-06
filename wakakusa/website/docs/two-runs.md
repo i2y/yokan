@@ -65,9 +65,9 @@ spinel's runtime, and links nothing but the system's own libraries.
 
 ## What both of them drive
 
-One engine, behind a C ABI: `crates/pixie-capi`, the same code in both
-runs. The interpreted run opens it as a shared library, the compiled
-run links the static one.
+One engine, behind a C ABI: `crates/pixie-capi` — pixie's kernel, with
+gpui drawing — the same code in both runs. The interpreted run opens it
+as a shared library, the compiled run links the static one.
 
 The face is deliberately narrow. An element is opened, written into by
 number, and closed; a handler is a number the door hands out; a list of
