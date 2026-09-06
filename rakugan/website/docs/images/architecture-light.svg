@@ -28,7 +28,7 @@
   <rect x="380" y="107" width="300" height="7" rx="3.5" fill="#b6bed4"/>
   <rect x="380" y="120" width="410" height="7" rx="3.5" fill="#b6bed4"/>
   <rect x="380" y="133" width="240" height="7" rx="3.5" fill="#b6bed4"/>
-  <rect x="380" y="146" width="180" height="7" rx="3.5" fill="#edc37a"/>
+  <rect x="380" y="146" width="180" height="7" rx="3.5" fill="#f0a8bd"/>
   <rect x="568" y="140" width="44" height="18" rx="5" fill="#fdf2da" stroke="#8a5a14" stroke-width="1.2"/>
   <text x="590" y="153" text-anchor="middle" font-size="11" font-weight="700" fill="#9a6207" font-family="ui-monospace,'SF Mono',Menlo,monospace">view</text>
   <text x="622" y="153" font-size="11" fill="#656b85">← answers the screen</text>
@@ -113,7 +113,7 @@
   <text x="311" y="673" text-anchor="end" font-size="11.5" fill="#5f667f">the interpreted run's transcript</text>
   <text x="889" y="673" text-anchor="start" font-size="11.5" fill="#5f667f">the compiled run's transcript</text>
 
-  <rect x="85" y="690" width="1030" height="86" rx="13" fill="#fdf2da" stroke="#edc37a" stroke-width="1.8"/>
+  <rect x="85" y="690" width="1030" height="86" rx="13" fill="#fdf2da" stroke="#f0a8bd" stroke-width="1.8"/>
   <text x="600" y="730" text-anchor="middle" font-size="18" font-weight="800" fill="#9a6207" font-family="ui-monospace,'SF Mono',Menlo,monospace">rakugan gate</text>
   <text x="600" y="757" text-anchor="middle" font-size="13" fill="#6e5c3c">drives both runs with one script and compares the two transcripts byte for byte</text>
 </svg>

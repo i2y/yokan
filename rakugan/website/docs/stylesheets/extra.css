@@ -1,15 +1,16 @@
 /* Rakugan site styling.
-   The brand is the confection's colour: pressed sugar, warm amber on a
-   dark ground. Two jobs here — a hero that is real text rather than a
+   The brand is the confection's colour: pressed sugar is white, and the
+   pieces in a box are tinted — 紅 above all. So the mark is white and
+   the accent is that pink, on a dark ground. Two jobs here — a hero that is real text rather than a
    picture of text, and a frame for the screenshots so a dark app
    window sits on a light page instead of punching a hole in it. */
 
 :root {
-  --rk-ground: #1c1714;
-  --rk-ground-2: #120e0c;
-  --rk-amber: #c2872f;
-  --rk-amber-light: #edc37a;
-  --rk-amber-dark: #96641d;
+  --rk-ground: #1b1619;
+  --rk-ground-2: #120e11;
+  --rk-beni: #c75f7f;
+  --rk-beni-light: #f0a8bd;
+  --rk-beni-dark: #9c4560;
 }
 
 /* ---- hero ------------------------------------------------------- */
@@ -20,7 +21,7 @@
   padding: 2.6rem 2.4rem 2.4rem;
   border-radius: 1rem;
   background:
-    radial-gradient(120% 140% at 12% 0%, #302620 0%, var(--rk-ground) 45%, var(--rk-ground-2) 100%);
+    radial-gradient(120% 140% at 12% 0%, #302027 0%, var(--rk-ground) 45%, var(--rk-ground-2) 100%);
   color: #fff;
   overflow: hidden;
 }
@@ -61,7 +62,7 @@
   font-size: 1.5rem;
   font-weight: 600;
   letter-spacing: -.01em;
-  color: var(--rk-amber-light);
+  color: var(--rk-beni-light);
 }
 
 .rk-hero__lede {
@@ -105,14 +106,14 @@
 }
 
 .rk-hero__cta .md-button--primary {
-  background: var(--rk-amber);
-  border-color: var(--rk-amber);
+  background: var(--rk-beni);
+  border-color: var(--rk-beni);
   color: #fff;
 }
 
 .rk-hero__cta .md-button--primary:hover {
-  background: var(--rk-amber-light);
-  border-color: var(--rk-amber-light);
+  background: var(--rk-beni-light);
+  border-color: var(--rk-beni-light);
   color: var(--rk-ground);
 }
 
@@ -130,9 +131,9 @@
 
 [data-md-color-scheme="default"] .rk-hero {
   background:
-    radial-gradient(120% 140% at 12% 0%, #fff 0%, #fdf8ef 45%, #f6ecd9 100%);
+    radial-gradient(120% 140% at 12% 0%, #fff 0%, #fdf6f8 45%, #f7e9ee 100%);
   color: var(--rk-ground);
-  border: 1px solid #eadcc2;
+  border: 1px solid #eed8de;
 }
 
 [data-md-color-scheme="default"] .rk-hero::after {
@@ -142,7 +143,7 @@
 }
 
 [data-md-color-scheme="default"] .rk-hero h1 { color: var(--rk-ground); }
-[data-md-color-scheme="default"] .rk-hero__tag { color: #8a5a15; }
+[data-md-color-scheme="default"] .rk-hero__tag { color: #8a3d55; }
 
 [data-md-color-scheme="default"] .rk-hero__lede { color: rgba(23, 28, 24, .78); }
 [data-md-color-scheme="default"] .rk-hero__lede strong { color: var(--rk-ground); }
@@ -171,13 +172,13 @@
 }
 
 [data-md-color-scheme="default"] .rk-hero__cta .md-button--primary {
-  background: var(--rk-amber-dark);
-  border-color: var(--rk-amber-dark);
+  background: var(--rk-beni-dark);
+  border-color: var(--rk-beni-dark);
 }
 
 [data-md-color-scheme="default"] .rk-hero__cta .md-button--primary:hover {
-  background: #8a5a15;
-  border-color: #8a5a15;
+  background: #8a3d55;
+  border-color: #8a3d55;
 }
 
 
@@ -247,7 +248,7 @@
 }
 
 .md-typeset .grid.cards > ul > li:hover {
-  border-color: var(--rk-amber);
+  border-color: var(--rk-beni);
   box-shadow: 0 8px 24px -14px rgba(0, 0, 0, .4);
 }
 

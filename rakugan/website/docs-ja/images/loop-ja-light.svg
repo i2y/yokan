@@ -68,7 +68,7 @@
     <text x="66" y="614">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
 
     <!-- row 6: gate -> GATE OK -->
-    <text x="66" y="666"><tspan fill="#7e849c">$ </tspan><tspan fill="#96641d">rakugan gate</tspan><tspan fill="#4a5068"> app.pl --script "click:+1,dump"</tspan></text>
+    <text x="66" y="666"><tspan fill="#7e849c">$ </tspan><tspan fill="#9c4560">rakugan gate</tspan><tspan fill="#4a5068"> app.pl --script "click:+1,dump"</tspan></text>
     <text x="66" y="690" fill="#15804a">GATE OK — 3 dump lines identical in both runs</text>
 
     <!-- the next prompt -->
@@ -100,9 +100,9 @@
     <text x="878" y="606">ウィンドウもコンパイラもない</text>
 
     <!-- row 6 -->
-    <text x="878" y="672" fill="#96641d"><tspan font-size="28" font-weight="700">2.8</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
+    <text x="878" y="672" fill="#9c4560"><tspan font-size="28" font-weight="700">2.8</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
     <rect x="878" y="682" width="240" height="6" rx="3" fill="#e4e7ef"/>
-    <rect x="878" y="682" width="240" height="6" rx="3" fill="#96641d"/>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#9c4560"/>
     <text x="878" y="710">これはコンパイルする。</text>
     <text x="878" y="730">二つの実行を一つのスクリプトで</text>
     <text x="878" y="750">動かし、1 バイトずつ</text>

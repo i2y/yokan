@@ -68,7 +68,7 @@
     <text x="66" y="614">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
 
     <!-- row 6: gate -> GATE OK -->
-    <text x="66" y="666"><tspan fill="#5f6685">$ </tspan><tspan fill="#c2872f">rakugan gate</tspan><tspan fill="#aeb4c8"> app.pl --script "click:+1,dump"</tspan></text>
+    <text x="66" y="666"><tspan fill="#5f6685">$ </tspan><tspan fill="#c75f7f">rakugan gate</tspan><tspan fill="#aeb4c8"> app.pl --script "click:+1,dump"</tspan></text>
     <text x="66" y="690" fill="#7ee2a8">GATE OK — 3 dump lines identical in both runs</text>
 
     <!-- the next prompt -->
@@ -99,9 +99,9 @@
     <text x="878" y="606">no window, no compiler</text>
 
     <!-- row 6 -->
-    <text x="878" y="672" fill="#c2872f"><tspan font-size="28" font-weight="700">2.8</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <text x="878" y="672" fill="#c75f7f"><tspan font-size="28" font-weight="700">2.8</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
     <rect x="878" y="682" width="240" height="6" rx="3" fill="#232739"/>
-    <rect x="878" y="682" width="240" height="6" rx="3" fill="#c2872f"/>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#c75f7f"/>
     <text x="878" y="710">this one compiles: both runs,</text>
     <text x="878" y="730">one script, byte for byte</text>
   </g>

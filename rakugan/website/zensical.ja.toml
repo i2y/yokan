@@ -60,15 +60,15 @@ favicon = "images/favicon.png"
 
 # ---- Palette --------------------------------------------------------------
 
-# Rakugan the confection: pressed sugar, warm amber. Black header keeps
-# the dark app screenshots seamless; the amber is the accent, the same
-# pair on both schemes so the brand holds.
+# Rakugan the confection: pressed sugar, white, with the pieces in a box
+# tinted 紅. Black header keeps the dark app screenshots seamless; that
+# pink is the accent, the same pair on both schemes so the brand holds.
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
 primary = "black"
-accent = "amber"
+accent = "pink"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to dark mode"
 
@@ -76,7 +76,7 @@ toggle.name = "Switch to dark mode"
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 primary = "black"
-accent = "amber"
+accent = "pink"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to light mode"
 

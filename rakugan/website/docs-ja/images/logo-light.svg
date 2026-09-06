@@ -1,19 +1,17 @@
-<!-- Rakugan mark: two pressed lozenges of 落雁 (sugar and rice flour, dried in a mold) in Yokan's flat isometric language — one whole piece with the mold's pattern still on its face, and a cut piece turned to show the pale interior inside the amber rim. Same geometry one ladder darker, for light grounds. -->
+<!-- Rakugan mark: two pressed pieces of 落雁 (rice flour and sugar, pressed in a mold and dried) in Yokan's flat isometric language. One material all the way through, so a piece is the same colour on every face — what a mold leaves on the top face is the whole of the decoration. White is the plain piece; the other is tinted 紅, the way the pieces in a box are. Same geometry one ladder darker, for light grounds. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <g stroke-linejoin="round">
-    <!-- cut piece: top, right side, front (the cut face), pale interior -->
-    <path d="M2 32 L10 24 L24 24 L16 32 Z" fill="#d9a457"/>
-    <path d="M16 32 L24 24 L24 40 L16 48 Z" fill="#6f4a12"/>
-    <path d="M2 32 L16 32 L16 48 L2 48 Z" fill="#96641d"/>
-    <path d="M4 34 L14 34 L14 46 L4 46 Z" fill="#f6e6c8"/>
-    <!-- whole piece: top, right side, front -->
-    <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#d9a457"/>
-    <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#6f4a12"/>
-    <path d="M28 32 L54 32 L54 48 L28 48 Z" fill="#96641d"/>
+    <!-- the tinted piece: top, right side, front -->
+    <path d="M2 32 L10 24 L26 24 L18 32 Z" fill="#e6a2b7"/>
+    <path d="M18 32 L26 24 L26 40 L18 48 Z" fill="#8a3d55"/>
+    <path d="M2 32 L18 32 L18 48 L2 48 Z" fill="#c75f7f"/>
     <!-- the mold's pattern, pressed into the top face -->
-    <path d="M42 26h6v2h-6z M44 28h2v2h-2z M40 28h2v2h-2z M48 28h2v2h-2z" fill="#b8843a"/>
-    <!-- sugar left on the front, one tone lighter than the face it sits on -->
-    <path d="M31 36h2v2h-2z M37 42h2v2h-2z M43 37h2v2h-2z M49 43h2v2h-2z" fill="#d9a457"/>
-    <path d="M52 26h2v2h-2z M58 26h2v2h-2z M12 26h2v2h-2z M18 26h2v2h-2z" fill="#edd6a8"/>
+    <path d="M8 26h8v2h-8z M10 28h2v2h-2z M14 28h2v2h-2z" fill="#cf8ba0"/>
+    <!-- the plain piece: top, right side, front -->
+    <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#efe8e0"/>
+    <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#a49a92"/>
+    <path d="M28 32 L54 32 L54 48 L28 48 Z" fill="#ded5cb"/>
+    <!-- its mold pattern: a bloom, three petals and a centre -->
+    <path d="M42 26h6v2h-6z M40 28h2v2h-2z M44 28h2v2h-2z M48 28h2v2h-2z M52 26h2v2h-2z" fill="#c3b7a9"/>
   </g>
 </svg>
