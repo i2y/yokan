@@ -63,7 +63,7 @@ app.rb:12:22: Wakakusa cannot take this — a block on an element cannot be writ
 
 **こう書きます。**
 行に必要なものを引数に取るメソッドを作り、繰り返しからそれを呼びます。
-ボタンのブロックは、繰り返しの変数ではなくメソッドの引数を閉じ込めます。
+ボタンのブロックが見るのは、繰り返しの変数ではなくメソッドの引数です。
 
 ```ruby
   def line(name, i)
@@ -142,7 +142,7 @@ app.rb:9:5: Wakakusa cannot take this — growing a list with `+ [...]` answers 
     ^
 ```
 
-短く書いた場合も、その書き方の文面で断ります。
+`+=` と短く書いた場合も、その書き方に合わせた文面で断ります。
 
 ```
 app.rb:9:5: Wakakusa cannot take this — growing a list with `+= [...]` answers something different in a compiled run. Copy it and push: `items = @items.dup`, `items.push(...)`, `@items = items`
@@ -151,8 +151,8 @@ app.rb:9:5: Wakakusa cannot take this — growing a list with `+= [...]` answers
 ```
 
 **こう書きます。**
-写して、足して、書き戻します。
-文面にも、自分のフィールドの名前でその三行が入っています。
+コピーして、足して、書き戻します。
+エラーの文面にも、自分のフィールド名を当てはめたその三行が入っています。
 
 ```ruby
   def add(t)
@@ -178,7 +178,7 @@ app.rb:5:19: Wakakusa cannot take this — `text` has no `weight:`. It takes a11
 
 文面に並ぶ一覧は `elements.toml` から生成しています。
 アプリが呼ぶ Ruby のメソッドも、エンジン側の定数も、同じ表から書き出されます。
-だから、その要素が実際には持たないキーワードを断りが挙げることはありません。
+だから、その要素が実際には持たないキーワードが文面に並ぶことはありません。
 表そのものを並べたのが[要素](elements.md)です。
 
 **こう書きます。**

@@ -4,14 +4,19 @@
 CRuby is what it ships as a native binary, and each build verifies
 it.**
 
-Build the screen out of elements — `text`, `button`, `column` and
-thirty more — and write ordinary Ruby for everything else. While you
-are working, the program runs under CRuby, so it is the real
-interpreter answering. When you ship, the whole program becomes one
-native binary. The gate runs both, drives them with the same
-interaction script, and compares what they drew, byte for byte — so
-"it worked while I was writing it" and "it works as shipped" are one
-claim, not two.
+`wakakusa build` takes the app's Ruby through
+[spinel](https://github.com/matz/spinel) to C and links it with the
+drawing engine into one native binary. While you are working, the same
+file runs under CRuby instead, so it is the real interpreter answering.
+The gate drives both with one interaction script and compares what they
+drew, byte for byte — so "it worked while I was writing it" and "it
+works as shipped" are one claim, not two.
+
+The methods that build the screen — `text`, `button`, `column` and
+thirty more — come with Wakakusa; the app itself is a plain Ruby class,
+with no special syntax to learn. How much of Ruby you can write is what
+spinel takes, minus the shapes under
+[What Wakakusa refuses](TOUR.md#what-wakakusa-refuses).
 
 ## What an app looks like
 

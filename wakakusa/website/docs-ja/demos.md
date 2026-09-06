@@ -16,7 +16,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
 
 ## まずここから
 
-#### counter — 基本形。アプリはオブジェクトで、状態はそのインスタンス変数、ハンドラはそれを閉じ込めたブロック
+#### counter — 基本形。アプリはオブジェクトで、状態はそのインスタンス変数、ハンドラはそのオブジェクトが見えるブロック
 <img src="images/demos/counter.png" width="360">
 
 ??? note "counter.rb"
@@ -208,7 +208,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Todo.new, title: "todo")
     ```
 
-#### calc — 電卓。累算器ひとつと保留中の演算ひとつ、見た目は Hash にまとめて各キーに `**` で渡す
+#### calc — 電卓。途中の値ひとつと待っている演算ひとつを持ち、見た目は Hash にまとめて各キーに `**` で渡す
 <img src="images/demos/calc.png" width="360">
 
 ??? note "calc.rb"
@@ -610,7 +610,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Points.new, title: "points")
     ```
 
-#### links — 互いを指すオブジェクト。Ruby の回収器は循環を扱えるので、逆向きの参照も普通の参照でよい
+#### links — 互いを指すオブジェクト。Ruby の GC は循環を扱えるので、逆向きの参照も普通の参照でよい
 <img src="images/demos/links.png" width="360">
 
 ??? note "links.rb"
@@ -868,7 +868,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Order.new, title: "quantities")
     ```
 
-#### layout — spacer と divider。続きを端まで押しやる詰め物と、区切り線
+#### layout — spacer と divider。続きを端まで押しやる余白と、区切り線
 <img src="images/demos/layout.png" width="360">
 
 ??? note "layout.rb"
@@ -953,7 +953,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Cards.new, title: "cards")
     ```
 
-#### styled — 見た目をひとところに。Hash を merge して `**` で渡し、`theme:` で一枚まるごと切り替える
+#### styled — 見た目をひとところに。Hash を merge して `**` で渡し、`theme:` でパネルごと切り替える
 <img src="images/demos/styled.png" width="360">
 
 ??? note "styled.rb"
@@ -1226,7 +1226,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Labels.new, title: "labels", width: 420.0, height: 320.0)
     ```
 
-#### shared — すべての要素が受け取る性質を、互いに似ていない要素の上で
+#### shared — 共通のプロパティを、種類の違う要素それぞれに付けてみる
 <img src="images/demos/shared.png" width="360">
 
 ??? note "shared.rb"
@@ -1290,7 +1290,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Locks.new, title: "shared")
     ```
 
-#### loading — 満ちていくバーの 3 つの形と、終わりの見えないジョブのための往復
+#### loading — 満ちていくバーの 3 つの形と、終わりの見えないジョブのための行き来する表示
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.rb"
@@ -2843,7 +2843,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Ledger.new, title: "ledger")
     ```
 
-#### edges — 端の話。リストの終わりを越えた添字と、機械語の 1 語をはるかに越えた数
+#### edges — 端の話。リストの終わりを越えた添字と、64 ビットをはるかに越えた数
 <img src="images/demos/edges.png" width="360">
 
 ??? note "edges.rb"
@@ -2969,7 +2969,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
 
 ## ウィンドウ
 
-#### keys — キーボードを和音として扱い、同じハンドラをメニューバーにも置く。`key:cmd+s` と `menu:Save` で動かせる
+#### keys — キーの組み合わせにハンドラを結び付け、同じものをメニューバーにも置く。`key:cmd+s` と `menu:Save` で動かせる
 <img src="images/demos/keys.png" width="360">
 
 ??? note "keys.rb"

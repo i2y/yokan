@@ -13,6 +13,26 @@ kinds: [refused before it runs](#1-refused-before-it-runs),
 [a second standard library](#3-the-standard-library-is-a-second-implementation),
 and [the same program at different speeds](#4-the-same-program-at-different-speeds).
 
+## Three Rubys, nested
+
+Wakakusa defines no language of its own. What you may write is Ruby,
+narrowed twice and then given a library:
+
+| | What it takes |
+|---|---|
+| **CRuby** | all of Ruby. It is what runs your app while you write it. |
+| **spinel** | the part an ahead-of-time compiler can take: no `eval`, no `method_missing`, no class built at run time, no reflection over a name it cannot see at compile time. [The list is below](#1-refused-before-it-runs); the compiler's own catalogue is the complete one. |
+| **Wakakusa** | spinel's part, minus five shapes that would compile and then behave differently — a view that writes, an element's block inside a loop, a global written from a block, a handler that is neither a block nor a written-out proc, and a list grown with `+`. `wakakusa check` refuses those before a compiler starts: [What Wakakusa refuses](refusals.md). |
+
+On top of that subtraction Wakakusa adds one thing, and it is a
+library rather than a language: the methods that build the screen, and
+`run`, `every`, `task`, `sqlite_exec` and their neighbours. Your
+classes, blocks, `require`s and standard library are Ruby's own.
+
+So a Wakakusa app is a Ruby program that two implementations of Ruby
+can both run. The rest of this page is what those two are made of, and
+the four kinds of difference between them.
+
 ## What runs while you are writing
 
 ```console

@@ -17,7 +17,7 @@
   <!-- ============ the one source file ============ -->
   <rect x="410" y="28" width="380" height="118" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
   <text x="600" y="60" text-anchor="middle" font-size="21" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
-  <text x="600" y="84" text-anchor="middle" font-size="13" fill="#9aa0b5">画面は用意された要素で組み立て、あとは普通の Ruby</text>
+  <text x="600" y="84" text-anchor="middle" font-size="13" fill="#9aa0b5">普通の Ruby のクラスに、画面を組み立てるメソッド</text>
   <text x="600" y="106" text-anchor="middle" font-size="13" fill="#9aa0b5">`view` メソッドを持つオブジェクトを `run` に渡す</text>
   <rect x="500" y="120" width="200" height="7" rx="3.5" fill="#39415f"/>
 

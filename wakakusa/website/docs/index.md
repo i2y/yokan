@@ -16,8 +16,9 @@ hide:
 <p class="wk-hero__lede">
 A compiler for Ruby desktop apps: <strong>what you run under CRuby is
 what it ships as a native binary, and each build verifies it</strong>.
-You write ordinary Ruby against a small vocabulary of elements. While
-you are working, the real interpreter is answering; when you ship, the
+An app is a plain Ruby class; what Wakakusa adds is the methods that
+build the screen. While you are working, the real interpreter is
+answering; when you ship, the
 whole program becomes one native binary — and
 <code>wakakusa gate</code> drives both with the same script and
 compares what they drew, byte for byte.
@@ -133,6 +134,10 @@ threads, everything `Enumerable` answers — you write Ruby's library,
 not a library of ours standing in front of it. Underneath, one run is
 CRuby's implementation and the other the compiler's, and the gate is
 what holds them together.
+
+How much of Ruby you may write — CRuby's all of it, spinel's
+compilable part, and Wakakusa's five further subtractions — is set out
+in [Three Rubys, nested](two-runs.md#three-rubys-nested).
 
 A database is the one exception, because it is no use unless both runs
 read the one file the same way:

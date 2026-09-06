@@ -1,10 +1,13 @@
 # First app
 
-Wakakusa is a compiler for Ruby desktop apps. You build the screen out
-of elements — `text`, `button`, `column` and thirty more — and write
-ordinary Ruby for everything else. While you are working it runs under
-CRuby, and when you ship it becomes one native binary. Each build
-verifies that the two are the same program.
+Wakakusa is a compiler for Ruby desktop apps. `wakakusa build` takes
+your Ruby through spinel to C and links it with the drawing engine
+into one native binary; while you are working, the same file runs
+under CRuby instead, and each build verifies that the two are the same
+program. The methods that build the screen — `text`, `button`,
+`column` and thirty more — come with Wakakusa; the app itself is a
+plain Ruby class. How much of Ruby you can write is set out in
+[Three Rubys, nested](two-runs.md#three-rubys-nested).
 
 This tour is one pass over how apps are written, in the order you meet
 it. Everything in it runs: `tools/tour_check.rb` pulls every complete
