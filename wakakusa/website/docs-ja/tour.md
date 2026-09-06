@@ -1,0 +1,189 @@
+# 最初のアプリ
+
+若草は Ruby のデスクトップアプリを作るコンパイラです。
+小さな要素の語彙に対して普通の Ruby を書きます。
+書いているあいだは CRuby が動かし、リリースすると一つのネイティブバイナリになります。
+その二つが同じプログラムであることを、ビルドのたびに検証します。
+
+このツアーには、言語そのものが読者の出会う順に並んでいます。
+ここに書いたものはすべて実際に動きます。
+`tools/tour_check.rb` がこのページから完全なアプリをすべて取り出し、デモと同じコマンドに通すからです。
+語彙の名前を変えれば、読者がそれを目にする前にこのページが壊れます。
+まだできないことは、理由とともに[まだできないこと](tour-ship.md#まだできないこと)にまとめてあります。
+
+## いちばん小さいアプリ
+
+アプリは `view` メソッドを持つオブジェクトです。
+`view` は要素を一つ返し、そのオブジェクトを `run` に渡すとウィンドウが開きます。
+
+<!-- script: dump -->
+```ruby
+require "wakakusa"
+
+class Hello
+  def view
+    text "hello", size: 28.0
+  end
+end
+
+run(Hello.new, title: "hello")
+```
+
+```console
+$ wakakusa run demo/hello.rb      # CRuby でウィンドウが開く
+$ wakakusa gate demo/hello.rb --script "dump"
+GATE OK — 1 dump line identical in both runs
+```
+
+継承すべきクラスも、登録すべきメソッドもありません。
+`run` はオブジェクトを受け取り、そこから使うのは `view` という名前のメソッドだけです。
+
+`run` はウィンドウそのものも受け取ります。
+`title:` が名前、`width:` と `height:` が開いたときの大きさ（0.0 なら既定のまま）、`padding:` が画面全体の余白です。
+`padding:` は -1.0 で既定のまま、0.0 で内容が端まで届きます。
+キャンバスが欲しいのは 0.0 のほうです。
+
+```ruby
+run(Game.new, title: "Pyxel Jump", width: 640.0, height: 480.0, padding: 0.0)
+```
+
+## 状態の持ち方
+
+状態はオブジェクトのインスタンス変数です。
+ハンドラはブロックで、ブロックの中からはそのオブジェクトがそのまま見えます。
+だから書き換え方は、普通のメソッドと変わりません。
+ハンドラを抜けると、そのときの状態からビュー全体が組み直されます。
+
+<!-- script: click:+1,click:+1,dump,input:Momo,dump -->
+```ruby
+require "wakakusa"
+
+class Counter
+  def initialize
+    @count = 0
+    @name = ""
+  end
+
+  def view
+    column(
+      text("count: #{@count}", size: 34.0),
+      row(
+        button("+1") { @count += 1 },
+        button("+10") { @count += 10 },
+        button("reset") { @count = 0 },
+        spacing: 8.0
+      ),
+      text_field(@name, placeholder: "your name") { |s| @name = s },
+      text("hello, #{@name}"),
+      spacing: 12.0,
+      padding: 16.0
+    )
+  end
+end
+
+run(Counter.new, title: "counter")
+```
+
+ストアを別に用意することはありません。
+監視の設定を書く必要も、これはフィールドだと印を付ける必要もありません。
+アプリはオブジェクトであり、その状態は `initialize` から始まります。
+
+知らないうちに結び付けられるものもありません。
+`@name` と書いたからその欄には `@name` が表示され、値を書き戻すのはブロックです。
+だから画面と状態が食い違うことがありません。
+
+## ビューの書き方
+
+コンテナは、子を引数として取ることも、ブロックとして取ることもできます。
+どちらも組み立てる木は同じなので、画面が読みやすくなるほうを選べば足ります。
+
+<!-- script: click:+1,dump -->
+```ruby
+require "wakakusa"
+
+class Two
+  def initialize
+    @count = 0
+  end
+
+  def view
+    column(spacing: 12.0, padding: 16.0) {
+      text "count: #{@count}", size: 34.0
+      row(spacing: 8.0) {
+        button("+1") { @count += 1 }
+        button("reset") { @count = 0 }
+      }
+    }
+  end
+end
+
+run(Two.new, title: "two")
+```
+
+ブロックの形はカンマを挟まずに入れ子になり、上から下へ読めます。
+構造のある画面にはこの形が向き、三つほどを並べるだけの場面には引数の形が向きます。
+`demo/counter.rb` と `demo/blockform.rb` は同じ画面を二つの書き方で書いたもので、掃引はその両方をゲートに通します。
+
+コンテナのブロックの中では、要素は開いているコンテナに加わります。
+規則はそれだけです。
+`column` のブロックの中に書いた `text` はその column の子になり、その中で開いた `row` は、さらにその中に書いたものを集めます。
+
+## 画面の一部はメソッド
+
+要素を返すメソッドは画面の一部にあたり、それを呼ぶことでビューを分けて書けます。
+
+```ruby
+  def field(label, value)
+    row(spacing: 6.0) {
+      text label, width: 90.0
+      text value, bold: true
+    }
+  end
+
+  def view
+    column(spacing: 4.0, padding: 14.0) {
+      field("name", @name)
+      field("size", @size)
+    }
+  end
+```
+
+宣言するものはありません。
+要素を返すメソッドが画面の一部で、要素を引数に取るメソッドがそれを包むものです。
+
+```ruby
+  def card(title, *kids)
+    column(
+      text(title, size: 18.0),
+      *kids,
+      spacing: 4.0, padding: 8.0,
+      border_width: 1.0, border_color: "accent", border_radius: 8.0
+    )
+  end
+```
+
+子は普通の Ruby の splat で届き、そのままコンテナの引数に入ります。
+だから包むメソッドも、ほかのメソッドと変わりません。
+`demo/cards.rb` がその書き方を一画面にしたものです。
+
+## ビューは読むだけ
+
+ビューは今の画面を答えるために呼ばれ、いつ呼び直されるかわかりません。
+だからビューは状態を読むだけで、書き換えません。
+
+```console
+$ wakakusa check app.rb
+app.rb:9:5: Wakakusa cannot take this — a view only reads. Move the write into a handler — the block on a button, or a method the app calls from one
+    @seen = @seen + 1
+    ^
+```
+
+書き換え方は文面が伝えます。
+書き換えはハンドラか、ハンドラから呼ぶメソッドに置きます。
+断る書き方の一覧は[若草が断る書き方](refusals.md)にあり、それぞれ実際に印字される文面を載せてあります。
+
+## 次に読むもの
+
+- [ビューと制御フロー](tour-logic.md)：ビューの中の `if` と繰り返し、入力の部品、ハンドラ、必要な行だけ作る一覧。
+- [キャンバスとキーボード](tour-canvas.md)：仮想的な画素の格子と、装置として読むキー。
+- [検証と配布](tour-ship.md)：ゲートと、一本のバイナリ。

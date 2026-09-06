@@ -53,7 +53,10 @@ def main
     list = apps(page)
     warn "#{File.basename(page)}: no complete app in it" if list.empty?
     list.each_with_index do |(script, body), i|
-      file = File.join(OUT, format("%s_%02d.rb", File.basename(page, ".md").downcase.tr(".", "_"), i))
+      # The whole path names the file, so a page under website/ cannot
+      # overwrite the tour page of the same name.
+      stem = page.sub(%r{\A\./}, "").sub(/\.md\z/, "").downcase.tr("/.-", "___")
+      file = File.join(OUT, format("%s_%02d.rb", stem, i))
       File.write(file, body)
       cmd = [File.join(ROOT, "bin", "wakakusa")]
       cmd += script ? ["gate", file, "--script", script] : ["check", file]

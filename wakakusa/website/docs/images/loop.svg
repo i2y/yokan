@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    </marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8fd14f"/>
+    </marker>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
+    </pattern>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="596" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="596" rx="20" fill="url(#dots)"/>
+
+  <text x="60" y="62" font-size="15" font-weight="700" fill="#8fd14f">the fast ring: an answer in well under a second, on every edit</text>
+
+  <!-- the ring -->
+  <rect x="60" y="86" width="300" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="210" y="126" text-anchor="middle" font-size="17" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
+  <text x="210" y="152" text-anchor="middle" font-size="12.5" fill="#9aa0b5">the agent writes one file,</text>
+  <text x="210" y="172" text-anchor="middle" font-size="12.5" fill="#9aa0b5">ordinary Ruby</text>
+
+  <path d="M360 146 L432 146" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <rect x="440" y="86" width="300" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="590" y="122" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa check</text>
+  <text x="590" y="148" text-anchor="middle" font-size="12.5" fill="#a7de6b">0.1 s, no compiler started</text>
+  <text x="590" y="172" text-anchor="middle" font-size="12.5" fill="#9aa0b5">silence, or a refusal that names</text>
+  <text x="590" y="190" text-anchor="middle" font-size="12.5" fill="#9aa0b5">what to write instead</text>
+
+  <path d="M740 146 L812 146" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <rect x="820" y="86" width="320" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="980" y="120" text-anchor="middle" font-size="14" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">PIXIE_SCRIPT=… run</text>
+  <text x="980" y="146" text-anchor="middle" font-size="12.5" fill="#a7de6b">0.7 s, no window opened</text>
+  <text x="980" y="170" text-anchor="middle" font-size="12.5" fill="#9aa0b5">the screen, printed as text</text>
+  <text x="980" y="188" text-anchor="middle" font-size="12.5" fill="#9aa0b5">(and a PNG, for a canvas)</text>
+
+  <!-- back round -->
+  <path d="M980 206 L980 258 Q980 274 964 274 L226 274 Q210 274 210 258 L210 206"
+        stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <rect x="470" y="256" width="260" height="34" rx="8" fill="#14161f"/>
+  <text x="600" y="279" text-anchor="middle" font-size="13" fill="#9aa0b5">read it, fix the file, go round again</text>
+
+  <!-- out of the ring -->
+  <path d="M1140 146 Q1170 146 1170 200 L1170 396 Q1170 424 1140 424 L1096 424"
+        stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+  <rect x="1136" y="222" width="24" height="176" rx="8" fill="#14161f"/>
+  <text x="1148" y="310" text-anchor="middle" font-size="12.5" fill="#a7de6b" transform="rotate(-90 1148 310)">when the work looks done</text>
+
+  <text x="60" y="366" font-size="15" font-weight="700" fill="#8fd14f">and out of it: the proof, and the thing you hand over</text>
+
+  <rect x="700" y="392" width="396" height="120" rx="14" fill="#1a2320" stroke="#3c5b33" stroke-width="1.8"/>
+  <text x="898" y="428" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa gate</text>
+  <text x="898" y="454" text-anchor="middle" font-size="12.5" fill="#a7de6b">2.1 s, a real compile</text>
+  <text x="898" y="478" text-anchor="middle" font-size="12.5" fill="#9aa0b5">both runs, one script,</text>
+  <text x="898" y="496" text-anchor="middle" font-size="12.5" fill="#9aa0b5">compared byte for byte</text>
+
+  <path d="M700 452 L628 452" stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+
+  <rect x="240" y="392" width="380" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="430" y="428" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">build --release --app</text>
+  <text x="430" y="454" text-anchor="middle" font-size="12.5" fill="#9aa0b5">one native binary, and a .app</text>
+  <text x="430" y="478" text-anchor="middle" font-size="12.5" fill="#9aa0b5">that opens on a machine with</text>
+  <text x="430" y="496" text-anchor="middle" font-size="12.5" fill="#9aa0b5">neither Ruby nor the compiler</text>
+</svg>

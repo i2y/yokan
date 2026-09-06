@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    </marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8fd14f"/>
+    </marker>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
+    </pattern>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="816" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="816" rx="20" fill="url(#dots)"/>
+
+  <!-- ============ the one source file ============ -->
+  <rect x="410" y="28" width="380" height="118" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="600" y="60" text-anchor="middle" font-size="21" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
+  <text x="600" y="84" text-anchor="middle" font-size="13" fill="#9aa0b5">ordinary Ruby, against a small vocabulary of elements</text>
+  <text x="600" y="106" text-anchor="middle" font-size="13" fill="#9aa0b5">an object with a `view` method, handed to `run`</text>
+  <rect x="500" y="120" width="200" height="7" rx="3.5" fill="#39415f"/>
+
+  <path d="M470 146 L300 196" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <path d="M730 146 L900 196" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <!-- ============ left road: while you develop ============ -->
+  <rect x="60" y="206" width="500" height="250" rx="16" fill="#181b26" stroke="#333a52" stroke-width="1.6"/>
+  <text x="86" y="238" font-size="15" font-weight="700" fill="#8fd14f">while you are writing it</text>
+
+  <rect x="86" y="256" width="448" height="60" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="106" y="282" font-size="14" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">ruby -Ilib -Idoor/cruby app.rb</text>
+  <text x="106" y="303" font-size="12.5" fill="#9aa0b5">CRuby: the real interpreter, running your file</text>
+
+  <rect x="86" y="330" width="448" height="52" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="106" y="352" font-size="13" fill="#cdd6f4">the door opens the engine as a shared library</text>
+  <text x="106" y="371" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.dylib</text>
+
+  <rect x="86" y="396" width="448" height="42" rx="10" fill="#171f1a" stroke="#3c5b33"/>
+  <text x="106" y="423" font-size="13" fill="#a7de6b">save the file → the window picks the edit up, state intact</text>
+
+  <!-- ============ right road: when you ship ============ -->
+  <rect x="640" y="206" width="500" height="250" rx="16" fill="#181b26" stroke="#333a52" stroke-width="1.6"/>
+  <text x="666" y="238" font-size="15" font-weight="700" fill="#8fd14f">when you ship it</text>
+
+  <rect x="666" y="256" width="448" height="60" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="686" y="282" font-size="14" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">spinel --int-overflow=promote -c</text>
+  <text x="686" y="303" font-size="12.5" fill="#9aa0b5">the same Ruby, compiled to C you can read</text>
+
+  <rect x="666" y="330" width="448" height="52" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="686" y="352" font-size="13" fill="#cdd6f4">cc links the engine in, statically</text>
+  <text x="686" y="371" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.a + the compiler's runtime</text>
+
+  <rect x="666" y="396" width="448" height="42" rx="10" fill="#171f1a" stroke="#3c5b33"/>
+  <text x="686" y="423" font-size="13" fill="#a7de6b">one native binary · 12.3 MB · no Ruby on the machine</text>
+
+  <path d="M310 456 L310 512" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <path d="M890 456 L890 512" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <!-- ============ one engine ============ -->
+  <rect x="60" y="520" width="1080" height="128" rx="16" fill="#1a2320" stroke="#3c5b33" stroke-width="1.8"/>
+  <text x="600" y="556" text-anchor="middle" font-size="18" font-weight="700" fill="#8fd14f">one engine, behind a C ABI</text>
+  <text x="600" y="582" text-anchor="middle" font-size="13" fill="#cdd6f4">an element is opened, written into by number, and closed; a handler is a number the door hands out</text>
+  <text x="600" y="604" text-anchor="middle" font-size="13" fill="#9aa0b5">the engine never holds a Ruby object — which is why an interpreter and a binary can drive the same code</text>
+  <text x="600" y="630" text-anchor="middle" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">crates/pixie-capi · elements.toml is the one table both sides are generated from</text>
+
+  <path d="M600 648 L600 700" stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+
+  <!-- ============ the gate ============ -->
+  <rect x="220" y="708" width="760" height="86" rx="14" fill="#1e2232" stroke="#8fd14f" stroke-width="1.8"/>
+  <text x="600" y="742" text-anchor="middle" font-size="17" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa gate</text>
+  <text x="600" y="770" text-anchor="middle" font-size="13" fill="#9aa0b5">one interaction script, two runs, the transcripts compared byte for byte</text>
+</svg>

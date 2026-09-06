@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    </marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8fd14f"/>
+    </marker>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
+    </pattern>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="816" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="816" rx="20" fill="url(#dots)"/>
+
+  <!-- ============ the one source file ============ -->
+  <rect x="410" y="28" width="380" height="118" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="600" y="60" text-anchor="middle" font-size="21" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
+  <text x="600" y="84" text-anchor="middle" font-size="13" fill="#9aa0b5">普通の Ruby を、小さな要素の語彙に対して書く</text>
+  <text x="600" y="106" text-anchor="middle" font-size="13" fill="#9aa0b5">`view` メソッドを持つオブジェクトを `run` に渡す</text>
+  <rect x="500" y="120" width="200" height="7" rx="3.5" fill="#39415f"/>
+
+  <path d="M470 146 L300 196" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <path d="M730 146 L900 196" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <!-- ============ left road: while you develop ============ -->
+  <rect x="60" y="206" width="500" height="250" rx="16" fill="#181b26" stroke="#333a52" stroke-width="1.6"/>
+  <text x="86" y="238" font-size="15" font-weight="700" fill="#8fd14f">書いている間</text>
+
+  <rect x="86" y="256" width="448" height="60" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="106" y="282" font-size="14" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">ruby -Ilib -Idoor/cruby app.rb</text>
+  <text x="106" y="303" font-size="12.5" fill="#9aa0b5">CRuby、つまり本物のインタプリタがそのファイルを動かす</text>
+
+  <rect x="86" y="330" width="448" height="52" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="106" y="352" font-size="13" fill="#cdd6f4">door がエンジンを共有ライブラリとして開く</text>
+  <text x="106" y="371" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.dylib</text>
+
+  <rect x="86" y="396" width="448" height="42" rx="10" fill="#171f1a" stroke="#3c5b33"/>
+  <text x="106" y="423" font-size="13" fill="#a7de6b">保存するとウィンドウが編集を拾い、状態はそのまま残る</text>
+
+  <!-- ============ right road: when you ship ============ -->
+  <rect x="640" y="206" width="500" height="250" rx="16" fill="#181b26" stroke="#333a52" stroke-width="1.6"/>
+  <text x="666" y="238" font-size="15" font-weight="700" fill="#8fd14f">配るとき</text>
+
+  <rect x="666" y="256" width="448" height="60" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="686" y="282" font-size="14" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">spinel --int-overflow=promote -c</text>
+  <text x="686" y="303" font-size="12.5" fill="#9aa0b5">同じ Ruby を、読める C にコンパイルする</text>
+
+  <rect x="666" y="330" width="448" height="52" rx="10" fill="#1e2232" stroke="#3a4160"/>
+  <text x="686" y="352" font-size="13" fill="#cdd6f4">cc がエンジンを静的に結び付ける</text>
+  <text x="686" y="371" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.a とコンパイラの実行時ライブラリ</text>
+
+  <rect x="666" y="396" width="448" height="42" rx="10" fill="#171f1a" stroke="#3c5b33"/>
+  <text x="686" y="423" font-size="13" fill="#a7de6b">ネイティブバイナリが 1 本、12.3 MB、相手の機械に Ruby は要らない</text>
+
+  <path d="M310 456 L310 512" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <path d="M890 456 L890 512" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <!-- ============ one engine ============ -->
+  <rect x="60" y="520" width="1080" height="128" rx="16" fill="#1a2320" stroke="#3c5b33" stroke-width="1.8"/>
+  <text x="600" y="556" text-anchor="middle" font-size="18" font-weight="700" fill="#8fd14f">C ABI の向こうに、エンジンはひとつ</text>
+  <text x="600" y="582" text-anchor="middle" font-size="13" fill="#cdd6f4">要素は開き、番号で書き込み、閉じる。ハンドラは door が配る番号</text>
+  <text x="600" y="604" text-anchor="middle" font-size="13" fill="#9aa0b5">エンジンは Ruby のオブジェクトを持たないので、インタプリタとバイナリが同じコードを動かせる</text>
+  <text x="600" y="630" text-anchor="middle" font-size="12.5" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">crates/pixie-capi（両側は elements.toml ひとつの表から生成される）</text>
+
+  <path d="M600 648 L600 700" stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+
+  <!-- ============ the gate ============ -->
+  <rect x="220" y="708" width="760" height="86" rx="14" fill="#1e2232" stroke="#8fd14f" stroke-width="1.8"/>
+  <text x="600" y="742" text-anchor="middle" font-size="17" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa gate</text>
+  <text x="600" y="770" text-anchor="middle" font-size="13" fill="#9aa0b5">操作の台本ひとつ、実行ふたつ、その記録を 1 バイトずつ突き合わせる</text>
+</svg>

@@ -232,6 +232,12 @@ The [language tour](TOUR.md) is the whole language in the order you
 meet it, and every example in it runs. 日本語版は
 [TOUR.ja.md](TOUR.ja.md).
 
+`website/` is the documentation site, in both languages: the tour split
+into six pages, a vocabulary reference generated from `elements.toml`,
+the two runs set out side by side, every refusal with the message it
+prints, and all forty-three demos with their screenshots and their
+source. `just wakakusa-site-serve` builds it and serves both.
+
 ## What does not work yet
 
 - No sound. The engine has no audio verb, which is why the two games

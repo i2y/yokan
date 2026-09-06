@@ -24,6 +24,8 @@ User-facing docs: `README.md` / `README.ja.md` (landing),
 `crates/yokan/TOUR*.md` (the language tour, one file per language
 on purpose), `website/` (the zensical site — the tour is split into
 six pages there), `docs/PIXIE.md` (the substrate, user-facing).
+Wakakusa has the same pair of its own: `wakakusa/TOUR*.md` and
+`wakakusa/website/`.
 `skills/yokan/SKILL.md` is the agent guide, at the repository root
 because that is where skill installers look for it; it is written
 for an agent about to write an app, and follows the tour.
@@ -153,6 +155,14 @@ fetches and builds the pinned Ruby compiler into `~/.cache/spinel/<sha>`.
 - `WAKAKUSA_FRAMES=<dir>` writes a PNG of a canvas after every script
   step, drawn by the same rasterizer the window uses — the way to look
   at drawn output with no window at all.
+- `website/` is Wakakusa's own zensical site (`just wakakusa-site`,
+  `just wakakusa-site-serve` on :8002), written for
+  `i2y.github.io/wakakusa/` so it can move to its own repository whole.
+  Two of its pages are generated — `elements.md` from `elements.toml`,
+  `demos.md` from `demo/` — by `just wakakusa-site-gen`; the sweep runs
+  `website/tools/site_check.rb`, which fails when a page quotes a
+  refusal the fixtures no longer print, and gates the site's tour
+  examples along with the repository's.
 
 ## What to verify for which change
 

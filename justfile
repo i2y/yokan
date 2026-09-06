@@ -127,6 +127,33 @@ wakakusa-gate app script='':
 wakakusa-sweep:
     ./wakakusa/tools/gate_all.sh
 
+# Wakakusa's site is its own zensical project under `wakakusa/website/`,
+# written for `i2y.github.io/wakakusa/` so it can move to its own
+# repository whole. Both languages, in the order build.sh enforces.
+#
+# Build the Wakakusa documentation site.
+wakakusa-site:
+    cd wakakusa/website && ./build.sh
+
+# The elements page comes from elements.toml and the gallery from
+# demo/; the checker then reads what the pages quote back against the
+# fixtures. The sweep runs the checker, not the writers.
+#
+# Rewrite the Wakakusa site's two generated pages, and check the rest.
+wakakusa-site-gen:
+    cd wakakusa/website && ruby tools/elements_page.rb && ruby tools/demos_page.rb
+    ruby wakakusa/website/tools/site_check.rb
+
+# The pages carry absolute links (site_url ends in /wakakusa/), so the
+# build has to sit under that path or every link 404s — hence the
+# symlinked docroot. Port 8002, so Yokan's site can stay up on 8001.
+#
+# Build the Wakakusa documentation site and read it at localhost:8002/wakakusa/.
+wakakusa-site-serve: wakakusa-site
+    @mkdir -p wakakusa/website/.serve && ln -sfn ../build wakakusa/website/.serve/wakakusa
+    @echo "http://localhost:8002/wakakusa/  ·  http://localhost:8002/wakakusa/ja/"
+    python3 -m http.server 8002 -d wakakusa/website/.serve
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every

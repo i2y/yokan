@@ -86,11 +86,24 @@ gate jump    ./bin/wakakusa gate demo/jump.rb --script "advance:34,advance:34,du
 gate shooter ./bin/wakakusa gate demo/shooter.rb --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
 
 # The tour teaches the vocabulary, so it has to hold to it: every
-# complete app in either language, through the same command.
-if ruby tools/tour_check.rb TOUR.md TOUR.ja.md > /dev/null 2>&1; then
+# complete app in either language, in the repository and on the site,
+# through the same command.
+if ruby tools/tour_check.rb TOUR.md TOUR.ja.md \
+     website/docs/tour.md website/docs/tour-logic.md website/docs/tour-canvas.md \
+     website/docs-ja/tour.md website/docs-ja/tour-logic.md website/docs-ja/tour-canvas.md \
+     > /dev/null 2>&1; then
   pass=$((pass + 1)); echo "OK   tour"
 else
   fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
+fi
+
+# The site quotes what lives elsewhere: the refusals' own wording, the
+# vocabulary table, the list of demos. Each has one source of truth.
+if ruby website/tools/site_check.rb > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   site"
+else
+  fail=$((fail + 1)); failed="$failed site"; echo "FAIL site"
+  ruby website/tools/site_check.rb 2>&1 | grep FAIL
 fi
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
