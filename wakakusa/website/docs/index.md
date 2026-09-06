@@ -236,6 +236,5 @@ end.
 
 ---
 
-_The name is 若草 — wakakusa, the first grass of the year._
-
-_Wakakusa compiles Ruby; it is not part of the Ruby project._
+_The name is 若草 — wakakusa, one of the three famous confections of
+Matsue. Like Yokan, it is named after a Japanese sweet._
