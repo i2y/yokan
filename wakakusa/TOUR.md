@@ -1,11 +1,9 @@
 # Wakakusa language tour
 
-*The paragraph that introduces Wakakusa is the owner's to write. A
-draft to start from: **Wakakusa is a compiler for Ruby desktop apps.
-You write ordinary Ruby against a small vocabulary of elements; while
-you are working it runs under CRuby, and when you ship it becomes one
-native binary. Each build verifies that the two are the same
-program.***
+Wakakusa is a compiler for Ruby desktop apps. You write ordinary Ruby
+against a small vocabulary of elements; while you are working it runs
+under CRuby, and when you ship it becomes one native binary. Each
+build verifies that the two are the same program.
 
 This page is the language, in the order you meet it. Everything in it
 runs: `tools/tour_check.rb` pulls every complete example out of this
@@ -362,12 +360,13 @@ The palette and any movement are keywords too.
 
 ```ruby
   column(theme: "dark") { ... }
-  text "saved", animate: 0.2, easing: "ease-out", enter: true
+  text "saved", animate: 150.0, easing: "out", enter: true
 ```
 
 `theme:` swaps the palette under one part of the screen. `animate:` is
-how long a change takes, with `enter:` and `exit:` for what appears and
-disappears.
+how many milliseconds a change takes and `easing:` is its shape
+(`linear`, `in`, `out`, `inOut`), with `enter:` and `exit:` for what
+appears and disappears.
 
 ## The window
 
@@ -535,8 +534,8 @@ it prints, so a refusal cannot quietly change its wording.
 
 ```console
 $ wakakusa build demo/todo.rb --release --app
-built:  demo/.gate/todo (11.5 MB)
-bundle: demo/dist/todo.app (11.7 MB)
+built: demo/.gate/todo (12.3 MB)
+bundle: demo/dist/todo.app (12.5 MB)
 ```
 
 `--release` drops the symbol table; `--app` wraps the binary in a
@@ -560,4 +559,4 @@ with neither Ruby nor the compiler installed.
   everything the compiler gets wrong; the gate is still what catches
   the rest.
 - macOS only. The binary carries the engine it draws with, so even a
-  small app weighs about 11 MB.
+  small app weighs about 12 MB.

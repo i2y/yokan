@@ -1,10 +1,9 @@
 # 若草 言語ツアー
 
-*若草を紹介する段落は所有者が書きます。
-下書き: **若草は Ruby のデスクトップアプリを作るコンパイラです。
+若草は Ruby のデスクトップアプリを作るコンパイラです。
 小さな要素の語彙に対して普通の Ruby を書きます。
 書いているあいだは CRuby が動かし、リリースすると一つのネイティブバイナリになります。
-その二つが同じプログラムであることを、ビルドのたびに検証します。***
+その二つが同じプログラムであることを、ビルドのたびに検証します。
 
 このページには、言語そのものが読者の出会う順に並んでいます。
 ここに書いたものはすべて実際に動きます。
@@ -350,11 +349,12 @@ $ ls frames
 
 ```ruby
   column(theme: "dark") { ... }
-  text "saved", animate: 0.2, easing: "ease-out", enter: true
+  text "saved", animate: 150.0, easing: "out", enter: true
 ```
 
 `theme:` は、書いた要素から下だけ配色を差し替えます。
-`animate:` には変化にかける時間を渡し、現れるときと消えるときの動きは `enter:` と `exit:` で指定します。
+`animate:` には変化にかける時間をミリ秒で渡し、`easing:` にはその曲がり方（`linear`、`in`、`out`、`inOut`）を渡します。
+現れるときと消えるときの動きは `enter:` と `exit:` で指定します。
 
 ## ウィンドウまわり
 
@@ -525,8 +525,8 @@ GATE OK — 3 dump lines identical in both runs
 
 ```console
 $ wakakusa build demo/todo.rb --release --app
-built:  demo/.gate/todo (11.5 MB)
-bundle: demo/dist/todo.app (11.7 MB)
+built: demo/.gate/todo (12.3 MB)
+bundle: demo/dist/todo.app (12.5 MB)
 ```
 
 `--release` は symbol table を落とします。
@@ -548,4 +548,4 @@ Ruby もコンパイラも入っていないマシンで、そのまま開きま
 - `check` が見つけるのは、その三つとほかの五つです。
   コンパイラが取りこぼすものをすべて見ているわけではないので、残りを見つけるのは今もゲートです。
 - macOS だけです。
-  バイナリが描画に使うエンジンを含むので、小さなアプリでも 11 MB ほどになります。
+  バイナリが描画に使うエンジンを含むので、小さなアプリでも 12 MB ほどになります。

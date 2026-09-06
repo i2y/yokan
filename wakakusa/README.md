@@ -1,9 +1,8 @@
 # Wakakusa
 
-*The sentence that introduces Wakakusa is the owner's to write. A draft
-to start from: **Wakakusa is a compiler for Ruby desktop apps: what you
-run under CRuby is what it ships as a native binary, and each build
-verifies it.***
+**Wakakusa is a compiler for Ruby desktop apps: what you run under
+CRuby is what it ships as a native binary, and each build verifies
+it.**
 
 Write ordinary Ruby against a small vocabulary of elements. While you
 are working, the program runs under CRuby, so it is the real
@@ -52,7 +51,7 @@ $ wakakusa gate demo/counter.rb --script "click:+1,dump,input:Momo"
 GATE OK — 3 dump lines identical in both runs
   script:   click:+1,dump,input:Momo
   emitted:  demo/.gate/counter.c
-  binary:   demo/.gate/counter (15.0 MB)
+  binary:   demo/.gate/counter (16.2 MB)
 ```
 
 Children can be written the other way round, as the container's block,
@@ -181,8 +180,8 @@ icon.
 
 ```console
 $ wakakusa build demo/todo.rb --release --app
-built:  demo/.gate/todo (11.5 MB)
-bundle: demo/dist/todo.app (11.7 MB)
+built: demo/.gate/todo (12.3 MB)
+bundle: demo/dist/todo.app (12.5 MB)
 ```
 
 ## The pieces
@@ -210,9 +209,9 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 | the engine's crate, rebuilt after an edit | 2.7 s |
 | the compiler's C output (the library and an app) | under 10 ms, 100 KB |
 | `cc` link of the compiled run | 0.29 s |
-| the compiled binary | 15.2 MB |
-| the shipped binary (`--release`) | 11.5 MB |
-| the application bundle | 11.7 MB |
+| the compiled binary | 16.2 MB |
+| the shipped binary (`--release`) | 12.3 MB |
+| the application bundle | 12.5 MB |
 | launch to a window on screen | under 0.3 s |
 | one gate round, engine already built | 2.1 s |
 | every demo, both runs, and the tour | 1 min 53 s |
@@ -270,4 +269,4 @@ meet it, and every example in it runs. 日本語版は
   what to write instead, but it does not yet see everything the
   compiler gets wrong; the gate is still what catches the rest.
 - macOS only. The binary carries the engine it draws with, so even a
-  small app weighs about 15 MB.
+  small app weighs about 12 MB.
