@@ -4,7 +4,8 @@
 CRuby is what it ships as a native binary, and each build verifies
 it.**
 
-Write ordinary Ruby against a small vocabulary of elements. While you
+Build the screen out of elements — `text`, `button`, `column` and
+thirty more — and write ordinary Ruby for everything else. While you
 are working, the program runs under CRuby, so it is the real
 interpreter answering. When you ship, the whole program becomes one
 native binary. The gate runs both, drives them with the same

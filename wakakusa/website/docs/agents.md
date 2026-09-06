@@ -5,17 +5,17 @@ An agent writes a file and reads what comes back. How the session goes
 whether a person has to sit and watch — follows from what comes back.
 
 Wakakusa's commands are shaped for that reading. Two of them start no
-compiler and open no window, and each answers one question: is this
-inside the vocabulary, what does it draw, and will the shipped app do
-the same.
+compiler and open no window, and each answers one question: can
+Wakakusa take this, what does it draw, and will the shipped app do the
+same.
 
-![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless dump in well under a second each, and leaves the ring for wakakusa gate, the compile that proves the shipped binary agrees, and then for ship](images/loop.svg#only-dark)
+![What an agent's loop looks like: it writes app.rb, runs wakakusa check and a headless dump over and over in well under a second each, and when the work looks done runs wakakusa gate and then ships](images/loop.svg#only-dark)
 
-![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless dump in well under a second each, and leaves the ring for wakakusa gate, the compile that proves the shipped binary agrees, and then for ship](images/loop-light.svg#only-light)
+![What an agent's loop looks like: it writes app.rb, runs wakakusa check and a headless dump over and over in well under a second each, and when the work looks done runs wakakusa gate and then ships](images/loop-light.svg#only-light)
 
 ## Three commands, three answers
 
-### `wakakusa check` — is this inside the vocabulary?
+### `wakakusa check` — can Wakakusa take this?
 
 ```console
 $ ./bin/wakakusa check app.rb
@@ -25,7 +25,7 @@ app.rb:5:19: Wakakusa cannot take this — `text` has no `weight:`. It takes a11
 ```
 
 It prints the refusal in `file:line:col` form with the line under it,
-and says nothing at all when the app is inside the vocabulary. No
+and says nothing at all when it can take the app. No
 compiler is started, so the answer comes back in about a tenth of a
 second.
 
@@ -47,7 +47,7 @@ start, once for every `dump`, once at the end. About seven tenths of a
 second, again with no compiler.
 
 This is the answer to "did the button do what I meant", and it is
-readable without a screen. The step vocabulary is on
+readable without a screen. The steps are listed on
 [Verify and ship](tour-ship.md#a-run-with-no-person-in-it).
 
 For anything drawn on a canvas, `WAKAKUSA_FRAMES=<dir>` writes a PNG
@@ -101,8 +101,9 @@ Three pages, in this order:
 - [Elements](elements.md) — every element, every keyword, its type and
   its default, generated from the one table the engine is built from.
 
-An agent that has read those writes the vocabulary correctly the first
-time, instead of learning it from refusals one build at a time.
+An agent that has read those gets the elements and their keywords
+right the first time, instead of learning them from refusals one build
+at a time.
 
 ## Two things worth telling it
 

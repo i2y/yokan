@@ -20,7 +20,7 @@ nav = [
     { "ビューと制御フロー" = "tour-logic.md" },
     { "キャンバスとキーボード" = "tour-canvas.md" },
     { "見た目とウィンドウ" = "tour-ui.md" },
-    { "Ruby、データ、仕事" = "tour-lib.md" },
+    { "Ruby、データ、ジョブ" = "tour-lib.md" },
     { "検証と配布" = "tour-ship.md" },
   ] },
   { "要素" = "elements.md" },

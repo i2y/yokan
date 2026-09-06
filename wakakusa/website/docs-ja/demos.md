@@ -2,7 +2,7 @@
 
 43 本のアプリが並んでいます。
 どれもゲートを通っています。
-つまり、インタプリタで動かした実行と、コンパイルした実行を、同じ操作台本で動かして、1 バイトずつ突き合わせてあります。
+つまり、インタプリタで動かした実行と、コンパイルした実行を、同じスクリプトで動かして、1 バイトずつ突き合わせてあります。
 どれもリポジトリの `wakakusa/` からそのまま動きます。
 
 ```console
@@ -524,7 +524,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Mixer.new, title: "mixer")
     ```
 
-#### lookup — アプリが持つ Hash。既定値つきの読み出し、キーの有無の確認、窓を開けたまま増やす
+#### lookup — アプリが持つ Hash。既定値つきの読み出し、キーの有無の確認、ウィンドウを開けたまま増やす
 <img src="images/demos/lookup.png" width="360">
 
 ??? note "lookup.rb"
@@ -1054,7 +1054,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Badges.new, title: "badges")
     ```
 
-#### panels — 並べる要素と覆う要素。グリッド、重ね、スクロールする面、窓の上に出る一枚
+#### panels — 並べる要素と覆う要素。グリッド、重ね、スクロールする面、ウィンドウの上に出る一枚
 <img src="images/demos/panels.png" width="360">
 
 ??? note "panels.rb"
@@ -1140,7 +1140,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Panels.new, title: "panels")
     ```
 
-#### dialog — 窓の上に出る一枚を、アプリが開いて閉じる
+#### dialog — ウィンドウの上に出る一枚を、アプリが開いて閉じる
 <img src="images/demos/dialog.png" width="360">
 
 ??? note "dialog.rb"
@@ -1290,7 +1290,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Locks.new, title: "shared")
     ```
 
-#### loading — 満ちていくバーの 3 つの形と、終わりの見えない仕事のための往復
+#### loading — 満ちていくバーの 3 つの形と、終わりの見えないジョブのための往復
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.rb"
@@ -1454,7 +1454,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Fleet.new, title: "table")
     ```
 
-#### roster — 行を必要なぶんだけ作る表。行の選択と見出しでの並べ替えは、アプリ自身の仕事
+#### roster — 行を必要なぶんだけ作る表。行の選択と見出しでの並べ替えは、アプリ自身が行う
 <img src="images/demos/roster.png" width="360">
 
 ??? note "roster.rb"
@@ -1527,7 +1527,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Roster.new, title: "roster")
     ```
 
-#### csv_viewer — 10 万行を、打ちながら絞り込む。作られるのは窓に入っている行だけ
+#### csv_viewer — 10 万行を、打ちながら絞り込む。作られるのは画面に入っている行だけ
 <img src="images/demos/csv_viewer.png" width="360">
 
 ??? note "csv_viewer.rb"
@@ -2617,7 +2617,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Files.new, title: "files")
     ```
 
-#### reader — 窓のスレッドの外で取ってくるページ。相手はアプリが自分で立てたサーバなので、両方の実行が同じバイト列を読む
+#### reader — ウィンドウのスレッドの外で取ってくるページ。相手はアプリが自分で立てたサーバなので、両方の実行が同じバイト列を読む
 <img src="images/demos/reader.png" width="360">
 
 ??? note "reader.rb"
@@ -2967,7 +2967,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(Flow.new, title: "flow")
     ```
 
-## 窓
+## ウィンドウ
 
 #### keys — キーボードを和音として扱い、同じハンドラをメニューバーにも置く。`key:cmd+s` と `menu:Save` で動かせる
 <img src="images/demos/keys.png" width="360">
@@ -3038,7 +3038,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(app, title: "keys")
     ```
 
-#### picker — OS 自身のファイル選択と、窓へ落とされたファイル。選択は人を待つので、窓のスレッドの外で頼む
+#### picker — OS 自身のファイル選択と、ウィンドウへ落とされたファイル。選択は人を待つので、ウィンドウのスレッドの外で頼む
 <img src="images/demos/picker.png" width="360">
 
 ??? note "picker.rb"
@@ -3135,7 +3135,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(About.new, title: "about")
     ```
 
-## 時間と、スレッドの外の仕事
+## 時間と、ウィンドウの外のジョブ
 
 #### dashboard — アプリを走らせる前に宣言するタイマー。両方の実行で同じだけ時を刻む（ゲートは `advance:` で進める）
 <img src="images/demos/dashboard.png" width="360">
@@ -3197,7 +3197,7 @@ $ ./tools/gate_all.sh                    # 全部まとめてゲートにかけ�
     run(app, title: "dashboard")
     ```
 
-#### tasks — 時間のかかる仕事を窓のスレッドの外へ。答えは `on_done` で受け取る
+#### tasks — 時間のかかるジョブをウィンドウのスレッドの外へ。答えは `on_done` で受け取る
 <img src="images/demos/tasks.png" width="360">
 
 ??? note "tasks.rb"

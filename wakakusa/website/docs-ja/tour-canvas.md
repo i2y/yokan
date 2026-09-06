@@ -61,7 +61,7 @@ run(app, title: "sky")
 | `triangle(x1, y1, x2, y2, x3, y3, color)` | 塗りつぶした三角形 |
 | `triangle_outline(…)` | その輪郭 |
 | `sprite(x, y, source, u, v, w, h, colkey:, flip_x:, flip_y:)` | 画像から切り出した矩形 |
-| `pixel_text(x, y, text, color)` | キャンバス自身の 4 かける 6 の字で書いた一行 |
+| `pixel_text(x, y, text, color)` | キャンバスが持つ 4×6 ドットの文字で書いた一行 |
 
 これらは要素ではないので、押すことも、テーマを変えることも、大きさを指定することも、アニメーションをつけることもできません。
 すべての要素が取るキーワードも取りません。
@@ -101,7 +101,7 @@ run(app, title: "sky")
 
 ## 移植した二つのゲーム
 
-`demo/jump.rb` と `demo/shooter.rb` は、Pyxel 自身の例（Takashi Kitao、MIT）をこの語彙に移植して、ゲートに通したものです。
+`demo/jump.rb` と `demo/shooter.rb` は、Pyxel 自身の例（Takashi Kitao、MIT）を若草に移植して、ゲートに通したものです。
 どちらも、その例が持っている画像から切り出したスプライトで描いています。
 移植は原作を一行ずつ追っていて、`pyxel.blt` は `sprite` に、`pyxel.btn` は `key_down` に、`pyxel.cls(12)` はキャンバスの背景になりました。
 12 が同じ色を指したままなのは、キャンバスの中では色がどちらでも番号だからです。
@@ -134,5 +134,5 @@ $ ls frames
 
 ## 次に読むもの
 
-- [見た目とウィンドウ](tour-ui.md)：すべての要素が取るキーワード、テーマ、ウィンドウそのもの。
-- [Ruby、データ、仕事](tour-lib.md)：Ruby 自身のライブラリ、データベース、タイマー、ウィンドウの外の仕事。
+- [見た目とウィンドウ](tour-ui.md)：すべての要素が取るキーワード、テーマ、ウィンドウそのものが渡すもの。
+- [Ruby、データ、ジョブ](tour-lib.md)：Ruby 自身のライブラリ、データベース、タイマー、ウィンドウの外のジョブ。

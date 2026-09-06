@@ -50,7 +50,7 @@ CATALOGUE = [
    "アプリが持つ状態と、そこへ書き込む入力欄"],
   ["state", "lookup",
    "a Hash on the app: reading with a fallback, asking whether a key is there, and adding one while the window is open",
-   "アプリが持つ Hash。既定値つきの読み出し、キーの有無の確認、窓を開けたまま増やす"],
+   "アプリが持つ Hash。既定値つきの読み出し、キーの有無の確認、ウィンドウを開けたまま増やす"],
   ["state", "points",
    "a small class of values, carried on the app's own state",
    "値のための小さなクラスを、アプリの状態として持つ"],
@@ -81,10 +81,10 @@ CATALOGUE = [
    "文字を丸いラベルに。等幅、下線、斜体、省略記号での打ち切り、行数の制限"],
   ["look", "panels",
    "the elements that arrange or cover: tracks, layers, panes that scroll, and a panel over the rest of the window",
-   "並べる要素と覆う要素。グリッド、重ね、スクロールする面、窓の上に出る一枚"],
+   "並べる要素と覆う要素。グリッド、重ね、スクロールする面、ウィンドウの上に出る一枚"],
   ["look", "dialog",
    "a panel over the rest of the window, opened and closed by the app",
-   "窓の上に出る一枚を、アプリが開いて閉じる"],
+   "ウィンドウの上に出る一枚を、アプリが開いて閉じる"],
   ["look", "labels",
    "what a screen reader is told and what the pointer shows; `role:` takes a value, so a line is a heading until it is not",
    "画面読み上げに伝える名前と、ポインタが見せる説明。`role:` は値を取るので、見出しであることを途中でやめられる"],
@@ -93,7 +93,7 @@ CATALOGUE = [
    "すべての要素が受け取る性質を、互いに似ていない要素の上で"],
   ["look", "loading",
    "the bar that fills, in its three forms, and the sweep for work with no known length",
-   "満ちていくバーの 3 つの形と、終わりの見えない仕事のための往復"],
+   "満ちていくバーの 3 つの形と、終わりの見えないジョブのための往復"],
   ["look", "filter",
    "a chooser that changes what a list shows, with the rows built on demand",
    "リストの見せかたを変える選択。行は必要なぶんだけ作られる"],
@@ -103,10 +103,10 @@ CATALOGUE = [
    "`data_table` が表そのものを描く。最初の row が見出しで、以降は交互に色の変わるデータ行"],
   ["lists", "roster",
    "the table that builds its rows on demand, with row selection and header sort the app performs itself",
-   "行を必要なぶんだけ作る表。行の選択と見出しでの並べ替えは、アプリ自身の仕事"],
+   "行を必要なぶんだけ作る表。行の選択と見出しでの並べ替えは、アプリ自身が行う"],
   ["lists", "csv_viewer",
    "a hundred thousand rows, filtered as you type; only the rows in the window are ever built",
-   "10 万行を、打ちながら絞り込む。作られるのは窓に入っている行だけ"],
+   "10 万行を、打ちながら絞り込む。作られるのは画面に入っている行だけ"],
   ["lists", "trend",
    "one list of numbers, drawn twice",
    "ひとつの数のリストを、2 通りに描く"],
@@ -132,7 +132,7 @@ CATALOGUE = [
    "Ruby 自身の `File` と `Dir` でファイルを扱う。ここに Wakakusa のものは何もない"],
   ["ruby", "reader",
    "a page fetched off the window's thread, from a server the app runs for itself, so both runs read the same bytes",
-   "窓のスレッドの外で取ってくるページ。相手はアプリが自分で立てたサーバなので、両方の実行が同じバイト列を読む"],
+   "ウィンドウのスレッドの外で取ってくるページ。相手はアプリが自分で立てたサーバなので、両方の実行が同じバイト列を読む"],
   ["ruby", "dbnotes",
    "a database reached through the engine, with the values bound rather than spliced",
    "エンジン越しに触るデータベース。値は文に埋め込まず、束縛して渡す"],
@@ -151,7 +151,7 @@ CATALOGUE = [
    "キーボードを和音として扱い、同じハンドラをメニューバーにも置く。`key:cmd+s` と `menu:Save` で動かせる"],
   ["window", "picker",
    "the platform's own file panels, asked for off the window's thread, and a file dragged onto the window",
-   "OS 自身のファイル選択と、窓へ落とされたファイル。選択は人を待つので、窓のスレッドの外で頼む"],
+   "OS 自身のファイル選択と、ウィンドウへ落とされたファイル。選択は人を待つので、ウィンドウのスレッドの外で頼む"],
   ["window", "about",
    "links that open a page, and the system clipboard",
    "ページを開くリンクと、システムのクリップボード"],
@@ -161,7 +161,7 @@ CATALOGUE = [
    "アプリを走らせる前に宣言するタイマー。両方の実行で同じだけ時を刻む（ゲートは `advance:` で進める）"],
   ["work", "tasks",
    "work that takes a while, done off the window's thread; the answer comes back through `on_done`",
-   "時間のかかる仕事を窓のスレッドの外へ。答えは `on_done` で受け取る"],
+   "時間のかかるジョブをウィンドウのスレッドの外へ。答えは `on_done` で受け取る"],
 ].freeze
 
 WORDS = {
@@ -198,7 +198,7 @@ WORDS = {
     intro: <<~MD,
       43 本のアプリが並んでいます。
       どれもゲートを通っています。
-      つまり、インタプリタで動かした実行と、コンパイルした実行を、同じ操作台本で動かして、1 バイトずつ突き合わせてあります。
+      つまり、インタプリタで動かした実行と、コンパイルした実行を、同じスクリプトで動かして、1 バイトずつ突き合わせてあります。
       どれもリポジトリの `wakakusa/` からそのまま動きます。
 
       ```console
@@ -217,8 +217,8 @@ WORDS = {
       "lists" => "リストと表とグラフ",
       "canvas" => "キャンバスと、2 本のゲーム",
       "ruby" => "Ruby、ファイル、データ",
-      "window" => "窓",
-      "work" => "時間と、スレッドの外の仕事",
+      "window" => "ウィンドウ",
+      "work" => "時間と、ウィンドウの外のジョブ",
     },
     source: "ソース",
   },

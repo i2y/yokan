@@ -1,9 +1,10 @@
 # Wakakusa language tour
 
-Wakakusa is a compiler for Ruby desktop apps. You write ordinary Ruby
-against a small vocabulary of elements; while you are working it runs
-under CRuby, and when you ship it becomes one native binary. Each
-build verifies that the two are the same program.
+Wakakusa is a compiler for Ruby desktop apps. You build the screen out
+of elements — `text`, `button`, `column` and thirty more — and write
+ordinary Ruby for everything else. While you are working it runs under
+CRuby, and when you ship it becomes one native binary. Each build
+verifies that the two are the same program.
 
 This page is the language, in the order you meet it. Everything in it
 runs: `tools/tour_check.rb` pulls every complete example out of this

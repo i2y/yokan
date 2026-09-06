@@ -14,7 +14,7 @@
   <rect x="2" y="2" width="1196" height="596" rx="20" fill="#fbfcfe" stroke="#dcdfe9" stroke-width="2"/>
   <rect x="2" y="2" width="1196" height="596" rx="20" fill="url(#dots)"/>
 
-  <text x="60" y="62" font-size="15" font-weight="700" fill="#3f7d28">速い環。編集のたびに、1 秒かからずに答えが返る</text>
+  <text x="60" y="62" font-size="15" font-weight="700" fill="#3f7d28">編集のたびに回す二つ。どちらも 1 秒かからない</text>
 
   <!-- the ring -->
   <rect x="60" y="86" width="300" height="120" rx="14" fill="#edeff6" stroke="#b4bcd2" stroke-width="1.6"/>
@@ -28,7 +28,7 @@
   <text x="590" y="122" text-anchor="middle" font-size="15" font-weight="700" fill="#1c2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa check</text>
   <text x="590" y="148" text-anchor="middle" font-size="12.5" fill="#35701f">0.1 秒、コンパイラは起動しない</text>
   <text x="590" y="172" text-anchor="middle" font-size="12.5" fill="#525970">何も出なければその形は通る。</text>
-  <text x="590" y="190" text-anchor="middle" font-size="12.5" fill="#525970">断るときは書き直しかたを名指しする</text>
+  <text x="590" y="190" text-anchor="middle" font-size="12.5" fill="#525970">断るときは書き直し方まで出る</text>
 
   <path d="M740 146 L812 146" stroke="#7f88a8" stroke-width="2" fill="none" marker-end="url(#ar)"/>
 
@@ -50,12 +50,12 @@
   <rect x="1136" y="222" width="24" height="176" rx="8" fill="#fbfcfe"/>
   <text x="1148" y="310" text-anchor="middle" font-size="12.5" fill="#35701f" transform="rotate(-90 1148 310)">仕上がったと思えたら</text>
 
-  <text x="60" y="366" font-size="15" font-weight="700" fill="#3f7d28">環の外にあるもの。証明と、人に渡すもの</text>
+  <text x="60" y="366" font-size="15" font-weight="700" fill="#3f7d28">区切りがついたら。証明と、人に渡すもの</text>
 
   <rect x="700" y="392" width="396" height="120" rx="14" fill="#f1f8ea" stroke="#9ec97f" stroke-width="1.8"/>
   <text x="898" y="428" text-anchor="middle" font-size="15" font-weight="700" fill="#1c2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa gate</text>
   <text x="898" y="454" text-anchor="middle" font-size="12.5" fill="#35701f">2.1 秒、本当にコンパイルする</text>
-  <text x="898" y="478" text-anchor="middle" font-size="12.5" fill="#525970">実行ふたつを台本ひとつで動かし、</text>
+  <text x="898" y="478" text-anchor="middle" font-size="12.5" fill="#525970">実行ふたつをスクリプトひとつで動かし、</text>
   <text x="898" y="496" text-anchor="middle" font-size="12.5" fill="#525970">1 バイトずつ突き合わせる</text>
 
   <path d="M700 452 L628 452" stroke="#3f7d28" stroke-width="2" fill="none" marker-end="url(#arG)"/>
