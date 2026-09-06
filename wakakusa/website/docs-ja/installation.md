@@ -10,6 +10,11 @@
   エンジンはこのプラットフォーム自身の GPU の仕組みで描くので、今のところ動くのはこの環境だけです。
 - **Ruby 4**（CRuby）。
   書いているあいだ、アプリを動かすインタプリタです。
+- **[spinel](https://github.com/matz/spinel)**。
+  リリースしたバイナリをビルドする、事前コンパイル方式の Ruby コンパイラです。
+  これだけは自分で入れません。
+  `just wakakusa-spinel` が、固定している版を取ってきて `~/.cache/spinel/<sha>` にビルドします。
+  数分かかりますが、一度きりです。
 - **Rust**（[rustup](https://rustup.rs) から）。
   使うコンパイラの版はリポジトリが固定していて、最初のビルドで取ってきます。
 - **Xcode の Metal ツールチェーン。**
@@ -22,10 +27,6 @@ $ export CARGO_TARGET_DIR=$HOME/.cache/pixie/target
 $ just wakakusa-spinel     # 固定してある Ruby コンパイラを取ってきてビルドする
 $ just wakakusa-capi       # エンジンを、C から呼べる形でビルドする
 ```
-
-`just wakakusa-spinel` は、若草が固定している版の [spinel](https://github.com/matz/spinel) を取ってきます。
-リリースしたバイナリをビルドするのが、この Ruby コンパイラです。
-`~/.cache/spinel/<sha>` に置かれ、数分かかりますが、一度きりです。
 
 `CARGO_TARGET_DIR` は、すべてのクレートと生成されるアプリで共有します。
 二度目からのビルドが速いのは、これがあるからです。

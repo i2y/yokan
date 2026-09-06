@@ -232,6 +232,8 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 ## How to start
 
 macOS on Apple silicon, Ruby 4, Rust, and Xcode's Metal toolchain.
+The compiler the shipped binary is built with, [spinel](https://github.com/matz/spinel), is not one you install:
+the first command below fetches the pinned revision and builds it.
 
 ```console
 $ export CARGO_TARGET_DIR=$HOME/.cache/pixie/target

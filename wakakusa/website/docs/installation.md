@@ -10,6 +10,10 @@ once, and then `./bin/wakakusa` is the whole command line.
   own GPU stack, and that is the only port today.
 - **Ruby 4** (CRuby) — the interpreter that runs your app while you are
   writing it.
+- **[spinel](https://github.com/matz/spinel)** — the ahead-of-time Ruby
+  compiler the shipped binary is built with. You do not install this
+  one: `just wakakusa-spinel` fetches the pinned revision and builds it
+  into `~/.cache/spinel/<sha>`, a few minutes, once.
 - **Rust**, via [rustup](https://rustup.rs). The exact compiler is
   pinned by the repository and fetched on the first build.
 - **Xcode's Metal toolchain**, because the engine compiles its shaders
@@ -22,11 +26,6 @@ $ export CARGO_TARGET_DIR=$HOME/.cache/pixie/target
 $ just wakakusa-spinel     # fetch and build the pinned Ruby compiler
 $ just wakakusa-capi       # build the engine's C face
 ```
-
-`just wakakusa-spinel` fetches [spinel](https://github.com/matz/spinel)
-— the Ruby compiler the shipped binary is built with — at the revision
-Wakakusa is pinned to, and builds it into `~/.cache/spinel/<sha>`. It
-takes a few minutes, once.
 
 `CARGO_TARGET_DIR` is shared by every crate and every generated app,
 which is what keeps later builds fast. Set it in your shell profile and
