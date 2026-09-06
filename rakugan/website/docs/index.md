@@ -36,6 +36,21 @@ and the check that the two runs agree.
 </div>
 </div>
 
+## The whole picture
+
+One source, two roads to run it.
+
+![How Rakugan runs your app: one Perl file, perl through the XS door while you develop, a translation to pixie compiled into a native binary when you ship, one engine underneath both, and the gate comparing them](images/architecture.svg#only-dark)
+
+![How Rakugan runs your app: one Perl file, perl through the XS door while you develop, a translation to pixie compiled into a native binary when you ship, one engine underneath both, and the gate comparing them](images/architecture-light.svg#only-light)
+
+Both roads end at one engine. The interpreted run opens it through an XS
+door as a shared library; the compiled run has pixie link it in. The
+engine never holds a Perl value, which is what lets an interpreter and a
+binary with no perl in it drive exactly the same code.
+
+---
+
 ## Write it, run it, ship it
 
 The smallest complete app:
@@ -162,6 +177,22 @@ frame of the game.
 *`demo/shooter.pl` and `demo/jump.pl` — inside a canvas a color is a
 number, the index of a color in the palette, which is what lets drawing
 code written for a pixel machine port with its numbers unchanged.*
+
+---
+
+## When an agent is writing it
+
+An agent writes a file and reads what comes back, so what comes back
+decides how the session goes. Two of the commands answer in about a
+tenth of a second, with no compiler and no window: a refusal that names
+what to write instead, and the screen as text. The gate is the proof at
+the end.
+
+![The loop an agent works in: it writes app.pl at the centre of a ring, spins through rakugan check and a headless run in about a tenth of a second each, and leaves the ring for rakugan gate, the compile that proves the shipped binary agrees](images/cycle.svg#only-dark)
+
+![The loop an agent works in: it writes app.pl at the centre of a ring, spins through rakugan check and a headless run in about a tenth of a second each, and leaves the ring for rakugan gate, the compile that proves the shipped binary agrees](images/cycle-light.svg#only-light)
+
+[Building with an agent](agents.md) walks the whole loop.
 
 ---
 

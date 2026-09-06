@@ -8,6 +8,10 @@ Rakugan's commands are shaped for that reading. Two of them start no
 compiler and open no window, and each answers one question: can Rakugan
 take this, what does it draw, and will the shipped app do the same.
 
+![One session at the terminal: the agent writes app.pl, rakugan check refuses and names the fix, the agent fixes it, the same check answers with silence, a headless run prints the screen as text, and rakugan gate reports both runs drew the same screen — the two fast answers in 0.07 s each, the compile in 2.8 s](images/loop.svg#only-dark)
+
+![One session at the terminal: the agent writes app.pl, rakugan check refuses and names the fix, the agent fixes it, the same check answers with silence, a headless run prints the screen as text, and rakugan gate reports both runs drew the same screen — the two fast answers in 0.07 s each, the compile in 2.8 s](images/loop-light.svg#only-light)
+
 ## Three commands, three answers
 
 ### `rakugan check` — can Rakugan take this?
@@ -15,8 +19,8 @@ take this, what does it draw, and will the shipped app do the same.
 ```console
 $ ./bin/rakugan check app.pl
 app.pl:8:30: Rakugan cannot take this — `text` has no `weight =>`; it takes `a11y_label`, `align`, `animate`, `background`, `bold`, `border_color`, `border_radius`, `border_width`, `col_span`, `color`, `disabled`, `easing`, `enter`, `exit`, `grow`, `height`, `italic`, `max_lines`, `max_width`, `min_width`, `mono`, `padding`, `role`, `row_span`, `size`, `theme`, `tooltip`, `underline`, `width`, `wrap`
-        return text("hello", weight => 700);
-                             ^
+            return text("hello", weight => 700);
+                                 ^
 ```
 
 It prints the refusal in `file:line:col` form with the line under it and

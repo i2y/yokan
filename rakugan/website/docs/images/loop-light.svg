@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 824" role="img" aria-labelledby="t" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <title id="t">One session at the terminal: the agent writes app.pl, rakugan check refuses and names the repair at the line it goes, the agent fixes it and the same check answers with silence, a headless run prints the screen as text, and rakugan gate reports both runs drew the same screen. The checks and the run answer in about a tenth of a second; the gate, the one that compiles, in a few seconds</title>
+  <defs>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#e9ecf4"/>
+    </pattern>
+  </defs>
+
+  <!-- frame -->
+  <rect x="2" y="2" width="1196" height="820" rx="20" fill="#fbfcfe" stroke="#dcdfe9" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="820" rx="20" fill="url(#dots)"/>
+
+  <!-- caption -->
+  <text x="40" y="58" font-size="20" font-weight="600" fill="#1d2030">The loop</text>
+  <text x="40" y="81" font-size="15" fill="#5d6380">one session at the terminal</text>
+
+  <!-- ===== the terminal: one session as a ledger, six rows, a cost column ===== -->
+  <rect x="40" y="96" width="1120" height="696" rx="12" fill="#ffffff" stroke="#d5d9e4" stroke-width="1"/>
+  <path d="M52,96 H1148 a12,12 0 0 1 12,12 V132 H40 V108 a12,12 0 0 1 12,-12 Z" fill="#f7f8fb"/>
+  <line x1="40" y1="132.5" x2="1160" y2="132.5" stroke="#e4e7ef" stroke-width="1"/>
+  <circle cx="62" cy="114" r="4.5" fill="#c8ccd8"/>
+  <circle cx="78" cy="114" r="4.5" fill="#c8ccd8"/>
+  <circle cx="94" cy="114" r="4.5" fill="#c8ccd8"/>
+
+  <!-- the ledger's rules: one between each row, one before the cost column -->
+  <line x1="41" y1="193.5" x2="1159" y2="193.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="340.5" x2="1159" y2="340.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="401.5" x2="1159" y2="401.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="510.5" x2="1159" y2="510.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="634.5" x2="1159" y2="634.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="856.5" y1="133" x2="856.5" y2="791" stroke="#e4e7ef" stroke-width="1"/>
+
+  <!-- row 1: the agent writes app.pl -->
+  <rect x="66" y="145" width="256" height="36" rx="8" fill="#edeff6" stroke="#5f45cc" stroke-width="1.2" stroke-opacity="0.7"/>
+  <g transform="translate(80,155)">
+    <path d="M0,0 H7 L12,5 V16 H0 Z" fill="#fbfcfe" stroke="#5f45cc" stroke-width="1.4"/>
+    <path d="M7,0 V5 H12" fill="none" stroke="#5f45cc" stroke-width="1.4"/>
+  </g>
+  <text x="102" y="168" font-size="13.5" fill="#1d2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.pl</text>
+  <text x="166" y="168" font-size="15" font-weight="600" fill="#5f45cc">the agent writes it</text>
+
+  <!-- row 3: the agent fixes it -->
+  <rect x="66" y="353" width="466" height="36" rx="8" fill="#edeff6" stroke="#5f45cc" stroke-width="1.2" stroke-opacity="0.7"/>
+  <g transform="translate(80,363)">
+    <path d="M0,0 H7 L12,5 V16 H0 Z" fill="#fbfcfe" stroke="#5f45cc" stroke-width="1.4"/>
+    <path d="M7,0 V5 H12" fill="none" stroke="#5f45cc" stroke-width="1.4"/>
+  </g>
+  <text x="102" y="376" font-size="13.5" fill="#1d2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.pl</text>
+  <text x="166" y="376" font-size="15" font-weight="600" fill="#5f45cc">the agent fixes it</text>
+  <text x="312" y="376" font-size="13.5" font-family="ui-monospace,'SF Mono',Menlo,monospace"><tspan fill="#6f7590">weight =&gt; 700</tspan><tspan fill="#7e849c"> → </tspan><tspan fill="#3f4560">bold =&gt; 1</tspan></text>
+
+  <!-- transcript: 13.5px mono, baseline pitch 24 -->
+  <g font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="13.5" fill="#3f4560">
+    <!-- row 2: check -> a refusal, at the line -->
+    <text x="66" y="224"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">rakugan check</tspan><tspan fill="#4a5068"> app.pl</tspan></text>
+    <text x="66" y="248" fill="#c0302a">app.pl:8:30: Rakugan cannot take this — `text` has no `weight =&gt;`;</text>
+    <text x="66" y="272" fill="#c0302a">it takes `a11y_label`, `align`, `animate`, `background`, `bold`, …, `wrap`</text>
+    <text x="66" y="296" fill="#6f7590" xml:space="preserve">            return text("hello", weight =&gt; 700);</text>
+    <text x="66" y="320" fill="#c0302a" xml:space="preserve">                                 ^</text>
+
+    <!-- row 4: check -> silence -->
+    <text x="66" y="432"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">rakugan check</tspan><tspan fill="#4a5068"> app.pl</tspan></text>
+
+    <!-- row 5: a headless run -> the screen, three times -->
+    <text x="66" y="542"><tspan fill="#7e849c">$ </tspan><tspan fill="#4a5068">PIXIE_SCRIPT="click:+1,dump" </tspan><tspan fill="#1a63c4">rakugan run</tspan><tspan fill="#4a5068"> app.pl</tspan></text>
+    <text x="66" y="566">Column(spacing=12, padding=16)[Text(count: 0, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+    <text x="66" y="590">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+    <text x="66" y="614">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+
+    <!-- row 6: gate -> GATE OK -->
+    <text x="66" y="666"><tspan fill="#7e849c">$ </tspan><tspan fill="#96641d">rakugan gate</tspan><tspan fill="#4a5068"> app.pl --script "click:+1,dump"</tspan></text>
+    <text x="66" y="690" fill="#15804a">GATE OK — 3 dump lines identical in both runs</text>
+
+    <!-- the next prompt -->
+    <text x="66" y="760"><tspan fill="#7e849c">$ </tspan></text>
+  </g>
+  <rect x="82" y="748" width="8" height="15" fill="#3f4560" fill-opacity="0.7"/>
+
+  <!-- ===== the cost column: what each answer took, as a number and as a bar on one 2.8 s track ===== -->
+  <g font-size="15" fill="#5d6380">
+    <!-- row 2 -->
+    <text x="878" y="230" fill="#1a63c4"><tspan font-size="28" font-weight="700">0.07</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <rect x="878" y="240" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="240" width="6" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="268">the message is the repair,</text>
+    <text x="878" y="288">at the line the repair goes</text>
+
+    <!-- row 4 -->
+    <text x="878" y="438" fill="#1a63c4"><tspan font-size="28" font-weight="700">0.07</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <rect x="878" y="448" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="448" width="6" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="476">silence means it can take the app</text>
+
+    <!-- row 5 -->
+    <text x="878" y="548" fill="#1a63c4"><tspan font-size="28" font-weight="700">0.07</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <rect x="878" y="558" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="558" width="6" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="586">the screen as text —</text>
+    <text x="878" y="606">no window, no compiler</text>
+
+    <!-- row 6 -->
+    <text x="878" y="672" fill="#96641d"><tspan font-size="28" font-weight="700">2.8</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#96641d"/>
+    <text x="878" y="710">this one compiles: both runs,</text>
+    <text x="878" y="730">one script, byte for byte</text>
+  </g>
+</svg>

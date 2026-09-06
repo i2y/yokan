@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+<defs>
+  <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/></pattern>
+  <radialGradient id="glow" cx="620" cy="345" r="330" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#1e2234" stop-opacity="1"/>
+    <stop offset="1" stop-color="#14161f" stop-opacity="0"/>
+  </radialGradient>
+  <marker id="mb" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#5cc8ff"/></marker>
+  <marker id="mw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#3a8fc0"/></marker>
+  <marker id="ma" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#f2b04e"/></marker>
+  <marker id="mg" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#3ddc97"/></marker>
+</defs>
+<rect x="2" y="2" width="1196" height="716" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+<rect x="2" y="2" width="1196" height="716" rx="20" fill="url(#dots)"/>
+<circle cx="620" cy="345" r="330" fill="url(#glow)"/>
+<circle cx="620" cy="345" r="190" fill="none" stroke="#2b3044" stroke-width="1.2"/>
+<path d="M588.6,157.6 A190,190 0 0 0 611.7,534.8" fill="none" stroke="#5cc8ff" stroke-width="3" stroke-linecap="round" marker-end="url(#mb)"/>
+<path d="M628.3,534.8 A190,190 0 0 0 651.4,157.6" fill="none" stroke="#5cc8ff" stroke-width="3" stroke-linecap="round" marker-end="url(#mb)"/>
+<path d="M627,536 C710,543 782,535 882,506" fill="none" stroke="#f2b04e" stroke-width="3" stroke-linecap="round" marker-end="url(#ma)"/>
+<line x1="902.6" y1="495.5" x2="1079.7" y2="370.6" stroke="#3ddc97" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)"/>
+<line x1="620" y1="183" x2="620" y2="305.0" stroke="#3a8fc0" stroke-width="2.4" stroke-linecap="round" marker-end="url(#mw)"/>
+<circle cx="452.2" cy="255.8" r="7" fill="#171a26" stroke="#5cc8ff" stroke-width="2"/>
+<circle cx="452.2" cy="255.8" r="2.6" fill="#5cc8ff"/>
+<circle cx="452.2" cy="434.2" r="7" fill="#171a26" stroke="#5cc8ff" stroke-width="2"/>
+<circle cx="452.2" cy="434.2" r="2.6" fill="#5cc8ff"/>
+<circle cx="620" cy="535" r="4" fill="#171a26" stroke="#5cc8ff" stroke-width="1.6"/>
+<circle cx="892" cy="503" r="9" fill="#171a26" stroke="#f2b04e" stroke-width="2.4"/>
+<circle cx="892" cy="503" r="3.2" fill="#f2b04e"/>
+<circle cx="1092" cy="362" r="18" fill="#3ddc97" fill-opacity="0.12"/>
+<circle cx="1092" cy="362" r="9" fill="#3ddc97"/>
+<circle cx="620" cy="155" r="26" fill="#171a26" stroke="#5cc8ff" stroke-width="2"/>
+<g fill="none" stroke="#e8eaf2" stroke-width="1.6" stroke-linecap="round">
+  <rect x="608" y="149" width="24" height="18" rx="6"/>
+  <circle cx="615" cy="158" r="1.9"/>
+  <circle cx="625" cy="158" r="1.9"/>
+  <line x1="620" y1="149" x2="620" y2="143"/>
+  <circle cx="620" cy="141.2" r="1.7"/>
+</g>
+<rect x="532.0" y="312.0" width="176" height="66" rx="8" fill="#1e2232" stroke="#3a4160" stroke-width="1.5"/>
+<text x="620" y="341" font-size="17" fill="#e8eaf2" text-anchor="middle" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.pl</text>
+<text x="620" y="364" font-size="13" fill="#9aa0b5" text-anchor="middle">エージェントが書く</text>
+<text x="620" y="111" font-size="15" fill="#e8eaf2" text-anchor="middle" font-weight="600">エージェント</text>
+<text x="630" y="251.5" font-size="13" fill="#9aa0b5">書く</text>
+<text x="823.0" y="350.00000000000006" font-size="13" fill="#9aa0b5">読む</text>
+<text x="430.23995735680387" y="209.80040307068072" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">rakugan check</text>
+<text x="430.23995735680387" y="245.80040307068072" font-size="30" fill="#5cc8ff" text-anchor="end" font-weight="700">0.07 s</text>
+<text x="430.23995735680387" y="269.8004030706807" font-size="14" fill="#9aa0b5" text-anchor="end">受け取れない書き方を、</text>
+<text x="430.23995735680387" y="288.8004030706807" font-size="14" fill="#9aa0b5" text-anchor="end">行と書き換え方とともに名指しする</text>
+<text x="430.23995735680387" y="310.8004030706807" font-size="14" fill="#5cc8ff" text-anchor="end">コンパイラは起動しない</text>
+<text x="430.23995735680387" y="368.1995969293193" font-size="13" fill="#9aa0b5" text-anchor="end">ウィンドウなしの実行</text>
+<text x="430.23995735680387" y="390.1995969293193" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">PIXIE_SCRIPT="click:+1,dump"</text>
+<text x="430.23995735680387" y="412.1995969293193" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">rakugan run</text>
+<text x="430.23995735680387" y="448.1995969293193" font-size="30" fill="#5cc8ff" text-anchor="end" font-weight="700">0.07 s</text>
+<text x="430.23995735680387" y="472.1995969293193" font-size="14" fill="#9aa0b5" text-anchor="end">画面を文字として印字する</text>
+<text x="430.23995735680387" y="494.1995969293193" font-size="14" fill="#5cc8ff" text-anchor="end">ウィンドウは開かない</text>
+<text x="880" y="543" font-size="17" fill="#e8eaf2" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">rakugan gate</text>
+<text x="880" y="579" font-size="30" fill="#f2b04e" font-weight="700">2.8 s</text>
+<text x="880" y="603" font-size="14" fill="#9aa0b5">翻訳してコンパイルし、</text>
+<text x="880" y="622" font-size="14" fill="#9aa0b5">両方を動かして 1 バイトずつ比べる</text>
+<text x="880" y="646" font-size="13" fill="#d5dbee" font-family="ui-monospace,'SF Mono',Menlo,monospace">GATE OK — 3 dump lines</text>
+<text x="880" y="664" font-size="13" fill="#d5dbee" font-family="ui-monospace,'SF Mono',Menlo,monospace">identical in both runs</text>
+<text x="1178" y="308" font-size="15" fill="#3ddc97" text-anchor="end" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace">rakugan build --release --app</text>
+<text x="1178" y="330" font-size="13" fill="#9aa0b5" text-anchor="end">11.9 MB、ダブルクリックで開く</text>
+<text x="44" y="692" font-size="14" fill="#9aa0b5"><tspan fill="#e8eaf2">速いほうの二つの答えは、どちらもプログラムが読める文字である。</tspan>直し方を名指しする断りと、画面そのもの。</text>
+</svg>

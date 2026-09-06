@@ -4,20 +4,24 @@
 何往復かかるか、自分の誤りに自分で気付けるか、人が横で見ている必要があるか。
 それは、返ってくるものの形で決まります。
 
-落雁のコマンドは、その読み取りのために形を決めてあります。
+落雁のコマンドは、その返事が読みやすいように作ってあります。
 三つのうち二つはコンパイラを起動せず、ウィンドウも開きません。
-そしてそれぞれが一つの問いに答えます。
+三つはそれぞれ、別の問いに答えます。
 落雁はこれを受け取れるか、これは何を描くか、配ったアプリも同じことをするか。
+
+![端末でのひとつづきの作業。エージェントが app.pl を書き、rakugan check が断って直し方を示し、直すと check は何も言わなくなり、ウィンドウなしの実行が画面を文字で返し、rakugan gate が二つの実行の一致を報告する。速い二つは各 0.07 秒、コンパイルは 2.8 秒](images/loop-ja.svg#only-dark)
+
+![端末でのひとつづきの作業。エージェントが app.pl を書き、rakugan check が断って直し方を示し、直すと check は何も言わなくなり、ウィンドウなしの実行が画面を文字で返し、rakugan gate が二つの実行の一致を報告する。速い二つは各 0.07 秒、コンパイルは 2.8 秒](images/loop-ja-light.svg#only-light)
 
 ## 三つのコマンドと、三つの答え
 
-### `rakugan check`。落雁はこれを受け取れるか
+### `rakugan check`：落雁はこれを受け取れるか
 
 ```console
 $ ./bin/rakugan check app.pl
 app.pl:8:30: Rakugan cannot take this — `text` has no `weight =>`; it takes `a11y_label`, `align`, `animate`, `background`, `bold`, `border_color`, `border_radius`, `border_width`, `col_span`, `color`, `disabled`, `easing`, `enter`, `exit`, `grow`, `height`, `italic`, `max_lines`, `max_width`, `min_width`, `mono`, `padding`, `role`, `row_span`, `size`, `theme`, `tooltip`, `underline`, `width`, `wrap`
-        return text("hello", weight => 700);
-                             ^
+            return text("hello", weight => 700);
+                                 ^
 ```
 
 `ファイル:行:桁` の形で断りを印字し、その下にその行と、桁を指す記号を置きます。
@@ -29,7 +33,7 @@ app.pl:8:30: Rakugan cannot take this — `text` has no `weight =>`; it takes `a
 直し方そのものを、直す場所に置いています。
 一覧は[落雁が断る書き方](refusals.md)にあり、それぞれ文面を保持しているファイルから引いています。
 
-### ウィンドウなしの実行。これは何を描くか
+### ウィンドウなしの実行：これは何を描くか
 
 ```console
 $ PIXIE_SCRIPT="click:+1,dump" ./bin/rakugan run app.pl
@@ -46,10 +50,10 @@ Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Butto
 「押したボタンは思ったとおりに効いたか」への答えがこれで、画面がなくても読めます。
 手順の一覧は[ウィンドウなしの実行とゲート](tour-ship.md#ウィンドウなしの実行とゲート)にあります。
 
-キャンバスに描くものなら、`PIXIE_FRAMES=<dir>` が手順ごとに PNG を書きます。
+キャンバスに描くものなら、`PIXIE_FRAMES=<dir>` が手順ごとに PNG を書き出します。
 描くのはウィンドウと同じラスタライザなので、エージェントは自分の描いたものを読むだけでなく、見ることができます。
 
-### `rakugan gate`。配ったアプリも同じことをするか
+### `rakugan gate`：配ったアプリも同じことをするか
 
 ```console
 $ ./bin/rakugan gate app.pl --script "click:+1,dump"
@@ -60,17 +64,18 @@ GATE OK — 3 dump lines identical in both runs
 ```
 
 これはコンパイルします。
-アプリを翻訳し、バイナリを建て、一つのスクリプトで両方を動かし、記録を 1 バイトずつ比べます。
-エンジンを最初に建てるときは数分かかり、そのあとは毎回数秒です。
+アプリを翻訳し、バイナリをビルドし、一つのスクリプトで両方を動かし、記録を 1 バイトずつ比べます。
+エンジンを最初にビルドするときは数分かかり、そのあとは毎回数秒です。
 赤いゲートは、二つの記録と、最初に食い違った行を印字します。
 
-## ひとつの作業でのまわり方
+## 一続きの作業でのループ
 
 1. ファイルを書く。
 2. `check` が黙るまで直す。
    どの答えも直し方を名指しするので、ここで要るのは往復であって、考え込むことではありません。
 3. 足したものを押すスクリプトで、ウィンドウなしの実行。
-   dump を読みます。それが画面です。
+   dump を読みます。
+   それが画面です。
 4. 形が決まったら `gate`。
    ここでコンパイルし、ここで証明します。
 5. できあがったら `build --release --app`。
@@ -81,7 +86,7 @@ GATE OK — 3 dump lines identical in both runs
 ## エージェントに渡すもの
 
 - **ツアー**（[ここから](tour.md)）。
-  言語を読者の出会う順に書いてあります。
+  言語そのものが、読者の出会う順に並んでいます。
   完全な例はすべて `tools/tour_check.pl` がゲートに通すので、翻訳器が断る書き方はそこにありません。
 - **[要素のページ](elements.md)**。
   唯一の表から生成しています。
@@ -99,5 +104,5 @@ GATE OK — 3 dump lines identical in both runs
 読むエージェントは、意図したとおりの Perl を書きます。
 
 **dump は画面である。**
-木が正しいと言うまで、ウィンドウの見た目を人に尋ねる必要はありません。
+木が正しいと言うまでは、ウィンドウの見た目を人に尋ねる必要はありません。
 ゲートが突き合わせているのも dump なので、dump を読むエージェントは、ゲートと同じものを見ています。
