@@ -1,6 +1,6 @@
 # デモ
 
-どれも 1 ファイル（opsboard と multi はディレクトリ）で、リポジトリの `crates/yokan/` からそのまま動きます。
+どのデモも 1 ファイルで（opsboard と multi だけはディレクトリ）、リポジトリの `crates/yokan/` の中でそのまま動きます。
 
 ```console
 $ cd crates/yokan
@@ -8,16 +8,17 @@ $ uv run demo/counter.py            # そのデモの名前に置き換える
 $ ./tools/gate_all.sh               # 全デモをゲートで一括チェック
 ```
 
-numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` で。
-`transcribe` は依存を自分で宣言しているので `uv run demo/transcribe/app.py` がそれを取ってきます。
-初めて文字起こしをするときに Whisper のモデルを取得し、ゲートはスイープではなく単独（`just transcribe-gate`）で走ります。
-`app` と `csv_viewer` の 2 本は辞書 state を使う開発専用デモで、ゲート対象外です（[今できないこと](tour-ship.md#今できないこと)参照）。
-スクリーンショットはすべて初期状態（起動直後）のものですが、`transcribe` だけは文字起こしを終えた状態です。
+numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` で動かします。
+`transcribe` は必要な依存を自分で宣言しているので、`uv run demo/transcribe/app.py` がそれを取ってきます。
+初めて文字起こしをするときには、Whisper のモデルも取りに行きます。
+ゲートは全デモの一括チェックには入れず、単独（`just transcribe-gate`）で走らせます。
+`app` と `csv_viewer` の 2 本は辞書 state を使う開発専用のデモなので、ゲートの対象外です（[今できないこと](tour-ship.md#今できないこと)を参照）。
+スクリーンショットはどれも起動直後の画面ですが、`transcribe` だけは文字起こしを終えたところを写しています。
 起動直後は表が空で、何も伝わらないからです。
 
 ## まず動きを見る
 
-#### counter — いちばん小さいアプリ。同じアプリの別の書き方が counter_state.py（型付き State セル）と counter_with.py です
+#### counter — いちばん小さいアプリ。同じアプリを別の書き方にしたのが counter_state.py（型付き State セル）と counter_with.py
 <img src="images/demos/counter.png" width="360">
 
 <!-- source -->
@@ -67,7 +68,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### opsboard — 旗艦デモ。3 モジュール構成のダッシュボード（ストア 2 つ、直和型のヘルスモデル、チャート、仮想化アラートフィード、テーマ切替、fs へのレポート出力）
+#### opsboard — 旗艦デモ。3 モジュールで組んだダッシュボード（ストア 2 つ、直和型のヘルスモデル、チャート、仮想化したアラートフィード、テーマ切替、fs へのレポート出力）
 <img src="images/demos/opsboard.png" width="720">
 
 <!-- source -->
@@ -462,7 +463,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### forms — フォーム部品一式。checkbox / switch / slider / select / radio_group / tab_bar、ハンドラは新しい値をひとつ受け取る
+#### forms — フォーム部品一式。checkbox / switch / slider / select / radio_group / tab_bar があり、どのハンドラも新しい値をひとつ受け取る
 <img src="images/demos/forms.png" width="360">
 
 <!-- source -->
@@ -582,7 +583,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### calc — 定番の電卓。レイアウトは `grow` だけで組んであり、ウィンドウを伸ばすとパッド全体が隙間なく追従する
+#### calc — 定番の電卓：レイアウトは `grow` だけで組んであり（行が高さを分け合い、キーが行の幅を分け合い、0 キーは 2 コマ分）、ウィンドウを伸ばせばパッド全体が隙間なく追従する
 <img src="images/demos/calc.png" width="300">
 
 <!-- source -->
@@ -738,7 +739,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で。0 キーは `col_span=2` で 2 セルにまたがる
+#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で書いた版：等分トラックのコンテナ一つに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
 <img src="images/demos/calcgrid.png" width="300">
 
 <!-- source -->
@@ -886,7 +887,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 状態の持ち方
 
-#### stores — 名前付きストア。クラス名がそのままシングルトンで、ストア同士のメソッド呼び出しもできる
+#### stores — 名前付きストア。クラス名がそのままシングルトンになり、ストア同士でメソッドを呼び合える
 <img src="images/demos/stores.png" width="360">
 
 <!-- source -->
@@ -1150,7 +1151,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### lookup — 辞書セル。読みは `.get(key, default)`、`in`、そして `cell[k] = v` のその場書き込み
+#### lookup — 辞書セル。読みは `.get(key, default)` と `in`、書き込みは `cell[k] = v` のその場更新
 <img src="images/demos/lookup.png" width="360">
 
 <!-- source -->
@@ -1215,7 +1216,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### mixer — フィールドだけの @store。注釈付きフィールドへの直接代入で画面が追随する
+#### mixer — フィールドだけの @store。注釈を付けたフィールドに直接代入すると、画面がそれに追随する
 <img src="images/demos/mixer.png" width="360">
 
 <!-- source -->
@@ -1274,7 +1275,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 値と型
 
-#### points — Value クラス（frozen dataclass）。書き換えは `replace` の関数的更新
+#### points — Value クラス（frozen dataclass）。書き換えは `replace` による関数的な更新
 <img src="images/demos/points.png" width="360">
 
 <!-- source -->
@@ -1408,7 +1409,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### geometry — Protocol による静的ディスパッチ。トレイト相当がコンパイルされる
+#### geometry — Protocol による静的ディスパッチ。実装ごとに特殊化してコンパイルされる
 <img src="images/demos/geometry.png" width="360">
 
 <!-- source -->
@@ -1596,7 +1597,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### pyops — CPython と同じ算術。`/` `//` `%` `**`、負のインデックス、キーによる並べ替えまで両実行でバイト一致
+#### pyops — CPython と同じ算術。`/` `//` `%` `**` から負のインデックス、キーによる並べ替えまで、両実行の結果がバイト単位で一致する
 <img src="images/demos/pyops.png" width="360">
 
 <!-- source -->
@@ -1933,7 +1934,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### edges — 封じ込めの実証。範囲外アクセスもオーバーフローも、両実行で同じ文が同じように止まり、アプリは落ちない
+#### edges — 封じ込めの実証。範囲外アクセスもオーバーフローも、両実行のどちらでも同じ文で同じように止まり、アプリは動き続ける
 <img src="images/demos/edges.png" width="360">
 
 <!-- source -->
@@ -2265,7 +2266,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### table — data_table。最初の `row` がヘッダー行、以降の `row` が交互に色の付くデータ行になり、枠は要素が描く
+#### table — data_table：最初の `row` がヘッダー行、以降の `row` は交互に色の付くデータ行になり、枠線は要素に付いてくる
 <img src="images/demos/table.png" width="360">
 
 <!-- source -->
@@ -2648,7 +2649,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### about — link。URL を開くテキストと、URL をクリップボードに写すボタン
+#### about — link。URL を開くテキストと、その URL をクリップボードにコピーするボタン
 <img src="images/demos/about.png" width="360">
 
 <!-- source -->
@@ -2702,7 +2703,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### badges — 自分の箱を持つ text。状態のピル、等幅のハッシュ、下線付きの注記、省略記号、二行での打ち切り
+#### badges — 自前の箱を持つ text。状態のピル、等幅のハッシュ、下線付きの注記、省略記号、二行での打ち切り
 <img src="images/demos/badges.png" width="360">
 
 <!-- source -->
@@ -2885,7 +2886,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### quantities — number_field と int_field。enter で確定し、範囲に収め、step に吸着する型付きの数値入力
+#### quantities — number_field と int_field。型付きの数値入力で、enter で確定し、値を範囲に収め、step に吸着する
 <img src="images/demos/quantities.png" width="360">
 
 <!-- source -->
@@ -2952,7 +2953,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### loading — progress の見出しと大きさ、長さの分からない作業のための不確定の往復
+#### loading — progress の見出しと大きさ。どれだけかかるか分からない作業には、往復し続ける不確定表示を使う
 <img src="images/demos/loading.png" width="360">
 
 <!-- source -->
@@ -3016,7 +3017,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### canvas — 描画面。仮想的なピクセルの格子を1命令ずつ描き、色はパレットの番号で指定します。キャンバスの中の `for` と、ティックからキーの状態を読む例です
+#### canvas — 描画面：仮想的なピクセルの格子に 1 命令ずつ描き、色はパレットの番号で指定し、キャンバスの中で `for` を回して、ティックの中でキーの状態を読む
 <img src="images/demos/canvas.png" width="360">
 
 <!-- source -->
@@ -3153,7 +3154,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     ```
 <!-- source -->
 
-#### shooter — Pyxel のシューティングの例を移植。三つの場面、視差で流れる100個の星、揺れながら落ちてくる敵、矩形の当たり判定、広がる爆発をキャンバスの上で
+#### shooter — Pyxel のシューティングの例を移植。三つの場面、視差で流れる 100 個の星、揺れながら落ちてくる敵、矩形の当たり判定、広がる爆発が、すべてキャンバスの上で動く
 <img src="images/demos/shooter.gif" width="240">
 
 <!-- source -->
@@ -3856,7 +3857,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### roster — table。列トラック、行の選択、見出しでのソートを持つ仮想化された表（並べ替えはアプリ側）
+#### roster — table。仮想化された表に、列トラック、行の選択、見出しでのソートを付ける（並べ替えはアプリ側）
 <img src="images/demos/roster.png" width="360">
 
 <!-- source -->
@@ -4027,7 +4028,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが印字する
+#### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが出力する
 <img src="images/demos/labels.png" width="360">
 
 <!-- source -->
@@ -4216,7 +4217,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 標準ライブラリ
 
-#### picker — ファイルダイアログと落とされたファイル。`task` の中の `fs.open_dialog` / `save_dialog`、`on_file_drop`。スクリプトは `file:<path>` で答え、`drop:<path>` で落とす
+#### picker — ファイルダイアログと落とされたファイル：`task` の中の `fs.open_dialog` / `save_dialog` と `on_file_drop`、スクリプトからは `file:<path>` で答え、`drop:<path>` で落とす
 <img src="images/demos/picker.png" width="360">
 
 <!-- source -->
@@ -4312,7 +4313,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### keys — ショートカット、キー、クリップボード、メニューバー。`shortcut("cmd+s", save)`、`on_key(typed)`、`clipboard.set_text` / `get_text`、`menu_item("Count", "Save", save)`。スクリプトからは `key:cmd+s` と `menu:Save` で動かす
+#### keys — ショートカット、キー、クリップボード、メニューバー：`shortcut("cmd+s", save)`、`on_key(typed)`、`clipboard.set_text` / `get_text`、`menu_item("Count", "Save", save)` を使い、スクリプトからは `key:cmd+s` と `menu:Save` で動かす
 <img src="images/demos/keys.png" width="360">
 
 <!-- source -->
@@ -4500,7 +4501,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### dbnotes — yokan.sqlite。行は SQL で形作り、ORDER BY で並べる
+#### dbnotes — yokan.sqlite。行の形は SQL で決め、並び順は ORDER BY で決める
 <img src="images/demos/dbnotes.png" width="360">
 
 <!-- source -->
@@ -4557,7 +4558,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### ledger — 実用アプリの形をした家計簿。sqlite に永続化し、値はすべてバインドで渡す
+#### ledger — 実用アプリの形をした家計簿。sqlite に保存し、値はすべてバインド変数で渡す
 <img src="images/demos/ledger.png" width="360">
 
 <!-- source -->
@@ -5120,7 +5121,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### dice — Python の `random`。種を撒けば両実行で同じ列
+#### dice — Python の `random`。同じ種を与えれば、両実行で同じ列が出る
 <img src="images/demos/dice.png" width="360">
 
 <!-- source -->
@@ -5234,7 +5235,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## Rust crate
 
-#### rustcrate — `yokan add` で足した Rust crate。手元の path crate と crates.io の version crate が同居し、crate 本来の snake_case 名で呼ぶ。同じ宣言の pyproject 綴りが `demo/proj/`
+#### rustcrate — `yokan add` で足した Rust crate：手元の path crate と crates.io の version crate が同居し、どちらも crate 本来の snake_case 名で呼ぶ（同じ宣言を pyproject.toml で書いた版が `demo/proj/`）
 <img src="images/demos/rustcrate.png" width="360">
 
 <!-- source -->
@@ -5460,7 +5461,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### tasks — task()。重い処理を UI スレッドの外へ、両方の実行で
+#### tasks — task()。重い処理を、どちらの実行でも UI スレッドの外に出す
 <img src="images/demos/tasks.png" width="360">
 
 <!-- source -->
@@ -5638,7 +5639,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### pyjob — @py のエスケープの中の重い Python を task で回すデモ。ウィンドウは描き続け、エスケープは載ったワーカースレッドから進み具合を報告します
+#### pyjob — @py のエスケープに書いた重い Python を task で回す。ウィンドウは描き続け、エスケープは自分が載ったワーカースレッドから進み具合を報告する
 <img src="images/demos/pyjob.png" width="360">
 
 <!-- source -->
@@ -5735,7 +5736,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     ```
 <!-- source -->
 
-#### transcribe — Buzz の移植。@py と mlx-whisper で文字起こしをして、進捗バー、区間の表、TXT と SRT と VTT の書き出しを持ちます
+#### transcribe — Buzz の移植。@py と mlx-whisper で文字起こしをして、進捗バー、区間の表、TXT と SRT と VTT の書き出しまで揃える
 <img src="images/demos/transcribe.png" width="720">
 
 <!-- source -->
@@ -6121,7 +6122,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### app — numpy 入りのダッシュボード（開発専用: 辞書 state）
+#### app — numpy 入りのダッシュボード（開発専用：辞書 state）
 <img src="images/demos/app.png" width="360">
 
 <!-- source -->
@@ -6190,7 +6191,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### csv_viewer — 10 万行の仮想化テーブル + numpy（開発専用: 辞書 state）
+#### csv_viewer — 10 万行の仮想化テーブル + numpy（開発専用：辞書 state）
 <img src="images/demos/csv_viewer.png" width="360">
 
 <!-- source -->

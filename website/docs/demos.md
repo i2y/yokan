@@ -587,7 +587,7 @@ shows a finished transcript — its launch state is an empty table.
 
 
 
-#### calc — the classic keypad calculator: the layout is all `grow`, so resizing scales the whole pad with no dead space
+#### calc — the classic keypad calculator: the layout is all `grow` (rows share the height, keys share each row, the zero key takes two shares), so resizing scales the pad with no dead space
 <img src="images/demos/calc.png" width="300">
 
 <!-- source -->
@@ -743,7 +743,7 @@ shows a finished transcript — its launch state is an empty table.
 
 
 
-#### calcgrid — the same calculator on `grid(columns=4, rows=5)`; the zero key spans two cells with `col_span=2`
+#### calcgrid — the same calculator on `grid(columns=4, rows=5)`: equal tracks, one container instead of five rows, and the zero key spans two cells with `col_span=2`
 <img src="images/demos/calcgrid.png" width="300">
 
 <!-- source -->

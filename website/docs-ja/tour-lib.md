@@ -1,18 +1,23 @@
 # ライブラリと crate
 
-[ツアー](tour.md)の続きです。エラー処理、標準ライブラリ、自分の Rust crate、CPython エスケープを見ます。
+[ツアー](tour.md)の続きです。
+エラー処理、標準ライブラリ、自分の Rust crate、CPython エスケープを見ます。
 
 ## エラー処理
 
 迷ったら、この順で選びます。
 
-1. **`*_or` を使う**。失敗したら既定値が返る読み方で、理由が要らない場面はこれで済みます。
+1. **`*_or` を使う**。
+   失敗したら既定値が返る読み方です。
+   失敗の理由が要らない場面は、これで済みます。
    `fs.read_text_or(p, "")`、`http.get_text_or(url, "")`、`sqlite.query_int_or(p, sql, 0)`。
-2. **try/except を使う**。失敗の理由が要るときの形で、Python の書き方がそのまま使えます。
-   本体に複数の文、例外の種類ごとの except 節、タプル指定（`except (ValueError, KeyError) as e:`）、`else`、`finally`。
-   `@py` のエスケープ関数が投げた例外もここで捕まえられ、`e` のメッセージも Python が出すものそのままです。
-3. **何もしない**。捕まえなかった失敗は、その文を中断してアプリは生き続けます。
-   クラッシュはしません。
+2. **try/except を使う**。
+   失敗の理由が要るときはこの形で、Python の書き方がそのまま使えます。
+   書けるのは、本体の複数の文、例外の種類ごとの except 節、タプル指定（`except (ValueError, KeyError) as e:`）、`else`、`finally` です。
+   `@py` のエスケープ関数が投げた例外も、ここで捕まえられます。
+   `e` のメッセージも、Python が出すものそのままです。
+3. **何もしない**。
+   捕まえなかった失敗はその文を中断させるだけで、アプリはクラッシュせずに動き続けます。
 
 ```python
 try:
@@ -25,15 +30,21 @@ except Exception as e:
 
 標準ライブラリは二つに分かれます。
 分かれ目は、名前がどこから来たかです。
-どちらの半分も、リリースバイナリに Python を持ち込みません。
-どのモジュールが Python のどこまで届いているかは、関数の単位で[対応状況のページ](support.md)にあります（手で書かずに生成しています）。
+どちらも、リリースバイナリに Python を持ち込みません。
+どのモジュールが Python のどこまでを実装しているかは、関数の単位で[対応状況のページ](support.md)にあります（手で書かずに生成しています）。
 
 **Python 自身のモジュール**は、Python と同じ書き方で使います（`import math`、`import random`、`import statistics`、`import json`、`import datetime`、`import time`、`import re`、`import string`、`import textwrap`、`import bisect`、`import heapq`、`import collections`、`import itertools`）。
 開発中はアプリが CPython のモジュールを import し、CPython がそれを動かします。
 リリースバイナリは、CPython の意味に合わせて書いた双子を呼びます。
 返す値も、失敗の仕方も、エラーの文言まで同じです。
-`math.sqrt(-1)` は Python が投げるところで投げ、`statistics.mean([0.1, 0.2, 0.3])` は素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返し、`random.seed(1)` は両方の実行で同じメルセンヌツイスタの列を始め、`json.dumps` は要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書き、`date` は `timedelta` を足し、別の `date` を引き、Python と同じ書式で自分を描きます。
-正規表現は、アプリを翻訳する時点で CPython 自身がコンパイルします。出荷したバイナリは Python が走らせるはずだった配列をそのまま走らせるので、後方追跡も群もフラグも CPython のもので、その方言ではありません。
+`math.sqrt(-1)` は、Python が投げるところで投げます。
+`statistics.mean([0.1, 0.2, 0.3])` は、素朴な和が返す `0.20000000000000004` ではなく厳密な `0.2` を返します。
+`random.seed(1)` のあとは、両方の実行が同じメルセンヌツイスタの列をたどります。
+`json.dumps` は、要素の間の `", "` から `\uXXXX` のエスケープまで CPython と同じ文字列を書きます。
+`date` は `timedelta` を足せ、別の `date` を引け、文字列にすれば Python と同じ書式になります。
+正規表現は、アプリを翻訳する時点で CPython 自身がコンパイルします。
+出荷したバイナリは、Python が走らせるはずだった配列をそのまま走らせます。
+後方追跡も群もフラグも CPython のもので、方言が真似たものではありません。
 
 ```python
 import json, math, random, re, statistics
@@ -56,8 +67,8 @@ def view():
 
 `math` と `statistics` は純粋なのでビューから呼べます。
 `random` は生成器の状態を進めるので、他と同じくハンドラで呼びます。
-種を撒いていない生成器が繰り返せないのは Python と同じです。
-種を撒けば、gate が両方の実行を一つの列に縛れます。
+種を与えていない生成器が繰り返せないのは Python と同じです。
+種を与えれば、ゲートは両方の実行を同じ列に固定できます。
 
 **Yokan 自身のモジュール**が受け持つのは、ファイル、データベース、ネットワーク、クリップボード、通知です。
 `from yokan import fs, sqlite, http, jsondoc, clock, strings, clipboard, notify, audio, keys` と書いて読み込みます。
@@ -66,33 +77,60 @@ def view():
 `math` や `re` は、開発中は CPython のモジュールが動き、リリース後は Rust の双子が動きます。
 こちらはどちらの実行も Rust の同じ関数を呼ぶので、二つの実行が違う答えを返しようがありません。
 これらに Python のモジュール名は使いません。
-Python の名前が付いていることは、CPython の答えに合わせるという約束だからです。
+Python の名前を名乗ることが、CPython の答えに合わせるという約束だからです。
 JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
 - **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
-  それと、プラットフォーム自身のパネルである `open_dialog(title)` と `save_dialog(name)`。返るのはパスで、取り消されたときは `""` です。ダイアログは人を待つので `task(...)` の中で呼びます。検証スクリプトは `file:<path>` で答えます。
+  それと、プラットフォーム自身のダイアログを開く `open_dialog(title)` と `save_dialog(name)`。
+  返るのはパスで、取り消されたときは `""` です。
+  ダイアログは人を待つので `task(...)` の中で呼びます。
+  検証スクリプトでは、`file:<path>` がこのダイアログに答えます。
 - **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
-- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒の締め切り、`post_text` は第三引数に content type を取る）
-- **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。Python の `json` にこの動詞はありません。書き出しは Python の `json.dumps` です
-- **clock**：`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`。この機械のタイムゾーンは、Python の `time` からは struct 越しにしか触れません。時計そのものを読むのは Python の `time`、暦の計算は Python の `datetime` です
+- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒単位の制限時間、`post_text` は第三引数に content type を取る）
+- **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。
+  Python の `json` に、同じ読み方はありません。
+  書き出しは Python の `json.dumps` です
+- **clock**：`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`。
+  この機械のタイムゾーンは、Python の `time` からは struct 越しにしか触れません。
+  時計そのものを読むのは Python の `time`、暦の計算は Python の `datetime` です
 - **strings**：`to_int(s, default)` / `to_float(s, default)`（壊れた入力は default になる数値パース）
-- **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行では自分の中に閉じるので、コピーと貼り付けも他の操作と同じように検証できる
-- **notify**：`send(title, body)` — OS 通知。`.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
-- **audio**：`play(path, volume=1.0)` / `stop()` — WAV を鳴らす。呼び出しはすぐ戻り、複数の音は重なって鳴る。`volume` は 0 から 1 の音量（大きすぎる音は取り返しがつかないので、秒に何度も鳴るものは小さめに頼む）。スクリプト実行は無音なので、ゲートにスピーカーのある機械は要らず、音がダンプに出ることもない。音の出せない機械や読めないファイルでは、アプリを止めずに何も鳴らさない。音のデバイスを積むのはこれを import したアプリだけで、バイナリの増分はおよそ 1.3 MB
-- **keys**：`down(k)` / `pressed(k)` / `released(k)` — 装置としてのキーボード。タイマーのティックから読む（ハンドラに届くコードのほうは[ウィンドウ](tour-ui.md#ウィンドウ)を参照）
+- **clipboard**：`set_text(s)` / `get_text()` — システムのクリップボード。
+  ウィンドウでは他のアプリケーションとやり取りし、ヘッドレス実行ではアプリの中で完結するので、コピーと貼り付けも他の操作と同じように検証できる
+- **notify**：`send(title, body)` — OS 通知。
+  `.app` バンドル（`--app`）として動かすと通知センターに届き、素の開発実行とヘッドレス実行では静かに捨てられる
+- **audio**：`play(path, volume=1.0)` / `stop()` — WAV を鳴らす。
+  呼び出しはすぐ戻り、複数の音は重なって鳴る。
+  `volume` は 0 から 1 の音量（大きすぎる音は取り返しがつかないので、秒に何度も鳴るものには小さめの値を渡す）。
+  スクリプト実行は無音なので、ゲートにスピーカーのある機械は要らず、音がダンプに出ることもない。
+  音の出せない機械や読めないファイルでは、アプリを止めずに何も鳴らさない。
+  音のデバイスを組み込むのはこれを import したアプリだけで、バイナリの増分はおよそ 1.3 MB
+- **keys**：`down(k)` / `pressed(k)` / `released(k)` — 装置としてのキーボード。
+  タイマーのティックから読む（ハンドラに届くキーの組み合わせのほうは[ウィンドウ](tour-ui.md#ウィンドウ)を参照）
 
-Python 側がどこまで届くかを、モジュールごとに挙げます。
+Python のどこまでを実装しているかを、モジュールごとに挙げます。
 
-- **math** — 六つを除いて全部です。除いた六つはそれぞれ理由を挙げて断ります。`prod` と `sumprod` はリストの中身によって int か float かが変わり、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算しているからです。
+- **math** — 六つを除いて全部です。
+  除いた六つは、それぞれ理由を挙げて断ります。
+  `prod` と `sumprod` はリストの中身によって int か float かが変わり、`gamma`、`lgamma`、`erf`、`erfc` はプラットフォームではなく CPython 自身が計算しているからです。
 - **random** — `seed`、`random`、`randint`、`randrange`、`getrandbits`、`uniform`、`gauss`、`choice`、`sample`。
-- **statistics** — `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev`。受けるのは `list[float]` だけです。int のリストは断ります。CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、型が一つに決まらないからです。
-- **json** — `dumps`。既定値のままで、キーワード引数は取りません。
+- **statistics** — `mean`、`fmean`、`median`、`mode`、`variance`、`pvariance`、`stdev`、`pstdev`。
+  受けるのは `list[float]` だけで、int のリストは断ります。
+  CPython は `mean([1, 2, 3])` に int を、`mean([1, 2, 4])` に float を返すので、型が一つに決まらないからです。
+- **json** — `dumps`。
+  既定値のままで、キーワード引数は取りません。
 - **time** — `time`、`time_ns`、`monotonic`、`monotonic_ns`、`perf_counter`、`perf_counter_ns`、`sleep`。
-- **re** — `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。パターンはリテラルです。アプリを翻訳する時点でコンパイルするからです。
-- **datetime** — `date`、`datetime`、`timedelta` の三つで、いずれも naive です。構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、算術と比較。穴に置いた値は `str()` と同じ形で描かれます。
-- **collections** — `Counter`（str のリストを数えます）。結果は初めて現れた順に並ぶ辞書で、辞書が答えるものすべてに加えて `.most_common()` と `.total()` を持ちます。`State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
-- **itertools** — `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
+- **re** — `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
+  パターンはリテラルだけです。
+  アプリを翻訳する時点でコンパイルするからです。
+- **datetime** — `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
+  使えるのは、構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、それに算術と比較です。
+  穴に置いた値は `str()` と同じ形で描かれます。
+- **collections** — `Counter`（str のリストを数えます）。
+  結果は初めて現れた順に並ぶ辞書で、辞書にできることすべてに加えて `.most_common()` と `.total()` を持ちます。
+  `State` に入れると辞書として読み戻るので、順位は入れる前に取り出します。
+- **itertools** — `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。
+  どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
 - **string / textwrap / bisect / heapq** — 九つの定数、`dedent` と `indent`、`bisect_left` と `bisect_right`、`nsmallest` と `nlargest`。
 
 ```python
@@ -133,8 +171,8 @@ class Ledger:
 
 表示する一行は、SQL で組み立てるのではなく Python 側で書きます。
 
-検証を安定させるこつは、結果を毎回同じにすることです。
-時刻は固定値を渡し、乱数は種を撒く。
+検証を安定させるこつは、実行のたびに変わる要素をなくすことです。
+時刻は固定値を渡し、乱数には種を与えます。
 そうしておけば、検証スクリプトは何度でも同じ結果を再生します。
 
 自分の Rust crate を足すこともできます。
@@ -152,7 +190,7 @@ $ yokan add app.py hexfmt --path native/hexfmt    # 手元の crate
 ```
 
 宣言の置き場はアプリの流儀に合わせて二つあります。
-スクリプト型なら PEP 723 ブロックの `[tool.yokan.crates]`、プロジェクト型なら pyproject.toml の同じテーブルです（`yokan add` がどちらの家も見つけて書き込みます）。
+スクリプト型なら PEP 723 ブロックの `[tool.yokan.crates]`、プロジェクト型なら pyproject.toml の同じテーブルです（`yokan add` はどちらの置き場も見つけて書き込みます）。
 
 ```python
 # /// script
@@ -183,10 +221,12 @@ pub fn avg(xs: Vec<f64>) -> f64 { … }
 この機能はネイティブビルドと同じ前提です（リポジトリの clone と Rust）。
 関数名は crate のドキュメント通りの snake_case で呼びます。
 境界を越えられるのは、Int、Float、Bool、String、その List と Optional（None ごと）、str キーの辞書（`HashMap<String, …>`）、構造体（入れ子も）と enum、そして Result を返す関数です（`Result<Vec<…>>` のような複合型も可）。
-crate から返る辞書はキー順に並んで届きます。どちらの実行でも同じ順です。
+crate から返る辞書はキー順に並んで届きます。
+どちらの実行でも同じ順です。
 Result は try/except で受け、`f"{e}"` の文言まで両実行で一致します。
 構造体と enum は、アプリ側に同名の**双子**を宣言すると往復します。
-特別な印は要りません。同じ形で宣言するだけです。
+特別な印は要りません。
+同じ形で宣言するだけです。
 入れ子の構造体は、内側の双子を先に宣言して、外側のフィールドにその名前を書きます。
 
 ```python
@@ -204,15 +244,16 @@ moved = crates.hexfmt.shift(Span(3, 8), 10)
 self.verdict = crates.hexfmt.describe(crates.hexfmt.judge(7))
 ```
 
-Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そのまま越えます（読みは広がり、書きは幅に合わせて戻ります）。入れ子のフィールドも同じ規則です。
-越えられない型を呼ぶと、何がなぜだめかがエラーに出ます。
-デモは `demo/rustcrate.py`（path と version の同居、Optional・Result・構造体・enum・辞書まで）と `demo/proj/`（pyproject 綴り）です。
+Rust 側が `u32` などの幅付きフィールドを持つ構造体も、そのまま越えます（読みは広がり、書きは幅に合わせて戻ります）。
+入れ子のフィールドも同じ規則です。
+越えられない型を使う関数を呼ぶと、何がなぜだめかがエラーに出ます。
+デモは `demo/rustcrate.py`（path と version の同居、Optional、Result、構造体、enum、辞書まで）と `demo/proj/`（pyproject に書く形）です。
 
 ## CPython エスケープ
 
 ここまでの範囲から外れる Python が要るときは、関数に `@py` を付けます（`from yokan import py`）。
 その関数は**本物の Python のまま**残ります。
-開発中はそのまま、リリース後は同梱または実行環境の CPython で実行されます（自己完結にするなら後述の `--bundle` / `--onefile`）。
+開発中はそのまま動き、リリース後は同梱した CPython か実行環境の CPython が動かします（自己完結にするなら後述の `--bundle` / `--onefile`）。
 
 ```python
 @py
@@ -246,12 +287,12 @@ def start():
 ヘッドレス実行はタスクの完了を待ってから次のステップに進むので、タスクを含む流れもテストできます。
 どちらの実行も同じことをします。
 開発実行では Python のスレッドが、コンパイル済みの実行では中の呼び出しの `await` が、その仕事を UI スレッドの外に出します。
-task の中の純粋な計算は書いた場所で走ります。
-外に出るのは `fs`、`sqlite`、`http`、`time.sleep` の呼び出しと、`@py` のエスケープです。
-一分かかる Python を積んでもウィンドウが描き続けるのは、エスケープが外に出るからです。
+task の中の純粋な計算は、書いた場所から動きません。
+UI スレッドの外に出るのは `fs`、`sqlite`、`http`、`time.sleep` の呼び出しと、`@py` のエスケープです。
+一分かかる Python を書いてもウィンドウが描き続けるのは、エスケープが外に出るからです。
 
-仕事は走っている間も黙っていません。
-`report(fraction, note)` がどこまで進んだかを伝え、`on_progress` がそれを UI スレッドで受け取ります。
+走っている間の進み具合も伝えられます。
+`report(fraction, note)` がそれを伝え、`on_progress` が UI スレッドで受け取ります。
 呼ぶ場所は仕事の中でも、そこから呼んだ `@py` のエスケープの中でもかまいません。
 
 ```python
@@ -271,7 +312,8 @@ task の外で呼んだときは何も起きません。
 報告の中身は仕事の側の話で、機械によって変わることもあります。
 届くという事実のほうは変わらないので、届いた回数はゲートで比べられます。
 
-`every(seconds, cb)` は秒間隔のタイマーで、モジュールレベル（または `__main__` ガードの中）に書いて、アプリと一緒に始まります。
+`every(seconds, cb)` は秒間隔のタイマーです。
+モジュールレベル（または `__main__` ガードの中）に書くと、アプリと一緒に動き始めます。
 
 ```python
 def tick():
@@ -285,7 +327,7 @@ every(1.0, tick)
 そのため一分ぶんのティックもゲートで確かめられます。
 
 キーも同じように宣言します。
-`shortcut(chord, handler)` はコードをひとつ束ね、`on_key(handler)` はすべてのキーをコードの形で受け取ります。
+`shortcut(chord, handler)` はキーの組み合わせをひとつ結びつけ、`on_key(handler)` はすべてのキーを組み合わせの形で受け取ります。
 
 ```python
 def save():
@@ -295,12 +337,12 @@ shortcut("cmd+s", save)
 on_key(lambda k: last.set(k))
 ```
 
-コードの綴りはプラットフォームの綴りに合わせます（`cmd+s`、`shift-tab`、`ctrl+alt+k`）。
+キーの組み合わせは、プラットフォームの綴りで書きます（`cmd+s`、`shift-tab`、`ctrl+alt+k`）。
 `-` で区切っても同じものとして読みます。
-テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴うコードだけがアプリに届きます。
+テキストフィールドにキャレットがある間、修飾のないキーはそのフィールドへの入力のままで、cmd か ctrl を伴う組み合わせだけがアプリに届きます。
 ヘッドレスのスクリプトは `key:cmd+s` で押せるので、ショートカットもクリックと同じく検証される操作になります。
 
-コードは届いて終わる知らせですが、押されたままのキーはそうではありません。
+キーの組み合わせは押した瞬間に一度届くだけですが、押されたままのキーはそうではありません。
 それに答えるのが `keys` です。
 
 ```python
@@ -316,7 +358,7 @@ every(0.033, tick)
 ```
 
 `keys.down(name)` は「いま押されている」、`keys.pressed(name)` は「前のティック以降に押された」、`keys.released(name)` はその反対です。
-名前は修飾のないキー1つ（`left`、`space`、`z`）で、修飾キーはそれぞれの名前（`shift`、`cmd`、`ctrl`、`alt`）で答えます。
+名前に書けるのは修飾のないキー1つ（`left`、`space`、`z`）で、修飾キー自身もそれぞれの名前（`shift`、`cmd`、`ctrl`、`alt`）で読めます。
 `down("left")` は shift を一緒に押していても真です。
 
 読むのはティックの中で、ビューの中ではありません。

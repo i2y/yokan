@@ -1,6 +1,7 @@
 # CPython 3.14.2 に対する対応状況
 
-`tools/stdlib_coverage.py` が `yokan_gate.py` のマニフェストと翻訳器のテーブルから生成しています。手で編集しないでください。
+`tools/stdlib_coverage.py` が `yokan_gate.py` のマニフェストと翻訳器のテーブルから生成しています。
+手で編集しないでください。
 
 ## 組み込み関数 — 調べた 45 個のうち 16 個
 
@@ -60,37 +61,43 @@
 
 ## `fs` — Yokan 独自、11 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `app_dir`, `append_text`, `exists`, `list_dir`, `make_dir`, `open_dialog`, `read_text`, `read_text_or`, `remove`, `save_dialog`, `write_text`
 
 ## `sqlite` — Yokan 独自、7 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `exec`, `query_int`, `query_int_or`, `query_rows`, `query_rows_or`, `query_text`, `query_text_or`
 
 ## `clipboard` — Yokan 独自、2 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `get_text`, `set_text`
 
 ## `keys` — Yokan 独自、3 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `down`, `pressed`, `released`
 
 ## `audio` — Yokan 独自、2 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `play`, `stop`
 
 ## `notify` — Yokan 独自、1 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `send`
 
@@ -176,7 +183,8 @@ Python に同じ名前のモジュールはないので、比べる相手があ�
 
 ## `jsondoc` — Yokan 独自、6 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `get_bool`, `get_float`, `get_int`, `get_text`, `has`, `length`
 
@@ -192,7 +200,8 @@ Python に同じ名前のモジュールはないので、比べる相手があ�
 
 ## `strings` — Yokan 独自、2 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `to_float`, `to_int`
 
@@ -309,7 +318,8 @@ Python に同じ名前のモジュールはないので、比べる相手があ�
 
 ## `clock` — Yokan 独自、3 個
 
-Python に同じ名前のモジュールはないので、比べる相手がありません。以下はすべて Yokan にあります。
+Python に同じ名前のモジュールはないので、比べる相手がありません。
+以下はすべて Yokan にあります。
 
 - `format_local_ms`, `format_ms`, `local_offset_minutes`
 

@@ -198,12 +198,13 @@ PHRASES = {
     "ja": {
         "title": "CPython {v} に対する対応状況",
         "made": "`tools/stdlib_coverage.py` が `yokan_gate.py` のマニフェストと"
-                "翻訳器のテーブルから生成しています。手で編集しないでください。",
+                "翻訳器のテーブルから生成しています。\n"
+                "手で編集しないでください。",
         "yes": "✓",
         "no": "—",
         "cols": "| 名前 | Yokan | 備考 |",
         "own_head": "## `{m}` — Yokan 独自、{n} 個",
-        "own_note": "Python に同じ名前のモジュールはないので、比べる相手がありません。"
+        "own_note": "Python に同じ名前のモジュールはないので、比べる相手がありません。\n"
                     "以下はすべて Yokan にあります。",
         "cmp_head": "## `{m}` — Python の {t} 個のうち {n} 個",
         "borrowed": "Python の名前で、意味は Yokan 独自",

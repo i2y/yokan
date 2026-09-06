@@ -28,7 +28,8 @@ hide:
 
 同じソースが、二つの道で動きます。
 どちらの道も同じ Rust 製の土台の上です。
-土台の名前が **pixie**（Yokan が経由する基盤言語）で、リリースの途中に挟まる `.pix` はその読めるソースです。
+土台の名前は **pixie**（Yokan が経由する基盤言語）です。
+ビルドの途中で書き出される `.pix` が、人の読める pixie のソースです。
 生成された `.pix` を開けば、自分のアプリが何にコンパイルされたのかを目で確かめられます（`yokan translate app.py` がそれを出力します）。
 
 ![Yokan の全体像: ひとつのソース、開発は VM の速いループ、リリースは VM なしのネイティブバイナリ（@py があるときだけ CPython を同梱）、共有の土台、そしてゲート](images/architecture-ja.svg#only-dark)
@@ -42,7 +43,9 @@ hide:
 ![Yokan で書いたダッシュボードのデモ OpsBoard](images/opsboard.png)
 
 *[`demo/opsboard`](https://github.com/i2y/yokan/tree/main/crates/yokan/demo/opsboard)
-— 3 モジュール構成のダッシュボード。ストア 2 つ、直和型のヘルスモデルをビューの match で分岐、チャート、仮想化アラートフィード、テーマ切替。すべて Python で書かれ、1 つのネイティブバイナリになります。*
+— 3 モジュール構成のダッシュボード。
+ストアが 2 つ、直和型のヘルスモデルをビューの match で分岐、チャート、仮想化アラートフィード、テーマ切替。
+すべて Python で書かれ、1 つのネイティブバイナリになります。*
 
 ---
 
@@ -75,7 +78,8 @@ if __name__ == "__main__":
 ![counter を実行したところ](images/counter.png)
 
 実行したままソースを直して保存すると、状態はそのままに、画面もハンドラの挙動も新しいコードに入れ替わります。
-下の GIF がその瞬間です（別の小さなデモを編集しています）。編集の前後でティックが止まっていないことに注目してください。
+下の GIF がその様子です（別の小さなデモを編集しています）。
+編集の前後でティックが止まっていないことに注目してください。
 
 ![実行中のアプリのソースを編集すると、ティックを刻んだまま画面がその場で更新される](images/reload.gif)
 
@@ -86,14 +90,15 @@ $ yokan build app.py --release
 ```
 
 `@py` を使っていないアプリなら、できあがる実行ファイルに CPython は入りません。
-Python へのリンクもゼロで、14.7 MB（strip 後 11.3 MB）、起動は数ミリ秒です。
-受け取る側のマシンには何のインストールも要りません。
+Python へのリンクもありません。
+大きさは 14.7 MB（strip 後 11.3 MB）、起動は数ミリ秒です。
+受け取る側のマシンに Python も pip も要りません。
 
 ---
 
 ## 「手元では動いたのに」
 
-同じ操作の並びを渡すと、CPython 版と機械語版の両方でそれを再生して、画面の結果をバイト単位で突き合わせます。
+クリックや入力の並びを渡すと、CPython 版と機械語版の両方でそれを再生して、画面の結果をバイト単位で突き合わせます。
 Yokan ではこれを**ゲート**と呼んでいます。
 
 ```console
@@ -102,7 +107,8 @@ GATE OK — 2 dump lines identical in both runs
 ```
 
 Yokan 自身のモジュール（ファイル、SQLite、HTTP、クリップボード）は、両方の実行が同じ実装を呼ぶので食い違いようがありません。
-Python 自身のモジュール（`math`、`re`、`datetime` など）は、開発中は CPython が、コンパイル後は双子が答えます。その二つをつなぐのがゲートです。
+Python 自身のモジュール（`math`、`re`、`datetime` など）は、開発中は CPython が、コンパイル後は双子が答えます。
+その二つが同じ答えを返すことを確かめるのがゲートです。
 まだできないことは、ツアー末尾の[今できないこと](tour-ship.md#今できないこと)に理由付きでまとまっています。
 
 ---
@@ -110,12 +116,13 @@ Python 自身のモジュール（`math`、`re`、`datetime` など）は、開�
 ## 移植した二本
 
 付属デモのうち二本は、Python で書かれたアプリを移植したものです。
-配るアプリがどれだけ Python を積むかという意味で、ちょうど両端にあたります。
+配るアプリに Python をどれだけ積むかで見ると、この二本はちょうど両端です。
 
-Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました。
-同じドット絵のキャンバス、同じ 30fps、押しっぱなしのキーの読み方もそのままです。
+Pyxel の例のゲームは、ほぼ一行ずつ書き写して移植しました。
+ドット絵のキャンバスも、30fps も、押しっぱなしのキーの読み方もそのままです。
 できあがるバイナリに Python は一行も入りません。
-キー操作とフレームを並べたスクリプトが両方の実行を再生するので、ゲートが全フレームを比べます。
+キー操作とフレームを並べたスクリプトが、両方の実行を再生します。
+ゲートはその全フレームを比べます。
 
 <p align="center">
   <img src="images/demos/shooter.gif" width="240" align="middle">
@@ -124,18 +131,20 @@ Pyxel の例のゲームは、ほぼ一行ずつ写す形で移植しました�
 
 *[`demo/shooter`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/shooter.py)
 と [`demo/jump`](https://github.com/i2y/yokan/blob/main/crates/yokan/demo/jump.py)。
-Pyxel の例二本を、キャンバスに移したものです。*
+Pyxel の例を二本、キャンバスに移したものです。*
 
-もう一方の端が Buzz の画面と流れです。
-録音のファイルを窓に落とし、モデルと言語を選び、進み具合を見て、区間の表を読み、TXT と SRT と VTT に書き出します。
-文字起こしをするのは Whisper で、`@py` の中で埋め込みの CPython が動かす本物の Python です。
-`--bundle --app` を付ければ自分のランタイムを抱えた `.app` になります。
+もう一方の端が、Buzz の画面と流れを移したデモです。
+録音のファイルを窓に落とし、モデルと言語を選びます。
+進み具合を見て、区間の表を読み、TXT と SRT と VTT に書き出します。
+文字起こしをするのは Whisper です。
+`@py` の中で、埋め込みの CPython が動かす本物の Python です。
+`--bundle --app` を付ければ、CPython を同梱した `.app` になります。
 ゲートは文字起こしの本文も、書き出した SRT も、バイト単位で比べます。
 
 ![録音を文字起こしした画面。区間ごとの時刻と本文が表に並び、TXT と SRT と VTT に書き出せる](images/demos/transcribe.png)
 
 *[`demo/transcribe`](https://github.com/i2y/yokan/tree/main/crates/yokan/demo/transcribe)。
-Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだものです。*
+Buzz の画面と流れを、`@py` の中で動く mlx-whisper と組み合わせたものです。*
 
 ---
 
@@ -143,9 +152,9 @@ Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだ�
 ## エージェントに書かせるなら
 
 エージェントはファイルを書き、返ってきたものを読みます。
-だから、返ってくるものが何かで往復の質が決まります。
+だから、何が返ってくるかで往復の質が決まります。
 最初の二つのコマンドは、コンパイラもウィンドウもなしに約1秒で答えます。
-代わりに何を書くかを名指しする拒否と、テキストになった画面です。
+返ってくるのは、代わりに何を書けばよいかを示す拒否と、テキストになった画面です。
 ゲートは最後の証明です。
 
 ![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、出荷へ向かう](images/cycle-ja.svg#only-dark)
@@ -164,15 +173,18 @@ Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだ�
 
 -   :material-language-python: __残りの Python もそのまま__
 
-    関数に `@py` を付ければ、実行ファイルに同梱された本物の CPython で動きます。numpy も pandas も、手持ちのコードもそのままです。
+    関数に `@py` を付ければ、その関数は実行ファイルに同梱された本物の CPython で動きます。
+    numpy も pandas も、手持ちのコードもそのままです。
 
 -   :material-language-rust: __Rust crate（crates.io も手元のも）__
 
-    `yokan add app.py deunicode 1` — crates.io の version 指定でも手元の path でも、宣言すれば Yokan のコードから呼べます。crate 側は普通の Rust のままで、Yokan のために書き足すものはありません。
+    `yokan add app.py deunicode 1` — crates.io の version 指定でも手元の path でも、宣言すれば Yokan のコードから呼べます。
+    crate 側は普通の Rust のままで、Yokan のために書き足すものはありません。
 
 -   :material-shield-check: __型チェックが通る__
 
-    同梱の型スタブで pyright / Pylance のチェックがそのまま通ります。`@store` のシングルトンも `@model` / `@value` のコンストラクタも `Weak[Node]` も、実行時の形どおりに見えます。
+    同梱の型スタブで pyright / Pylance のチェックがそのまま通ります。
+    `@store` のシングルトンも `@model` / `@value` のコンストラクタも `Weak[Node]` も、実行時の形どおりに見えます。
 
 </div>
 
@@ -184,15 +196,19 @@ Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだ�
 
 -   :material-rocket-launch: __[インストール](installation.md)__
 
-    開発は `uv run` だけ。ネイティブビルドはリポジトリを clone。いまのところ Apple silicon の macOS です。
+    開発は `uv run` だけ。
+    ネイティブビルドには Rust ツールチェーンが要ります。
+    いまのところ Apple silicon の macOS です。
 
 -   :material-book-open-variant: __[言語ツアー](tour.md)__
 
-    状態、ビュー、フォーム、メモリ、Rust crate、ゲートまで書き方を一周。末尾に「今できないこと」。
+    状態、ビュー、フォーム、メモリ、Rust crate、ゲートまで書き方を一周。
+    末尾に「今できないこと」。
 
 -   :material-view-gallery: __[デモ](demos.md)__
 
-    付属デモを全部スクリーンショット付きで。最小の counter から OpsBoard まで。
+    付属デモを全部スクリーンショット付きで。
+    最小の counter から OpsBoard まで。
 
 -   :material-github: __[ソースコード](https://github.com/i2y/yokan)__
 
@@ -202,6 +218,8 @@ Buzz の画面と流れを、エスケープの中の mlx-whisper と組んだ�
 
 ---
 
-_名前は和菓子の羊羹からとりました。中身のぎっしり詰まったひと棹を、切り分けて配るお菓子です。ひとつの実行ファイルに詰めて配る、このアプリの姿と重なります。_
+_名前は和菓子の羊羹からとりました。
+中身のぎっしり詰まったひと棹を、切り分けて配るお菓子です。
+アプリをひとつの実行ファイルに詰めて配る、その姿と重なります。_
 
 _"Python" は Python Software Foundation の商標です。_
