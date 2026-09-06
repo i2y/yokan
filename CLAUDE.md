@@ -152,8 +152,9 @@ fetches and builds the pinned Ruby compiler into `~/.cache/spinel/<sha>`.
   it in a macOS bundle).
 - `./tools/gate_all.sh` — the sweep: every demo, then every complete
   example in both tours. Run it before merging anything it touches.
-- `elements.toml` is THE table: every element, its keywords, their
-  types and defaults. `tools/gen.rb` writes the Ruby methods, the key
+- `crates/pixie-capi/elements.toml` is THE table: every element, its
+  keywords, their types and defaults (it is the substrate's, read by
+  both other languages). `tools/gen.rb` writes the Ruby methods, the key
   numbers both sides count with, and `crates/pixie-capi/src/vocab.rs`
   from it, and `--check` fails when they are stale. Adding an element
   is a row there and an arm in `materialize`.
@@ -187,6 +188,13 @@ PPI from CPAN (the macOS system perl ships it).
   `build` (the native binary; `--release`).
 - `./tools/gate_all.sh` — the sweep: every demo. Run it before merging
   anything under `rakugan/`.
+- `tools/gen.pl` writes `lib/Rakugan/Vocab.pm` (the table as data,
+  read by the runtime and the translator) and `lib/Rakugan/Elements.pm`
+  (one sub per element) from `crates/pixie-capi/elements.toml`;
+  `--check` fails when they are stale, and the sweep runs it. A new
+  element is a row in the table, an arm in `materialize`, and nothing
+  in Perl; a `.pix` spelling that breaks the camelCase rule is a
+  `pix = "..."` on the row.
 - The door (`door/Door.xs`) is built for the app's perl into
   `~/.cache/rakugan/door/<version>/` by the command itself and rebuilt
   when its sources change, so nothing under `rakugan/` is generated in

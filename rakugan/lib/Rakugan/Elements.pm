@@ -1,135 +1,130 @@
 package Rakugan::Elements;
-# The elements an app writes its screen with. Five of them for now,
-# written by hand from wakakusa/elements.toml; the generator that
-# writes this file from that table comes with the rest of the
-# vocabulary.
+# Generated from crates/pixie-capi/elements.toml by tools/gen.pl. Do not
+# edit by hand; edit the table and run `tools/gen.pl`.
 #
-# An element opens with `el(kind)`, writes the properties a person
-# actually wrote (a value equal to the table's default is not sent, as
-# the generated Ruby does not send it), hands over its children, and
-# closes with `end`, which answers the handle its parent consumes.
+# The elements an app writes its screen with: one sub per row of the
+# table. Positional arguments come first, then keywords and children in
+# any order (`column(text(...), row(...), spacing => 8)`); the keywords
+# every element takes ride along with the element's own. What each one
+# does with what it was given is in Rakugan::Runtime, read off the
+# table, so the subs here are the names and their sentences.
 use v5.40;
-use Carp qw(croak);
-use Rakugan::Door;
 use Rakugan::Runtime;
+use Rakugan::Vocab;
 
-our @ELEMENTS = qw(text button text_field column row);
+our @ELEMENTS = qw(text button text_field column row grid grid_cell stack scroll_view h_scroll_view data_table modal list_view table image svg bar_chart line_chart progress checkbox switch slider select radio_group segmented tab_bar number_field int_field link spinner spacer divider canvas);
 
-# crates/pixie-capi/src/vocab.rs — the numbers both sides count with.
-use constant {
-    KIND_TEXT => 1, KIND_BUTTON => 2, KIND_TEXT_FIELD => 3, KIND_COLUMN => 4, KIND_ROW => 5,
-    K_WIDTH => 1, K_HEIGHT => 2,
-    K_TEXT => 16, K_SIZE => 17, K_COLOR => 18, K_ALIGN => 19, K_GROW => 20,
-    K_BOLD => 21, K_ITALIC => 22, K_MONO => 23, K_UNDERLINE => 24, K_WRAP => 25,
-    K_MAX_LINES => 26, K_BACKGROUND => 27, K_PADDING => 28, K_BORDER_RADIUS => 29,
-    K_BORDER_WIDTH => 30, K_BORDER_COLOR => 31, K_LABEL => 32, K_ON_CLICK => 33,
-    K_HOVER_BACKGROUND => 34, K_ACTIVE_BACKGROUND => 35, K_BASIS => 36, K_VALUE => 37,
-    K_PLACEHOLDER => 38, K_ON_CHANGE => 39, K_ON_SUBMIT => 40, K_MULTILINE => 41,
-    K_ROWS => 42, K_SPACING => 43,
-};
+# A run of text. `wrap` is "", "nowrap" or "ellipsis"; a background with
+# padding and a radius makes a pill.
+sub text { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{text}, @_) }
 
-# Each element's own keywords, in the order elements.rb writes them:
-# [name, writer, key, default].
-my @BOX = (
-    [spacing => num => K_SPACING, -1], [padding => num => K_PADDING, 0],
-    [background => str => K_BACKGROUND, ''], [grow => num => K_GROW, 0],
-    [border_radius => num => K_BORDER_RADIUS, 0], [border_width => num => K_BORDER_WIDTH, 0],
-    [border_color => str => K_BORDER_COLOR, ''],
-);
-my %SPEC = (
-    text => [
-        [size => num => K_SIZE, 0], [color => str => K_COLOR, ''], [align => str => K_ALIGN, ''],
-        [grow => num => K_GROW, 0], [bold => bool => K_BOLD, 0], [italic => bool => K_ITALIC, 0],
-        [mono => bool => K_MONO, 0], [underline => bool => K_UNDERLINE, 0],
-        [wrap => str => K_WRAP, ''], [max_lines => int => K_MAX_LINES, 0],
-        [width => num => K_WIDTH, 0], [background => str => K_BACKGROUND, ''],
-        [padding => num => K_PADDING, 0], [border_radius => num => K_BORDER_RADIUS, 0],
-        [border_width => num => K_BORDER_WIDTH, 0], [border_color => str => K_BORDER_COLOR, ''],
-    ],
-    button => [
-        [on_click => on_none => K_ON_CLICK], [width => num => K_WIDTH, 0],
-        [height => num => K_HEIGHT, 0], [size => num => K_SIZE, 0],
-        [background => str => K_BACKGROUND, ''], [grow => num => K_GROW, 0],
-        [color => str => K_COLOR, ''], [hover_background => str => K_HOVER_BACKGROUND, ''],
-        [active_background => str => K_ACTIVE_BACKGROUND, ''],
-        [border_radius => num => K_BORDER_RADIUS, 0], [border_width => num => K_BORDER_WIDTH, 0],
-        [border_color => str => K_BORDER_COLOR, ''], [basis => num => K_BASIS, 0],
-    ],
-    text_field => [
-        [placeholder => str => K_PLACEHOLDER, ''], [on_change => on_text => K_ON_CHANGE],
-        [on_submit => on_text => K_ON_SUBMIT], [multiline => bool => K_MULTILINE, 0],
-        [rows => num => K_ROWS, 0],
-    ],
-    column => \@BOX,
-    row    => \@BOX,
-);
+# A button. The block runs when it is pressed.
+sub button { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{button}, @_) }
 
-my %WRITE = (
-    num     => sub ($el, $key, $v) { Rakugan::Door::num($el, $key, $v) },
-    str     => sub ($el, $key, $v) { Rakugan::Door::str($el, $key, $v) },
-    bool    => sub ($el, $key, $v) { Rakugan::Door::bool($el, $key, $v ? 1 : 0) },
-    int     => sub ($el, $key, $v) { Rakugan::Door::int($el, $key, $v) },
-    on_none => \&Rakugan::Runtime::register,
-    on_text => \&Rakugan::Runtime::register,
-);
+# A line a person types into. `on_change` fires per keystroke, `on_submit`
+# when they press enter; `multiline` makes it a paragraph field.
+sub text_field { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{text_field}, @_) }
 
-sub _differs ($writer, $v, $default) {
-    return defined $v         if $writer =~ /^on_/;
-    return $v ne $default     if $writer eq 'str';
-    return !!$v != !!$default if $writer eq 'bool';
-    return $v != $default;
-}
-
-# Children and keywords arrive mixed in one list, as in
-# `column(text(...), row(...), spacing => 8)`. A string naming one of
-# the element's keywords takes the next item as its value; anything
-# else is a child handle.
-sub _args ($spec, @list) {
-    my %known = map { $_->[0] => 1 } @$spec;
-    my (@kids, %kw);
-    while (@list) {
-        my $item = shift @list;
-        if (defined $item && !ref $item && $known{$item}) { $kw{$item} = shift @list }
-        else                                               { push @kids, $item }
-    }
-    return (\@kids, \%kw);
-}
-
-sub _element ($kind, $name, $head, $kids, $kw) {
-    my $spec = $SPEC{$name};
-    my $el = Rakugan::Door::el($kind);
-    Rakugan::Door::str($el, @$head) if $head;
-    for my $row (@$spec) {
-        my ($key_name, $writer, $key, $default) = @$row;
-        next unless exists $kw->{$key_name};
-        my $v = delete $kw->{$key_name};
-        $WRITE{$writer}->($el, $key, $v) if _differs($writer, $v, $default);
-    }
-    croak "$name has no `" . join('`, `', sort keys %$kw) . "`" if %$kw;
-    for my $kid (@$kids) {
-        croak "$name was given something that is not an element" unless defined $kid && $kid =~ /^\d+$/;
-    }
-    Rakugan::Door::children($el, $kids) if @$kids;
-    return Rakugan::Door::end($el);
-}
-
-sub _leaf ($kind, $name, $head, @rest) {
-    my ($kids, $kw) = _args($SPEC{$name}, @rest);
-    croak "$name takes no children" if @$kids;
-    return _element($kind, $name, $head, [], $kw);
-}
-
-# --- the vocabulary -----------------------------------------------------
-
-# A run of text.
-sub text ($s, @rest) { _leaf(KIND_TEXT, text => [K_TEXT, $s], @rest) }
-# A button; `on_click` runs when it is pressed.
-sub button ($label, @rest) { _leaf(KIND_BUTTON, button => [K_LABEL, $label], @rest) }
-# A line a person types into; `on_change` is called with the text per keystroke.
-sub text_field ($value, @rest) { _leaf(KIND_TEXT_FIELD, text_field => [K_VALUE, $value], @rest) }
 # Its children down the page.
-sub column (@list) { _element(KIND_COLUMN, column => undef, _args($SPEC{column}, @list)) }
+sub column { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{column}, @_) }
+
 # Its children across the page.
-sub row (@list) { _element(KIND_ROW, row => undef, _args($SPEC{row}, @list)) }
+sub row { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{row}, @_) }
+
+# Its children on tracks. `columns` counts the tracks; `col_span` on a
+# child covers more than one.
+sub grid { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{grid}, @_) }
+
+# The span written out: this and `col_span:` on the child itself are the
+# same tree.
+sub grid_cell { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{grid_cell}, @_) }
+
+# Its children on top of one another.
+sub stack { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{stack}, @_) }
+
+# A pane that scrolls when its children do not fit.
+sub scroll_view { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{scroll_view}, @_) }
+
+# A pane that scrolls sideways.
+sub h_scroll_view { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{h_scroll_view}, @_) }
+
+# The first `row` child is the header; the later ones are data rows,
+# shaded in alternation, in a frame that comes with the element.
+sub data_table { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{data_table}, @_) }
+
+# A panel over the rest of the window while `open`.
+sub modal { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{modal}, @_) }
+
+# Rows built on demand: the builder is called for the rows in view, not
+# for all of them.
+sub list_view { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{list_view}, @_) }
+
+# A table whose rows are built on demand, laid on tracks whose shares are
+# `widths`. `on_select` receives the row clicked, `on_sort` the header.
+sub table { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{table}, @_) }
+
+# A picture from a file.
+sub image { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{image}, @_) }
+
+# A drawing from an SVG file, painted at any size.
+sub svg { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{svg}, @_) }
+
+# Bars. `min`/`max` both 0 take the range from the data; `axis` draws
+# ticks and gridlines; `series` draws several groups.
+sub bar_chart { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{bar_chart}, @_) }
+
+# A line. Same arguments as the bars, and `series` draws several lines.
+sub line_chart { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{line_chart}, @_) }
+
+# A track filled to `value` (0 to 1); `indeterminate` sweeps instead, for
+# work with no known length.
+sub progress { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{progress}, @_) }
+
+# A box a person ticks. The block receives the new state.
+sub checkbox { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{checkbox}, @_) }
+
+# A switch a person flips. The block receives the new state.
+sub switch { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{switch}, @_) }
+
+# A track a person drags. The block receives the new number.
+sub slider { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{slider}, @_) }
+
+# A drop-down. The block receives the chosen index.
+sub select { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{select}, @_) }
+
+# A column of radio buttons. The block receives the chosen index.
+sub radio_group { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{radio_group}, @_) }
+
+# A row of joined toggle buttons. The block receives the chosen index.
+sub segmented { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{segmented}, @_) }
+
+# A row of tabs. The block receives the chosen index.
+sub tab_bar { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{tab_bar}, @_) }
+
+# A field for a number: enter or leaving it commits, text that is not a
+# number is dropped. `min`/`max` both 0 is unbounded, `step` 0 is free.
+sub number_field { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{number_field}, @_) }
+
+# The same field for a whole number.
+sub int_field { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{int_field}, @_) }
+
+# Text that opens a page when clicked. There is no handler: opening a page
+# is not the app's state.
+sub link { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{link}, @_) }
+
+# A turning ring, for work with no known length.
+sub spinner { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{spinner}, @_) }
+
+# Takes the space its parent has left over; 0 is one share.
+sub spacer { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{spacer}, @_) }
+
+# A rule across its parent: level in a column, upright in a row.
+sub divider { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{divider}, @_) }
+
+# A grid of virtual pixels, painted by the commands written in its block.
+# A color here is a NUMBER: the index of a color in `palette`, which is
+# how drawing code written for a pixel machine ports line for line.
+# `scale` is how many logical pixels one virtual pixel takes.
+sub canvas { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{canvas}, @_) }
 
 1;
