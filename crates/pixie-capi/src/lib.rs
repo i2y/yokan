@@ -35,6 +35,7 @@ use pixie_kernel::{
     LazyRows, List, Listener, Op, Runtime, Str, TextListener, World, mount, speak_refusals,
 };
 
+mod stdlib;
 mod vocab;
 use vocab::*;
 
@@ -1235,7 +1236,7 @@ fn install_bindings(rt: &Runtime) {
 // a time: see `pixie_event_text_length` for why it cannot simply be
 // returned.
 
-fn answer_with(text: &str) {
+pub(crate) fn answer_with(text: &str) {
     ANSWER.with(|c| *c.borrow_mut() = text.chars().collect());
 }
 

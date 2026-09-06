@@ -20,6 +20,7 @@ typedef int64_t (*PixieRowFn)(int64_t, int64_t);
 typedef void (*PixieTimerFn)(int64_t);
 typedef void (*PixieTaskFn)(int64_t);
 typedef int32_t (*PixieReloadFn)(void);
+typedef void (*PixieBindingFn)(int64_t);
 
 extern int64_t pixie_el(int32_t kind);
 extern void    pixie_str(int64_t el, int32_t key, const char *v);
@@ -41,6 +42,24 @@ extern void    pixie_every(double seconds, int64_t handler);
 extern int64_t pixie_task(void);
 extern void    pixie_task_done(int64_t id);
 extern void    pixie_watch(const char *path, PixieReloadFn f);
+extern void    pixie_set_binding_handler(PixieBindingFn f);
+extern void    pixie_shortcut(const char *chord, int64_t handler);
+extern void    pixie_menu_item(const char *menu, const char *item, int64_t handler);
+extern void    pixie_on_key(int64_t handler);
+extern void    pixie_on_file_drop(int64_t handler);
+extern void    pixie_std_reset(void);
+extern void    pixie_std_arg_str(const char *v);
+extern void    pixie_std_arg_int(int64_t v);
+extern void    pixie_std_arg_num(double v);
+extern void    pixie_std_arg_list_begin(void);
+extern void    pixie_std_arg_list_end(void);
+extern int64_t pixie_std_call(int32_t id);
+extern int64_t pixie_std_rows(void);
+extern int64_t pixie_std_cells(int64_t row);
+extern void    pixie_std_pick(int64_t row, int64_t col);
+extern double  pixie_std_answer_num(void);
+extern int64_t pixie_answer_length(void);
+extern int64_t pixie_answer_char(int64_t i);
 extern int64_t pixie_event_int(void);
 extern double  pixie_event_num(void);
 extern int64_t pixie_event_text_length(void);
@@ -54,6 +73,7 @@ static SV *row_cb = NULL;
 static SV *timer_cb = NULL;
 static SV *task_cb = NULL;
 static SV *reload_cb = NULL;
+static SV *binding_cb = NULL;
 
 /* A `die` must not unwind through the engine's Rust frames (Perl's
  * die is a longjmp), so both callbacks run under G_EVAL and report. */
@@ -127,6 +147,7 @@ static void call_with_id(SV *cb, int64_t id) {
 
 static void call_timer(int64_t id) { call_with_id(timer_cb, id); }
 static void call_task(int64_t id)  { call_with_id(task_cb, id); }
+static void call_binding(int64_t id) { call_with_id(binding_cb, id); }
 
 /* The app's file changed: read it again. Non-zero means it took. */
 static int32_t call_reload(void) {
@@ -236,6 +257,116 @@ watch(SV *path, SV *on_reload)
     p = sv_mortalcopy(path);
     pixie_watch(SvPVutf8_nolen(p), call_reload);
 
+void
+shortcut(SV *chord, IV handler)
+  PREINIT:
+    SV *c;
+  CODE:
+    c = sv_mortalcopy(chord);
+    pixie_shortcut(SvPVutf8_nolen(c), (int64_t)handler);
+
+void
+menu_item(SV *menu, SV *item, IV handler)
+  PREINIT:
+    SV *m; SV *i;
+  CODE:
+    m = sv_mortalcopy(menu);
+    i = sv_mortalcopy(item);
+    pixie_menu_item(SvPVutf8_nolen(m), SvPVutf8_nolen(i), (int64_t)handler);
+
+void
+on_key(IV handler)
+  CODE:
+    pixie_on_key((int64_t)handler);
+
+void
+on_file_drop(IV handler)
+  CODE:
+    pixie_on_file_drop((int64_t)handler);
+
+void
+std_reset()
+  CODE:
+    pixie_std_reset();
+
+void
+std_arg_str(SV *v)
+  PREINIT:
+    SV *c;
+  CODE:
+    c = sv_mortalcopy(v);
+    pixie_std_arg_str(SvPVutf8_nolen(c));
+
+void
+std_arg_int(IV v)
+  CODE:
+    pixie_std_arg_int((int64_t)v);
+
+void
+std_arg_num(NV v)
+  CODE:
+    pixie_std_arg_num((double)v);
+
+void
+std_arg_list_begin()
+  CODE:
+    pixie_std_arg_list_begin();
+
+void
+std_arg_list_end()
+  CODE:
+    pixie_std_arg_list_end();
+
+IV
+std_call(IV id)
+  CODE:
+    RETVAL = (IV)pixie_std_call((int32_t)id);
+  OUTPUT:
+    RETVAL
+
+IV
+std_rows()
+  CODE:
+    RETVAL = (IV)pixie_std_rows();
+  OUTPUT:
+    RETVAL
+
+IV
+std_cells(IV row)
+  CODE:
+    RETVAL = (IV)pixie_std_cells((int64_t)row);
+  OUTPUT:
+    RETVAL
+
+void
+std_pick(IV row, IV col)
+  CODE:
+    pixie_std_pick((int64_t)row, (int64_t)col);
+
+NV
+std_answer_num()
+  CODE:
+    RETVAL = (NV)pixie_std_answer_num();
+  OUTPUT:
+    RETVAL
+
+SV *
+answer_text()
+  PREINIT:
+    int64_t n, i; U8 buf[UTF8_MAXBYTES + 1]; U8 *e;
+  CODE:
+    /* What the engine was last asked for, the same way the text an
+     * event carried comes over: one code point at a time. */
+    n = pixie_answer_length();
+    RETVAL = newSVpvn("", 0);
+    SvUTF8_on(RETVAL);
+    for (i = 0; i < n; i++) {
+        e = uvchr_to_utf8(buf, (UV)pixie_answer_char(i));
+        sv_catpvn_flags(RETVAL, (const char *)buf, e - buf, SV_CATUTF8);
+    }
+  OUTPUT:
+    RETVAL
+
 IV
 event_int()
   CODE:
@@ -295,7 +426,7 @@ event_text()
     RETVAL
 
 IV
-run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row_build, SV *on_tick, SV *on_task)
+run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row_build, SV *on_tick, SV *on_task, SV *on_binding)
   PREINIT:
     SV *t;
   CODE:
@@ -309,10 +440,13 @@ run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row
     timer_cb = newSVsv(on_tick);
     if (task_cb) SvREFCNT_dec(task_cb);
     task_cb = newSVsv(on_task);
+    if (binding_cb) SvREFCNT_dec(binding_cb);
+    binding_cb = newSVsv(on_binding);
     pixie_set_event_handler(call_event);
     pixie_set_row_builder(call_row);
     pixie_set_timer_handler(call_timer);
     pixie_set_task_handler(call_task);
+    pixie_set_binding_handler(call_binding);
     t = sv_mortalcopy(title);
     RETVAL = (IV)pixie_run(SvPVutf8_nolen(t), (double)width, (double)height,
                            (double)padding, call_build);

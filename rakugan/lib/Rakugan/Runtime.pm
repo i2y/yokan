@@ -18,6 +18,7 @@ my @rows;
 # ticks it asked for and the work it started.
 my @ticks;
 my @jobs;
+my @bindings;
 # The object whose `view` answers the tree, and whether the window is
 # already up — a reload re-reads the whole file, and the second `run`
 # it reaches must not open a second window.
@@ -79,6 +80,47 @@ sub every ($seconds, $cb) {
 sub _on_tick ($id) {
     my $cb = $ticks[$id] or return;
     $cb->();
+    return;
+}
+
+# What the desktop can be told to tell the app about: a chord, an item
+# in the menu bar, every key, and a file dragged onto the window. Each
+# is declared before `run`, and outlives every build.
+sub shortcut ($chord, $cb) {
+    return if $running;
+    die "shortcut takes a chord and a sub\n" unless ref $cb eq 'CODE';
+    push @bindings, { cb => $cb };
+    Rakugan::Door::shortcut($chord, $#bindings);
+    return;
+}
+
+sub menu_item ($menu, $item, $cb) {
+    return if $running;
+    die "menu_item takes a menu, an item and a sub\n" unless ref $cb eq 'CODE';
+    push @bindings, { cb => $cb };
+    Rakugan::Door::menu_item($menu, $item, $#bindings);
+    return;
+}
+
+sub on_key ($cb) {
+    return if $running;
+    die "on_key takes a sub the chord is handed to\n" unless ref $cb eq 'CODE';
+    push @bindings, { cb => $cb, text => 1 };
+    Rakugan::Door::on_key($#bindings);
+    return;
+}
+
+sub on_file_drop ($cb) {
+    return if $running;
+    die "on_file_drop takes a sub the path is handed to\n" unless ref $cb eq 'CODE';
+    push @bindings, { cb => $cb, text => 1 };
+    Rakugan::Door::on_file_drop($#bindings);
+    return;
+}
+
+sub _on_binding ($id) {
+    my $b = $bindings[$id] or return;
+    $b->{text} ? $b->{cb}->(Rakugan::Door::event_text()) : $b->{cb}->();
     return;
 }
 
@@ -249,7 +291,7 @@ sub run ($the_app, %opt) {
     Rakugan::Door::watch($0, \&_reload) unless defined $ENV{PIXIE_SCRIPT};
     return Rakugan::Door::run($opt{title} // 'rakugan', $opt{width} // 0, $opt{height} // 0,
                               $opt{padding} // -1, \&_build, \&_on_event, \&_row_build,
-                              \&_on_tick, \&_on_task);
+                              \&_on_tick, \&_on_task, \&_on_binding);
 }
 
 1;

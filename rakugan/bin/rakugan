@@ -219,9 +219,13 @@ sub translate {
     make_path("$proj/.pixie/rpi");
     write_file("$proj/src/main.pix", $tr->{pix});
     my $stdlib = $tr->{stdlib} ? "$REPO/crates/rakugan-stdlib" : undef;
+    my $framework = $tr->{framework} ? "$REPO/crates/yokan-stdlib" : undef;
     unlink glob "$proj/.pixie/rpi/*.rpi";
     write_file("$proj/.pixie/rpi/rakugan-stdlib.rpi", Rakugan::Translator::stdlib_rpi()) if $stdlib;
-    write_file("$proj/pixie.toml", Rakugan::Translator::project_toml(stem($app), $tr->{window}, $stdlib));
+    copy("$ROOT/lib/Rakugan/yokan-stdlib.rpi", "$proj/.pixie/rpi/yokan-stdlib.rpi")
+        or die_("the standard library's door: $!") if $framework;
+    write_file("$proj/pixie.toml",
+               Rakugan::Translator::project_toml(stem($app), $tr->{window}, $stdlib, $framework));
     return $proj;
 }
 

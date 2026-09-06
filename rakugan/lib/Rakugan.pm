@@ -19,6 +19,7 @@ require utf8;
 require builtin;
 use Rakugan::Runtime;
 use Rakugan::Elements;
+use Rakugan::Stdlib;
 
 our $VERSION = '0.1.0';
 
@@ -50,7 +51,8 @@ sub HashRef  :prototype(;$) { 'HashRef'  . (@_ ? "[$_[0][0]]" : '') }
 # exception for an empty one.
 sub empty { return }
 
-my @VOCAB = (@Rakugan::Elements::ELEMENTS, qw(run every task empty Int Str Num Bool ArrayRef HashRef));
+my @VOCAB = (@Rakugan::Elements::ELEMENTS, @Rakugan::Stdlib::EXPORT,
+             qw(run every task shortcut menu_item on_key on_file_drop empty Int Str Num Bool ArrayRef HashRef));
 
 sub import {
     my $class = shift;
@@ -76,7 +78,9 @@ sub import {
     };
     for my $name (@VOCAB) {
         my $from = defined &{"Rakugan::Elements::$name"} ? "Rakugan::Elements::$name"
-                 : $name =~ /\A(?:run|every|task)\z/       ? "Rakugan::Runtime::$name"
+                 : defined &{"Rakugan::Stdlib::$name"}    ? "Rakugan::Stdlib::$name"
+                 : $name =~ /\A(?:run|every|task|shortcut|menu_item|on_key|on_file_drop)\z/
+                                                           ? "Rakugan::Runtime::$name"
                  :                                            "Rakugan::$name";
         *{"${pkg}::$name"} = \&{$from};
     }

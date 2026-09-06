@@ -26,6 +26,14 @@ rusqlite = "0.32"
 # runs, so a per-app feature would mean two different libraries and a
 # gate comparing them.
 rodio = { version = "0.22", default-features = false, features = ["playback", "wav"] }
+# The framework's own standard library — files, a database, http, JSON
+# reads, the clipboard, the clock, sound. It is one implementation that
+# a translated language's COMPILED run links through pixie's binding
+# door; its interpreted run has to land on the same code or the gate
+# compares two libraries, which is why it is here as well. `audio` is
+# on for the same reason the sound above is: one library serves both
+# runs of every door.
+yokan-stdlib = { path = "../yokan-stdlib", features = ["audio"] }
 
 # The table test reads elements.toml beside this crate with a real parser, so a
 # mistake in the generator's own reader cannot pass quietly.

@@ -39,6 +39,7 @@ use warnings;
 use utf8;
 use PPI;
 use Rakugan::Vocab;
+use Rakugan::Manifest;
 
 my %ROLES = map { $_ => 1 } qw(button label heading textInput image list listItem table dialog
                                progress slider group checkbox switch comboBox radioGroup tabList);
@@ -93,12 +94,14 @@ my %bag;                    # a hash of keywords at the top of the file: name =>
 my (@methods, %method);     # name => { name, block, node, params, ret, kind, ... }
 my @handlers;               # { id, params => [[name, ty]], body => [lines], async }
 my @timers;                 # { ms, body => [lines] }
+my @binds;                  # { kind, args, param, body => [lines] }
 my @lifted;                 # the statics a conditional expression became
 my (@values, %value);       # the value classes: name => [{ name, ty, init }]
 my $app_class;              # the class `run` was handed
 my $app_var;                # `my $app = Class->new` at the top of the file
 my @app_stmts;              # every top-level statement, in order
 my $uses_pl;                # the twins of Perl's own functions were called
+my $uses_std;               # the framework's own standard library was called
 our $re_at;                 # the token a piece of Perl inside a string came from
 my $tmp;                    # a counter for the names this file makes up
 
@@ -107,10 +110,10 @@ my $tmp;                    # a counter for the names this file makes up
 sub translate {
     my ($file) = @_;
     ($path, $class_name, $class_block, $run_word, $run_list, $view_block) = ($file);
-    (@fields, %field, %bag, @methods, %method, @handlers, @timers, @app_stmts, @lifted,
-     @values, %value) = ();
+    (@fields, %field, %bag, @methods, %method, @handlers, @timers, @binds, @app_stmts,
+     @lifted, @values, %value) = ();
     $app_class = undef;
-    ($app_var, $uses_pl, $tmp) = (undef, 0, 0);
+    ($app_var, $uses_pl, $uses_std, $tmp) = (undef, 0, 0, 0);
     open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
     my $src = do { local $/; <$fh> };
     close $fh;
@@ -123,12 +126,12 @@ sub translate {
     my $tree = view();
     my $window = run_line();
     bodies();
-    return { pix => emit($tree), window => $window, stdlib => $uses_pl };
+    return { pix => emit($tree), window => $window, stdlib => $uses_pl, framework => $uses_std };
 }
 
 # The pixie.toml of the project a translation is built as.
 sub project_toml {
-    my ($stem, $window, $stdlib_dir) = @_;
+    my ($stem, $window, $stdlib_dir, $framework_dir) = @_;
     my $toml = qq{[package]\nname = "$stem"\nversion = "0.1.0"\n};
     if (%$window) {
         $toml .= "\n[window]\n";
@@ -138,6 +141,10 @@ sub project_toml {
     }
     $toml .= "\n[crates]\n";
     $toml .= qq{rakugan-stdlib = { path = "$stdlib_dir" }\n} if defined $stdlib_dir;
+    # The framework's own library, with sound: the same crate and the
+    # same feature the C face carries, so both runs are one library.
+    $toml .= qq{yokan-stdlib = { path = "$framework_dir", features = ["audio"] }\n}
+        if defined $framework_dir;
     return $toml;
 }
 
@@ -264,7 +271,7 @@ sub declarations {
                     unless @t >= 2 && $t[1]->isa('PPI::Structure::List');
                 ($run_word, $run_list) = @t[0, 1];
                 splice @t, 0, 2;
-            } elsif (is_word($t[0], 'every') || is_word($t[0], 'task')) {
+            } elsif (is_word($t[0]) && $t[0]->content =~ /\A(?:every|task|shortcut|menu_item|on_key|on_file_drop)\z/) {
                 refuse($t[0], '`' . $t[0]->content . '` is called with parentheses')
                     unless @t >= 2 && $t[1]->isa('PPI::Structure::List');
                 push @app_stmts, { what => $t[0]->content, word => $t[0], list => $t[1] };
@@ -1079,6 +1086,15 @@ sub symbol_expr {
         return method_call($word, $args, $env);
     }
     my $next = $toks->[$$ip];
+    # `$row->[0]` — one cell of a row, which is how perl reads a list
+    # inside a list.
+    if ($kind eq '$' && is_op($next, '->') && is_sub($toks->[$$ip + 1], '[')) {
+        my $v = read_var($t, $name, $env);
+        refuse($t, "`\$$name` holds a $v->{ty}; `->[...]` reads one of a list inside a list")
+            unless $v->{ty} =~ /\AList</;
+        $$ip += 2;
+        return list_read($t, $v, $toks->[$$ip - 1], $env);
+    }
     if ($kind eq '$' && is_op($next, '->') && is_word($toks->[$$ip + 1])) {
         my $v = read_var($t, $name, $env);
         if (my $fields = $value{ $v->{ty} }) {
@@ -1353,6 +1369,14 @@ sub word_expr {
         $uses_pl = 1;
         return { ty => 'Int', pix => "Pl.intOf($v->{pix})" };
     }
+    # The framework's own standard library: one implementation that
+    # both runs land on, reached here by the name the manifest gives it.
+    if ($Rakugan::Manifest::NAMES{$name}) {
+        $$ip++;
+        refuse($w, "`$name` is called with parentheses") unless $next && $next->isa('PPI::Structure::List');
+        $$ip++;
+        return framework_call($name, $w, $next, $env);
+    }
     if (my $u = $UNARY{$name}) {
         $$ip++;
         my $v = one_arg($ip, $toks, $env, $w, $name);
@@ -1447,6 +1471,18 @@ sub pipeline_rhs {
         if (@a == 1 && grep { is_op($_, '=~') } @{ $a[0]{toks} }) {
             return parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
         }
+        # `(0 .. $n)` where a list goes: the run of numbers, written out.
+        if (@a == 1 && grep { is_op($_, '..') } @{ $a[0]{toks} }) {
+            refuse($a[0]{node}, 'a run of numbers becomes a list where a handler can build one; a view '
+                              . 'repeats over a list it already holds')
+                if $env->{ctx} eq 'view';
+            my $over = list_source($a[0]{toks}, $env, $a[0]{node});
+            my $it = '__it' . ++$tmp;
+            my $out = '__lc' . ++$tmp;
+            push @{ $env->{pre} }, "var $out : List<Int> = []",
+                "for $it in $over->{over} {", "  $out.push($it)", '}';
+            return { ty => 'List<Int>', pix => $out };
+        }
     }
     return undef unless is_word($t[0]) && $t[0]->content =~ /\A(?:grep|map)\z/;
     my ($w, $block, @rest) = @t;
@@ -1456,22 +1492,26 @@ sub pipeline_rhs {
              . 'a view repeats over a list it already holds')
         if $env->{ctx} eq 'view';
     my $over = list_source(\@rest, $env, $w);
-    refuse($w, "`" . $w->content . '` walks a list') unless $over->{list};
     my @st = $block->schildren;
     refuse($block, "`" . $w->content . '` takes one expression in its block') unless @st == 1;
     my $it = '__it' . ++$tmp;
-    my $inner = { %$env, vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
+    # What the block's own expression needs said first belongs INSIDE
+    # the loop: it reads the row.
+    my @first;
+    my $inner = { %$env, pre => \@first,
+                  vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
     my $out = '__lc' . ++$tmp;
     my @body = strip_semicolon(sig($st[0]));
     if ($w->content eq 'grep') {
         my $cond = cond_of(\@body, $inner, $block);
-        push @{ $env->{pre} }, "var $out : $over->{listty} = []",
-            "for $it in $over->{over} {", "  if $cond {", "    $out.push($it)", '  }', '}';
-        return { ty => $over->{listty}, pix => $out };
+        my $ty = $over->{listty} // "List<$over->{ty}>";
+        push @{ $env->{pre} }, "var $out : $ty = []", "for $it in $over->{over} {",
+            (map { "  $_" } @first), "  if $cond {", "    $out.push($it)", '  }', '}';
+        return { ty => $ty, pix => $out };
     }
     my $v = parse_expr(\@body, { %$inner, at => $block });
-    push @{ $env->{pre} }, "var $out : List<$v->{ty}> = []",
-        "for $it in $over->{over} {", "  $out.push($v->{pix})", '}';
+    push @{ $env->{pre} }, "var $out : List<$v->{ty}> = []", "for $it in $over->{over} {",
+        (map { "  $_" } @first), "  $out.push($v->{pix})", '}';
     return { ty => "List<$v->{ty}>", pix => $out };
 }
 
@@ -1493,12 +1533,59 @@ sub first_of {
     my @st = $block->schildren;
     refuse($block, '`first` takes one expression in its block') unless @st == 1;
     my $it = '__it' . ++$tmp;
-    my $inner = { %$env, vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
+    my @first;
+    my $inner = { %$env, pre => \@first,
+                  vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
     my $out = '__f' . ++$tmp;
     my $cond = cond_of([strip_semicolon(sig($st[0]))], $inner, $block);
-    push @{ $env->{pre} }, "var $out : $over->{ty} = $d->{pix}",
-        "for $it in $over->{over} {", "  if $cond {", "    $out = $it", '    break', '  }', '}';
+    push @{ $env->{pre} }, "var $out : $over->{ty} = $d->{pix}", "for $it in $over->{over} {",
+        (map { "  $_" } @first), "  if $cond {", "    $out = $it", '    break', '  }', '}';
     return { ty => $over->{ty}, pix => $out };
+}
+
+# One of the framework's own. The row is picked by how many values
+# came with the call, the way `sqlite_exec` takes a statement with or
+# without values to bind.
+sub framework_call {
+    my ($name, $w, $list, $env) = @_;
+    my @a = split_args($list);
+    my $row = $Rakugan::Manifest::BY_CALL{"$name/" . scalar @a};
+    unless ($row) {
+        my %n = map { scalar(@{ $_->{kinds} }) => 1 }
+                grep { "$_->{module}_$_->{name}" eq $name } @Rakugan::Manifest::ROWS;
+        refuse($w, "`$name` takes " . join(' or ', sort keys %n) . ' values, and got ' . scalar(@a));
+    }
+    refuse($w, "`$name` reaches outside the app, and building a view only reads; call it from a "
+             . 'handler and keep what it answered in a field')
+        if $env->{ctx} eq 'view' && !$row->{pure};
+    my %want = (str => 'String', int => 'Int', num => 'Float', list => 'List<String>');
+    my @vals;
+    for my $i (0 .. $#a) {
+        refuse($a[$i]{node}, "`$name` takes its values in order, without names") if defined $a[$i]{key};
+        my $ty = $want{ $row->{kinds}[$i] };
+        my $v;
+        if ($ty eq 'List<String>' && @{ $a[$i]{toks} } == 2 && $a[$i]{toks}[0]->isa('PPI::Token::Cast')) {
+            my ($bs, $sym) = @{ $a[$i]{toks} };
+            refuse($a[$i]{node}, "`$name` takes a list of strings here") unless is_sym($sym, '@');
+            $v = read_list($sym, substr($sym->content, 1), $env);
+        } elsif ($ty eq 'List<String>' && @{ $a[$i]{toks} } == 1
+                 && $a[$i]{toks}[0]->isa('PPI::Structure::Constructor')
+                 && $a[$i]{toks}[0]->start->content eq '[') {
+            my ($lty, $pix) = list_literal($a[$i]{toks}[0], $env);
+            $v = { ty => $lty, pix => $pix };
+        } else {
+            $v = parse_expr($a[$i]{toks}, { %$env, at => $a[$i]{node} });
+        }
+        refuse($a[$i]{node}, "`$name` takes a $ty here (got $v->{ty})")
+            unless $v->{ty} eq $ty || ($ty eq 'Float' && $v->{ty} eq 'Int');
+        push @vals, $v->{pix};
+    }
+    $uses_std = 1;
+    my $ty = length $row->{ret_ty} ? $row->{ret_ty} : 'Void';
+    # Inside work the app started, a call that waits is handed to the
+    # engine's own pool rather than held on the window's thread.
+    my $wait = $env->{awaiting} ? 'await ' : '';
+    return { ty => $ty, pix => "$wait$row->{class}.$row->{fn}(" . join(', ', @vals) . ')' };
 }
 
 # What a named unary operator was given: `uc $s` and `uc($s)` both.
@@ -1673,7 +1760,7 @@ sub interpolate {
             ($buf, $plain) = ('', 0);
             next;
         }
-        if ($s =~ s/\A\$\{(\w+)\}// || $s =~ s/\A\$(\w+)((?:\[[^\[\]]*\]|\{[^{}]*\})?)//) {
+        if ($s =~ s/\A\$\{(\w+)\}// || $s =~ s/\A\$(\w+)((?:->)?(?:\[[^\[\]]*\]|\{[^{}]*\})?)//) {
             my ($name, $sub) = ($1, $2 // '');
             my $v = $name eq 'self' ? refuse($tok, '`$self` has no text')
                   : length $sub    ? reparse($tok, "\$$name$sub", $env)
@@ -2277,6 +2364,15 @@ sub simple_stmt {
     }
     if (is_sym($head, '@') || is_sym($head, '%')) { return whole_assign(\@t, $env) }
     refuse($head, $NOT_TAKEN{ $head->content }) if is_word($head) && $NOT_TAKEN{ $head->content };
+    # A call whose answer nobody wants — the framework's own, and
+    # nothing else, since a Perl builtin called for its own sake does
+    # nothing here.
+    if (is_word($head) && $Rakugan::Manifest::NAMES{ $head->content }) {
+        my $i = 0;
+        my $v = word_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
+        refuse($t[$i], 'this does not continue the call') if $i < @t;
+        return $v->{pix};
+    }
     refuse($head // $st, 'a statement here writes a field (`$count += 1`), a list or a hash, '
                        . 'declares a name (`my $x = ...`) or calls a method (`$self->flip`)')
         unless is_sym($head, '$');
@@ -2603,7 +2699,10 @@ sub task_stmt {
     my $last = $wst[-1];
     my @lt = strip_semicolon(sig($last));
     shift @lt if is_word($lt[0], 'return');
-    my $ans = parse_expr(\@lt, { %$wenv, at => $last });
+    # The value the work answers: if it is one of the framework's own,
+    # it waits on the engine's pool.
+    my $awaiting = is_word($lt[0]) && $Rakugan::Manifest::NAMES{ $lt[0]->content };
+    my $ans = parse_expr(\@lt, { %$wenv, at => $last, ($awaiting ? (awaiting => 1) : ()) });
     my $name = substr $dp[0], 1;
     my $denv = scope($env);
     $denv->{vars}{$name} = { ty => $ans->{ty}, pix => $name, fixed => 1 };
@@ -2884,9 +2983,14 @@ sub classify {
             is_op($p, '->') && is_sym($p->sprevious_sibling, '$')
         } @{ $m->{block}->find('PPI::Token::Word') || [] }];
         # A field is touched under any sigil: `@items` is the list and
-        # `$items[$i]` is one of its elements.
+        # `$items[$i]` is one of its elements. A field read inside a
+        # string counts too — the hole is a read like any other.
         $m->{own_fields} = grep { exists $field{ substr $_->content, 1 } }
             @{ $m->{block}->find('PPI::Token::Symbol') || [] };
+        for my $q (@{ $m->{block}->find('PPI::Token::Quote::Double') || [] }) {
+            my $text = $q->content;
+            $m->{own_fields} ||= grep { exists $field{$_} } $text =~ /[\$\@%]\{?(\w+)/g;
+        }
         $m->{answers} = [answers_of($m->{block})];
     }
     my $changed = 1;
@@ -2933,6 +3037,7 @@ sub bodies {
     }
     for my $s (@app_stmts) {
         refuse($s->{word}, '`task` is started from a handler, where something is happening') if $s->{what} eq 'task';
+        if ($s->{what} ne 'every') { binding($s); next }
         my @a = split_args($s->{list});
         refuse($s->{word}, '`every` takes how many seconds, and what to do: `every(1.0, sub { ... })`')
             unless @a == 2 && !defined $a[0]{key} && !defined $a[1]{key};
@@ -2945,6 +3050,43 @@ sub bodies {
         my $env = { ctx => 'fn', vars => {}, nonneg => {}, at => $a[1]{node} };
         push @timers, { ms => sprintf('%g', $secs->{pix} * 1000), body => [stmts($block, $env)] };
     }
+}
+
+# `shortcut("cmd+s", sub { ... })`, `menu_item("File", "Save", sub { ... })`,
+# `on_key(sub ($chord) { ... })`, `on_file_drop(sub ($path) { ... })`.
+# Each is declared before the app runs and outlives every build, which
+# is why they are numbered apart from a build's own handlers.
+sub binding {
+    my ($s) = @_;
+    my $what = $s->{what};
+    my @a = split_args($s->{list});
+    my %takes = (shortcut => 1, menu_item => 2, on_key => 0, on_file_drop => 0);
+    my $want = $takes{$what} + 1;
+    refuse($s->{word}, "`$what` takes " . ($want == 1 ? 'a sub' : ($want - 1) . ' names and a sub'))
+        unless @a == $want;
+    my @names;
+    for my $i (0 .. $want - 2) {
+        my $v = parse_expr($a[$i]{toks}, { ctx => 'fn', vars => {}, nonneg => {}, at => $a[$i]{node} });
+        refuse($a[$i]{node}, "`$what` takes a name written out as a string") unless defined $v->{lit};
+        push @names, $v->{pix};
+    }
+    my ($sub, @rest) = @{ $a[-1]{toks} };
+    my ($proto, $block) = @rest == 2 ? @rest : (undef, $rest[0]);
+    refuse($a[-1]{node}, "`$what` runs a sub: `$what(" . join('', map { '"…", ' } @names) . 'sub { ... })`')
+        unless is_word($sub, 'sub') && $block && $block->isa('PPI::Structure::Block');
+    my @params = sub_params($proto);
+    my $text = $what eq 'on_key' || $what eq 'on_file_drop';
+    refuse($proto // $sub, $text ? "`$what` hands over one string: `sub (\$s) { ... }`"
+                                 : "`$what` runs a sub with nothing: `sub { ... }`")
+        unless @params == ($text ? 1 : 0);
+    my $env = { ctx => 'fn', vars => {}, nonneg => {}, at => $a[-1]{node} };
+    $env->{vars}{ substr $params[0], 1 } = { ty => 'String', pix => substr($params[0], 1), fixed => 1 } if $text;
+    push @binds, {
+        what  => $what,
+        names => \@names,
+        param => $text ? substr($params[0], 1) : undef,
+        body  => [stmts($block, $env)],
+    };
 }
 
 # --- the run line ---------------------------------------------------------
@@ -3004,6 +3146,15 @@ sub emit {
     }
     for my $i (0 .. $#timers) {
         push @out, '', "  fn __tick$i \@every($timers[$i]{ms}) {", (map { "    $_" } @{ $timers[$i]{body} }), '  }';
+    }
+    my %n;
+    for my $b (@binds) {
+        my $i = $n{ $b->{what} }++;
+        my $head = $b->{what} eq 'shortcut'  ? "fn __key$i \@key(" . join(', ', @{ $b->{names} }) . ')'
+                 : $b->{what} eq 'menu_item' ? "fn __menu$i \@menu(" . join(', ', @{ $b->{names} }) . ')'
+                 : $b->{what} eq 'on_key'    ? "fn __anykey$i($b->{param}: String) \@key"
+                 :                             "fn __drop$i($b->{param}: String) \@drop";
+        push @out, '', "  $head {", (map { "    $_" } @{ $b->{body} }), '  }';
     }
     push @out, '}';
     my @help = (grep({ !$_->{element} && !$_->{stateful} } @methods), @lifted);

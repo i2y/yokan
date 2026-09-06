@@ -1,0 +1,575 @@
+# The standard library's manifest: one row per function that both of
+# Yokan's runs land on, and the surface Rakugan's compiled run reaches
+# through the same `.rpi`.
+#
+# A row is what an app writes (`py`, under `module`), what the `.pix`
+# calls (`class.fn`), the parameters and the return in pixie's types,
+# and the Rust function in this crate. The binding door, the arity and
+# container-type checks, the type a call reads as, the fallible twin a
+# `try` routes to, and the coverage table are all derived from this.
+#
+# A row with no `py` is not reachable as `module.fn`: the twins behind
+# the builtins (`Py`), and the JSON writers a translator picks by the
+# value's type. A row with no `rust` has no door line either.
+#
+# The flags: `try` a fallible twin exists (`tryFn`, `!T`,
+# `<rust>_result`); `pure` no side effects and the same answer for the
+# same arguments, which is what a view may call; `cpython` answers what
+# CPython's module of the same name answers, and a ground-truth table
+# says so; `const` a value rather than a call; `pick` the fallible twin
+# follows the list's element type.
+#
+# The file is TOML because no language owns it: Yokan reads it, and so
+# does the generator that puts the framework's own functions on the
+# substrate's C face for a language whose door is C.
+
+
+[[group]]
+class = "Fs"
+module = "fs"
+layer = "yokan"
+rows = [
+  { py = "read_text", fn = "readText", params = "path: String", ret = "String", rust = "fs_read_text", flags = "try" },
+  { py = "write_text", fn = "writeText", params = "path: String, text: String", ret = "Int", rust = "fs_write_text" },
+  { py = "exists", fn = "exists", params = "path: String", ret = "Bool", rust = "fs_exists" },
+  { py = "read_text_or", fn = "readTextOr", params = "path: String, default: String", ret = "String", rust = "fs_read_text_or" },
+  { py = "list_dir", fn = "listDir", params = "path: String", ret = "List<String>", rust = "fs_list_dir" },
+  { py = "append_text", fn = "appendText", params = "path: String, text: String", ret = "Int", rust = "fs_append_text" },
+  { py = "remove", fn = "remove", params = "path: String", ret = "Int", rust = "fs_remove" },
+  { py = "make_dir", fn = "makeDir", params = "path: String", ret = "Int", rust = "fs_make_dir" },
+  { py = "app_dir", fn = "appDir", params = "name: String", ret = "String", rust = "fs_app_dir" },
+  { py = "open_dialog", fn = "openDialog", params = "title: String", ret = "String", rust = "fs_open_dialog" },
+  { py = "save_dialog", fn = "saveDialog", params = "name: String", ret = "String", rust = "fs_save_dialog" },
+]
+
+[[group]]
+class = "Sqlite"
+module = "sqlite"
+layer = "yokan"
+rows = [
+  { py = "exec", fn = "exec", params = "path: String, sql: String", ret = "Int", rust = "sqlite_exec" },
+  { py = "query_text", fn = "queryText", params = "path: String, sql: String", ret = "List<String>", rust = "sqlite_query_text" },
+  { py = "query_int", fn = "queryInt", params = "path: String, sql: String", ret = "Int", rust = "sqlite_query_int", flags = "try" },
+  { py = "query_int_or", fn = "queryIntOr", params = "path: String, sql: String, default: Int", ret = "Int", rust = "sqlite_query_int_or" },
+  { py = "query_text_or", fn = "queryTextOr", params = "path: String, sql: String", ret = "List<String>", rust = "sqlite_query_text_or" },
+  { py = "exec", fn = "execWith", params = "path: String, sql: String, params: List<String>", ret = "Int", rust = "sqlite_exec_with" },
+  { py = "query_text", fn = "queryTextWith", params = "path: String, sql: String, params: List<String>", ret = "List<String>", rust = "sqlite_query_text_with" },
+  { py = "query_int", fn = "queryIntWith", params = "path: String, sql: String, params: List<String>", ret = "Int", rust = "sqlite_query_int_with", flags = "try" },
+  { py = "query_int_or", fn = "queryIntOrWith", params = "path: String, sql: String, default: Int, params: List<String>", ret = "Int", rust = "sqlite_query_int_or_with" },
+  { py = "query_text_or", fn = "queryTextOrWith", params = "path: String, sql: String, params: List<String>", ret = "List<String>", rust = "sqlite_query_text_or_with" },
+  { py = "query_rows", fn = "queryRows", params = "path: String, sql: String", ret = "List<List<String>>", rust = "sqlite_query_rows_all" },
+  { py = "query_rows", fn = "queryRowsWith", params = "path: String, sql: String, params: List<String>", ret = "List<List<String>>", rust = "sqlite_query_rows" },
+  { py = "query_rows_or", fn = "queryRowsOr", params = "path: String, sql: String", ret = "List<List<String>>", rust = "sqlite_query_rows_or_all" },
+  { py = "query_rows_or", fn = "queryRowsOrWith", params = "path: String, sql: String, params: List<String>", ret = "List<List<String>>", rust = "sqlite_query_rows_or" },
+]
+
+[[group]]
+class = "Clipboard"
+module = "clipboard"
+layer = "yokan"
+rows = [
+  { py = "set_text", fn = "setText", params = "text: String", ret = "Int", rust = "clipboard_set_text" },
+  { py = "get_text", fn = "getText", params = "", ret = "String", rust = "clipboard_get_text" },
+]
+
+# The keyboard's own state, read from a tick. Not `pure`: what
+# it answers changes under the app's feet, so a view cannot
+# call it — a view is rebuilt on the framework's schedule, and
+# what it read would be a moment the app never chose.
+[[group]]
+class = "Keys"
+module = "keys"
+layer = "yokan"
+rows = [
+  { py = "down", fn = "down", params = "key: String", ret = "Bool", rust = "keys_down" },
+  { py = "pressed", fn = "pressed", params = "key: String", ret = "Bool", rust = "keys_pressed" },
+  { py = "released", fn = "released", params = "key: String", ret = "Bool", rust = "keys_released" },
+]
+
+# Sound. A scripted run is silent, so nothing here reaches a
+# dump and the gate cannot check it — a window is the only
+# place it plays.
+[[group]]
+class = "Audio"
+module = "audio"
+layer = "yokan"
+rows = [
+  { py = "play", fn = "play", params = "path: String", ret = "Int", rust = "audio_play" },
+  { py = "play", fn = "playAt", params = "path: String, volume: Float", ret = "Int", rust = "audio_play_at" },
+  { py = "stop", fn = "stop", params = "", ret = "Int", rust = "audio_stop" },
+]
+
+[[group]]
+class = "Notify"
+module = "notify"
+layer = "yokan"
+rows = [
+  { py = "send", fn = "send", params = "title: String, body: String", ret = "", rust = "notify_send" },
+]
+
+[[group]]
+class = "Http"
+module = "http"
+layer = "yokan"
+rows = [
+  { py = "get_text", fn = "getText", params = "url: String", ret = "String", rust = "http_get_text", flags = "try" },
+  { py = "get_text_or", fn = "getTextOr", params = "url: String, default: String", ret = "String", rust = "http_get_text_or" },
+  { py = "get_text", fn = "getTextTimeout", params = "url: String, timeoutMs: Int", ret = "String", rust = "http_get_text_timeout", flags = "try" },
+  { py = "get_text_with", fn = "getTextWith", params = "url: String, headers: Map<String, String>", ret = "String", rust = "http_get_text_with" },
+  { py = "post_text", fn = "postText", params = "url: String, body: String", ret = "String", rust = "http_post_text", flags = "try" },
+  { py = "post_text", fn = "postTextAs", params = "url: String, body: String, contentType: String", ret = "String", rust = "http_post_text_as" },
+  { py = "post_text_or", fn = "postTextOr", params = "url: String, body: String, default: String", ret = "String", rust = "http_post_text_or" },
+  { py = "status", fn = "status", params = "url: String", ret = "Int", rust = "http_status" },
+]
+
+# Python's `math`, held to CPython by
+# tests/expected/math.txt. Four of its members are refused
+# by name instead: `frexp` and `modf` answer tuples,
+# `prod` and `sumprod` answer an int or a float depending
+# on the list, and `gamma`, `lgamma`, `erf` and `erfc` are
+# computed by CPython itself rather than by the platform.
+[[group]]
+class = "Math"
+module = "math"
+layer = "python"
+rows = [
+  { py = "sqrt", fn = "sqrt", params = "v: Float", ret = "Float", rust = "math_sqrt", flags = "pure cpython" },
+  { py = "sin", fn = "sin", params = "v: Float", ret = "Float", rust = "math_sin", flags = "pure cpython" },
+  { py = "cos", fn = "cos", params = "v: Float", ret = "Float", rust = "math_cos", flags = "pure cpython" },
+  { py = "tan", fn = "tan", params = "v: Float", ret = "Float", rust = "math_tan", flags = "pure cpython" },
+  { py = "asin", fn = "asin", params = "v: Float", ret = "Float", rust = "math_asin", flags = "pure cpython" },
+  { py = "acos", fn = "acos", params = "v: Float", ret = "Float", rust = "math_acos", flags = "pure cpython" },
+  { py = "atan", fn = "atan", params = "v: Float", ret = "Float", rust = "math_atan", flags = "pure cpython" },
+  { py = "asinh", fn = "asinh", params = "v: Float", ret = "Float", rust = "math_asinh", flags = "pure cpython" },
+  { py = "acosh", fn = "acosh", params = "v: Float", ret = "Float", rust = "math_acosh", flags = "pure cpython" },
+  { py = "atanh", fn = "atanh", params = "v: Float", ret = "Float", rust = "math_atanh", flags = "pure cpython" },
+  { py = "sinh", fn = "sinh", params = "v: Float", ret = "Float", rust = "math_sinh", flags = "pure cpython" },
+  { py = "cosh", fn = "cosh", params = "v: Float", ret = "Float", rust = "math_cosh", flags = "pure cpython" },
+  { py = "tanh", fn = "tanh", params = "v: Float", ret = "Float", rust = "math_tanh", flags = "pure cpython" },
+  { py = "cbrt", fn = "cbrt", params = "v: Float", ret = "Float", rust = "math_cbrt", flags = "pure cpython" },
+  { py = "exp", fn = "exp", params = "v: Float", ret = "Float", rust = "math_exp", flags = "pure cpython" },
+  { py = "exp2", fn = "exp2", params = "v: Float", ret = "Float", rust = "math_exp2", flags = "pure cpython" },
+  { py = "expm1", fn = "expm1", params = "v: Float", ret = "Float", rust = "math_expm1", flags = "pure cpython" },
+  { py = "log1p", fn = "log1p", params = "v: Float", ret = "Float", rust = "math_log1p", flags = "pure cpython" },
+  { py = "log2", fn = "log2", params = "v: Float", ret = "Float", rust = "math_log2", flags = "pure cpython" },
+  { py = "log10", fn = "log10", params = "v: Float", ret = "Float", rust = "math_log10", flags = "pure cpython" },
+  { py = "degrees", fn = "degrees", params = "v: Float", ret = "Float", rust = "math_degrees", flags = "pure cpython" },
+  { py = "radians", fn = "radians", params = "v: Float", ret = "Float", rust = "math_radians", flags = "pure cpython" },
+  { py = "fabs", fn = "fabs", params = "v: Float", ret = "Float", rust = "math_fabs", flags = "pure cpython" },
+  { py = "ulp", fn = "ulp", params = "v: Float", ret = "Float", rust = "math_ulp", flags = "pure cpython" },
+  # `log(x)` and `log(x, base)` are one name and two calls.
+  { py = "log", fn = "log", params = "v: Float", ret = "Float", rust = "math_log", flags = "pure cpython" },
+  { py = "log", fn = "logBase", params = "v: Float, base: Float", ret = "Float", rust = "math_log_base", flags = "pure cpython" },
+  { py = "floor", fn = "floor", params = "v: Float", ret = "Int", rust = "math_floor", flags = "pure cpython" },
+  { py = "ceil", fn = "ceil", params = "v: Float", ret = "Int", rust = "math_ceil", flags = "pure cpython" },
+  { py = "trunc", fn = "trunc", params = "v: Float", ret = "Int", rust = "math_trunc", flags = "pure cpython" },
+  { py = "isnan", fn = "isnan", params = "v: Float", ret = "Bool", rust = "math_isnan", flags = "pure cpython" },
+  { py = "isinf", fn = "isinf", params = "v: Float", ret = "Bool", rust = "math_isinf", flags = "pure cpython" },
+  { py = "isfinite", fn = "isfinite", params = "v: Float", ret = "Bool", rust = "math_isfinite", flags = "pure cpython" },
+  { py = "atan2", fn = "atan2", params = "y: Float, x: Float", ret = "Float", rust = "math_atan2", flags = "pure cpython" },
+  { py = "copysign", fn = "copysign", params = "a: Float, b: Float", ret = "Float", rust = "math_copysign", flags = "pure cpython" },
+  { py = "fmod", fn = "fmod", params = "x: Float, y: Float", ret = "Float", rust = "math_fmod", flags = "pure cpython" },
+  { py = "remainder", fn = "remainder", params = "x: Float, y: Float", ret = "Float", rust = "math_remainder", flags = "pure cpython" },
+  { py = "hypot", fn = "hypot", params = "x: Float, y: Float", ret = "Float", rust = "math_hypot", flags = "pure cpython" },
+  { py = "nextafter", fn = "nextafter", params = "x: Float, y: Float", ret = "Float", rust = "math_nextafter", flags = "pure cpython" },
+  { py = "pow", fn = "pow_", params = "a: Float, b: Float", ret = "Float", rust = "math_pow", flags = "pure cpython" },
+  { py = "isclose", fn = "isclose", params = "a: Float, b: Float", ret = "Bool", rust = "math_isclose", flags = "pure cpython" },
+  { py = "ldexp", fn = "ldexp", params = "x: Float, n: Int", ret = "Float", rust = "math_ldexp", flags = "pure cpython" },
+  { py = "fma", fn = "fma", params = "a: Float, b: Float, c: Float", ret = "Float", rust = "math_fma", flags = "pure cpython" },
+  { py = "factorial", fn = "factorial", params = "n: Int", ret = "Int", rust = "math_factorial", flags = "pure cpython" },
+  { py = "isqrt", fn = "isqrt", params = "n: Int", ret = "Int", rust = "math_isqrt", flags = "pure cpython" },
+  { py = "comb", fn = "comb", params = "n: Int, k: Int", ret = "Int", rust = "math_comb", flags = "pure cpython" },
+  { py = "perm", fn = "perm", params = "n: Int, k: Int", ret = "Int", rust = "math_perm", flags = "pure cpython" },
+  { py = "gcd", fn = "gcd", params = "a: Int, b: Int", ret = "Int", rust = "math_gcd", flags = "pure cpython" },
+  { py = "lcm", fn = "lcm", params = "a: Int, b: Int", ret = "Int", rust = "math_lcm", flags = "pure cpython" },
+  # `frexp` and `modf` answer a pair; each half is a static
+  # and the translator builds the tuple (`_tuple_call`).
+  { py = "frexp", fn = "frexpM", params = "v: Float", ret = "Float", rust = "math_frexp_m", flags = "pure cpython" },
+  { fn = "frexpE", params = "v: Float", ret = "Int", rust = "math_frexp_e", flags = "pure cpython" },
+  { py = "modf", fn = "modfFrac", params = "v: Float", ret = "Float", rust = "math_modf_frac", flags = "pure cpython" },
+  { fn = "modfInt", params = "v: Float", ret = "Float", rust = "math_modf_int", flags = "pure cpython" },
+  { py = "fsum", fn = "fsum", params = "xs: List<Float>", ret = "Float", rust = "math_fsum", flags = "pure cpython" },
+  { py = "dist", fn = "dist", params = "p: List<Float>, q: List<Float>", ret = "Float", rust = "math_dist", flags = "pure cpython" },
+  # Values in Python, so the app reads them as values.
+  { py = "pi", fn = "pi", params = "", ret = "Float", rust = "math_pi", flags = "pure cpython const" },
+  { py = "e", fn = "e", params = "", ret = "Float", rust = "math_e", flags = "pure cpython const" },
+  { py = "tau", fn = "tau", params = "", ret = "Float", rust = "math_tau", flags = "pure cpython const" },
+  { py = "inf", fn = "inf", params = "", ret = "Float", rust = "math_inf", flags = "pure cpython const" },
+  { py = "nan", fn = "nan", params = "", ret = "Float", rust = "math_nan", flags = "pure cpython const" },
+]
+
+# Yokan's own reads into a JSON document by dotted path.
+# Python's `json` has no such thing, and Yokan's modules do
+# not carry a Python module's name, so this one is `jsondoc`.
+[[group]]
+class = "Jsondoc"
+module = "jsondoc"
+layer = "yokan"
+rows = [
+  { py = "get_text", fn = "getText", params = "src: String, path: String", ret = "String", rust = "json_get_text", flags = "pure" },
+  { py = "get_int", fn = "getInt", params = "src: String, path: String", ret = "Int", rust = "json_get_int", flags = "pure" },
+  { py = "get_float", fn = "getFloat", params = "src: String, path: String", ret = "Float", rust = "json_get_float", flags = "pure" },
+  { py = "get_bool", fn = "getBool", params = "src: String, path: String", ret = "Bool", rust = "json_get_bool", flags = "pure" },
+  { py = "length", fn = "length", params = "src: String, path: String", ret = "Int", rust = "json_length", flags = "pure" },
+  { py = "has", fn = "has", params = "src: String, path: String", ret = "Bool", rust = "json_has", flags = "pure" },
+]
+
+# Python's `json.dumps`. The pieces compose — a value renders
+# to its text and a container joins texts — so a document
+# nests without a writer per shape; `_json_dumps` walks the
+# value and emits the composition.
+[[group]]
+class = "Json"
+module = "json"
+layer = "python"
+rows = [
+  { py = "dumps", fn = "dumps", params = "v: Any", ret = "String", flags = "pure cpython" },
+  { fn = "text", params = "v: String", ret = "String", rust = "json_text", flags = "pure cpython" },
+  { fn = "int_", params = "v: Int", ret = "String", rust = "json_int", flags = "pure cpython" },
+  { fn = "float_", params = "v: Float", ret = "String", rust = "json_float", flags = "pure cpython" },
+  { fn = "bool_", params = "v: Bool", ret = "String", rust = "json_bool", flags = "pure cpython" },
+  { fn = "null", params = "", ret = "String", rust = "json_null", flags = "pure cpython" },
+  { fn = "array", params = "parts: List<String>", ret = "String", rust = "json_array", flags = "pure cpython" },
+  { fn = "object", params = "keys: List<String>, parts: List<String>", ret = "String", rust = "json_object", flags = "pure cpython" },
+  { fn = "texts", params = "xs: List<String>", ret = "List<String>", rust = "json_texts", flags = "pure cpython" },
+  { fn = "ints", params = "xs: List<Int>", ret = "List<String>", rust = "json_ints", flags = "pure cpython" },
+  { fn = "floats", params = "xs: List<Float>", ret = "List<String>", rust = "json_floats", flags = "pure cpython" },
+  { fn = "bools", params = "xs: List<Bool>", ret = "List<String>", rust = "json_bools", flags = "pure cpython" },
+]
+
+[[group]]
+class = "Strings"
+module = "strings"
+layer = "yokan"
+rows = [
+  { py = "to_int", fn = "toInt", params = "s: String, default: Int", ret = "Int", rust = "strings_to_int", flags = "pure" },
+  { py = "to_float", fn = "toFloat", params = "s: String, default: Float", ret = "Float", rust = "strings_to_float", flags = "pure" },
+]
+
+# Python's `random`: the Mersenne Twister CPython uses and
+# the algorithms `random.py` builds on it. Not pure — every
+# call moves the generator on — so a view cannot ask for one.
+# `shuffle` is refused by name: it reorders a list in place,
+# and a list lives in a State here, which a call cannot reach
+# into.
+[[group]]
+class = "Random"
+module = "random"
+layer = "python"
+rows = [
+  { py = "seed", fn = "seed", params = "n: Int", ret = "Int", rust = "random_seed_ret", flags = "cpython" },
+  { py = "random", fn = "random", params = "", ret = "Float", rust = "random_random", flags = "cpython" },
+  { py = "getrandbits", fn = "getrandbits", params = "k: Int", ret = "Int", rust = "random_getrandbits", flags = "cpython" },
+  { py = "randint", fn = "randint", params = "a: Int, b: Int", ret = "Int", rust = "random_randint", flags = "cpython" },
+  { py = "randrange", fn = "randrange", params = "stop: Int", ret = "Int", rust = "random_randrange", flags = "cpython" },
+  { py = "randrange", fn = "randrangeFrom", params = "start: Int, stop: Int", ret = "Int", rust = "random_randrange_from", flags = "cpython" },
+  { py = "randrange", fn = "randrangeStep", params = "start: Int, stop: Int, step: Int", ret = "Int", rust = "random_randrange_step", flags = "cpython" },
+  { py = "uniform", fn = "uniform", params = "a: Float, b: Float", ret = "Float", rust = "random_uniform", flags = "cpython" },
+  { py = "gauss", fn = "gauss", params = "mu: Float, sigma: Float", ret = "Float", rust = "random_gauss", flags = "cpython" },
+  # `choice` and `sample` answer an element, so the twin
+  # follows what the list holds — `_random_pick` chooses.
+  { py = "choice", fn = "choice", params = "xs: List<?>", ret = "?", flags = "cpython pick" },
+  { py = "sample", fn = "sample", params = "xs: List<?>, k: Int", ret = "List<?>", flags = "cpython pick" },
+  { fn = "choiceStr", params = "xs: List<String>", ret = "String", rust = "random_choice_str", flags = "cpython" },
+  { fn = "sampleStr", params = "xs: List<String>, k: Int", ret = "List<String>", rust = "random_sample_str", flags = "cpython" },
+  { fn = "choiceInt", params = "xs: List<Int>", ret = "Int", rust = "random_choice_int", flags = "cpython" },
+  { fn = "sampleInt", params = "xs: List<Int>, k: Int", ret = "List<Int>", rust = "random_sample_int", flags = "cpython" },
+  { fn = "choiceFloat", params = "xs: List<Float>", ret = "Float", rust = "random_choice_float", flags = "cpython" },
+  { fn = "sampleFloat", params = "xs: List<Float>, k: Int", ret = "List<Float>", rust = "random_sample_float", flags = "cpython" },
+  { fn = "choiceBool", params = "xs: List<Bool>", ret = "Bool", rust = "random_choice_bool", flags = "cpython" },
+  { fn = "sampleBool", params = "xs: List<Bool>, k: Int", ret = "List<Bool>", rust = "random_sample_bool", flags = "cpython" },
+]
+
+# Python's `statistics`, over `list[float]` only: CPython
+# answers an int for `mean([1, 2, 3])` and a float for
+# `mean([1, 2, 4])`, so an int list has no static type.
+[[group]]
+class = "Statistics"
+module = "statistics"
+layer = "python"
+rows = [
+  { py = "mean", fn = "mean", params = "xs: List<Float>", ret = "Float", rust = "statistics_mean", flags = "pure cpython" },
+  { py = "fmean", fn = "fmean", params = "xs: List<Float>", ret = "Float", rust = "statistics_fmean", flags = "pure cpython" },
+  { py = "median", fn = "median", params = "xs: List<Float>", ret = "Float", rust = "statistics_median", flags = "pure cpython" },
+  { py = "mode", fn = "mode", params = "xs: List<Float>", ret = "Float", rust = "statistics_mode", flags = "pure cpython" },
+  { py = "variance", fn = "variance", params = "xs: List<Float>", ret = "Float", rust = "statistics_variance", flags = "pure cpython" },
+  { py = "pvariance", fn = "pvariance", params = "xs: List<Float>", ret = "Float", rust = "statistics_pvariance", flags = "pure cpython" },
+  { py = "stdev", fn = "stdev", params = "xs: List<Float>", ret = "Float", rust = "statistics_stdev", flags = "pure cpython" },
+  { py = "pstdev", fn = "pstdev", params = "xs: List<Float>", ret = "Float", rust = "statistics_pstdev", flags = "pure cpython" },
+]
+
+# Python's `time`. A clock is the one thing a ground-truth
+# table cannot pin down — the answer is the machine's, and the
+# two runs read it at different moments — so what a twin owes
+# here is the unit and the reference point CPython documents.
+[[group]]
+class = "Time"
+module = "time"
+layer = "python"
+rows = [
+  { py = "time", fn = "time", params = "", ret = "Float", rust = "time_time", flags = "cpython" },
+  { py = "time_ns", fn = "timeNs", params = "", ret = "Int", rust = "time_time_ns", flags = "cpython" },
+  { py = "monotonic", fn = "monotonic", params = "", ret = "Float", rust = "time_monotonic", flags = "cpython" },
+  { py = "monotonic_ns", fn = "monotonicNs", params = "", ret = "Int", rust = "time_monotonic_ns", flags = "cpython" },
+  { py = "perf_counter", fn = "perfCounter", params = "", ret = "Float", rust = "time_perf_counter", flags = "cpython" },
+  { py = "perf_counter_ns", fn = "perfCounterNs", params = "", ret = "Int", rust = "time_perf_counter_ns", flags = "cpython" },
+  { py = "sleep", fn = "sleep", params = "secs: Float", ret = "", rust = "time_sleep", flags = "cpython" },
+]
+
+# Yokan's own clock: the machine's own zone, which Python's
+# `time` reaches only through `localtime` and a struct. Named
+# `clock` because Yokan's modules do not carry a Python
+# module's name.
+[[group]]
+class = "Clock"
+module = "clock"
+layer = "yokan"
+rows = [
+  { py = "format_ms", fn = "formatMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_ms" },
+  { py = "format_local_ms", fn = "formatLocalMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_local_ms" },
+  { py = "local_offset_minutes", fn = "localOffsetMinutes", params = "ms: Int", ret = "Int", rust = "clock_local_offset_minutes" },
+]
+
+# `string`, which is nine constants and nothing else that
+# a typed subset can take.
+[[group]]
+class = "PyString"
+module = "string"
+layer = "python"
+rows = [
+  { py = "ascii_letters", fn = "asciiLetters", params = "", ret = "String", rust = "string_ascii_letters", flags = "pure cpython const" },
+  { py = "ascii_lowercase", fn = "asciiLowercase", params = "", ret = "String", rust = "string_ascii_lowercase", flags = "pure cpython const" },
+  { py = "ascii_uppercase", fn = "asciiUppercase", params = "", ret = "String", rust = "string_ascii_uppercase", flags = "pure cpython const" },
+  { py = "digits", fn = "digits", params = "", ret = "String", rust = "string_digits", flags = "pure cpython const" },
+  { py = "hexdigits", fn = "hexdigits", params = "", ret = "String", rust = "string_hexdigits", flags = "pure cpython const" },
+  { py = "octdigits", fn = "octdigits", params = "", ret = "String", rust = "string_octdigits", flags = "pure cpython const" },
+  { py = "punctuation", fn = "punctuation", params = "", ret = "String", rust = "string_punctuation", flags = "pure cpython const" },
+  { py = "whitespace", fn = "whitespace", params = "", ret = "String", rust = "string_whitespace", flags = "pure cpython const" },
+  { py = "printable", fn = "printable", params = "", ret = "String", rust = "string_printable", flags = "pure cpython const" },
+]
+
+# `textwrap`: the two that are pure text arithmetic.
+# `wrap`, `fill` and `shorten` split words with a regular
+# expression of CPython's own, so a twin for them is a
+# port and not a call — refused by name.
+[[group]]
+class = "Textwrap"
+module = "textwrap"
+layer = "python"
+rows = [
+  { py = "dedent", fn = "dedent", params = "text: String", ret = "String", rust = "textwrap_dedent", flags = "pure cpython" },
+  { py = "indent", fn = "indent", params = "text: String, prefix: String", ret = "String", rust = "textwrap_indent", flags = "pure cpython" },
+]
+
+# `bisect` and `heapq`, the pure halves. What they answer
+# follows what the list holds, so the twin does too.
+[[group]]
+class = "Bisect"
+module = "bisect"
+layer = "python"
+rows = [
+  { py = "bisect_left", fn = "left", params = "xs: List<?>, x: ?", ret = "Int", flags = "pure cpython pick" },
+  { py = "bisect_right", fn = "right", params = "xs: List<?>, x: ?", ret = "Int", flags = "pure cpython pick" },
+  { py = "bisect", fn = "right", params = "xs: List<?>, x: ?", ret = "Int", flags = "pure cpython pick" },
+  { fn = "leftStr", params = "xs: List<String>, x: String", ret = "Int", rust = "bisect_left_str", flags = "pure cpython" },
+  { fn = "rightStr", params = "xs: List<String>, x: String", ret = "Int", rust = "bisect_right_str", flags = "pure cpython" },
+  { fn = "leftInt", params = "xs: List<Int>, x: Int", ret = "Int", rust = "bisect_left_int", flags = "pure cpython" },
+  { fn = "rightInt", params = "xs: List<Int>, x: Int", ret = "Int", rust = "bisect_right_int", flags = "pure cpython" },
+  { fn = "leftFloat", params = "xs: List<Float>, x: Float", ret = "Int", rust = "bisect_left_float", flags = "pure cpython" },
+  { fn = "rightFloat", params = "xs: List<Float>, x: Float", ret = "Int", rust = "bisect_right_float", flags = "pure cpython" },
+]
+
+[[group]]
+class = "Heapq"
+module = "heapq"
+layer = "python"
+rows = [
+  { py = "nsmallest", fn = "nsmallest", params = "n: Int, xs: List<?>", ret = "List<?>", flags = "pure cpython pick" },
+  { py = "nlargest", fn = "nlargest", params = "n: Int, xs: List<?>", ret = "List<?>", flags = "pure cpython pick" },
+  { fn = "nsmallestStr", params = "n: Int, xs: List<String>", ret = "List<String>", rust = "heapq_nsmallest_str", flags = "pure cpython" },
+  { fn = "nlargestStr", params = "n: Int, xs: List<String>", ret = "List<String>", rust = "heapq_nlargest_str", flags = "pure cpython" },
+  { fn = "nsmallestInt", params = "n: Int, xs: List<Int>", ret = "List<Int>", rust = "heapq_nsmallest_int", flags = "pure cpython" },
+  { fn = "nlargestInt", params = "n: Int, xs: List<Int>", ret = "List<Int>", rust = "heapq_nlargest_int", flags = "pure cpython" },
+  { fn = "nsmallestFloat", params = "n: Int, xs: List<Float>", ret = "List<Float>", rust = "heapq_nsmallest_float", flags = "pure cpython" },
+  { fn = "nlargestFloat", params = "n: Int, xs: List<Float>", ret = "List<Float>", rust = "heapq_nlargest_float", flags = "pure cpython" },
+]
+
+# Python's `re`. The PATTERN is compiled by CPython at
+# translate time (`_re_call`), so what crosses is the u32
+# array its own compiler produced and the engine here runs it
+# — the backtracking, the groups and the flags are CPython's.
+# A `Match` has no shape a typed subset can hold, so the calls
+# that answer one are refused and the rest are here.
+[[group]]
+class = "Re"
+module = "re"
+layer = "python"
+rows = [
+  { py = "escape", fn = "escape", params = "s: String", ret = "String", rust = "re_escape", flags = "pure cpython" },
+  { py = "search", fn = "search", params = "p: String, s: String", ret = "Bool", flags = "pure cpython" },
+  { py = "match", fn = "match", params = "p: String, s: String", ret = "Bool", flags = "pure cpython" },
+  { py = "fullmatch", fn = "fullmatch", params = "p: String, s: String", ret = "Bool", flags = "pure cpython" },
+  { py = "findall", fn = "findall", params = "p: String, s: String", ret = "List<String>", flags = "pure cpython" },
+  { py = "sub", fn = "sub", params = "p: String, r: String, s: String", ret = "String", flags = "pure cpython" },
+  { py = "split", fn = "split", params = "p: String, s: String", ret = "List<String>", flags = "pure cpython" },
+  { fn = "runSearch", params = "codes: List<Int>, s: String", ret = "Bool", rust = "re_search", flags = "pure cpython" },
+  { fn = "runMatch", params = "codes: List<Int>, s: String", ret = "Bool", rust = "re_match", flags = "pure cpython" },
+  { fn = "runFullmatch", params = "codes: List<Int>, s: String", ret = "Bool", rust = "re_fullmatch", flags = "pure cpython" },
+  { fn = "runFindall", params = "codes: List<Int>, s: String, group: Int", ret = "List<String>", rust = "re_findall", flags = "pure cpython" },
+  { fn = "runSub", params = "codes: List<Int>, parts: List<Int>, lits: List<String>, s: String, count: Int, ngroups: Int", ret = "String", rust = "re_sub", flags = "pure cpython" },
+  { fn = "runSplit", params = "codes: List<Int>, s: String, maxsplit: Int", ret = "List<String>", rust = "re_split", flags = "pure cpython" },
+]
+
+# Python's `datetime`, carried as integers: a date is its
+# ordinal, a datetime is microseconds from the same origin,
+# a timedelta is microseconds. Comparison is then integer
+# comparison and nothing new crosses the boundary; what the
+# app writes as a method or an attribute is a static over
+# that integer (`DT_ATTRS` and `DT_METHODS`).
+[[group]]
+class = "Dt"
+# no module: not reachable as `module.fn`
+# no layer
+rows = [
+  { fn = "dateNew", params = "y: Int, m: Int, d: Int", ret = "Int", rust = "date_new", flags = "pure cpython" },
+  { fn = "dateToday", params = "", ret = "Int", rust = "date_today", flags = "pure cpython" },
+  { fn = "dateFromIso", params = "s: String", ret = "Int", rust = "date_from_iso", flags = "pure cpython" },
+  { fn = "dateFromOrdinal", params = "n: Int", ret = "Int", rust = "date_from_ordinal", flags = "pure cpython" },
+  { fn = "dateIsoformat", params = "o: Int", ret = "String", rust = "date_isoformat", flags = "pure cpython" },
+  { fn = "dateStr", params = "o: Int", ret = "String", rust = "date_str", flags = "pure cpython" },
+  { fn = "dateYear", params = "o: Int", ret = "Int", rust = "date_year", flags = "pure cpython" },
+  { fn = "dateMonth", params = "o: Int", ret = "Int", rust = "date_month", flags = "pure cpython" },
+  { fn = "dateDay", params = "o: Int", ret = "Int", rust = "date_day", flags = "pure cpython" },
+  { fn = "dateWeekday", params = "o: Int", ret = "Int", rust = "date_weekday", flags = "pure cpython" },
+  { fn = "dateIsoweekday", params = "o: Int", ret = "Int", rust = "date_isoweekday", flags = "pure cpython" },
+  { fn = "dateToordinal", params = "o: Int", ret = "Int", rust = "date_toordinal", flags = "pure cpython" },
+  { fn = "dateStrftime", params = "o: Int, fmt: String", ret = "String", rust = "date_strftime", flags = "pure cpython" },
+  { fn = "dateAddDelta", params = "o: Int, us: Int", ret = "Int", rust = "date_add_delta", flags = "pure cpython" },
+  { fn = "dateSubDelta", params = "o: Int, us: Int", ret = "Int", rust = "date_sub_delta", flags = "pure cpython" },
+  { fn = "dateSubDate", params = "a: Int, b: Int", ret = "Int", rust = "date_sub_date", flags = "pure cpython" },
+  { fn = "datetimeNew", params = "y: Int, m: Int, d: Int, h: Int, mi: Int, s: Int, us: Int", ret = "Int", rust = "datetime_new", flags = "pure cpython" },
+  { fn = "datetimeNow", params = "", ret = "Int", rust = "datetime_now", flags = "pure cpython" },
+  { fn = "datetimeFromIso", params = "s: String", ret = "Int", rust = "datetime_from_iso", flags = "pure cpython" },
+  { fn = "datetimeFromTimestamp", params = "secs: Float", ret = "Int", rust = "datetime_from_timestamp", flags = "pure cpython" },
+  { fn = "datetimeOfDate", params = "o: Int", ret = "Int", rust = "datetime_of_date", flags = "pure cpython" },
+  { fn = "datetimeIsoformat", params = "u: Int", ret = "String", rust = "datetime_isoformat", flags = "pure cpython" },
+  { fn = "datetimeStr", params = "u: Int", ret = "String", rust = "datetime_str", flags = "pure cpython" },
+  { fn = "datetimeDate", params = "u: Int", ret = "Int", rust = "datetime_date", flags = "pure cpython" },
+  { fn = "datetimeYear", params = "u: Int", ret = "Int", rust = "datetime_year", flags = "pure cpython" },
+  { fn = "datetimeMonth", params = "u: Int", ret = "Int", rust = "datetime_month", flags = "pure cpython" },
+  { fn = "datetimeDay", params = "u: Int", ret = "Int", rust = "datetime_day", flags = "pure cpython" },
+  { fn = "datetimeHour", params = "u: Int", ret = "Int", rust = "datetime_hour", flags = "pure cpython" },
+  { fn = "datetimeMinute", params = "u: Int", ret = "Int", rust = "datetime_minute", flags = "pure cpython" },
+  { fn = "datetimeSecond", params = "u: Int", ret = "Int", rust = "datetime_second", flags = "pure cpython" },
+  { fn = "datetimeMicrosecond", params = "u: Int", ret = "Int", rust = "datetime_microsecond", flags = "pure cpython" },
+  { fn = "datetimeWeekday", params = "u: Int", ret = "Int", rust = "datetime_weekday", flags = "pure cpython" },
+  { fn = "datetimeIsoweekday", params = "u: Int", ret = "Int", rust = "datetime_isoweekday", flags = "pure cpython" },
+  { fn = "datetimeToordinal", params = "u: Int", ret = "Int", rust = "datetime_toordinal", flags = "pure cpython" },
+  { fn = "datetimeTimestamp", params = "u: Int", ret = "Float", rust = "datetime_timestamp", flags = "pure cpython" },
+  { fn = "datetimeStrftime", params = "u: Int, fmt: String", ret = "String", rust = "datetime_strftime", flags = "pure cpython" },
+  { fn = "datetimeAddDelta", params = "u: Int, d: Int", ret = "Int", rust = "datetime_add_delta", flags = "pure cpython" },
+  { fn = "datetimeSubDelta", params = "u: Int, d: Int", ret = "Int", rust = "datetime_sub_delta", flags = "pure cpython" },
+  { fn = "datetimeSubDatetime", params = "a: Int, b: Int", ret = "Int", rust = "datetime_sub_datetime", flags = "pure cpython" },
+  { fn = "deltaNew", params = "days: Int, seconds: Int, micros: Int, millis: Int, minutes: Int, hours: Int, weeks: Int", ret = "Int", rust = "delta_new", flags = "pure cpython" },
+  { fn = "deltaDays", params = "u: Int", ret = "Int", rust = "delta_days", flags = "pure cpython" },
+  { fn = "deltaSeconds", params = "u: Int", ret = "Int", rust = "delta_seconds", flags = "pure cpython" },
+  { fn = "deltaMicroseconds", params = "u: Int", ret = "Int", rust = "delta_microseconds", flags = "pure cpython" },
+  { fn = "deltaTotalSeconds", params = "u: Int", ret = "Float", rust = "delta_total_seconds", flags = "pure cpython" },
+  { fn = "deltaStr", params = "u: Int", ret = "String", rust = "delta_str", flags = "pure cpython" },
+  { fn = "deltaAdd", params = "a: Int, b: Int", ret = "Int", rust = "delta_add", flags = "pure cpython" },
+  { fn = "deltaSub", params = "a: Int, b: Int", ret = "Int", rust = "delta_sub", flags = "pure cpython" },
+  { fn = "deltaMul", params = "a: Int, n: Int", ret = "Int", rust = "delta_mul", flags = "pure cpython" },
+  { fn = "deltaNeg", params = "a: Int", ret = "Int", rust = "delta_neg", flags = "pure cpython" },
+  { fn = "deltaAbs", params = "a: Int", ret = "Int", rust = "delta_abs", flags = "pure cpython" },
+]
+
+[[group]]
+class = "Py"
+# no module: not reachable as `module.fn`
+# no layer
+rows = [
+  { fn = "floatRepr", params = "v: Float", ret = "String", rust = "py_float_repr", flags = "pure" },
+  { fn = "boolRepr", params = "v: Bool", ret = "String", rust = "py_bool_repr", flags = "pure" },
+  { fn = "truedivInt", params = "a: Int, b: Int", ret = "Float", rust = "py_truediv_int", flags = "pure" },
+  { fn = "truedivFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_truediv_float", flags = "pure" },
+  { fn = "floordivInt", params = "a: Int, b: Int", ret = "Int", rust = "py_floordiv_int", flags = "pure" },
+  { fn = "floordivFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_floordiv_float", flags = "pure" },
+  { fn = "modInt", params = "a: Int, b: Int", ret = "Int", rust = "py_mod_int", flags = "pure" },
+  { fn = "modFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_mod_float", flags = "pure" },
+  { fn = "powInt", params = "a: Int, b: Int", ret = "Int", rust = "py_pow_int", flags = "pure" },
+  { fn = "powFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_pow_float", flags = "pure" },
+  { fn = "strLen", params = "s: String", ret = "Int", rust = "py_str_len", flags = "pure" },
+  { fn = "strIndex", params = "s: String, i: Int", ret = "String", rust = "py_str_index", flags = "pure" },
+  { fn = "strSlice", params = "s: String, a: Int, b: Int", ret = "String", rust = "py_str_slice", flags = "pure" },
+  { fn = "strUpper", params = "s: String", ret = "String", rust = "py_str_upper", flags = "pure" },
+  { fn = "strLower", params = "s: String", ret = "String", rust = "py_str_lower", flags = "pure" },
+  { fn = "strStrip", params = "s: String", ret = "String", rust = "py_str_strip", flags = "pure" },
+  { fn = "strLstrip", params = "s: String", ret = "String", rust = "py_str_lstrip", flags = "pure" },
+  { fn = "strRstrip", params = "s: String", ret = "String", rust = "py_str_rstrip", flags = "pure" },
+  { fn = "strSplit", params = "s: String, sep: String", ret = "List<String>", rust = "py_str_split", flags = "pure" },
+  { fn = "strSplitWs", params = "s: String", ret = "List<String>", rust = "py_str_split_ws", flags = "pure" },
+  { fn = "strJoin", params = "sep: String, parts: List<String>", ret = "String", rust = "py_str_join", flags = "pure" },
+  { fn = "strStartswith", params = "s: String, p: String", ret = "Bool", rust = "py_str_startswith", flags = "pure" },
+  { fn = "strEndswith", params = "s: String, p: String", ret = "Bool", rust = "py_str_endswith", flags = "pure" },
+  { fn = "strContains", params = "s: String, p: String", ret = "Bool", rust = "py_str_contains", flags = "pure" },
+  { fn = "strReplace", params = "s: String, from: String, to: String", ret = "String", rust = "py_str_replace", flags = "pure" },
+  { fn = "strFind", params = "s: String, p: String", ret = "Int", rust = "py_str_find", flags = "pure" },
+  { fn = "strCount", params = "s: String, p: String", ret = "Int", rust = "py_str_count", flags = "pure" },
+  { fn = "intOfStr", params = "s: String", ret = "Int", rust = "py_int_of_str", flags = "pure" },
+  { fn = "floatOfStr", params = "s: String", ret = "Float", rust = "py_float_of_str", flags = "pure" },
+  { fn = "floatOfInt", params = "v: Int", ret = "Float", rust = "py_float_of_int", flags = "pure" },
+  { fn = "intOfFloat", params = "v: Float", ret = "Int", rust = "py_int_of_float", flags = "pure" },
+  { fn = "round", params = "v: Float", ret = "Int", rust = "py_round", flags = "pure" },
+  { fn = "formatInt", params = "v: Int, spec: String", ret = "String", rust = "py_format_int", flags = "pure" },
+  { fn = "formatFloat", params = "v: Float, spec: String", ret = "String", rust = "py_format_float", flags = "pure" },
+  { fn = "formatStr", params = "v: String, spec: String", ret = "String", rust = "py_format_str", flags = "pure" },
+  { fn = "log", params = "msg: String", ret = "Int", rust = "log_line" },
+  { fn = "quit", params = "", ret = "Int", rust = "quit_app" },
+  { fn = "report", params = "fraction: Float, note: String", ret = "Int", rust = "progress_report" },
+  { fn = "abort", params = "msg: String", ret = "Int", rust = "py_abort" },
+  { fn = "listSortedStr", params = "xs: List<String>", ret = "List<String>", rust = "py_list_sorted_str", flags = "pure" },
+  { fn = "listSortedInt", params = "xs: List<Int>", ret = "List<Int>", rust = "py_list_sorted_int", flags = "pure" },
+  { fn = "listSortedFloat", params = "xs: List<Float>", ret = "List<Float>", rust = "py_list_sorted_float", flags = "pure" },
+  { fn = "listMinInt", params = "xs: List<Int>", ret = "Int", rust = "py_list_min_int", flags = "pure" },
+  { fn = "listMaxInt", params = "xs: List<Int>", ret = "Int", rust = "py_list_max_int", flags = "pure" },
+  { fn = "listSumInt", params = "xs: List<Int>", ret = "Int", rust = "py_list_sum_int", flags = "pure" },
+  { fn = "minInt", params = "a: Int, b: Int", ret = "Int", rust = "py_min2_int", flags = "pure" },
+  { fn = "maxInt", params = "a: Int, b: Int", ret = "Int", rust = "py_max2_int", flags = "pure" },
+  { fn = "absInt", params = "v: Int", ret = "Int", rust = "py_abs_int", flags = "pure" },
+  { fn = "listMinFloat", params = "xs: List<Float>", ret = "Float", rust = "py_list_min_float", flags = "pure" },
+  { fn = "listMaxFloat", params = "xs: List<Float>", ret = "Float", rust = "py_list_max_float", flags = "pure" },
+  { fn = "listSumFloat", params = "xs: List<Float>", ret = "Float", rust = "py_list_sum_float", flags = "pure" },
+  { fn = "minFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_min2_float", flags = "pure" },
+  { fn = "maxFloat", params = "a: Float, b: Float", ret = "Float", rust = "py_max2_float", flags = "pure" },
+  { fn = "absFloat", params = "v: Float", ret = "Float", rust = "py_abs_float", flags = "pure" },
+  { fn = "strTitle", params = "s: String", ret = "String", rust = "py_str_title", flags = "pure" },
+  { fn = "strCapitalize", params = "s: String", ret = "String", rust = "py_str_capitalize", flags = "pure" },
+  { fn = "strSwapcase", params = "s: String", ret = "String", rust = "py_str_swapcase", flags = "pure" },
+  { fn = "strZfill", params = "s: String, width: Int", ret = "String", rust = "py_str_zfill", flags = "pure" },
+  { fn = "strLjust", params = "s: String, width: Int, fill: String", ret = "String", rust = "py_str_ljust", flags = "pure" },
+  { fn = "strRjust", params = "s: String, width: Int, fill: String", ret = "String", rust = "py_str_rjust", flags = "pure" },
+  { fn = "strCenter", params = "s: String, width: Int, fill: String", ret = "String", rust = "py_str_center", flags = "pure" },
+  { fn = "strIsupper", params = "s: String", ret = "Bool", rust = "py_str_isupper", flags = "pure" },
+  { fn = "strIslower", params = "s: String", ret = "Bool", rust = "py_str_islower", flags = "pure" },
+  { fn = "strIsalpha", params = "s: String", ret = "Bool", rust = "py_str_isalpha", flags = "pure" },
+  { fn = "strIsdigit", params = "s: String", ret = "Bool", rust = "py_str_isdigit", flags = "pure" },
+  { fn = "strIsalnum", params = "s: String", ret = "Bool", rust = "py_str_isalnum", flags = "pure" },
+  { fn = "strIsspace", params = "s: String", ret = "Bool", rust = "py_str_isspace", flags = "pure" },
+  { fn = "strIsascii", params = "s: String", ret = "Bool", rust = "py_str_isascii", flags = "pure" },
+  { fn = "strRemoveprefix", params = "s: String, p: String", ret = "String", rust = "py_str_removeprefix", flags = "pure" },
+  { fn = "strRemovesuffix", params = "s: String, p: String", ret = "String", rust = "py_str_removesuffix", flags = "pure" },
+  { fn = "strRfind", params = "s: String, p: String", ret = "Int", rust = "py_str_rfind", flags = "pure" },
+  { fn = "strIndexOf", params = "s: String, p: String", ret = "Int", rust = "py_str_index_of", flags = "pure" },
+  { fn = "strRindex", params = "s: String, p: String", ret = "Int", rust = "py_str_rindex", flags = "pure" },
+  { fn = "strSplitlines", params = "s: String", ret = "List<String>", rust = "py_str_splitlines", flags = "pure" },
+  { fn = "strExpandtabs", params = "s: String, size: Int", ret = "String", rust = "py_str_expandtabs", flags = "pure" },
+  { fn = "strStripChars", params = "s: String, set: String", ret = "String", rust = "py_str_strip_chars", flags = "pure" },
+  { fn = "strLstripChars", params = "s: String, set: String", ret = "String", rust = "py_str_lstrip_chars", flags = "pure" },
+  { fn = "strRstripChars", params = "s: String, set: String", ret = "String", rust = "py_str_rstrip_chars", flags = "pure" },
+  { fn = "strPartitionBefore", params = "s: String, sep: String", ret = "String", rust = "py_str_partition_before", flags = "pure" },
+  { fn = "strPartitionSep", params = "s: String, sep: String", ret = "String", rust = "py_str_partition_sep", flags = "pure" },
+  { fn = "strPartitionAfter", params = "s: String, sep: String", ret = "String", rust = "py_str_partition_after", flags = "pure" },
+  { fn = "strRpartitionBefore", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_before", flags = "pure" },
+  { fn = "strRpartitionSep", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_sep", flags = "pure" },
+  { fn = "strRpartitionAfter", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_after", flags = "pure" },
+]

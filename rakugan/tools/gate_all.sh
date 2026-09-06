@@ -24,6 +24,15 @@ if ! perl tools/gen.pl --check; then
 fi
 echo "OK   vocabulary"
 
+# The framework's own standard library is one manifest, and three files
+# are written from it: the C face's arms, the Perl that calls them, and
+# the binding door the compiled run reads.
+if ! perl tools/gen_capi.pl --check; then
+  echo "FAIL manifest (the generated files are behind crates/yokan-stdlib/stdlib.toml)"
+  exit 1
+fi
+echo "OK   manifest"
+
 # Every refusal that stands for a decision has a file that triggers it
 # and the message it must print. A rule that stops firing is a promise
 # the dialect quietly dropped.
@@ -70,6 +79,17 @@ gate shared  ./bin/rakugan gate demo/shared.pl --script "click:lock,click:save,i
 gate lookup  ./bin/rakugan gate demo/lookup.pl --script "click:apple,dump,click:cherry,dump,click:miss,dump"
 gate table   ./bin/rakugan gate demo/table.pl --script "click:refresh,dump,click:refresh"
 gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,click:next month"
+gate files   ./bin/rakugan gate demo/files.pl --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
+gate dbnotes ./bin/rakugan gate demo/dbnotes.pl --fresh demo/.gate/notes.db --script "click:setup,click:load,dump"
+gate ledger  ./bin/rakugan gate demo/ledger.pl --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
+gate reader  ./bin/rakugan gate demo/reader.pl --fresh demo/.gate/feed.json --script "click:fetch,dump"
+gate csv_viewer ./bin/rakugan gate demo/csv_viewer.pl --script "input:momo,dump,input:zzz,dump"
+gate dialog  ./bin/rakugan gate demo/dialog.pl --script "click:open dialog,dump,click:accept,dump"
+gate about   ./bin/rakugan gate demo/about.pl --script "click:copy link,dump,click:Website"
+gate sound   ./bin/rakugan gate demo/sound.pl --script "click:jump,dump,slide:0.3,click:blast,click:stop,dump"
+gate keys    ./bin/rakugan gate demo/keys.pl --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
+mkdir -p demo/.gate && echo "a file the picker can read" > demo/.gate/fs_probe.txt
+gate picker  ./bin/rakugan gate demo/picker.pl --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
 gate stdlib  ./bin/rakugan gate demo/stdlib.pl --script "click:measure,click:stats,click:sift,click:combine,dump,click:stamp,click:words,click:set,click:first,click:scan,click:tidy,dump"
 gate flow    ./bin/rakugan gate demo/flow.pl --script "click:step,click:tally,dump,click:bump3,click:find,dump"
 gate forms   ./bin/rakugan gate demo/forms.pl --script "click:Dark mode,slide:7,select:banana"
