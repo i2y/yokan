@@ -11,6 +11,7 @@ This page is the language, in the order you meet it. Everything in it
 runs: `tools/tour_check.rb` pulls every complete example out of this
 file and puts it through the same command a demo goes through, so a
 rename in the vocabulary breaks this page before a reader meets it.
+日本語版は [TOUR.ja.md](TOUR.ja.md).
 
 ## Table of contents
 
@@ -504,7 +505,7 @@ line and the rewrite. It runs before every build and every gate.
 - State in a global written from inside a block. Put it on the app.
 - A list grown with `list + [item]` on a field. Write `dup` then
   `push`: the two runs do not agree about what the first one answers.
-- A handler given as anything but a literal block, or a proc of no
+- A handler given as anything but a literal block or a proc of no
   arguments through a keyword.
 - An element's own block written inside a loop's block. Move it into a
   method that takes what it needs.

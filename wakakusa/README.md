@@ -224,6 +224,10 @@ $ cd wakakusa
 $ ./bin/wakakusa run demo/counter.rb   # a window
 ```
 
+The [language tour](TOUR.md) is the whole language in the order you
+meet it, and every example in it runs. 日本語版は
+[TOUR.ja.md](TOUR.ja.md).
+
 ## What does not work yet
 
 - No sound. The engine has no audio verb, which is why the two games
