@@ -13,6 +13,11 @@ you ship, the same source becomes a machine-code executable.
 Whether the two behave the same is something you can check, with
 `yokan gate`.
 
+Two more languages live in this repository, on the same engine:
+**[Wakakusa](https://i2y.github.io/yokan/wakakusa/)** (Ruby,
+`wakakusa/`) and **[Rakugan](https://i2y.github.io/yokan/rakugan/)**
+(Perl, `rakugan/`). Each has a tour, demos and a gate of its own.
+
 First, what it looks like: OpsBoard, a bundled dashboard demo —
 charts, a virtualized list, theme switching — written entirely in
 Python (source: `crates/yokan/demo/opsboard/`).
