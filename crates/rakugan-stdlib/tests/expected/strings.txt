@@ -1,0 +1,91 @@
+# perl v5.44.0 — printed by rakugan/tools/gen_expected.pl, not by hand.
+length_of s: -> i:0
+uc s: -> s:
+lc s: -> s:
+ucfirst s: -> s:
+lcfirst s: -> s:
+reverse_str s: -> s:
+length_of s:hello -> i:5
+uc s:hello -> s:HELLO
+lc s:hello -> s:hello
+ucfirst s:hello -> s:Hello
+lcfirst s:hello -> s:hello
+reverse_str s:hello -> s:olleh
+length_of s:%e6%97%a5%e6%9c%ac -> i:2
+uc s:%e6%97%a5%e6%9c%ac -> s:%e6%97%a5%e6%9c%ac
+lc s:%e6%97%a5%e6%9c%ac -> s:%e6%97%a5%e6%9c%ac
+ucfirst s:%e6%97%a5%e6%9c%ac -> s:%e6%97%a5%e6%9c%ac
+lcfirst s:%e6%97%a5%e6%9c%ac -> s:%e6%97%a5%e6%9c%ac
+reverse_str s:%e6%97%a5%e6%9c%ac -> s:%e6%9c%ac%e6%97%a5
+length_of s:%ce%a3%ce%91%ce%a3 -> i:3
+uc s:%ce%a3%ce%91%ce%a3 -> s:%ce%a3%ce%91%ce%a3
+lc s:%ce%a3%ce%91%ce%a3 -> s:%cf%83%ce%b1%cf%83
+ucfirst s:%ce%a3%ce%91%ce%a3 -> s:%ce%a3%ce%91%ce%a3
+lcfirst s:%ce%a3%ce%91%ce%a3 -> s:%cf%83%ce%91%ce%a3
+reverse_str s:%ce%a3%ce%91%ce%a3 -> s:%ce%a3%ce%91%ce%a3
+length_of s:%cf%83%ce%b1%cf%82 -> i:3
+uc s:%cf%83%ce%b1%cf%82 -> s:%ce%a3%ce%91%ce%a3
+lc s:%cf%83%ce%b1%cf%82 -> s:%cf%83%ce%b1%cf%82
+ucfirst s:%cf%83%ce%b1%cf%82 -> s:%ce%a3%ce%b1%cf%82
+lcfirst s:%cf%83%ce%b1%cf%82 -> s:%cf%83%ce%b1%cf%82
+reverse_str s:%cf%83%ce%b1%cf%82 -> s:%cf%82%ce%b1%cf%83
+length_of s:%c3%9f -> i:1
+uc s:%c3%9f -> s:SS
+lc s:%c3%9f -> s:%c3%9f
+ucfirst s:%c3%9f -> s:Ss
+lcfirst s:%c3%9f -> s:%c3%9f
+reverse_str s:%c3%9f -> s:%c3%9f
+length_of s:aBc -> i:3
+uc s:aBc -> s:ABC
+lc s:aBc -> s:abc
+ucfirst s:aBc -> s:ABc
+lcfirst s:aBc -> s:aBc
+reverse_str s:aBc -> s:cBa
+length_of s:a%20b -> i:3
+uc s:a%20b -> s:A%20B
+lc s:a%20b -> s:a%20b
+ucfirst s:a%20b -> s:A%20b
+lcfirst s:a%20b -> s:a%20b
+reverse_str s:a%20b -> s:b%20a
+substr_from s:hello i:0 -> s:hello
+substr_from s:hello i:1 -> s:ello
+substr_from s:hello i:5 -> s:
+substr_from s:hello i:-2 -> s:lo
+substr_from s:%e6%97%a5%e6%9c%ac%e8%aa%9e i:1 -> s:%e6%9c%ac%e8%aa%9e
+substr_len s:hello i:1 i:3 -> s:ell
+substr_len s:hello i:1 i:-1 -> s:ell
+substr_len s:hello i:0 i:0 -> s:
+substr_len s:hello i:-3 i:2 -> s:ll
+substr_len s:%e6%97%a5%e6%9c%ac%e8%aa%9e i:0 i:2 -> s:%e6%97%a5%e6%9c%ac
+index_of s:hello s:l -> i:2
+rindex_of s:hello s:l -> i:3
+index_of s:hello s:z -> i:-1
+rindex_of s:hello s:z -> i:-1
+index_of s:hello s: -> i:0
+rindex_of s:hello s: -> i:5
+index_of s:%e6%97%a5%e6%9c%ac%e8%aa%9e s:%e6%9c%ac -> i:1
+rindex_of s:%e6%97%a5%e6%9c%ac%e8%aa%9e s:%e6%9c%ac -> i:1
+index_of s:banana s:na -> i:2
+rindex_of s:banana s:na -> i:4
+index_from s:hello s:l i:3 -> i:3
+rindex_from s:hello s:l i:3 -> i:3
+index_from s:hello s:l i:4 -> i:-1
+rindex_from s:hello s:l i:4 -> i:3
+index_from s:banana s:na i:3 -> i:4
+rindex_from s:banana s:na i:3 -> i:2
+index_from s:banana s:na i:0 -> i:2
+rindex_from s:banana s:na i:0 -> i:-1
+join s:%2c [s:a,s:b,s:c] -> s:a%2cb%2cc
+join s: [s:a,s:b] -> s:ab
+join s:- [] -> s:
+join s:%2c%20 [s:x] -> s:x
+split_on s:%2c s:a%2cb%2cc -> [s:a,s:b,s:c]
+split_on s:%2c s:a%2c%2cb%2c%2c -> [s:a,s:,s:b]
+split_on s:%2c s: -> []
+split_on s: s:abc -> [s:a,s:b,s:c]
+split_on s:%2c s:%2ca -> [s:,s:a]
+split_on s:-- s:a--b -> [s:a,s:b]
+split_words s:%20%20the%20quick%20%20brown%20fox%20%20 -> [s:the,s:quick,s:brown,s:fox]
+split_words s: -> []
+split_words s:one -> [s:one]
+split_words s:a%09b%0ac -> [s:a,s:b,s:c]

@@ -47,6 +47,18 @@ my %TYPE_WORD = (Int => 'Int', Str => 'String', Num => 'Float', Bool => 'Bool');
 # What Perl has that a compiled app cannot be given, each with what to
 # write instead. These are decisions, not gaps: the reason is in the
 # message, and the tour lists them.
+# Perl's named unary operators the dialect takes: what each is given,
+# what it answers, and the twin that answers it.
+my %UNARY = (
+    length  => ['String', 'Int',    'lengthOf'],
+    uc      => ['String', 'String', 'uc'],
+    lc      => ['String', 'String', 'lc'],
+    ucfirst => ['String', 'String', 'ucfirst'],
+    lcfirst => ['String', 'String', 'lcfirst'],
+    sqrt    => ['Float',  'Float',  'sqrtOf'],
+    floor   => ['Float',  'Float',  'floorOf'],
+    ceil    => ['Float',  'Float',  'ceilOf'],
+);
 my %NOT_TAKEN = (
     print   => 'a compiled app writes its screen, not its standard output — that is where the '
              . 'gate reads the tree from; `warn` goes to standard error and is taken',
@@ -147,6 +159,37 @@ class Pl {
   static fn fmtNum(fmt: String, v: Float) String @rust("rakugan_stdlib::fmt_num")
   static fn fmtInt(fmt: String, v: Int) String @rust("rakugan_stdlib::fmt_int")
   static fn fmtStr(fmt: String, v: String) String @rust("rakugan_stdlib::fmt_str")
+  static fn lengthOf(s: String) Int @rust("rakugan_stdlib::length_of")
+  static fn substrFrom(s: String, off: Int) String @rust("rakugan_stdlib::substr_from")
+  static fn substrLen(s: String, off: Int, len: Int) String @rust("rakugan_stdlib::substr_len")
+  static fn indexOf(s: String, sub: String) Int @rust("rakugan_stdlib::index_of")
+  static fn indexFrom(s: String, sub: String, pos: Int) Int @rust("rakugan_stdlib::index_from")
+  static fn rindexOf(s: String, sub: String) Int @rust("rakugan_stdlib::rindex_of")
+  static fn rindexFrom(s: String, sub: String, pos: Int) Int @rust("rakugan_stdlib::rindex_from")
+  static fn uc(s: String) String @rust("rakugan_stdlib::uc")
+  static fn lc(s: String) String @rust("rakugan_stdlib::lc")
+  static fn ucfirst(s: String) String @rust("rakugan_stdlib::ucfirst")
+  static fn lcfirst(s: String) String @rust("rakugan_stdlib::lcfirst")
+  static fn reverseStr(s: String) String @rust("rakugan_stdlib::reverse_str")
+  static fn join(sep: String, parts: List<String>) String @rust("rakugan_stdlib::join")
+  static fn splitOn(sep: String, s: String) List<String> @rust("rakugan_stdlib::split_on")
+  static fn splitWords(s: String) List<String> @rust("rakugan_stdlib::split_words")
+  static fn absNum(v: Float) Float @rust("rakugan_stdlib::abs_num")
+  static fn absInt(v: Int) Int @rust("rakugan_stdlib::abs_int")
+  static fn sqrtOf(v: Float) Float @rust("rakugan_stdlib::sqrt_of")
+  static fn floorOf(v: Float) Float @rust("rakugan_stdlib::floor_of")
+  static fn ceilOf(v: Float) Float @rust("rakugan_stdlib::ceil_of")
+  static fn fmodOf(a: Float, b: Float) Float @rust("rakugan_stdlib::fmod_of")
+  static fn sumInt(xs: List<Int>) Int @rust("rakugan_stdlib::sum_int")
+  static fn sumNum(xs: List<Float>) Float @rust("rakugan_stdlib::sum_num")
+  static fn maxInt(xs: List<Int>) Int @rust("rakugan_stdlib::max_int")
+  static fn minInt(xs: List<Int>) Int @rust("rakugan_stdlib::min_int")
+  static fn maxNum(xs: List<Float>) Float @rust("rakugan_stdlib::max_num")
+  static fn minNum(xs: List<Float>) Float @rust("rakugan_stdlib::min_num")
+  static fn uniqStr(xs: List<String>) List<String> @rust("rakugan_stdlib::uniq_str")
+  static fn uniqInt(xs: List<Int>) List<Int> @rust("rakugan_stdlib::uniq_int")
+  static fn strftimeUtc(fmt: String, epoch: Int) String @rust("rakugan_stdlib::strftime_utc")
+  static fn strftimeLocal(fmt: String, epoch: Int) String @rust("rakugan_stdlib::strftime_local")
 }
 RPI
 }
@@ -1123,13 +1166,28 @@ sub word_expr {
     }
     if ($name eq 'sort') {
         $$ip++;
-        refuse($w, '`sort` with a block of its own is not in the translator yet; `sort keys %h` is '
-                 . 'what a view reads a hash with')
-            if $next && $next->isa('PPI::Structure::Block');
+        my $desc = 0;
+        my $how;
+        if ($next && $next->isa('PPI::Structure::Block')) {
+            $$ip++;
+            ($how, $desc) = sort_block($next);
+        }
         my $v = expr_bp($ip, $toks, { %$env, sorted => 1 }, 30);
-        refuse($w, '`sort` here sorts the keys of a hash: `sort keys %h`')
-            unless $v->{ty} eq 'List<String>' && $v->{pix} =~ /\.keys\z/;
-        return { ty => 'List<String>', pix => $v->{pix} };
+        my $inner = $v->{ty} =~ /\AList<(.+)>\z/ ? $1 : refuse($w, "`sort` puts a list in order (got $v->{ty})");
+        refuse($w, 'a hash hands its keys back in a different order every time perl starts, so they are '
+                 . 'read `sort keys %h`; sorting them again is the same list')
+            if $v->{pix} =~ /\.keys\z/ && $how;
+        return { ty => $v->{ty}, pix => $v->{pix} } if $v->{pix} =~ /\.keys\z/;
+        if (!$how) {
+            refuse($w, "a bare `sort` puts things in the order of their text, which for numbers is not "
+                     . "their order (perl's `sort 10, 9` is `10, 9`); write `sort { \$a <=> \$b } \@xs`")
+                unless $inner eq 'String';
+        } elsif ($how eq 'num') {
+            refuse($w, '`<=>` compares numbers, and this list holds ' . $inner) unless num_ty($inner);
+        } else {
+            refuse($w, '`cmp` compares text, and this list holds ' . $inner) unless $inner eq 'String';
+        }
+        return { ty => $v->{ty}, pix => "$v->{pix}.sortedBy($v->{pix}, " . ($desc ? 'true' : 'false') . ')' };
     }
     if ($name eq 'exists') {
         $$ip++;
@@ -1154,7 +1212,8 @@ sub word_expr {
         my $lst = parse_expr($a[1]{toks}, { %$env, at => $a[1]{node} });
         refuse($a[0]{node}, "`join` puts a string between (got $sep->{ty})") unless $sep->{ty} eq 'String';
         refuse($a[1]{node}, '`join` joins a list of strings') unless $lst->{ty} eq 'List<String>';
-        return { ty => 'String', pix => "$lst->{pix}.join($sep->{pix})" };
+        $uses_pl = 1;
+        return { ty => 'String', pix => "Pl.join($sep->{pix}, $lst->{pix})" };
     }
     if ($name eq 'sprintf') {
         $$ip++;
@@ -1174,24 +1233,273 @@ sub word_expr {
         $uses_pl = 1;
         return { ty => 'Int', pix => "Pl.intOf($v->{pix})" };
     }
+    if (my $u = $UNARY{$name}) {
+        $$ip++;
+        my $v = one_arg($ip, $toks, $env, $w, $name);
+        refuse($w, "`$name` takes a $u->[0] (got $v->{ty})")
+            unless $v->{ty} eq $u->[0] || ($u->[0] eq 'Float' && $v->{ty} eq 'Int');
+        $uses_pl = 1;
+        return { ty => $u->[1], pix => "Pl.$u->[2]($v->{pix})" };
+    }
+    if ($name eq 'abs') {
+        $$ip++;
+        my $v = one_arg($ip, $toks, $env, $w, $name);
+        refuse($w, "`abs` takes a number (got $v->{ty})") unless num_ty($v->{ty});
+        $uses_pl = 1;
+        return { ty => $v->{ty}, pix => 'Pl.' . ($v->{ty} eq 'Int' ? 'absInt' : 'absNum') . "($v->{pix})" };
+    }
+    if ($name eq 'reverse') {
+        $$ip++;
+        my $v = one_arg($ip, $toks, $env, $w, $name);
+        $uses_pl = 1;
+        return { ty => 'String', pix => "Pl.reverseStr($v->{pix})" } if $v->{ty} eq 'String';
+        refuse($w, "`reverse` turns a string or a list around (got $v->{ty})") unless $v->{ty} =~ /\AList</;
+        return { ty => $v->{ty}, pix => "$v->{pix}.reversed()" };
+    }
+    if ($name =~ /\A(?:sum|max|min|uniq)\z/) {
+        $$ip++;
+        my $v = one_arg($ip, $toks, $env, $w, $name);
+        my $inner = $v->{ty} =~ /\AList<(.+)>\z/
+            ? $1 : refuse($w, "`$name` reads a list (got $v->{ty})");
+        refuse($w, "`$name` reads a list of numbers or, for `uniq`, of strings; this one holds $inner")
+            unless $inner eq 'Int' || $inner eq 'Float' || ($name eq 'uniq' && $inner eq 'String');
+        my %by = (Int => 'Int', Float => 'Num', String => 'Str');
+        my $fn = $name . $by{$inner};
+        $fn = 'uniqStr' if $name eq 'uniq' && $inner eq 'String';
+        $uses_pl = 1;
+        return { ty => ($name eq 'uniq' ? $v->{ty} : $inner), pix => "Pl.$fn($v->{pix})" };
+    }
+    if ($name =~ /\A(?:substr|index|rindex|split|fmod|strftime)\z/) {
+        $$ip++;
+        refuse($w, "`$name` is called with parentheses here") unless $next && $next->isa('PPI::Structure::List');
+        $$ip++;
+        return perl_call($name, $w, $next, $env);
+    }
     refuse($w, $NOT_TAKEN{$name}) if $NOT_TAKEN{$name};
     refuse($w, "`$name` is not something the translator knows; a method of the app is called `\$self->$name`");
 }
 
-# `sprintf(FORMAT, value)` — one value, whose type picks the twin.
+# `sort { $a <=> $b } @xs` and its three siblings: which way round, and
+# whether the comparison is of numbers or of text.
+sub sort_block {
+    my ($block) = @_;
+    my @st = $block->schildren;
+    refuse($block, 'a `sort` block compares `$a` and `$b`') unless @st == 1;
+    my @t = strip_semicolon(sig($st[0]));
+    refuse($block, 'a `sort` block is `{ $a <=> $b }` or `{ $a cmp $b }`, either way round')
+        unless @t == 3 && is_sym($t[0], '$') && is_sym($t[2], '$')
+            && (is_op($t[1], '<=>') || is_word($t[1], 'cmp') || is_op($t[1], 'cmp'));
+    my ($l, $r) = ($t[0]->content, $t[2]->content);
+    refuse($block, 'a `sort` block compares `$a` and `$b`, and nothing else')
+        unless ($l eq '$a' && $r eq '$b') || ($l eq '$b' && $r eq '$a');
+    my $how = is_op($t[1], '<=>') ? 'num' : 'text';
+    return ($how, $l eq '$b' ? 1 : 0);
+}
+
+# `grep { ... } @xs`, `map { ... } @xs` and `(first { ... } @xs) // $d`
+# where a value is being given a name. Each becomes a loop, because
+# that is what it is; the lines go in front of the statement.
+sub pipeline_rhs {
+    my ($toks, $env, $node) = @_;
+    my @t = @$toks;
+    # `(first { ... } @xs) // $default`
+    if (@t >= 3 && $t[0]->isa('PPI::Structure::List') && is_op($t[1], '//')) {
+        my @inner = map { sig($_) } $t[0]->schildren;
+        return undef unless @inner && is_word($inner[0], 'first');
+        return first_of(\@inner, [@t[2 .. $#t]], $env, $node);
+    }
+    return undef unless is_word($t[0]) && $t[0]->content =~ /\A(?:grep|map)\z/;
+    my ($w, $block, @rest) = @t;
+    refuse($w, "`" . $w->content . '` takes a block and a list: `grep { $_ > 5 } @xs`')
+        unless $block && $block->isa('PPI::Structure::Block') && @rest;
+    refuse($w, "`" . $w->content . '` builds a list here, and a view has nowhere to build one; '
+             . 'a view repeats over a list it already holds')
+        if $env->{ctx} eq 'view';
+    my $over = list_source(\@rest, $env, $w);
+    refuse($w, "`" . $w->content . '` walks a list') unless $over->{list};
+    my @st = $block->schildren;
+    refuse($block, "`" . $w->content . '` takes one expression in its block') unless @st == 1;
+    my $it = '__it' . ++$tmp;
+    my $inner = { %$env, vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
+    my $out = '__lc' . ++$tmp;
+    my @body = strip_semicolon(sig($st[0]));
+    if ($w->content eq 'grep') {
+        my $cond = cond_of(\@body, $inner, $block);
+        push @{ $env->{pre} }, "var $out : $over->{listty} = []",
+            "for $it in $over->{over} {", "  if $cond {", "    $out.push($it)", '  }', '}';
+        return { ty => $over->{listty}, pix => $out };
+    }
+    my $v = parse_expr(\@body, { %$inner, at => $block });
+    push @{ $env->{pre} }, "var $out : List<$v->{ty}> = []",
+        "for $it in $over->{over} {", "  $out.push($v->{pix})", '}';
+    return { ty => "List<$v->{ty}>", pix => $out };
+}
+
+# `(first { ... } @xs) // $default` — perl answers undef when nothing
+# matches, and the dialect has no undef, so the app says what to
+# answer instead.
+sub first_of {
+    my ($toks, $default, $env, $node) = @_;
+    my ($w, $block, @rest) = @$toks;
+    refuse($w, '`first` takes a block and a list: `(first { $_ > 5 } @xs) // -1`')
+        unless $block && $block->isa('PPI::Structure::Block') && @rest;
+    refuse($w, '`first` looks through a list here, and a view has nowhere to do that')
+        if $env->{ctx} eq 'view';
+    my $over = list_source(\@rest, $env, $w);
+    refuse($w, '`first` walks a list') unless $over->{list};
+    my $d = parse_expr($default, { %$env, at => $node });
+    refuse($node, "`first` answers a $over->{ty}, and after `//` this is a $d->{ty}")
+        unless $d->{ty} eq $over->{ty} || ($over->{ty} eq 'Float' && $d->{ty} eq 'Int');
+    my @st = $block->schildren;
+    refuse($block, '`first` takes one expression in its block') unless @st == 1;
+    my $it = '__it' . ++$tmp;
+    my $inner = { %$env, vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
+    my $out = '__f' . ++$tmp;
+    my $cond = cond_of([strip_semicolon(sig($st[0]))], $inner, $block);
+    push @{ $env->{pre} }, "var $out : $over->{ty} = $d->{pix}",
+        "for $it in $over->{over} {", "  if $cond {", "    $out = $it", '    break', '  }', '}';
+    return { ty => $over->{ty}, pix => $out };
+}
+
+# What a named unary operator was given: `uc $s` and `uc($s)` both.
+sub one_arg {
+    my ($ip, $toks, $env, $w, $name) = @_;
+    my $t = $toks->[$$ip];
+    if ($t && $t->isa('PPI::Structure::List')) {
+        my @a = split_args($t);
+        refuse($w, "`$name` takes one value") unless @a == 1;
+        $$ip++;
+        return parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+    }
+    return expr_bp($ip, $toks, $env, 30);
+}
+
+# The rest of Perl's own, each called with parentheses.
+sub perl_call {
+    my ($name, $w, $list, $env) = @_;
+    my @a = split_args($list);
+    return strftime_call($w, \@a, $env) if $name eq 'strftime';
+    my @v = map { parse_expr($_->{toks}, { %$env, at => $_->{node} }) } @a;
+    my $want = sub {
+        my ($i, $ty) = @_;
+        refuse($a[$i]{node}, "`$name` takes a $ty here (got $v[$i]{ty})")
+            unless $v[$i]{ty} eq $ty || ($ty eq 'Float' && $v[$i]{ty} eq 'Int');
+        return $v[$i]{pix};
+    };
+    $uses_pl = 1;
+    if ($name eq 'substr') {
+        refuse($w, '`substr` takes a string, where to start, and how much') unless @a == 2 || @a == 3;
+        return { ty => 'String', pix => @a == 2 ? "Pl.substrFrom(" . $want->(0, 'String') . ', ' . $want->(1, 'Int') . ')'
+                                                : "Pl.substrLen(" . $want->(0, 'String') . ', ' . $want->(1, 'Int')
+                                                  . ', ' . $want->(2, 'Int') . ')' };
+    }
+    if ($name eq 'index' || $name eq 'rindex') {
+        refuse($w, "`$name` takes a string, what to look for, and where to start from") unless @a == 2 || @a == 3;
+        my $fn = $name eq 'index' ? 'index' : 'rindex';
+        return { ty => 'Int', pix => @a == 2 ? "Pl.${fn}Of(" . $want->(0, 'String') . ', ' . $want->(1, 'String') . ')'
+                                             : "Pl.${fn}From(" . $want->(0, 'String') . ', ' . $want->(1, 'String')
+                                               . ', ' . $want->(2, 'Int') . ')' };
+    }
+    if ($name eq 'fmod') {
+        refuse($w, '`fmod` takes two numbers') unless @a == 2;
+        return { ty => 'Float', pix => 'Pl.fmodOf(' . $want->(0, 'Float') . ', ' . $want->(1, 'Float') . ')' };
+    }
+    if ($name eq 'split') {
+        refuse($w, '`split` takes what to split on and the string') unless @a == 2;
+        my $sep = $v[0];
+        refuse($a[0]{node}, '`split` here takes a separator written out as a string; a pattern comes with '
+                          . 'the regular expressions')
+            unless defined $sep->{lit};
+        return { ty => 'List<String>', pix => "Pl.splitWords(" . $want->(1, 'String') . ')' }
+            if $sep->{lit} eq ' ';
+        refuse($a[0]{node}, 'a separator here is plain text; `' . $sep->{lit} . '` reads as a pattern')
+            if $sep->{lit} =~ /[\\^\$.\[\]|()?*+{}]/;
+        return { ty => 'List<String>', pix => 'Pl.splitOn(' . $sep->{pix} . ', ' . $want->(1, 'String') . ')' };
+    }
+    refuse($w, "`$name` is not something the translator knows");
+}
+
+# `strftime($fmt, gmtime($epoch))` and the same with `localtime`. perl
+# hands strftime the nine numbers a moment breaks into; the moment
+# itself is what crosses here, and the twin breaks it apart again.
+sub strftime_call {
+    my ($w, $a, $env) = @_;
+    my @a = @$a;
+    refuse($w, '`strftime` is written `strftime($fmt, gmtime($epoch))` or with `localtime`') unless @a == 2;
+    my $fmt = parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+    refuse($a[0]{node}, "`strftime` takes a format (got $fmt->{ty})") unless $fmt->{ty} eq 'String';
+    my @t = @{ $a[1]{toks} };
+    refuse($a[1]{node}, '`strftime` takes the moment as `gmtime($epoch)` or `localtime($epoch)`')
+        unless @t == 2 && is_word($t[0]) && $t[0]->content =~ /\A(?:gmtime|localtime)\z/
+            && $t[1]->isa('PPI::Structure::List');
+    my @e = split_args($t[1]);
+    refuse($a[1]{node}, '`gmtime` here takes the moment in seconds') unless @e == 1;
+    my $epoch = parse_expr($e[0]{toks}, { %$env, at => $e[0]{node} });
+    refuse($e[0]{node}, "a moment is a whole number of seconds (got $epoch->{ty})") unless $epoch->{ty} eq 'Int';
+    my $fn = $t[0]->content eq 'gmtime' ? 'strftimeUtc' : 'strftimeLocal';
+    $uses_pl = 1;
+    return { ty => 'String', pix => "Pl.$fn($fmt->{pix}, $epoch->{pix})" };
+}
+
+# `sprintf(FORMAT, value…)`. The format is written out, so it is cut
+# apart here: the text between the conversions is text, and each
+# conversion is one twin call with the one value it writes. The twin
+# for one conversion is what the table holds to perl, so a format with
+# five of them is held to perl five times over.
 sub sprintf_call {
     my ($w, $list, $env) = @_;
     my @a = split_args($list);
-    refuse($w, '`sprintf` here takes a format and one value; more than one comes later') unless @a == 2;
+    refuse($w, '`sprintf` takes a format and the values it writes') unless @a >= 1;
     my $fmt = parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
     refuse($a[0]{node}, '`sprintf` takes a format written out as a string') unless defined $fmt->{lit};
-    my $v = parse_expr($a[1]{toks}, { %$env, at => $a[1]{node} });
+    my @pieces = format_pieces($fmt->{lit}, $a[0]{node});
+    my @specs = grep { $_->{spec} } @pieces;
+    refuse($a[0]{node}, 'this format writes ' . scalar(@specs) . ' value'
+                      . (@specs == 1 ? '' : 's') . ', and ' . (@a - 1) . ' '
+                      . (@a - 1 == 1 ? 'was' : 'were') . ' written')
+        unless @specs == @a - 1;
     my %fn = (Float => 'fmtNum', Int => 'fmtInt', String => 'fmtStr');
-    my $fn = $fn{ $v->{ty} } or refuse($a[1]{node}, "`sprintf` writes a number or a string here (got $v->{ty})");
-    my $n = () = $fmt->{lit} =~ /%[^%]/g;
-    refuse($a[0]{node}, "this format takes $n values, and one was written") unless $n == 1;
-    $uses_pl = 1;
-    return { ty => 'String', pix => "Pl.$fn($fmt->{pix}, $v->{pix})" };
+    my (@out, $i);
+    for my $p (@pieces) {
+        if (!$p->{spec}) {
+            push @out, '"' . pix_text($a[0]{node}, $p->{text}) . '"' if length $p->{text};
+            next;
+        }
+        my $arg = $a[++$i];
+        my $v = parse_expr($arg->{toks}, { %$env, at => $arg->{node} });
+        my $fn = $fn{ $v->{ty} }
+            or refuse($arg->{node}, "`sprintf` writes a number or a string here (got $v->{ty})");
+        $uses_pl = 1;
+        push @out, "Pl.$fn(\"" . pix_text($arg->{node}, $p->{spec}) . "\", $v->{pix})";
+    }
+    return { ty => 'String', pix => '""' } unless @out;
+    return { ty => 'String', pix => join(' + ', @out) };
+}
+
+# A format cut into the text between conversions and the conversions
+# themselves. `%%` is a per cent sign in the text, not a conversion.
+sub format_pieces {
+    my ($fmt, $node) = @_;
+    my (@out, $text);
+    $text = '';
+    my $s = $fmt;
+    while (length $s) {
+        if ($s =~ s/\A%%//) { $text .= '%'; next }
+        if ($s =~ s/\A(%[-+ 0#]*\d*(?:\.\d+)?([A-Za-z]))//) {
+            my ($spec, $conv) = ($1, $2);
+            refuse($node, "the conversion `%$conv` is not in the translator")
+                unless $conv =~ /\A[difFeEgGsxXob]\z/;
+            push @out, { text => $text };
+            $text = '';
+            push @out, { spec => $spec };
+            next;
+        }
+        refuse($node, 'a `%` here starts no conversion the translator knows') if $s =~ /\A%/;
+        $s =~ s/\A(.)//s;
+        $text .= $1;
+    }
+    push @out, { text => $text };
+    return @out;
 }
 
 # "count: $count", "$xs[$i] and @{[ $i + 1 ]}" — literal text and holes.
@@ -1521,7 +1829,7 @@ sub list_source {
     }
     my $v = parse_expr(\@t, { %$env, at => $at });
     refuse($at, "a repeater walks a list (got $v->{ty})") unless $v->{ty} =~ /\AList<(.+)>\z/;
-    return { ty => $1, over => $v->{pix}, list => $v->{pix} };
+    return { ty => $1, listty => $v->{ty}, over => $v->{pix}, list => $v->{pix} };
 }
 
 # `list_view(scalar @items, sub ($i) { ... })` and the table's rows: the
@@ -1837,6 +2145,10 @@ sub declare {
     refuse($sym, 'a name declared here starts with a value: `my $x = 0;`') unless is_op($t[2], '=') && @t > 3;
     my @rhs = @t[3 .. $#t];
     my ($ty, $pix);
+    if (my $p = pipeline_rhs(\@rhs, $env, $sym)) {
+        $env->{vars}{$name} = { ty => $p->{ty}, pix => $name };
+        return "var $name : $p->{ty} = $p->{pix}";
+    }
     if ($sym->raw_type eq '@' && is_word($rhs[0], 'empty')) {
         ($ty, $pix) = list_init(\@rhs, $sym);
     } elsif ($sym->raw_type eq '@' && @rhs == 1 && $rhs[0]->isa('PPI::Structure::List')) {
@@ -1915,6 +2227,11 @@ sub whole_assign {
     }
     my $lv = read_list($sym, substr($sym->content, 1), $env);
     return "$lv->{pix} = []" if is_empty_list(\@rhs);
+    if (my $p = pipeline_rhs(\@rhs, $env, $sym)) {
+        refuse($eq, "`\@" . substr($sym->content, 1) . "` holds a $lv->{ty}, and this is a $p->{ty}")
+            unless $p->{ty} eq $lv->{ty};
+        return "$lv->{pix} = $p->{pix}";
+    }
     if (@rhs == 1 && $rhs[0]->isa('PPI::Structure::List')) {
         my ($ty, $pix) = list_literal($rhs[0], $env);
         refuse($eq, "`\@" . substr($sym->content, 1) . "` holds a $lv->{ty}, and this is a $ty") unless $ty eq $lv->{ty};
@@ -1973,6 +2290,11 @@ sub assign {
         return ("if $cond {", "  $target = $a", '} else {', "  $target = $b", '}');
     }
     if ($op->content eq '=') {
+        if (my $p = pipeline_rhs(\@t, $env, $sym)) {
+            refuse($op, "`\$$name` holds a $tty, and this is a $p->{ty}")
+                unless $p->{ty} eq $tty || ($tty eq 'Float' && $p->{ty} eq 'Int');
+            return "$target = $p->{pix}";
+        }
         return "$target = " . typed_rhs($name, $tty, \@t, $env, $op);
     }
     my $v = parse_expr(\@t, { %$env, at => $t[0] });
@@ -2378,6 +2700,11 @@ sub component_call {
 # a view can.
 sub classify {
     for my $m (@methods) {
+        # The compiled run gives every field a reader of its own name,
+        # so a method cannot share one.
+        refuse($m->{node}, "`$m->{name}` is both a field and a method here, and the compiled run gives "
+                         . 'a field a reader of its own name; rename one of them')
+            if exists $field{ $m->{name} };
         $m->{calls} = [map { $_->content } grep {
             my $p = $_->sprevious_sibling;
             is_op($p, '->') && is_sym($p->sprevious_sibling, '$')

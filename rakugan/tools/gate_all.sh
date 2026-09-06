@@ -34,6 +34,22 @@ if ! ./tools/refuse_test.sh > /dev/null; then
 fi
 echo "OK   refusals"
 
+# The twins of Perl's own answers are held to what perl printed. A
+# table that is not what perl says NOW is a twin that has drifted, or a
+# perl that has moved.
+PERL_FOR_TABLES="$(./tools/perl_setup.sh --path)/bin/perl"
+[ -x "$PERL_FOR_TABLES" ] || PERL_FOR_TABLES="${RAKUGAN_PERL:-perl}"
+if ! "$PERL_FOR_TABLES" tools/gen_expected.pl --check; then
+  echo "FAIL tables (crates/rakugan-stdlib/tests/expected is behind what perl prints)"
+  exit 1
+fi
+if ! (cd .. && cargo test -q -p rakugan-stdlib > /dev/null 2>&1); then
+  echo "FAIL twins (a twin does not answer what perl printed)"
+  (cd .. && cargo test -q -p rakugan-stdlib 2>&1 | tail -20)
+  exit 1
+fi
+echo "OK   twins"
+
 # Scripted gates, with the same steps Yokan's and Wakakusa's sweeps
 # drive their copies of each demo with.
 gate counter ./bin/rakugan gate demo/counter.pl --script "click:+1,dump,input:Momo\, again"
@@ -54,6 +70,7 @@ gate shared  ./bin/rakugan gate demo/shared.pl --script "click:lock,click:save,i
 gate lookup  ./bin/rakugan gate demo/lookup.pl --script "click:apple,dump,click:cherry,dump,click:miss,dump"
 gate table   ./bin/rakugan gate demo/table.pl --script "click:refresh,dump,click:refresh"
 gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,click:next month"
+gate stdlib  ./bin/rakugan gate demo/stdlib.pl --script "click:measure,click:stats,click:sift,click:combine,dump,click:stamp,click:words,click:set,click:first,dump"
 gate flow    ./bin/rakugan gate demo/flow.pl --script "click:step,click:tally,dump,click:bump3,click:find,dump"
 gate forms   ./bin/rakugan gate demo/forms.pl --script "click:Dark mode,slide:7,select:banana"
 gate roster  ./bin/rakugan gate demo/roster.pl --script "select:member 7,dump,click:score,dump,click:score,dump"

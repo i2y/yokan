@@ -5,3 +5,10 @@ name = "rakugan-stdlib"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+
+[dependencies]
+# Unicode's TITLECASE mapping, which is not the uppercase one: perl's
+# `ucfirst("ß")` is "Ss" where `uc("ß")` is "SS", and about a hundred
+# characters make that distinction. The table is taken rather than
+# written.
+unicode-case-mapping = "1"
