@@ -44,6 +44,30 @@ my %ROLES = map { $_ => 1 } qw(button label heading textInput image list listIte
                                progress slider group checkbox switch comboBox radioGroup tabList);
 my %EASINGS = map { $_ => 1 } qw(linear in out inOut);
 my %TYPE_WORD = (Int => 'Int', Str => 'String', Num => 'Float', Bool => 'Bool');
+# What Perl has that a compiled app cannot be given, each with what to
+# write instead. These are decisions, not gaps: the reason is in the
+# message, and the tour lists them.
+my %NOT_TAKEN = (
+    print   => 'a compiled app writes its screen, not its standard output — that is where the '
+             . 'gate reads the tree from; `warn` goes to standard error and is taken',
+    printf  => 'a compiled app writes its screen, not its standard output; `warn` goes to standard error',
+    say     => 'a compiled app writes its screen, not its standard output; `warn` goes to standard error',
+    eval    => 'a string `eval` compiles Perl while the app runs, and a shipped app carries no compiler; '
+             . 'catch a failure with `try` / `catch`',
+    goto    => '`goto` has no shape in the compiled run; write the call itself',
+    local   => '`local` gives a value back when the scope ends, which the compiled run has nowhere to '
+             . 'keep; a field or a `my` name holds a value here',
+    wantarray => 'the translator settles what every expression is read as while it reads it, so there '
+             . 'is nothing to ask at run time',
+    each    => '`each` hands a hash back in the order perl happens to hold it, which is a different '
+             . 'order every time perl starts; write `for my $k (sort keys %h)`',
+    tie     => '`tie` hides a call behind a variable, and the compiled run reads the variable itself',
+    untie   => '`tie` hides a call behind a variable, and the compiled run reads the variable itself',
+    bless   => 'an app is one class, written with `class`; `bless` is the older way and is not read here',
+    AUTOLOAD => 'a method that does not exist is a refusal here, not something answered at run time',
+    ref     => '`ref` asks what something is while the app runs; in the compiled run every value '
+             . 'already has one type, and the translator knows it',
+);
 my %ELEMENT = %Rakugan::Vocab::ELEMENT;
 my %RIDER = %Rakugan::Vocab::RIDER;
 my @RIDERS = @Rakugan::Vocab::RIDERS;
@@ -113,6 +137,7 @@ class Pl {
   static fn modInt(a: Int, b: Int) Int @rust("rakugan_stdlib::mod_int")
   static fn divInt(a: Int, b: Int) Float @rust("rakugan_stdlib::div_int")
   static fn intOf(v: Float) Int @rust("rakugan_stdlib::int_of")
+  static fn numOf(s: String) Float @rust("rakugan_stdlib::num_of")
   static fn numText(v: Float) String @rust("rakugan_stdlib::num_text")
   static fn boolText(v: Bool) String @rust("rakugan_stdlib::bool_text")
   static fn fmtNum(fmt: String, v: Float) String @rust("rakugan_stdlib::fmt_num")
@@ -215,7 +240,9 @@ sub app_decl {
     }
     refuse($sym, '`$' . substr($sym->content, 1) . '` is declared twice') if defined $app_var;
     my ($eq, $cls, $arrow, $new, @rest) = @{$toks}[2 .. $#$toks];
-    refuse($sym, 'the app is `my $app = ' . ($class_name // 'Counter') . '->new;`')
+    refuse($sym, 'a `my $...` at the top of the file is the app itself (`my $app = '
+               . ($class_name // 'Counter') . '->new;`), which is what a timer reaches its methods '
+               . 'through; anything else an app holds is a field')
         unless is_op($eq, '=') && is_word($cls) && is_op($arrow, '->') && is_word($new, 'new');
     refuse($cls, "the app is an instance of `$class_name`") unless $cls->content eq ($class_name // '');
     $app_var = substr $sym->content, 1;
@@ -324,7 +351,12 @@ sub method_decl {
     refuse($name->{node}, 'a method needs a block') unless $block && $block->isa('PPI::Structure::Block');
     $taken++;
     my ($ptys, $ret) = sig_types($sig, scalar @names, $name->{node});
-    refuse($name->{node}, "`$name->{content}` takes " . scalar(@names) . ' and `:Sig` gives ' . scalar(@$ptys) . ' types')
+    refuse($name->{node}, "a method with parameters says what they are: `method $name->{content} :Sig("
+                        . join(', ', ('Int') x @names) . ") (" . join(', ', @names) . ') { ... }`')
+        if @names && !$sig;
+    refuse($name->{node}, "`$name->{content}` is called with " . scalar(@names) . ' value'
+                        . (@names == 1 ? '' : 's') . ", and `:Sig` gives " . scalar(@$ptys) . ' type'
+                        . (@$ptys == 1 ? '' : 's'))
         if @$ptys != @names;
     my @pairs = map { [$names[$_], $ptys->[$_]] } 0 .. $#names;
     if ($name->{content} eq 'view') {
@@ -528,7 +560,14 @@ sub literal {
         my $s = $tok->content;
         $s =~ s/_//g;
         refuse($tok, 'a number literal here is a plain decimal') unless $s =~ /\A-?\d+(\.\d+)?\z/;
-        return $s =~ /\./ ? ('Float', $s) : ('Int', $s);
+        return ('Float', $s) if $s =~ /\./;
+        # perl grows a whole number past a machine word into one with a
+        # fraction; the compiled run holds 64 bits and would wrap.
+        refuse($tok, 'a whole number here holds 64 bits, and this one is past that — perl would grow '
+                   . 'it into a number with a fraction, which the compiled run cannot follow; write it '
+                   . 'with a `.0` to mean that number')
+            if length($s =~ s/\A-//r) > 18 && !eval { my $n = $s + 0; "$n" eq $s && $n == int($n) };
+        return ('Int', $s);
     }
     if ($tok->isa('PPI::Token::Quote::Single')) {
         return ('String', '"' . pix_text($tok, $tok->literal) . '"');
@@ -570,6 +609,7 @@ sub pix_text {
 # literal, kept so two of them can be joined and a keyword checked.
 my %BP = ('or' => 1, '||' => 1, '//' => 1, 'and' => 2, '&&' => 2,
           '==' => 5, '!=' => 5, '<' => 5, '>' => 5, '<=' => 5, '>=' => 5, 'eq' => 5, 'ne' => 5,
+          'lt' => 5, 'gt' => 5, 'le' => 5, 'ge' => 5,
           '+' => 10, '-' => 10, '.' => 10, '*' => 20, '/' => 20, '%' => 20);
 
 sub parse_expr {
@@ -640,7 +680,7 @@ sub lifted {
 sub op_of {
     my ($t) = @_;
     return $t->content if is_op($t) && exists $BP{ $t->content };
-    return $t->content if is_word($t) && $t->content =~ /\A(?:or|and|eq|ne|x)\z/ && exists $BP{ $t->content };
+    return $t->content if is_word($t) && exists $BP{ $t->content };
     return undef;
 }
 
@@ -684,9 +724,11 @@ sub binop {
         return { ty => 'String', pix => group($l->{pix}) . ' + ' . group($r->{pix}) };
     }
     if ($o eq '//') {
-        refuse($node, '`//` answers what a map read holds, or the value after it: `$prices{$k} // 0`')
-            unless $l->{maybe} && $l->{ty} eq $r->{ty};
-        return { ty => $l->{ty}, pix => "$l->{map}.getOr($l->{key}, $r->{pix})" };
+        refuse($node, '`//` answers what a hash or a list holds there, or the value after it: '
+                    . '`$prices{$k} // 0`')
+            unless ($l->{maybe} || $l->{soft})
+                && ($l->{ty} eq $r->{ty} || ($l->{ty} eq 'Float' && $r->{ty} eq 'Int'));
+        return { ty => $l->{ty}, pix => "$l->{of}.getOr($l->{key}, $r->{pix})" };
     }
     if ($o eq '%') {
         refuse($node, "`%` needs whole numbers on both sides (got $l->{ty} and $r->{ty})")
@@ -704,12 +746,24 @@ sub binop {
         return { ty => 'Float', pix => group($l->{pix}) . ' / ' . group($r->{pix}) };
     }
     if ($o =~ /\A(?:\+|-|\*)\z/) {
-        refuse($node, "`$o` needs a number on both sides (got $l->{ty} and $r->{ty})") unless num_ty($l->{ty}) && num_ty($r->{ty});
+        # `0 + $s` is how Perl says "this string as a number", and it is
+        # the only place the two mix: perl reads as much of a number off
+        # the front as it can, and the twin reads it the same way.
+        if ($o eq '+' && $l->{ty} eq 'Int' && $l->{pix} eq '0' && $r->{ty} eq 'String') {
+            $uses_pl = 1;
+            return { ty => 'Float', pix => "Pl.numOf($r->{pix})" };
+        }
+        refuse($node, "`$o` needs a number on both sides (got $l->{ty} and $r->{ty}); "
+                    . '`0 + $s` reads a string as a number, the way perl does')
+            unless num_ty($l->{ty}) && num_ty($r->{ty});
         my $ty = ($l->{ty} eq 'Float' || $r->{ty} eq 'Float') ? 'Float' : 'Int';
         return { ty => $ty, pix => group($l->{pix}) . " $o " . group($r->{pix}) };
     }
-    if ($o eq 'eq' || $o eq 'ne') {
+    if ($o =~ /\A(?:eq|ne|lt|gt|le|ge)\z/) {
         refuse($node, "`$o` compares strings (got $l->{ty} and $r->{ty})") unless $l->{ty} eq 'String' && $r->{ty} eq 'String';
+        refuse($node, "`$o` puts two strings in order, which the compiled run has no comparison for yet; "
+                    . 'compare numbers, or ask `eq` / `ne` whether they are the same')
+            if $o =~ /\A(?:lt|gt|le|ge)\z/;
         return { ty => 'Bool', pix => group($l->{pix}) . ($o eq 'eq' ? ' == ' : ' != ') . group($r->{pix}) };
     }
     if ($o eq '==' || $o eq '!=') {
@@ -779,9 +833,11 @@ sub symbol_expr {
     my $name = substr $t->content, 1;
     my $kind = $t->raw_type;
     $$ip++;
-    if ($kind eq '$' && $name eq 'self') {
+    # Inside the class the app is `$self`; at the top of the file it is
+    # the name the app was given, and a timer reaches its methods there.
+    if ($kind eq '$' && ($name eq 'self' || (defined $app_var && $name eq $app_var))) {
         my ($arrow, $word) = @{$toks}[$$ip, $$ip + 1];
-        refuse($t, '`$self` is read for its methods (`$self->name`) and nothing else')
+        refuse($t, "`\$$name` is read for its methods (`\$$name->name`) and nothing else")
             unless is_op($arrow, '->') && is_word($word);
         $$ip += 2;
         my $args = $toks->[$$ip];
@@ -799,7 +855,7 @@ sub symbol_expr {
         my $mv = read_map($t, $name, $env);
         my $key = subscript_key($next, $env);
         my $inner = $mv->{ty} =~ /\AMap<String, (.+)>\z/ ? $1 : refuse($t, "`%$name` is not a map");
-        return { ty => $inner, pix => $mv->{pix} . "[$key]", maybe => 1, map => $mv->{pix}, key => $key };
+        return { ty => $inner, pix => $mv->{pix} . "[$key]", maybe => 1, of => $mv->{pix}, key => $key };
     }
     if ($kind eq '@') { return read_list($t, $name, $env) }
     if ($kind eq '%') { return read_map($t, $name, $env) }
@@ -818,7 +874,10 @@ sub list_read {
     my $rep = $env->{repeat};
     return { ty => $inner, pix => $rep->{it} }
         if $rep && $rep->{list} && $rep->{list} eq $lv->{pix} && $ix->{pix} eq $rep->{ix};
-    return { ty => $inner, pix => $lv->{pix} . "[" . guard_index($ix, $lv, $env, $sub) . "]" };
+    # A list read stands on its own: an app indexes a list it knows the
+    # length of. `// value` is how it says the row may not be there.
+    my $at = guard_index($ix, $lv, $env, $sub);
+    return { ty => $inner, pix => $lv->{pix} . "[$at]", soft => 1, of => $lv->{pix}, key => $at };
 }
 
 # The index as the compiled run must read it: as written when it cannot
@@ -940,7 +999,7 @@ sub word_expr {
     my $next = $toks->[$$ip + 1];
     if ($name eq 'scalar') {
         $$ip++;
-        my $v = expr_bp($ip, $toks, $env, 30);
+        my $v = expr_bp($ip, $toks, { %$env, sorted => 1 }, 30);
         refuse($w, "`scalar` here counts a list or a hash (got $v->{ty})") unless $v->{ty} =~ /\A(?:List|Map)</;
         # `scalar keys %h` is how many the hash holds.
         (my $of = $v->{pix}) =~ s/\.keys\z//;
@@ -948,6 +1007,9 @@ sub word_expr {
     }
     if ($name eq 'keys' || $name eq 'values') {
         $$ip++;
+        refuse($w, "a hash hands `$name` back in the order perl happens to hold it, which is a "
+                 . 'different order every time perl starts; write `sort keys %h`')
+            unless $env->{sorted};
         my $v = expr_bp($ip, $toks, $env, 30);
         refuse($w, "`$name` reads a hash (got $v->{ty})") unless $v->{ty} =~ /\AMap<String, (.+)>\z/;
         my $inner = $name eq 'keys' ? 'String' : $1;
@@ -955,9 +1017,10 @@ sub word_expr {
     }
     if ($name eq 'sort') {
         $$ip++;
-        refuse($w, '`sort` with a block is not in the translator yet; `sort keys %h` is what a view needs')
+        refuse($w, '`sort` with a block of its own is not in the translator yet; `sort keys %h` is '
+                 . 'what a view reads a hash with')
             if $next && $next->isa('PPI::Structure::Block');
-        my $v = expr_bp($ip, $toks, $env, 30);
+        my $v = expr_bp($ip, $toks, { %$env, sorted => 1 }, 30);
         refuse($w, '`sort` here sorts the keys of a hash: `sort keys %h`')
             unless $v->{ty} eq 'List<String>' && $v->{pix} =~ /\.keys\z/;
         return { ty => 'List<String>', pix => $v->{pix} };
@@ -966,13 +1029,13 @@ sub word_expr {
         $$ip++;
         my $v = expr_bp($ip, $toks, { %$env, allow_maybe => 1 }, 30);
         refuse($w, '`exists` asks a hash whether it has a key: `exists $prices{$k}`') unless $v->{maybe};
-        return { ty => 'Bool', pix => "$v->{map}.contains($v->{key})" };
+        return { ty => 'Bool', pix => "$v->{of}.contains($v->{key})" };
     }
     if ($name eq 'defined') {
         $$ip++;
         my $v = expr_bp($ip, $toks, { %$env, allow_maybe => 1 }, 30);
         refuse($w, '`defined` asks a hash whether it has a key: `defined $prices{$k}`') unless $v->{maybe};
-        return { ty => 'Bool', pix => "$v->{map}.contains($v->{key})" };
+        return { ty => 'Bool', pix => "$v->{of}.contains($v->{key})" };
     }
     if ($name eq 'join') {
         $$ip++;
@@ -1005,6 +1068,7 @@ sub word_expr {
         $uses_pl = 1;
         return { ty => 'Int', pix => "Pl.intOf($v->{pix})" };
     }
+    refuse($w, $NOT_TAKEN{$name}) if $NOT_TAKEN{$name};
     refuse($w, "`$name` is not something the translator knows; a method of the app is called `\$self->$name`");
 }
 
@@ -1181,8 +1245,10 @@ sub parse_element {
                     if $spec->{owns_label} && $k eq 'a11y_label';
                 $given{$k} = $a;
             } else {
-                my @takes = sort +(map { $_->{name} } grep { !$_->{pos} } @{ $spec->{props} }), (map { $_->{name} } @RIDERS);
-                refuse($a->{node}, "`$name` has no `$k =>`; it takes " . join(', ', map { "`$_`" } @takes));
+                my %takes = map { $_ => 1 } (map { $_->{name} } grep { !$_->{pos} } @{ $spec->{props} }),
+                                            (map { $_->{name} } @RIDERS);
+                refuse($a->{node}, "`$name` has no `$k =>`; it takes "
+                                 . join(', ', map { "`$_`" } sort keys %takes));
             }
             next;
         }
@@ -1217,12 +1283,15 @@ sub parse_element {
     if ($rows) {
         refuse($w, "`$name` builds its rows on demand: it takes how many, and a sub that builds row i")
             unless exists $given{count} && exists $given{ $rows->{name} };
-        # Whether the rows are built on demand is the engine's default
-        # here and the compiled run's the other way round, so it is
-        # always said out loud.
-        my ($virt) = grep { $_->{name} eq 'virtualized' } @{ $spec->{props} };
-        push @props, [$virt->{pix}, $virt->{default} ? 'true' : 'false']
-            if $virt && !exists $given{virtualized};
+        # Two keywords a list of rows starts with have one default in
+        # the engine's table and another in the compiled run's element,
+        # so they are always said out loud rather than left to whichever
+        # side is reading.
+        for my $d (grep { $_->{name} =~ /\A(?:virtualized|item_height)\z/ } @{ $spec->{props} }) {
+            next if exists $given{ $d->{name} };
+            push @props, [$d->{pix}, $d->{type} eq 'bool' ? ($d->{default} ? 'true' : 'false')
+                                                          : $d->{default} + 0];
+        }
         push @children, rows_repeater($given{count}, $given{ $rows->{name} }, $env);
     }
     # `grid_cell(child, col_span => 2)` is the child with the span
@@ -1277,7 +1346,7 @@ sub is_empty_list {
 sub elem_of {
     my ($toks, $at, $env) = @_;
     my @t = @$toks;
-    if (is_sym($t[0], '$') && $t[0]->content eq '$self') {
+    if (is_sym($t[0], '$') && ($t[0]->content eq '$self' || (defined $app_var && $t[0]->content eq "\$$app_var"))) {
         refuse($t[0], 'a method of the app is called `$self->name(...)`') unless is_op($t[1], '->') && is_word($t[2]);
         my $args = $t[3];
         refuse($t[2], 'this does not continue the call') if @t > 4 || (@t == 4 && !$args->isa('PPI::Structure::List'));
@@ -1633,13 +1702,14 @@ sub simple_stmt {
     if (is_word($head, 'pop') || is_word($head, 'shift'))    { return shrink(\@t, $env) }
     if (is_word($head, 'delete')) { return drop(\@t, $env) }
     if (is_word($head, 'task'))   { return task_stmt(\@t, $env) }
-    if (is_sym($head, '$') && $head->content eq '$self') {
+    if (is_sym($head, '$') && ($head->content eq '$self' || (defined $app_var && $head->content eq "\$$app_var"))) {
         my $i = 0;
         my $v = symbol_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
         refuse($t[$i], 'this does not continue the call') if $i < @t;
         return $v->{pix};
     }
     if (is_sym($head, '@') || is_sym($head, '%')) { return whole_assign(\@t, $env) }
+    refuse($head, $NOT_TAKEN{ $head->content }) if is_word($head) && $NOT_TAKEN{ $head->content };
     refuse($head // $st, 'a statement here writes a field (`$count += 1`), a list or a hash, '
                        . 'declares a name (`my $x = ...`) or calls a method (`$self->flip`)')
         unless is_sym($head, '$');
@@ -1651,6 +1721,9 @@ sub declare {
     my ($toks, $env) = @_;
     my @t = @$toks;
     my $sym = $t[1];
+    refuse($t[0], 'a `my` here declares one name (`my $x = ...`, `my @xs = ...`); a list of names on '
+                . 'the left takes what is on the right apart, and the translator does not do that yet')
+        if $sym && $sym->isa('PPI::Structure::List');
     refuse($t[0], 'a name is declared `my $x = ...;`') unless is_sym($sym);
     my $name = substr $sym->content, 1;
     refuse($sym, "`$name` is already in scope here") if $env->{vars}{$name};
@@ -1771,6 +1844,15 @@ sub assign {
         ($target, $tty) = ($v->{pix}, $v->{ty});
     }
     my $op = shift @t;
+    if (is_op($op) && ($op->content eq '++' || $op->content eq '--')) {
+        refuse($op, "`\$$name` holds a $tty, and Perl's `++` on a string counts letters (`\"az\"++` is "
+                  . '`"ba"`), which the compiled run does not do; join or replace the string instead')
+            if $tty eq 'String';
+        refuse($op, "`" . $op->content . "` counts a number (`\$$name` holds a $tty)") unless num_ty($tty);
+        refuse($op, 'nothing follows `' . $op->content . '`') if @t;
+        my $by = $op->content eq '++' ? '+' : '-';
+        return "$target = $target $by 1";
+    }
     refuse($op // $sym, 'a statement here writes with `=`, `+=`, `-=`, `*=`, `/=` or `.=`')
         unless is_op($op) && $op->content =~ m{\A(?:=|\+=|-=|\*=|/=|\.=)\z} && @t;
     # `$x = c ? a : b` lowers to an if/else, each branch writing the same place.
@@ -2194,10 +2276,10 @@ sub classify {
             my $p = $_->sprevious_sibling;
             is_op($p, '->') && is_sym($p->sprevious_sibling, '$')
         } @{ $m->{block}->find('PPI::Token::Word') || [] }];
-        $m->{own_fields} = grep {
-            my $n = substr $_->content, 1;
-            exists $field{$n} && $field{$n}{kind} eq $_->raw_type
-        } @{ $m->{block}->find('PPI::Token::Symbol') || [] };
+        # A field is touched under any sigil: `@items` is the list and
+        # `$items[$i]` is one of its elements.
+        $m->{own_fields} = grep { exists $field{ substr $_->content, 1 } }
+            @{ $m->{block}->find('PPI::Token::Symbol') || [] };
         $m->{answers} = [answers_of($m->{block})];
     }
     my $changed = 1;

@@ -1,0 +1,3 @@
+test/refuse/view_calls_method.pl:13:21: Rakugan cannot take this — `bumped` touches the app's state, and building a view only reads; give it what it needs as parameters, or read a field
+            return text("n=@{[ $self->bumped ]}");
+                        ^

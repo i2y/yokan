@@ -1,0 +1,3 @@
+test/refuse/quote_method.pl:7:12: Rakugan cannot take this — a method named `s` reads as a regular expression to the parser; pick another name
+        method s { $n += 1 }
+               ^

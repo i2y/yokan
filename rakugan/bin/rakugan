@@ -199,7 +199,9 @@ sub check {
         print STDERR $e;
         return 0;
     }
-    my $tr = eval { Rakugan::Translator::translate($abs) };
+    # The path the reader typed, not the one this program worked out:
+    # a refusal names a file they can open.
+    my $tr = eval { Rakugan::Translator::translate($app) };
     if (!$tr) {
         print STDERR $@;
         return 0;

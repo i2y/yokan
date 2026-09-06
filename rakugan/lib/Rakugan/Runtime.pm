@@ -14,8 +14,15 @@ use Rakugan::Vocab;
 # only inside the build that handed it out.
 my @handlers;
 my @rows;
-# The object whose `view` answers the tree.
+# What was declared before the app ran, and outlives every build: the
+# ticks it asked for and the work it started.
+my @ticks;
+my @jobs;
+# The object whose `view` answers the tree, and whether the window is
+# already up — a reload re-reads the whole file, and the second `run`
+# it reaches must not open a second window.
 my $app;
+my $running = 0;
 
 sub register ($el, $key, $cb) {
     push @handlers, $cb;
@@ -54,6 +61,68 @@ sub _on_event ($id, $kind) {
 sub _row_build ($handler, $index) {
     my $cb = $rows[$handler] or return 0;
     return $cb->($index) // 0;
+}
+
+# --- what happens on its own ------------------------------------------------
+
+# `every(1.0, sub { ... })` before `run`: the engine fires it off the
+# same clock a frame and a script's `advance:` move, so both runs tick
+# the same number of times.
+sub every ($seconds, $cb) {
+    return if $running;   # a reload reaches this line again
+    die "every takes a number of seconds and a sub\n" unless ref $cb eq 'CODE';
+    push @ticks, $cb;
+    Rakugan::Door::every($seconds, $#ticks);
+    return;
+}
+
+sub _on_tick ($id) {
+    my $cb = $ticks[$id] or return;
+    $cb->();
+    return;
+}
+
+# `task(sub { ... }, on_done => sub ($v) { ... })`: the work runs on a
+# thread of perl's own, and the answer reaches the app on the window's
+# thread. Nothing in the work touches the app — it cannot: an ithread
+# gets a copy of everything, and only the value it answers comes back.
+sub task ($work, %opt) {
+    die "task runs a sub: task(sub { ... }, on_done => sub (\$v) { ... })\n" unless ref $work eq 'CODE';
+    my $done = $opt{on_done};
+    die "task takes `on_done => sub (\$v) { ... }`\n" unless ref $done eq 'CODE';
+    require threads;
+    my $id = Rakugan::Door::task();
+    my $thr = threads->create(sub {
+        my $answer = $work->();
+        Rakugan::Door::task_done($id);
+        return $answer;
+    });
+    $jobs[$id] = { thread => $thr, done => $done };
+    return $id;
+}
+
+sub _on_task ($id) {
+    my $job = $jobs[$id] or return;
+    $jobs[$id] = undef;
+    $job->{done}->($job->{thread}->join);
+    return;
+}
+
+# The app's file changed while its window is open: read it again. The
+# class is redefined and the object the window holds answers with the
+# new `view`, keeping every value it had.
+sub _reload {
+    my $path = $0;
+    {
+        no warnings 'redefine';
+        local $@;
+        do $path;
+        if ($@) {
+            warn "rakugan: $@";
+            return 0;
+        }
+    }
+    return 1;
 }
 
 # --- writing an element from the table --------------------------------------
@@ -161,9 +230,16 @@ sub run ($the_app, %opt) {
             unless $k =~ /\A(?:title|width|height|padding)\z/;
     }
     die "run takes an object with a `view` method\n" unless ref $the_app && $the_app->can('view');
+    # A reload runs the file again, `new` and all. The window already
+    # has an object; what the reload was for is the code behind it.
+    return 0 if $running;
+    $running = 1;
     $app = $the_app;
+    # Only a windowed run can be edited while it is up.
+    Rakugan::Door::watch($0, \&_reload) unless defined $ENV{PIXIE_SCRIPT};
     return Rakugan::Door::run($opt{title} // 'rakugan', $opt{width} // 0, $opt{height} // 0,
-                              $opt{padding} // -1, \&_build, \&_on_event, \&_row_build);
+                              $opt{padding} // -1, \&_build, \&_on_event, \&_row_build,
+                              \&_on_tick, \&_on_task);
 }
 
 1;

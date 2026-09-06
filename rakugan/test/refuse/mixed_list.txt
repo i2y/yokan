@@ -1,0 +1,3 @@
+test/refuse/mixed_list.pl:5:24: Rakugan cannot take this — a list holds one type: this one started with Int and this is String
+        field @items = (1, "two");
+                           ^

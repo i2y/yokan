@@ -1,0 +1,3 @@
+test/refuse/class_pragma.pl:3:11: Rakugan cannot take this — `class App` needs `use Rakugan;` as its first line: a Perl import is per package, and the elements, `empty` and the type names have to be in this one
+    class App {
+              ^

@@ -1,0 +1,3 @@
+test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds a String, and Perl's `++` on a string counts letters (`"az"++` is `"ba"`), which the compiled run does not do; join or replace the string instead
+            $tag++;
+                ^

@@ -1,0 +1,3 @@
+test/refuse/handler_arity.pl:8:45: Rakugan cannot take this — this handler is called with nothing; drop the parameter
+            return button("go", on_click => sub ($x) { $n += 1 });
+                                                ^

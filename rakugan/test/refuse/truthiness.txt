@@ -1,0 +1,3 @@
+test/refuse/truthiness.pl:9:35: Rakugan cannot take this — a condition is a bool (got Int); Perl's truthiness of a number or a string is not in the translator — compare it (`!= 0`, `ne ""`)
+            push @cells, text("some") if $n;
+                                      ^

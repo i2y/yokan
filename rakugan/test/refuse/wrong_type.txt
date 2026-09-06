@@ -1,0 +1,3 @@
+test/refuse/wrong_type.pl:7:30: Rakugan cannot take this — `size =>` takes a number (got String)
+            return text("hello", size => "large");
+                                 ^

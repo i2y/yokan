@@ -1,0 +1,3 @@
+test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `keys` back in the order perl happens to hold it, which is a different order every time perl starts; write `sort keys %h`
+            for my $k (keys %prices) {
+                       ^

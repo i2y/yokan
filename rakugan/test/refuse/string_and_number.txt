@@ -1,0 +1,3 @@
+test/refuse/string_and_number.pl:8:19: Rakugan cannot take this — `+` needs a number on both sides (got String and Int); `0 + $s` reads a string as a number, the way perl does
+            $n = "10" + 5;
+                      ^

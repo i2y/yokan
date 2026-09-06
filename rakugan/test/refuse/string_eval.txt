@@ -1,0 +1,3 @@
+test/refuse/string_eval.pl:8:14: Rakugan cannot take this — a string `eval` compiles Perl while the app runs, and a shipped app carries no compiler; catch a failure with `try` / `catch`
+            $n = eval "1 + 1";
+                 ^

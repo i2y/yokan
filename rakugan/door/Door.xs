@@ -17,6 +17,9 @@
 typedef int64_t (*PixieBuildFn)(void);
 typedef void (*PixieEventFn)(int64_t, int64_t);
 typedef int64_t (*PixieRowFn)(int64_t, int64_t);
+typedef void (*PixieTimerFn)(int64_t);
+typedef void (*PixieTaskFn)(int64_t);
+typedef int32_t (*PixieReloadFn)(void);
 
 extern int64_t pixie_el(int32_t kind);
 extern void    pixie_str(int64_t el, int32_t key, const char *v);
@@ -32,6 +35,12 @@ extern void    pixie_children(int64_t el, const int64_t *ids, size_t n);
 extern int64_t pixie_end(int64_t el);
 extern void    pixie_set_event_handler(PixieEventFn f);
 extern void    pixie_set_row_builder(PixieRowFn f);
+extern void    pixie_set_timer_handler(PixieTimerFn f);
+extern void    pixie_set_task_handler(PixieTaskFn f);
+extern void    pixie_every(double seconds, int64_t handler);
+extern int64_t pixie_task(void);
+extern void    pixie_task_done(int64_t id);
+extern void    pixie_watch(const char *path, PixieReloadFn f);
 extern int64_t pixie_event_int(void);
 extern double  pixie_event_num(void);
 extern int64_t pixie_event_text_length(void);
@@ -42,6 +51,9 @@ extern int32_t pixie_run(const char *title, double width, double height,
 static SV *build_cb = NULL;
 static SV *event_cb = NULL;
 static SV *row_cb = NULL;
+static SV *timer_cb = NULL;
+static SV *task_cb = NULL;
+static SV *reload_cb = NULL;
 
 /* A `die` must not unwind through the engine's Rust frames (Perl's
  * die is a longjmp), so both callbacks run under G_EVAL and report. */
@@ -96,6 +108,41 @@ static int64_t call_row(int64_t handler, int64_t index) {
     report(aTHX);
     FREETMPS; LEAVE;
     return (int64_t)h;
+}
+
+/* A tick that came due, and a piece of work that finished. Both reach
+ * the app on the window's thread, like an event. */
+static void call_with_id(SV *cb, int64_t id) {
+    dTHX; dSP;
+    if (!cb) return;
+    ENTER; SAVETMPS;
+    PUSHMARK(SP);
+    EXTEND(SP, 1);
+    PUSHs(sv_2mortal(newSViv((IV)id)));
+    PUTBACK;
+    call_sv(cb, G_DISCARD | G_EVAL);
+    report(aTHX);
+    FREETMPS; LEAVE;
+}
+
+static void call_timer(int64_t id) { call_with_id(timer_cb, id); }
+static void call_task(int64_t id)  { call_with_id(task_cb, id); }
+
+/* The app's file changed: read it again. Non-zero means it took. */
+static int32_t call_reload(void) {
+    dTHX; dSP;
+    IV ok = 0; int count;
+    if (!reload_cb) return 0;
+    ENTER; SAVETMPS;
+    PUSHMARK(SP);
+    PUTBACK;
+    count = call_sv(reload_cb, G_SCALAR | G_EVAL);
+    SPAGAIN;
+    if (count == 1) ok = POPi;
+    PUTBACK;
+    report(aTHX);
+    FREETMPS; LEAVE;
+    return (int32_t)ok;
 }
 
 MODULE = Rakugan::Door  PACKAGE = Rakugan::Door
@@ -162,6 +209,33 @@ rows(IV el, IV key, IV handler)
   CODE:
     pixie_rows((int64_t)el, (int32_t)key, (int64_t)handler);
 
+void
+every(NV seconds, IV handler)
+  CODE:
+    pixie_every((double)seconds, (int64_t)handler);
+
+IV
+task()
+  CODE:
+    RETVAL = (IV)pixie_task();
+  OUTPUT:
+    RETVAL
+
+void
+task_done(IV id)
+  CODE:
+    pixie_task_done((int64_t)id);
+
+void
+watch(SV *path, SV *on_reload)
+  PREINIT:
+    SV *p;
+  CODE:
+    if (reload_cb) SvREFCNT_dec(reload_cb);
+    reload_cb = newSVsv(on_reload);
+    p = sv_mortalcopy(path);
+    pixie_watch(SvPVutf8_nolen(p), call_reload);
+
 IV
 event_int()
   CODE:
@@ -221,7 +295,7 @@ event_text()
     RETVAL
 
 IV
-run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row_build)
+run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row_build, SV *on_tick, SV *on_task)
   PREINIT:
     SV *t;
   CODE:
@@ -231,8 +305,14 @@ run(SV *title, NV width, NV height, NV padding, SV *build, SV *on_event, SV *row
     event_cb = newSVsv(on_event);
     if (row_cb) SvREFCNT_dec(row_cb);
     row_cb = newSVsv(row_build);
+    if (timer_cb) SvREFCNT_dec(timer_cb);
+    timer_cb = newSVsv(on_tick);
+    if (task_cb) SvREFCNT_dec(task_cb);
+    task_cb = newSVsv(on_task);
     pixie_set_event_handler(call_event);
     pixie_set_row_builder(call_row);
+    pixie_set_timer_handler(call_timer);
+    pixie_set_task_handler(call_task);
     t = sv_mortalcopy(title);
     RETVAL = (IV)pixie_run(SvPVutf8_nolen(t), (double)width, (double)height,
                            (double)padding, call_build);

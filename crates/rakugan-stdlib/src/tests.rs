@@ -37,6 +37,20 @@ fn dividing_two_whole_numbers_answers_a_fraction() {
 }
 
 #[test]
+fn a_string_read_as_a_number_stops_where_the_number_does() {
+    assert_eq!(num_of("10"), 10.0);
+    assert_eq!(num_of("3abc"), 3.0);
+    assert_eq!(num_of("abc"), 0.0);
+    assert_eq!(num_of("  12  "), 12.0);
+    assert_eq!(num_of("-2.5"), -2.5);
+    assert_eq!(num_of("1e3"), 1000.0);
+    assert_eq!(num_of("1e"), 1.0);
+    assert_eq!(num_of(""), 0.0);
+    assert_eq!(num_of("0."), 0.0);
+    assert_eq!(num_of(".5"), 0.5);
+}
+
+#[test]
 fn int_throws_the_fraction_away_towards_zero() {
     assert_eq!(int_of(3.7), 3);
     assert_eq!(int_of(-3.7), -3);

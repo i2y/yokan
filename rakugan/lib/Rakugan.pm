@@ -50,7 +50,7 @@ sub HashRef  :prototype(;$) { 'HashRef'  . (@_ ? "[$_[0][0]]" : '') }
 # exception for an empty one.
 sub empty { return }
 
-my @VOCAB = (@Rakugan::Elements::ELEMENTS, qw(run empty Int Str Num Bool ArrayRef HashRef));
+my @VOCAB = (@Rakugan::Elements::ELEMENTS, qw(run every task empty Int Str Num Bool ArrayRef HashRef));
 
 sub import {
     my $class = shift;
@@ -76,7 +76,7 @@ sub import {
     };
     for my $name (@VOCAB) {
         my $from = defined &{"Rakugan::Elements::$name"} ? "Rakugan::Elements::$name"
-                 : $name eq 'run'                          ? 'Rakugan::Runtime::run'
+                 : $name =~ /\A(?:run|every|task)\z/       ? "Rakugan::Runtime::$name"
                  :                                            "Rakugan::$name";
         *{"${pkg}::$name"} = \&{$from};
     }

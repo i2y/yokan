@@ -1,0 +1,3 @@
+test/refuse/field_attribute.pl:5:14: Rakugan cannot take this — a field takes no attributes here (`:param`, `:reader`); its type is read from the initializer
+        field $n :param = 0;
+                 ^

@@ -1,0 +1,3 @@
+test/refuse/bare_hash_read.pl:9:26: Rakugan cannot take this — a hash may not have that key, so say what to answer when it does not: `$prices{$k} // 0`
+            $picked = $prices{"apple"};
+                             ^

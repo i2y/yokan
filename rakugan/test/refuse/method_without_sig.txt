@@ -1,0 +1,3 @@
+test/refuse/method_without_sig.pl:7:12: Rakugan cannot take this — a method with parameters says what they are: `method add :Sig(Int) ($by) { ... }`
+        method add ($by) {
+               ^

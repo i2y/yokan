@@ -1,0 +1,3 @@
+test/refuse/empty_list.pl:5:20: Rakugan cannot take this — a list that starts empty says what it will hold: `field @items = empty(Str);`
+        field @items = ();
+                       ^

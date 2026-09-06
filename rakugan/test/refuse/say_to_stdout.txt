@@ -1,0 +1,3 @@
+test/refuse/say_to_stdout.pl:8:9: Rakugan cannot take this — a compiled app writes its screen, not its standard output; `warn` goes to standard error
+            say "n is $n";
+            ^

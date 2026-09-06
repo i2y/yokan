@@ -24,6 +24,16 @@ if ! perl tools/gen.pl --check; then
 fi
 echo "OK   vocabulary"
 
+# Every refusal that stands for a decision has a file that triggers it
+# and the message it must print. A rule that stops firing is a promise
+# the dialect quietly dropped.
+if ! ./tools/refuse_test.sh > /dev/null; then
+  echo "FAIL refusals"
+  ./tools/refuse_test.sh
+  exit 1
+fi
+echo "OK   refusals"
+
 # Scripted gates, with the same steps Yokan's and Wakakusa's sweeps
 # drive their copies of each demo with.
 gate counter ./bin/rakugan gate demo/counter.pl --script "click:+1,dump,input:Momo\, again"
@@ -45,6 +55,13 @@ gate lookup  ./bin/rakugan gate demo/lookup.pl --script "click:apple,dump,click:
 gate table   ./bin/rakugan gate demo/table.pl --script "click:refresh,dump,click:refresh"
 gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,click:next month"
 gate flow    ./bin/rakugan gate demo/flow.pl --script "click:step,click:tally,dump,click:bump3,click:find,dump"
+gate forms   ./bin/rakugan gate demo/forms.pl --script "click:Dark mode,slide:7,select:banana"
+gate roster  ./bin/rakugan gate demo/roster.pl --script "select:member 7,dump,click:score,dump,click:score,dump"
+gate edges   ./bin/rakugan gate demo/edges.pl --script "click:oob,dump,click:shrink,click:shrink,click:partial,dump"
+gate calc    ./bin/rakugan gate demo/calc.pl --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate calcgrid ./bin/rakugan gate demo/calcgrid.pl --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate tasks   ./bin/rakugan gate demo/tasks.pl --script "click:start slow work,dump,click:start slow work,dump"
+gate dashboard ./bin/rakugan gate demo/dashboard.pl --script "advance:1000,advance:1000,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

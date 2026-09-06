@@ -769,6 +769,14 @@ impl<T: Clone> List<T> {
         usize::try_from(i).ok().and_then(|k| self.0.get(k).cloned())
     }
 
+    /// Total lookup: the element or the default. `getOr` is one of the
+    /// language's value-method surfaces (`builtin_value_method_arity`
+    /// lists it), and it answered only for `Map` — a list asked the
+    /// same question had nowhere to send it.
+    pub fn get_or(&self, i: i64, default: T) -> T {
+        self.get(i).unwrap_or(default)
+    }
+
     /// The head as a `T?` — the same contract as `get`, no index.
     pub fn first(&self) -> Option<T> {
         self.0.first().cloned()

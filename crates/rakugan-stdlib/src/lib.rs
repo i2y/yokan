@@ -30,6 +30,38 @@ pub fn div_int(a: i64, b: i64) -> f64 {
     a as f64 / b as f64
 }
 
+/// `0 + $s`. Perl reads as much of a number off the front of a string
+/// as it can and answers 0 when there is none: `"3abc" + 1` is 4 and
+/// `"abc" + 1` is 1. Leading space is skipped; what follows the number
+/// is dropped.
+pub fn num_of(s: &str) -> f64 {
+    let b = s.trim_start();
+    let mut end = 0;
+    let mut seen_digit = false;
+    let mut seen_dot = false;
+    let mut seen_exp = false;
+    for (i, c) in b.char_indices() {
+        match c {
+            '+' | '-' if i == 0 => {}
+            '+' | '-' if seen_exp && matches!(b[..i].chars().last(), Some('e') | Some('E')) => {}
+            '0'..='9' => seen_digit = true,
+            '.' if !seen_dot && !seen_exp => seen_dot = true,
+            'e' | 'E' if seen_digit && !seen_exp => seen_exp = true,
+            _ => break,
+        }
+        end = i + c.len_utf8();
+    }
+    if !seen_digit {
+        return 0.0;
+    }
+    // A trailing `e` or sign belongs to an exponent that never came.
+    let mut t = &b[..end];
+    while !t.is_empty() && !t.ends_with(|c: char| c.is_ascii_digit()) {
+        t = &t[..t.len() - 1];
+    }
+    t.parse::<f64>().unwrap_or(0.0)
+}
+
 /// `int($x)`. Perl throws the fraction away, towards zero.
 pub fn int_of(v: f64) -> i64 {
     v.trunc() as i64

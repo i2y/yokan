@@ -1,0 +1,3 @@
+test/refuse/field_initializer.pl:5:11: Rakugan cannot take this — a field needs an initializer (`= 0`, `= ""`, `= empty(Str)`) — that is where its type comes from
+        field $n;
+              ^

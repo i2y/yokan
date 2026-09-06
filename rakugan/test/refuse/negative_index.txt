@@ -1,0 +1,3 @@
+test/refuse/negative_index.pl:9:21: Rakugan cannot take this — an index a view cannot prove is not negative; a row reads its own index, and anything else is worked out in a handler
+            return text("at: $items[$at]");
+                        ^
