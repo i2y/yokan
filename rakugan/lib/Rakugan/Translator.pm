@@ -84,6 +84,7 @@ my %NOT_TAKEN = (
 my %ELEMENT = %Rakugan::Vocab::ELEMENT;
 my %RIDER = %Rakugan::Vocab::RIDER;
 my @RIDERS = @Rakugan::Vocab::RIDERS;
+my %OP = %Rakugan::Vocab::OP;
 my %PIX_ELEMENT = map { $_->{pix} => 1 } @Rakugan::Vocab::ELEMENTS;
 
 # --- state for one translation ---------------------------------------------
@@ -91,6 +92,7 @@ my ($path, @lines);
 my ($class_name, $class_block, $run_word, $run_list, $view_block);
 my (@fields, %field);       # name => { ty, init, kind }
 my %bag;                    # a hash of keywords at the top of the file: name => [pieces]
+my %const;                  # a named literal at the top of the file: name => { ty, pix }
 my (@methods, %method);     # name => { name, block, node, params, ret, kind, ... }
 my @handlers;               # { id, params => [[name, ty]], body => [lines], async }
 my @timers;                 # { ms, body => [lines] }
@@ -110,7 +112,7 @@ my $tmp;                    # a counter for the names this file makes up
 sub translate {
     my ($file) = @_;
     ($path, $class_name, $class_block, $run_word, $run_list, $view_block) = ($file);
-    (@fields, %field, %bag, @methods, %method, @handlers, @timers, @binds, @app_stmts,
+    (@fields, %field, %bag, %const, @methods, %method, @handlers, @timers, @binds, @app_stmts,
      @lifted, @values, %value) = ();
     $app_class = undef;
     ($app_var, $uses_pl, $uses_std, $tmp) = (undef, 0, 0, 0);
@@ -338,19 +340,32 @@ sub value_class {
 sub app_decl {
     my ($toks) = @_;
     my ($my, $sym) = @$toks;
-    refuse($my, 'a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`) '
-              . 'or the app itself (`my $app = Counter->new;`)')
+    refuse($my, 'a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`), '
+              . 'a name for a literal (`my $WIDTH = 120;`) or the app itself '
+              . '(`my $app = Counter->new;`)')
         unless is_sym($sym, '%') || is_sym($sym, '$');
     if (is_sym($sym, '%')) {
         bag($toks);
         return scalar @$toks;
     }
+    # `my $WIDTH = 120;` — a name for a literal. The compiled run has
+    # no place at the top of a file to keep a value, so the value is
+    # written wherever the name is read.
+    my ($eq0, @rest0) = @{$toks}[2 .. $#$toks];
+    if (is_op($eq0, '=') && @rest0 && !is_word($rest0[0])) {
+        my $name = substr $sym->content, 1;
+        refuse($sym, "`\$$name` is declared twice") if exists $const{$name};
+        my ($ty, $pix) = literal_run(\@rest0);
+        my $lit = $ty eq 'String' ? (@rest0 == 1 ? $rest0[0]->string : undef) : undef;
+        $const{$name} = { ty => $ty, pix => $pix, lit => $lit };
+        return scalar @$toks;
+    }
     refuse($sym, '`$' . substr($sym->content, 1) . '` is declared twice') if defined $app_var;
     my ($eq, $cls, $arrow, $new, @rest) = @{$toks}[2 .. $#$toks];
     $app_class = $cls->content if is_word($cls);
-    refuse($sym, 'a `my $...` at the top of the file is the app itself (`my $app = '
-               . ($class_name // 'Counter') . '->new;`), which is what a timer reaches its methods '
-               . 'through; anything else an app holds is a field')
+    refuse($sym, 'a `my $...` at the top of the file is a name for a literal (`my $WIDTH = 120;`) '
+               . 'or the app itself (`my $app = ' . ($class_name // 'Counter') . '->new;`), which is '
+               . 'what a timer reaches its methods through')
         unless is_op($eq, '=') && is_word($cls) && is_op($arrow, '->') && is_word($new, 'new');
     $app_var = substr $sym->content, 1;
     return 6;
@@ -589,6 +604,13 @@ sub list_init {
 sub list_item {
     my ($a) = @_;
     my @t = @{ $a->{toks} };
+    # One of the file's own values, built where it is written.
+    if (is_word($t[0]) && $value{ $t[0]->content }) {
+        my $i = 0;
+        my $v = primary(\$i, \@t, { ctx => 'fn', vars => {}, nonneg => {}, at => $a->{node} });
+        refuse($t[$i], 'this does not continue the value') if $i < @t;
+        return ($v->{ty}, $v->{pix});
+    }
     if (@t == 1 && $t[0]->isa('PPI::Structure::Constructor') && $t[0]->start->content eq '[') {
         my ($ty, @pix);
         for my $inner (split_args($t[0])) {
@@ -651,7 +673,10 @@ sub type_of_words {
         refuse($param, '`' . $w->content . '` takes one type') unless @st == 1;
         return sprintf $outer, type_of_words([sig($st[0])], $param);
     }
-    refuse($w, 'a type here is `Int`, `Str`, `Num`, `Bool` or `ArrayRef[...]`; `' . $w->content . '` is not one')
+    # A class in this file is a type name too.
+    return $w->content if $value{ $w->content } && @$toks == 1;
+    refuse($w, 'a type here is `Int`, `Str`, `Num`, `Bool`, `ArrayRef[...]` or one of this file\'s own '
+             . 'classes; `' . $w->content . '` is not one')
         unless $TYPE_WORD{ $w->content } && @$toks == 1;
     return $TYPE_WORD{ $w->content };
 }
@@ -840,7 +865,7 @@ sub binop {
     if ($o eq '.') {
         if (defined $l->{lit} && defined $r->{lit}) {
             my $lit = $l->{lit} . $r->{lit};
-            return { ty => 'String', pix => '"' . pix_text($node, $lit) . '"', lit => $lit };
+            return { ty => 'String', pix => '"' . pix_text($node, $lit) . '"', lit => $lit, str => 1 };
         }
         refuse($node, "`.` joins strings (got $l->{ty} and $r->{ty}); a number is written into a string with a hole")
             unless $l->{ty} eq 'String' && $r->{ty} eq 'String';
@@ -1006,7 +1031,7 @@ sub primary {
     if ($t->isa('PPI::Token::Number') || $t->isa('PPI::Token::Quote::Single')) {
         $$ip++;
         my ($ty, $pix) = literal($t);
-        return { ty => $ty, pix => $pix, ($ty eq 'String' ? (lit => $t->literal) : ()) };
+        return { ty => $ty, pix => $pix, ($ty eq 'String' ? (lit => $t->literal, str => 1) : ()) };
     }
     if ($t->isa('PPI::Token::Quote::Double')) { $$ip++; return interpolate($t, $env) }
     # `$1` … `$9` and `$+{name}`. Every other magic name (`$_` among
@@ -1200,6 +1225,11 @@ sub read_var {
     if (exists $field{$name} && $field{$name}{kind} eq '$') {
         return lifted($env, $name, { ty => $field{$name}{ty}, pix => $env->{ctx} eq 'view' ? "App.$name" : $name });
     }
+    # A name for a literal is the literal.
+    if (my $c = $const{$name}) {
+        return { ty => $c->{ty}, pix => $c->{pix},
+                 ($c->{ty} eq 'String' ? (lit => $c->{lit}, str => 1) : ()) };
+    }
     refuse($node, "`\$$name` is not a field of $class_name" . ($env->{ctx} eq 'fn' ? ' nor anything in scope here' : ''));
 }
 
@@ -1377,6 +1407,15 @@ sub word_expr {
         $$ip++;
         return framework_call($name, $w, $next, $env);
     }
+    if ($name eq 'quit') {
+        $$ip++;
+        refuse($w, '`quit` is called with nothing: `quit()`')
+            unless $next && $next->isa('PPI::Structure::List') && !$next->schildren;
+        $$ip++;
+        refuse($w, '`quit` closes the window, and building a view only reads') if $env->{ctx} eq 'view';
+        $uses_std = 1;
+        return { ty => 'Int', pix => 'Py.quit()' };
+    }
     if (my $u = $UNARY{$name}) {
         $$ip++;
         my $v = one_arg($ip, $toks, $env, $w, $name);
@@ -1402,7 +1441,7 @@ sub word_expr {
     }
     if ($name =~ /\A(?:sum|max|min|uniq)\z/) {
         $$ip++;
-        my $v = one_arg($ip, $toks, $env, $w, $name);
+        my $v = one_arg($ip, $toks, $env, $w, $name, 1);
         my $inner = $v->{ty} =~ /\AList<(.+)>\z/
             ? $1 : refuse($w, "`$name` reads a list (got $v->{ty})");
         refuse($w, "`$name` reads a list of numbers or, for `uniq`, of strings; this one holds $inner")
@@ -1590,12 +1629,25 @@ sub framework_call {
 
 # What a named unary operator was given: `uc $s` and `uc($s)` both.
 sub one_arg {
-    my ($ip, $toks, $env, $w, $name) = @_;
+    my ($ip, $toks, $env, $w, $name, $listy) = @_;
     my $t = $toks->[$$ip];
     if ($t && $t->isa('PPI::Structure::List')) {
         my @a = split_args($t);
-        refuse($w, "`$name` takes one value") unless @a == 1;
         $$ip++;
+        # `max($a, $b)` reads a list of two, the way perl reads it.
+        if (@a > 1) {
+            refuse($w, "`$name` takes one list, or the values themselves") unless $listy;
+            my ($ty, $pix);
+            for my $arg (@a) {
+                my $v = parse_expr($arg->{toks}, { %$env, at => $arg->{node} });
+                refuse($arg->{node}, "`$name` reads one type: this started with $ty and this is $v->{ty}")
+                    if defined $ty && $v->{ty} ne $ty;
+                $ty = $v->{ty};
+                $pix = defined $pix ? "$pix, $v->{pix}" : $v->{pix};
+            }
+            return { ty => "List<$ty>", pix => "[$pix]" };
+        }
+        refuse($w, "`$name` takes one value") unless @a == 1;
         return parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
     }
     return expr_bp($ip, $toks, $env, 30);
@@ -1776,7 +1828,7 @@ sub interpolate {
     }
     $out .= pix_text($tok, $buf);
     $lit .= $buf;
-    return { ty => 'String', pix => qq{"$out"}, ($plain ? (lit => $lit) : ()) };
+    return { ty => 'String', pix => qq{"$out"}, str => 1, ($plain ? (lit => $lit) : ()) };
 }
 
 # What a hole prints. Perl prints a number with %.15g and a bool as `1`
@@ -1889,6 +1941,8 @@ sub parse_element {
             if ($own{$k}) {
                 refuse($a->{node}, "`$name`'s $k is written first, without its name") if $own{$k}{pos};
                 $given{$k} = $a;
+            } elsif ($k eq 'paint' && $spec->{paints}) {
+                $given{$k} = $a;
             } elsif ($RIDER{$k}) {
                 refuse($a->{node}, "`$name`'s own `label` is already the name a screen reader reads; there is no second one to give")
                     if $spec->{owns_label} && $k eq 'a11y_label';
@@ -1928,6 +1982,15 @@ sub parse_element {
         } else {
             push @props, [$p->{pix}, prop_value($name, $p, $a, $env)];
         }
+    }
+    if ($spec->{paints}) {
+        refuse($w, "`$name` is painted by a sub: `paint => sub { rect(...) }`")
+            unless exists $given{paint};
+        my ($sub, @rest) = @{ $given{paint}{toks} };
+        my ($proto, $block) = @rest == 2 ? @rest : (undef, $rest[0]);
+        refuse($given{paint}{node}, "`$name` is painted by a sub with nothing: `paint => sub { ... }`")
+            unless is_word($sub, 'sub') && $block && $block->isa('PPI::Structure::Block') && !$proto;
+        push @children, paint_nodes($block, $env);
     }
     if ($rows) {
         refuse($w, "`$name` builds its rows on demand: it takes how many, and a sub that builds row i")
@@ -2197,7 +2260,12 @@ sub rider_value {
 # hole, which is where the compiled run takes an element of a list.
 sub str_value {
     my ($v) = @_;
-    return $v->{pix} if $v->{pix} =~ /\A"/ || $v->{pix} !~ /\[/;
+    # A string an app wrote out stands as it is, and so does a name, a
+    # property or one plain call. Anything else — a read out of a list,
+    # two strings joined — is written into a hole, which is where the
+    # compiled run takes an expression.
+    return $v->{pix} if $v->{str};
+    return $v->{pix} if $v->{pix} =~ /\A[A-Za-z_][\w.]*(?:\([^()]*\))?\z/;
     return '"#{' . $v->{pix} . '}"';
 }
 
@@ -2367,7 +2435,7 @@ sub simple_stmt {
     # A call whose answer nobody wants — the framework's own, and
     # nothing else, since a Perl builtin called for its own sake does
     # nothing here.
-    if (is_word($head) && $Rakugan::Manifest::NAMES{ $head->content }) {
+    if (is_word($head) && ($Rakugan::Manifest::NAMES{ $head->content } || $head->content eq 'quit')) {
         my $i = 0;
         my $v = word_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
         refuse($t[$i], 'this does not continue the call') if $i < @t;
@@ -2886,6 +2954,151 @@ sub block_appends {
     return ($target, @nodes);
 }
 
+# --- what a canvas is painted with ------------------------------------------
+#
+# A command is not an element: it has no handle, takes none of the
+# keywords every element takes, and means nothing outside the canvas it
+# is written in. What a paint sub holds is commands, `if`s and `for`s.
+sub paint_nodes {
+    my ($block, $env) = @_;
+    my @out;
+    for my $st (grep { !$_->isa('PPI::Statement::Null') } $block->schildren) {
+        push @out, paint_stmt($st, $env);
+    }
+    return @out;
+}
+
+sub paint_stmt {
+    my ($st, $env) = @_;
+    if ($st->isa('PPI::Statement::Compound')) {
+        my @t = sig($st);
+        if (is_word($t[0], 'for') || is_word($t[0], 'foreach')) {
+            refuse($t[0], 'a loop here is `for my $x (@items) { ... }`')
+                unless is_word($t[1], 'my') && is_sym($t[2], '$') && $t[3] && $t[3]->isa('PPI::Structure::List')
+                    && $t[4] && $t[4]->isa('PPI::Structure::Block');
+            my $name = substr $t[2]->content, 1;
+            my $over = list_source([$t[3]], $env, $t[0]);
+            my $inner = { %$env, vars => { %{ $env->{vars} }, $name => { ty => $over->{ty}, pix => $name, fixed => 1 } } };
+            return unrolled_paint($over, $name, $t[4], $env, $t[0]) if $over->{counted} && !$over->{indexed};
+            if ($over->{indexed}) {
+                $inner->{nonneg} = { %{ $env->{nonneg} // {} }, $name => 1 };
+                $inner->{repeat} = { list => $over->{list}, it => 'it', ix => $name };
+                return { n => 'for', over => $over->{list}, it => 'it', ix => $name,
+                         body => [paint_nodes($t[4], $inner)] };
+            }
+            return { n => 'for', over => $over->{over}, it => $name, body => [paint_nodes($t[4], $inner)] };
+        }
+        refuse($t[0], 'a canvas paints under `if`, `unless` and `for`')
+            unless is_word($t[0], 'if') || is_word($t[0], 'unless');
+        return paint_if(\@t, 0, $env);
+    }
+    my @t = strip_semicolon(sig($st));
+    my ($ix) = grep { is_word($t[$_], 'if') || is_word($t[$_], 'unless') } 1 .. $#t;
+    if (defined $ix) {
+        my $cond = cond_of([@t[$ix + 1 .. $#t]], $env, $t[$ix]);
+        $cond = "!($cond)" if $t[$ix]->content eq 'unless';
+        return { n => 'if', cond => $cond,
+                 then => [paint_call([@t[0 .. $ix - 1]], $env)], else => [] };
+    }
+    return paint_call(\@t, $env);
+}
+
+sub unrolled_paint {
+    my ($over, $name, $block, $env, $at) = @_;
+    refuse($at, 'a canvas repeats over a list, or over a run of numbers whose ends are written out')
+        unless defined $over->{from};
+    my @out;
+    for my $n ($over->{from} .. $over->{to}) {
+        my $inner = { %$env, vars => { %{ $env->{vars} }, $name => { ty => 'Int', pix => $n, fixed => 1 } } };
+        push @out, paint_nodes($block, $inner);
+    }
+    return @out;
+}
+
+sub paint_if {
+    my ($t, $i, $env) = @_;
+    my $kw = $t->[$i];
+    my ($cnd, $blk) = @{$t}[$i + 1, $i + 2];
+    refuse($kw, '`' . $kw->content . '` takes its condition in parentheses and a block')
+        unless $cnd && $cnd->isa('PPI::Structure::Condition') && $blk && $blk->isa('PPI::Structure::Block');
+    my $cond = cond_of([$cnd], $env, $kw);
+    $cond = "!($cond)" if $kw->content eq 'unless';
+    my @then = paint_nodes($blk, nonneg_in($env, $cond));
+    my @else;
+    if (my $next = $t->[$i + 3]) {
+        if (is_word($next, 'elsif')) {
+            @else = paint_if($t, $i + 3, $env);
+        } elsif (is_word($next, 'else')) {
+            refuse($next, '`else` takes a block') unless $t->[$i + 4] && $t->[$i + 4]->isa('PPI::Structure::Block');
+            @else = paint_nodes($t->[$i + 4], $env);
+        } else {
+            refuse($next, 'this does not belong in an if statement: `' . $next->content . '`');
+        }
+    }
+    return { n => 'if', cond => $cond, then => \@then, else => \@else };
+}
+
+sub paint_call {
+    my ($toks, $env) = @_;
+    my ($w, $list, @more) = @$toks;
+    # A method that paints is written out where it is called: the
+    # compiled run has commands inside a canvas and nothing to call.
+    if (is_sym($w, '$') && ($w->content eq '$self' || (defined $app_var && $w->content eq "\$$app_var"))) {
+        refuse($w, 'a method of the app is called `$self->name(...)`')
+            unless is_op($toks->[1], '->') && is_word($toks->[2]);
+        my $m = $method{ $toks->[2]->content }
+            or refuse($toks->[2], '`' . $toks->[2]->content . "` is not a method of $class_name");
+        refuse($toks->[2], '`' . $m->{name} . '` paints nothing; a canvas holds commands')
+            unless $m->{paints};
+        my @given = $toks->[3] ? split_args($toks->[3]) : ();
+        refuse($toks->[2], "`$m->{name}` takes " . scalar(@{ $m->{params} }) . ' values')
+            unless @given == @{ $m->{params} };
+        my $inner = { ctx => $env->{ctx}, vars => {}, nonneg => { %{ $env->{nonneg} // {} } },
+                      repeat => $env->{repeat}, at => $toks->[2] };
+        for my $i (0 .. $#given) {
+            my ($pname, $pty) = @{ $m->{params}[$i] };
+            my $v = parse_expr($given[$i]{toks}, { %$env, at => $given[$i]{node} });
+            refuse($given[$i]{node}, "`$m->{name}` takes a $pty here (got $v->{ty})")
+                unless $v->{ty} eq $pty || ($pty eq 'Float' && $v->{ty} eq 'Int');
+            $inner->{vars}{ substr $pname, 1 } = { ty => $pty, pix => $v->{pix}, fixed => 1 };
+        }
+        return paint_nodes($m->{block}, $inner);
+    }
+    refuse($toks->[0], 'a canvas is painted with its commands: ' . join(', ', sort keys %OP))
+        unless is_word($w) && $OP{ $w->content };
+    refuse($w, '`' . $w->content . '` is called with parentheses')
+        unless $list && $list->isa('PPI::Structure::List') && !@more;
+    my $op = $OP{ $w->content };
+    my @a = split_args($list);
+    my @need = grep { !exists $_->{default} } @{ $op->{params} };
+    refuse($w, "`$op->{name}` takes " . scalar(@need) . ' values ('
+             . join(', ', map { $_->{name} } @need) . ')')
+        if @a < @need || (@a > @need && !defined $a[scalar @need]{key});
+    my %want = (int => 'Int', str => 'String', bool => 'Bool');
+    my $value = sub {
+        my ($p, $arg) = @_;
+        my $v = parse_expr($arg->{toks}, { %$env, at => $arg->{node} });
+        refuse($arg->{node}, "`$op->{name}`'s $p->{name} is a $want{$p->{type}} (got $v->{ty})")
+            unless $v->{ty} eq $want{ $p->{type} };
+        return [$p->{pix}, $p->{type} eq 'str' ? str_value($v) : $v->{pix}];
+    };
+    my @props;
+    push @props, $value->($need[$_], $a[$_]) for 0 .. $#need;
+    # What is left over is named: a value with a default is given by
+    # name or not at all.
+    for my $arg (@a[scalar(@need) .. $#a]) {
+        refuse($arg->{node}, "`$op->{name}` takes its first values in order and the rest by name")
+            unless defined $arg->{key};
+        my ($p) = grep { $_->{name} eq $arg->{key} && exists $_->{default} } @{ $op->{params} };
+        refuse($arg->{node}, "`$op->{name}` has no `$arg->{key} =>`; it takes "
+                           . join(', ', map { "`$_->{name}`" }
+                                  grep { exists $_->{default} } @{ $op->{params} }))
+            unless $p;
+        push @props, $value->($p, $arg);
+    }
+    return { n => 'el', pix => $op->{pix}, props => \@props, kids => [], flat => 1 };
+}
+
 # --- components -----------------------------------------------------------
 sub comp_name {
     my ($m) = @_;
@@ -2992,6 +3205,11 @@ sub classify {
             $m->{own_fields} ||= grep { exists $field{$_} } $text =~ /[\$\@%]\{?(\w+)/g;
         }
         $m->{answers} = [answers_of($m->{block})];
+        # A method whose statements are drawing commands paints; it is
+        # written out inside the canvas that calls it.
+        $m->{paints} = grep {
+            $OP{ $_->content } && !is_op($_->sprevious_sibling, '->')
+        } @{ $m->{block}->find('PPI::Token::Word') || [] };
     }
     my $changed = 1;
     while ($changed) {
@@ -3029,7 +3247,7 @@ sub answers_of {
 
 sub bodies {
     for my $m (@methods) {
-        next if $m->{element};
+        next if $m->{element} || $m->{paints};
         my $env = { ctx => 'fn', vars => {}, nonneg => {}, ret => $m->{ret}, at => $m->{node} };
         $env->{vars}{ substr $_->[0], 1 } = { ty => $_->[1], pix => substr($_->[0], 1), fixed => 1 } for @{ $m->{params} };
         $m->{body} = [stmts($m->{block}, $env)];
@@ -3136,7 +3354,7 @@ sub emit {
     push @out, 'store App {';
     push @out, "  state $_ : $field{$_}{ty} = $field{$_}{init}" for @fields;
     for my $m (@methods) {
-        next if $m->{element} || !$m->{stateful};
+        next if $m->{element} || $m->{paints} || !$m->{stateful};
         push @out, '', '  ' . fn_head($m) . ' {', (map { "    $_" } @{ $m->{body} }), '  }';
     }
     for my $h (@handlers) {
@@ -3157,7 +3375,7 @@ sub emit {
         push @out, '', "  $head {", (map { "    $_" } @{ $b->{body} }), '  }';
     }
     push @out, '}';
-    my @help = (grep({ !$_->{element} && !$_->{stateful} } @methods), @lifted);
+    my @help = (grep({ !$_->{element} && !$_->{paints} && !$_->{stateful} } @methods), @lifted);
     if (@help) {
         push @out, '', 'class Helpers {';
         for my $m (@help) {
@@ -3206,7 +3424,7 @@ sub emit_element {
     my ($el, $lvl) = @_;
     my $pad = '  ' x $lvl;
     my @props = map { "$_->[0]: $_->[1]" } @{ $el->{props} };
-    if (!@{ $el->{kids} } && @props <= 3) {
+    if (!@{ $el->{kids} } && (@props <= 3 || $el->{flat})) {
         push @out, @props ? "$pad$el->{pix} { " . join('; ', @props) . ' }' : "$pad$el->{pix} { }";
         return;
     }

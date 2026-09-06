@@ -100,6 +100,9 @@ gate calc    ./bin/rakugan gate demo/calc.pl --script "click:7,click:×,click:6,
 gate calcgrid ./bin/rakugan gate demo/calcgrid.pl --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate tasks   ./bin/rakugan gate demo/tasks.pl --script "click:start slow work,dump,click:start slow work,dump"
 gate dashboard ./bin/rakugan gate demo/dashboard.pl --script "advance:1000,advance:1000,dump"
+gate canvas  ./bin/rakugan gate demo/canvas.pl --script "advance:50,dump,keydown:left,advance:50,advance:50,dump,keyup:left,keydown:space,advance:50,keyup:space,dump"
+gate jump    ./bin/rakugan gate demo/jump.pl --script "advance:34,advance:34,dump,keydown:right,advance:34,advance:34,advance:34,dump,keyup:right,advance:34,dump"
+gate shooter ./bin/rakugan gate demo/shooter.pl --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

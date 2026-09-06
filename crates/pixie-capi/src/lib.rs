@@ -1248,17 +1248,20 @@ pub(crate) fn answer_with(text: &str) {
 /// window is involved, so it works over ssh, in CI, and while the
 /// screen is locked.
 ///
-/// `WAKAKUSA_FRAMES` is the directory; `WAKAKUSA_FRAME_SCALE` draws
-/// the grid bigger than the app asks, so a 160x120 canvas comes back
-/// readable without the app changing.
+/// `PIXIE_FRAMES` is the directory and `PIXIE_FRAME_SCALE` draws the
+/// grid bigger than the app asks, so a 160x120 canvas comes back
+/// readable without the app changing. The face is pixie's and so are
+/// the names; `WAKAKUSA_FRAMES` still answers, because the first
+/// caller's own documents say it.
 fn install_frames() {
-    let Ok(dir) = std::env::var("WAKAKUSA_FRAMES") else {
+    let Ok(dir) = std::env::var("PIXIE_FRAMES").or_else(|_| std::env::var("WAKAKUSA_FRAMES")) else {
         return;
     };
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
-    let scale: i64 = std::env::var("WAKAKUSA_FRAME_SCALE")
+    let scale: i64 = std::env::var("PIXIE_FRAME_SCALE")
+        .or_else(|_| std::env::var("WAKAKUSA_FRAME_SCALE"))
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(0);

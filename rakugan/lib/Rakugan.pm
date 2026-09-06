@@ -20,6 +20,7 @@ require builtin;
 use Rakugan::Runtime;
 use Rakugan::Elements;
 use Rakugan::Stdlib;
+use Rakugan::Elements;
 
 our $VERSION = '0.1.0';
 
@@ -51,8 +52,29 @@ sub HashRef  :prototype(;$) { 'HashRef'  . (@_ ? "[$_[0][0]]" : '') }
 # exception for an empty one.
 sub empty { return }
 
-my @VOCAB = (@Rakugan::Elements::ELEMENTS, @Rakugan::Stdlib::EXPORT,
-             qw(run every task shortcut menu_item on_key on_file_drop empty Int Str Num Bool ArrayRef HashRef));
+my @VOCAB = (@Rakugan::Elements::ELEMENTS, @Rakugan::Elements::OPS, @Rakugan::Stdlib::EXPORT,
+             qw(run every task shortcut menu_item on_key on_file_drop quit empty Int Str Num Bool ArrayRef HashRef));
+
+# Every class in the file is a type name too, so a container that
+# starts empty can say what it will hold: `field @floors =
+# empty(Floor);`. A class learns its own name from `caller` when it
+# imports, and every package that has imported gets it — which works
+# because a class is written before the app that holds its values.
+my (@CLASSES, @IMPORTED);
+
+sub _share_class_names {
+    my ($pkg) = @_;
+    push @IMPORTED, $pkg unless grep { $_ eq $pkg } @IMPORTED;
+    push @CLASSES, $pkg if $pkg ne 'main' && !grep { $_ eq $pkg } @CLASSES;
+    no strict 'refs';
+    for my $p (@IMPORTED) {
+        for my $c (@CLASSES) {
+            next if defined &{"${p}::$c"};
+            *{"${p}::$c"} = sub :prototype() { $c };
+        }
+    }
+    return;
+}
 
 sub import {
     my $class = shift;
@@ -76,10 +98,11 @@ sub import {
         my ($class, $code, @attrs) = @_;
         return grep { !/\ASig\b/ } @attrs;
     };
+    _share_class_names($pkg);
     for my $name (@VOCAB) {
         my $from = defined &{"Rakugan::Elements::$name"} ? "Rakugan::Elements::$name"
                  : defined &{"Rakugan::Stdlib::$name"}    ? "Rakugan::Stdlib::$name"
-                 : $name =~ /\A(?:run|every|task|shortcut|menu_item|on_key|on_file_drop)\z/
+                 : $name =~ /\A(?:run|every|task|shortcut|menu_item|on_key|on_file_drop|quit)\z/
                                                            ? "Rakugan::Runtime::$name"
                  :                                            "Rakugan::$name";
         *{"${pkg}::$name"} = \&{$from};

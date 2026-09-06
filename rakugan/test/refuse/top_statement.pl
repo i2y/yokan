@@ -1,6 +1,6 @@
 use Rakugan;
 
-my $greeting = "hello";
+my @greetings = ("hello", "goodbye");
 
 class App {
     use Rakugan;

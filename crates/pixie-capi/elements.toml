@@ -509,3 +509,68 @@ props = [
   { name = "background", type = "int", default = 0 },
   { name = "palette", type = "strs", default = [] },
 ]
+
+# --- the canvas's drawing commands ------------------------------------------
+#
+# A command is not an element. It takes none of the keywords every
+# element takes, nothing can click it, and it means nothing outside the
+# canvas it was written in — so it has no kind number, no handle, and
+# no entry above. Every coordinate is a whole virtual pixel and every
+# color is a NUMBER, the index of a color in the canvas's palette,
+# which is how drawing written for a pixel machine ports line for line.
+#
+# `args` names the values in the order `pixie_op_<name>` takes them,
+# each with its type (`int`, `str`, `bool`); `pix` is the command a
+# translated run writes inside its `Canvas { }`, and a value whose
+# `.pix` name differs is written `name=pixname`. A value with `= …` may
+# be left out, and is then given by its name rather than its place.
+
+[[op]]
+name = "pixel"
+pix = "Pixel"
+args = "x: int, y: int, color: int"
+
+[[op]]
+name = "line"
+pix = "Line"
+args = "x1: int, y1: int, x2: int, y2: int, color: int"
+
+[[op]]
+name = "rect"
+pix = "Rect"
+args = "x: int, y: int, w: int, h: int, color: int"
+
+[[op]]
+name = "rect_outline"
+pix = "RectOutline"
+args = "x: int, y: int, w: int, h: int, color: int"
+
+[[op]]
+name = "circle"
+pix = "Circle"
+args = "x: int, y: int, r: int, color: int"
+
+[[op]]
+name = "circle_outline"
+pix = "CircleOutline"
+args = "x: int, y: int, r: int, color: int"
+
+[[op]]
+name = "triangle"
+pix = "Triangle"
+args = "x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, color: int"
+
+[[op]]
+name = "triangle_outline"
+pix = "TriangleOutline"
+args = "x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, color: int"
+
+[[op]]
+name = "sprite"
+pix = "Sprite"
+args = "x: int, y: int, source: str, u: int, v: int, w: int, h: int, colkey: int = -1, flip_x=flipX: bool = false, flip_y=flipY: bool = false"
+
+[[op]]
+name = "pixel_text"
+pix = "PixelText"
+args = "x: int, y: int, text: str, color: int"

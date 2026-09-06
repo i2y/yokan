@@ -23,6 +23,7 @@ use open qw(:std :encoding(UTF-8));
 use FindBin;
 use File::Basename qw(basename dirname);
 use File::Copy qw(copy);
+use File::Find ();
 use File::Path qw(make_path remove_tree);
 use File::Spec;
 use File::Temp qw(tempfile);
@@ -39,13 +40,17 @@ my $TARGET = $ENV{CARGO_TARGET_DIR} // "$ENV{HOME}/.cache/pixie/target";
 $ENV{CARGO_TARGET_DIR} = $TARGET;
 
 my $USAGE = <<'TXT';
-usage: rakugan <command> <app.pl> [--script "step,step"] [--fresh <path>] [--release]
+usage: rakugan <command> <app.pl> [--script "step,step"] [--fresh <path>] [--release] [--app]
 
   check      what the app writes that Rakugan cannot take
   run        run it interpreted, in a window
   translate  emit the .pix the compiled run is built from
-  build      build the native binary [--release]
+  build      build the native binary [--release] [--app]
   gate       run it both ways headless and compare the two runs
+
+--release drops the symbol table, which is a fifth of the file.
+--app wraps the binary in a macOS application bundle under demo/dist/,
+with the icon beside the app if there is one.
 
 --fresh deletes a path before EACH run, so an app that keeps a file or a
 database starts both runs from the same nothing. Repeatable.
@@ -247,6 +252,10 @@ sub build {
                       'build', ($release ? '--release' : '--no-interp'));
     my ($binary) = $out =~ /^built: (.*)$/m
         or die_("pixie printed no `built:` line:\n$out");
+    # A shipped binary carries no symbol table: it is a fifth of the
+    # file, and nobody reads a crash report from an app they shipped.
+    # A gate's binary keeps its symbols, because that one IS read.
+    quietly('strip', '-x', $binary) if $release;
     return ($proj, $binary);
 }
 
@@ -257,6 +266,124 @@ sub interpreted {
 }
 
 sub size_of { sprintf '%.1f MB', (-s $_[0]) / 1_000_000 }
+
+# What the bundle weighs: the files in it, in the same bytes `size_of`
+# counts, so the bundle never reads as smaller than the binary in it.
+sub dir_size {
+    my ($dir) = @_;
+    my $total = 0;
+    File::Find::find(sub { $total += -s $_ if -f $_ }, $dir);
+    return sprintf '%.1f MB', $total / 1_000_000;
+}
+
+# --- shipping ---------------------------------------------------------------
+
+# `--app`: a macOS application bundle under demo/dist/, beside the app.
+# The binary carries the engine and the compiled program and links
+# nothing but the system's own libraries, so the bundle is the whole
+# thing: it runs on a machine with neither perl nor the toolchain.
+sub app_bundle {
+    my ($app, $bin, $tr) = @_;
+    my $title = $tr->{window}{title} // '';
+    $title =~ s/\A"|"\z//g;
+    $title = stem($app) unless length $title;
+    (my $safe = $title) =~ s/[^A-Za-z0-9 ._-]//g;
+    $safe =~ s/\A\s+|\s+\z//g;
+    $safe = stem($app) unless length $safe;
+    my $root = File::Spec->catdir(dirname(File::Spec->rel2abs($app)), 'dist', "$safe.app");
+    my $macos = File::Spec->catdir($root, 'Contents', 'MacOS');
+    my $res = File::Spec->catdir($root, 'Contents', 'Resources');
+    remove_tree($root);
+    make_path($macos, $res);
+    copy($bin, File::Spec->catfile($macos, stem($app))) or die_("copy the binary: $!");
+    chmod 0755, File::Spec->catfile($macos, stem($app));
+    write_file(File::Spec->catfile($root, 'Contents', 'Info.plist'),
+               plist($title, stem($app), install_icon($app, $res)));
+    # Ad-hoc signed, like every other artifact here: unsigned, macOS
+    # refuses to open it at all.
+    quietly('codesign', '--force', '-s', '-', $root) or die_('codesign failed');
+    return $root;
+}
+
+# An icon rides along when <stem>.icns or <stem>.png sits beside the
+# app. A PNG goes through the only pipeline macOS offers: sips writes
+# every size into an iconset and iconutil packs it. If either balks the
+# bundle simply has no icon, which is not worth failing a build over.
+sub install_icon {
+    my ($app, $res) = @_;
+    my $dir = dirname(File::Spec->rel2abs($app));
+    my $dest = File::Spec->catfile($res, 'icon.icns');
+    my $icns = File::Spec->catfile($dir, stem($app) . '.icns');
+    my $png = File::Spec->catfile($dir, stem($app) . '.png');
+    if (-f $icns) {
+        copy($icns, $dest) or return '';
+    } elsif (-f $png) {
+        return '' unless png_to_icns($png, $dest);
+    } else {
+        return '';
+    }
+    return "  <key>CFBundleIconFile</key>\n  <string>icon</string>\n";
+}
+
+sub png_to_icns {
+    my ($png, $dest) = @_;
+    my $td = File::Temp->newdir;
+    my $iconset = File::Spec->catdir("$td", 'app.iconset');
+    make_path($iconset);
+    for my $base (16, 32, 128, 256, 512) {
+        for my $scale (1, 2) {
+            my $px = $base * $scale;
+            my $name = "icon_${base}x${base}" . ($scale == 1 ? '' : '\@2x') . '.png';
+            return 0 unless quietly('sips', '-z', $px, $px, $png, '--out',
+                                    File::Spec->catfile($iconset, $name));
+        }
+    }
+    return quietly('iconutil', '-c', 'icns', $iconset, '-o', $dest);
+}
+
+sub quietly {
+    my @cmd = @_;
+    my $pid = fork // return 0;
+    if (!$pid) {
+        open STDOUT, '>', '/dev/null';
+        open STDERR, '>', '/dev/null';
+        exec @cmd or exit 1;
+    }
+    waitpid $pid, 0;
+    return $? == 0;
+}
+
+sub plist {
+    my ($title, $exe, $icon_line) = @_;
+    $icon_line =~ s/\n\z//;
+    return <<"XML";
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>$title</string>
+  <key>CFBundleDisplayName</key>
+  <string>$title</string>
+  <key>CFBundleExecutable</key>
+  <string>$exe</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.rakugan.$exe</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>0.1.0</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+$icon_line
+</dict>
+</plist>
+XML
+}
 
 # What each run must find missing when it starts.
 sub wipe { remove_tree($_) for @{ $_[0] } }
@@ -285,6 +412,10 @@ sub cmd_build {
     my $tr = check($app) or exit 1;
     my ($proj, $binary) = build($app, $tr, $opts->{release});
     print "built: $binary (", size_of($binary), ")\n";
+    if ($opts->{app}) {
+        my $root = app_bundle($app, $binary, $tr);
+        print "bundle: ", rel($root), " (", dir_size($root), ")\n";
+    }
     print "  not gate-checked — `gate` with a script proves the two runs agree\n";
 }
 
@@ -325,12 +456,13 @@ die_("no command\n\n$USAGE") unless defined $mode;
 die_("unknown command `$mode`\n\n$USAGE") unless $COMMANDS{$mode};
 
 my $app;
-my %opts = (script => '', fresh => [], release => 0);
+my %opts = (script => '', fresh => [], release => 0, app => 0);
 while (@ARGV) {
     my $arg = shift @ARGV;
     if    ($arg eq '--script')  { $opts{script} = shift(@ARGV) // '' }
     elsif ($arg eq '--fresh')   { push @{ $opts{fresh} }, shift(@ARGV) // '' }
     elsif ($arg eq '--release') { $opts{release} = 1 }
+    elsif ($arg eq '--app')     { $opts{app} = 1 }
     elsif ($arg =~ /\A--/)      { die_("unknown option `$arg`\n\n$USAGE") }
     else {
         die_("rakugan $mode takes one app") if defined $app;
@@ -343,8 +475,8 @@ die_("$mode takes no --script — replaying a script is the gate's job")
     if $opts{script} ne '' && $mode ne 'gate';
 die_("--fresh belongs to gate: it is there so the two runs start alike")
     if @{ $opts{fresh} } && $mode ne 'gate';
-die_("--release belongs to build: it is how an app ships")
-    if $opts{release} && $mode ne 'build';
+die_("--release and --app belong to build: they are how an app ships")
+    if ($opts{release} || $opts{app}) && $mode ne 'build';
 
 no strict 'refs';
 &{"cmd_$mode"}($app, \%opts);

@@ -24,6 +24,9 @@ my @bindings;
 # it reaches must not open a second window.
 my $app;
 my $running = 0;
+# The canvas being painted, or 0 between canvases. A canvas cannot hold
+# another, so one place to keep it is enough.
+my $canvas = 0;
 
 sub register ($el, $key, $cb) {
     push @handlers, $cb;
@@ -63,6 +66,52 @@ sub _row_build ($handler, $index) {
     my $cb = $rows[$handler] or return 0;
     return $cb->($index) // 0;
 }
+
+# --- the canvas -------------------------------------------------------------
+
+# A command joins the canvas that is open where it stands. It is not an
+# element: no handle, no keywords every element takes, and no meaning
+# outside its canvas.
+sub paint_op ($name, @args) {
+    croak "`$name` is a drawing command, and there is no canvas open here" unless $canvas;
+    my $spec = $Rakugan::Vocab::OP{$name} or croak "no drawing command `$name`";
+    my @want = @{ $spec->{params} };
+    my @need = grep { !exists $_->{default} } @want;
+    croak "`$name` takes " . scalar(@need) . ' values (' . join(', ', map { $_->{name} } @need) . ')'
+        if @args < @need;
+    # What is left over is named rather than placed.
+    my %given = map { $need[$_]{name} => $args[$_] } 0 .. $#need;
+    my @rest = @args[scalar(@need) .. $#args];
+    while (@rest) {
+        my $key = shift @rest;
+        croak "`$name` has no `$key =>`" unless grep { $_->{name} eq $key && exists $_->{default} } @want;
+        croak "`$name` was given `$key` with nothing after it" unless @rest;
+        $given{$key} = shift @rest;
+    }
+    my @vals = map {
+        my $v = exists $given{ $_->{name} } ? $given{ $_->{name} }
+              : $_->{default} eq 'false'    ? 0
+              : $_->{default} eq 'true'     ? 1
+              :                               $_->{default};
+        $_->{type} eq 'str' ? "$v" : $_->{type} eq 'bool' ? ($v ? 1 : 0) : int $v;
+    } @want;
+    no strict 'refs';
+    &{"Rakugan::Door::op_$name"}($canvas, @vals);
+    return;
+}
+
+# `paint => sub { ... }` on a canvas: what it draws belongs to that
+# canvas until the sub ends.
+sub paint ($el, $cb) {
+    my $outer = $canvas;
+    $canvas = $el;
+    $cb->();
+    $canvas = $outer;
+    return;
+}
+
+# Close the window and end the app.
+sub quit { Rakugan::Door::quit(); return }
 
 # --- what happens on its own ------------------------------------------------
 
@@ -206,7 +255,7 @@ sub _differs ($type, $v, $default) {
 
 sub _is_keyword ($item, $own) {
     return defined $item && !ref $item && !looks_like_number($item)
-        && ($own->{$item} || $Rakugan::Vocab::RIDER{$item});
+        && ($own->{$item} || $Rakugan::Vocab::RIDER{$item} || $item eq 'paint');
 }
 
 # One element, from its row of the table and what the app wrote.
@@ -268,6 +317,12 @@ sub element ($spec, @args) {
         croak "this element's own `label` is already the name a screen reader reads; there is no second one to give"
             if $spec->{owns_label} && $r->{name} eq 'a11y_label';
         $WRITE{ $r->{type} }->($el, $r->{key}, $given{ $r->{name} });
+    }
+    # A canvas paints itself before it closes, so its commands land on
+    # the element they were written in.
+    if ($spec->{paints} && exists $given{paint}) {
+        croak "`$name`'s `paint` takes a sub" unless ref $given{paint} eq 'CODE';
+        paint($el, $given{paint});
     }
     Rakugan::Door::children($el, \@kids) if @kids;
     return Rakugan::Door::end($el);

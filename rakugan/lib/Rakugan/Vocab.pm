@@ -616,4 +616,21 @@ our @ELEMENTS = (
 );
 our %ELEMENT = map { $_->{name} => $_ } @ELEMENTS;
 
+# The canvas's drawing commands. Not elements: no kind, no handle, no
+# keywords that every element takes, and no meaning outside the canvas
+# they are written in.
+our @OPS = (
+    { name => 'pixel', pix => 'Pixel', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'line', pix => 'Line', params => [{ name => 'x1', pix => 'x1', type => 'int' }, { name => 'y1', pix => 'y1', type => 'int' }, { name => 'x2', pix => 'x2', type => 'int' }, { name => 'y2', pix => 'y2', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'rect', pix => 'Rect', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'w', pix => 'w', type => 'int' }, { name => 'h', pix => 'h', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'rect_outline', pix => 'RectOutline', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'w', pix => 'w', type => 'int' }, { name => 'h', pix => 'h', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'circle', pix => 'Circle', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'r', pix => 'r', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'circle_outline', pix => 'CircleOutline', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'r', pix => 'r', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'triangle', pix => 'Triangle', params => [{ name => 'x1', pix => 'x1', type => 'int' }, { name => 'y1', pix => 'y1', type => 'int' }, { name => 'x2', pix => 'x2', type => 'int' }, { name => 'y2', pix => 'y2', type => 'int' }, { name => 'x3', pix => 'x3', type => 'int' }, { name => 'y3', pix => 'y3', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'triangle_outline', pix => 'TriangleOutline', params => [{ name => 'x1', pix => 'x1', type => 'int' }, { name => 'y1', pix => 'y1', type => 'int' }, { name => 'x2', pix => 'x2', type => 'int' }, { name => 'y2', pix => 'y2', type => 'int' }, { name => 'x3', pix => 'x3', type => 'int' }, { name => 'y3', pix => 'y3', type => 'int' }, { name => 'color', pix => 'color', type => 'int' }] },
+    { name => 'sprite', pix => 'Sprite', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'source', pix => 'source', type => 'str' }, { name => 'u', pix => 'u', type => 'int' }, { name => 'v', pix => 'v', type => 'int' }, { name => 'w', pix => 'w', type => 'int' }, { name => 'h', pix => 'h', type => 'int' }, { name => 'colkey', pix => 'colkey', type => 'int', default => '-1' }, { name => 'flip_x', pix => 'flipX', type => 'bool', default => 'false' }, { name => 'flip_y', pix => 'flipY', type => 'bool', default => 'false' }] },
+    { name => 'pixel_text', pix => 'PixelText', params => [{ name => 'x', pix => 'x', type => 'int' }, { name => 'y', pix => 'y', type => 'int' }, { name => 'text', pix => 'text', type => 'str' }, { name => 'color', pix => 'color', type => 'int' }] },
+);
+our %OP = map { $_->{name} => $_ } @OPS;
+
 1;

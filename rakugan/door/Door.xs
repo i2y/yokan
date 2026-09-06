@@ -42,6 +42,20 @@ extern void    pixie_every(double seconds, int64_t handler);
 extern int64_t pixie_task(void);
 extern void    pixie_task_done(int64_t id);
 extern void    pixie_watch(const char *path, PixieReloadFn f);
+extern void    pixie_op_pixel(int64_t el, int64_t x, int64_t y, int64_t color);
+extern void    pixie_op_line(int64_t el, int64_t x1, int64_t y1, int64_t x2, int64_t y2, int64_t color);
+extern void    pixie_op_rect(int64_t el, int64_t x, int64_t y, int64_t w, int64_t h, int64_t color);
+extern void    pixie_op_rect_outline(int64_t el, int64_t x, int64_t y, int64_t w, int64_t h, int64_t color);
+extern void    pixie_op_circle(int64_t el, int64_t x, int64_t y, int64_t r, int64_t color);
+extern void    pixie_op_circle_outline(int64_t el, int64_t x, int64_t y, int64_t r, int64_t color);
+extern void    pixie_op_triangle(int64_t el, int64_t x1, int64_t y1, int64_t x2, int64_t y2,
+                                 int64_t x3, int64_t y3, int64_t color);
+extern void    pixie_op_triangle_outline(int64_t el, int64_t x1, int64_t y1, int64_t x2, int64_t y2,
+                                         int64_t x3, int64_t y3, int64_t color);
+extern void    pixie_op_sprite(int64_t el, int64_t x, int64_t y, const char *source, int64_t u, int64_t v,
+                               int64_t w, int64_t h, int64_t colkey, int32_t flip_x, int32_t flip_y);
+extern void    pixie_op_pixel_text(int64_t el, int64_t x, int64_t y, const char *text, int64_t color);
+extern void    pixie_quit(void);
 extern void    pixie_set_binding_handler(PixieBindingFn f);
 extern void    pixie_shortcut(const char *chord, int64_t handler);
 extern void    pixie_menu_item(const char *menu, const char *item, int64_t handler);
@@ -256,6 +270,70 @@ watch(SV *path, SV *on_reload)
     reload_cb = newSVsv(on_reload);
     p = sv_mortalcopy(path);
     pixie_watch(SvPVutf8_nolen(p), call_reload);
+
+void
+op_pixel(IV el, IV x, IV y, IV color)
+  CODE:
+    pixie_op_pixel((int64_t)el, (int64_t)x, (int64_t)y, (int64_t)color);
+
+void
+op_line(IV el, IV x1, IV y1, IV x2, IV y2, IV color)
+  CODE:
+    pixie_op_line((int64_t)el, (int64_t)x1, (int64_t)y1, (int64_t)x2, (int64_t)y2, (int64_t)color);
+
+void
+op_rect(IV el, IV x, IV y, IV w, IV h, IV color)
+  CODE:
+    pixie_op_rect((int64_t)el, (int64_t)x, (int64_t)y, (int64_t)w, (int64_t)h, (int64_t)color);
+
+void
+op_rect_outline(IV el, IV x, IV y, IV w, IV h, IV color)
+  CODE:
+    pixie_op_rect_outline((int64_t)el, (int64_t)x, (int64_t)y, (int64_t)w, (int64_t)h, (int64_t)color);
+
+void
+op_circle(IV el, IV x, IV y, IV r, IV color)
+  CODE:
+    pixie_op_circle((int64_t)el, (int64_t)x, (int64_t)y, (int64_t)r, (int64_t)color);
+
+void
+op_circle_outline(IV el, IV x, IV y, IV r, IV color)
+  CODE:
+    pixie_op_circle_outline((int64_t)el, (int64_t)x, (int64_t)y, (int64_t)r, (int64_t)color);
+
+void
+op_triangle(IV el, IV x1, IV y1, IV x2, IV y2, IV x3, IV y3, IV color)
+  CODE:
+    pixie_op_triangle((int64_t)el, (int64_t)x1, (int64_t)y1, (int64_t)x2, (int64_t)y2,
+                      (int64_t)x3, (int64_t)y3, (int64_t)color);
+
+void
+op_triangle_outline(IV el, IV x1, IV y1, IV x2, IV y2, IV x3, IV y3, IV color)
+  CODE:
+    pixie_op_triangle_outline((int64_t)el, (int64_t)x1, (int64_t)y1, (int64_t)x2, (int64_t)y2,
+                              (int64_t)x3, (int64_t)y3, (int64_t)color);
+
+void
+op_sprite(IV el, IV x, IV y, SV *source, IV u, IV v, IV w, IV h, IV colkey, IV flip_x, IV flip_y)
+  PREINIT:
+    SV *c;
+  CODE:
+    c = sv_mortalcopy(source);
+    pixie_op_sprite((int64_t)el, (int64_t)x, (int64_t)y, SvPVutf8_nolen(c), (int64_t)u, (int64_t)v,
+                    (int64_t)w, (int64_t)h, (int64_t)colkey, flip_x ? 1 : 0, flip_y ? 1 : 0);
+
+void
+op_pixel_text(IV el, IV x, IV y, SV *text, IV color)
+  PREINIT:
+    SV *c;
+  CODE:
+    c = sv_mortalcopy(text);
+    pixie_op_pixel_text((int64_t)el, (int64_t)x, (int64_t)y, SvPVutf8_nolen(c), (int64_t)color);
+
+void
+quit()
+  CODE:
+    pixie_quit();
 
 void
 shortcut(SV *chord, IV handler)

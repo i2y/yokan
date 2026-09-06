@@ -82,6 +82,19 @@ my $TABLE = parse_toml(do { local $/; <$tfh> });
 close $tfh;
 my @RIDERS = @{ $TABLE->{rider} };
 my @ELEMENTS = @{ $TABLE->{element} };
+my @OPS = @{ $TABLE->{op} };
+
+# A drawing command's values, in the order the C face takes them: the
+# name an app writes, the name the `.pix` writes, and the type.
+for my $op (@OPS) {
+    $op->{params} = [map {
+        my ($lhs, $rhs) = split /:\s*/, $_, 2;
+        my ($name, $pix) = split /=/, $lhs, 2;
+        my ($ty, $default) = split /\s*=\s*/, $rhs, 2;
+        { name => $name, pix => $pix // $name, type => $ty,
+          (defined $default ? (default => $default) : ()) }
+    } split /,\s*/, $op->{args}];
+}
 
 # --- the numbers ------------------------------------------------------------
 # A keyword is numbered once, by its name, however many elements take
@@ -201,7 +214,22 @@ HEAD
         }
         $out .= "        ],\n    },\n";
     }
-    $out .= ");\nour %ELEMENT = map { \$_->{name} => \$_ } \@ELEMENTS;\n\n1;\n";
+    $out .= ");\nour %ELEMENT = map { \$_->{name} => \$_ } \@ELEMENTS;\n\n";
+
+    $out .= "# The canvas's drawing commands. Not elements: no kind, no handle, no\n";
+    $out .= "# keywords that every element takes, and no meaning outside the canvas\n";
+    $out .= "# they are written in.\n";
+    $out .= "our \@OPS = (\n";
+    for my $op (@OPS) {
+        my @f = ("name => " . q_str($op->{name}), "pix => " . q_str($op->{pix}),
+                 'params => [' . join(', ', map {
+                     '{ ' . join(', ', "name => " . q_str($_->{name}), "pix => " . q_str($_->{pix}),
+                                       "type => " . q_str($_->{type}),
+                                       (exists $_->{default} ? ('default => ' . q_str($_->{default})) : ())) . ' }'
+                 } @{ $op->{params} }) . ']');
+        $out .= "    { " . join(', ', @f) . " },\n";
+    }
+    $out .= ");\nour %OP = map { \$_->{name} => \$_ } \@OPS;\n\n1;\n";
     return $out;
 }
 
@@ -240,6 +268,22 @@ HEAD
         $out .= "\n";
         $out .= wrap_doc($el->{doc}) if defined $el->{doc};
         $out .= "sub $el->{name} { Rakugan::Runtime::element(\$Rakugan::Vocab::ELEMENT{$el->{name}}, \@_) }\n";
+    }
+    $out .= "\n";
+    $out .= <<'PAINT';
+# --- the canvas's drawing commands ------------------------------------------
+#
+# A command joins the canvas that is open where it stands. A canvas
+# cannot hold another, so one place to remember the open one is enough.
+
+our @OPS = qw(PAINTNAMES);
+
+PAINT
+    $out =~ s/PAINTNAMES/join ' ', map { $_->{name} } @OPS/e;
+    for my $op (@OPS) {
+        $out .= '# ' . join(', ', map { exists $_->{default} ? "$_->{name} => …" : $_->{name} }
+                                  @{ $op->{params} }) . ".\n";
+        $out .= "sub $op->{name} { Rakugan::Runtime::paint_op('$op->{name}', \@_) }\n";
     }
     $out .= "\n1;\n";
     return $out;

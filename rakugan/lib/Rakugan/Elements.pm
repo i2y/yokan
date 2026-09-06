@@ -127,4 +127,32 @@ sub divider { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{divider}, @_) }
 # `scale` is how many logical pixels one virtual pixel takes.
 sub canvas { Rakugan::Runtime::element($Rakugan::Vocab::ELEMENT{canvas}, @_) }
 
+# --- the canvas's drawing commands ------------------------------------------
+#
+# A command joins the canvas that is open where it stands. A canvas
+# cannot hold another, so one place to remember the open one is enough.
+
+our @OPS = qw(pixel line rect rect_outline circle circle_outline triangle triangle_outline sprite pixel_text);
+
+# x, y, color.
+sub pixel { Rakugan::Runtime::paint_op('pixel', @_) }
+# x1, y1, x2, y2, color.
+sub line { Rakugan::Runtime::paint_op('line', @_) }
+# x, y, w, h, color.
+sub rect { Rakugan::Runtime::paint_op('rect', @_) }
+# x, y, w, h, color.
+sub rect_outline { Rakugan::Runtime::paint_op('rect_outline', @_) }
+# x, y, r, color.
+sub circle { Rakugan::Runtime::paint_op('circle', @_) }
+# x, y, r, color.
+sub circle_outline { Rakugan::Runtime::paint_op('circle_outline', @_) }
+# x1, y1, x2, y2, x3, y3, color.
+sub triangle { Rakugan::Runtime::paint_op('triangle', @_) }
+# x1, y1, x2, y2, x3, y3, color.
+sub triangle_outline { Rakugan::Runtime::paint_op('triangle_outline', @_) }
+# x, y, source, u, v, w, h, colkey => …, flip_x => …, flip_y => ….
+sub sprite { Rakugan::Runtime::paint_op('sprite', @_) }
+# x, y, text, color.
+sub pixel_text { Rakugan::Runtime::paint_op('pixel_text', @_) }
+
 1;

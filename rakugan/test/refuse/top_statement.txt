@@ -1,3 +1,3 @@
-test/refuse/top_statement.pl:3:4: Rakugan cannot take this — a `my $...` at the top of the file is the app itself (`my $app = Counter->new;`), which is what a timer reaches its methods through; anything else an app holds is a field
-    my $greeting = "hello";
-       ^
+test/refuse/top_statement.pl:3:1: Rakugan cannot take this — a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`), a name for a literal (`my $WIDTH = 120;`) or the app itself (`my $app = Counter->new;`)
+    my @greetings = ("hello", "goodbye");
+    ^
