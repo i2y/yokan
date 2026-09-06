@@ -200,11 +200,22 @@ PPI from CPAN (the macOS system perl ships it).
   holding the message word for word. The sweep runs this before it
   gates anything.
 - `crates/rakugan-stdlib` holds the twins: what perl answers for itself
-  and the compiled run would answer differently (a number or a bool in
-  a string, `%` and `/` between whole numbers, `int`, `sprintf`,
-  `0 + $s`). The translator writes its `.rpi` into the generated
-  project; `cargo test -p rakugan-stdlib` holds each one to what perl
-  prints.
+  and the compiled run would answer differently (`length`, `uc`,
+  `sprintf`, `sum`, `strftime`, the regular expressions, `%` and `/`
+  between whole numbers, a number or a bool in a string, `0 + $s`).
+  `tools/gen_expected.pl` runs the case set through perl and writes
+  `crates/rakugan-stdlib/tests/expected/`; `cargo test -p
+  rakugan-stdlib` holds each twin to those rows, and the sweep runs
+  both with `--check`.
+- The framework's own standard library (files, sqlite, http, jsondoc,
+  the clipboard, the clock, sound) is one manifest,
+  `crates/yokan-stdlib/stdlib.toml`, which no language owns:
+  `yokan_gate.py` reads it, and `rakugan/tools/gen_capi.pl` writes
+  three files from it — the C face's arms
+  (`crates/pixie-capi/src/stdlib.rs`), the Perl that calls them
+  (`lib/Rakugan/Stdlib.pm`, `lib/Rakugan/Manifest.pm`) and the binding
+  door the compiled run reads (`lib/Rakugan/yokan-stdlib.rpi`). A
+  change there runs BOTH other sweeps.
 - The door (`door/Door.xs`) is built for the app's perl into
   `~/.cache/rakugan/door/<version>/` by the command itself and rebuilt
   when its sources change, so nothing under `rakugan/` is generated in
@@ -231,7 +242,10 @@ PPI from CPAN (the macOS system perl ships it).
   `rakugan/tools/gate_all.sh`. The translator is the checker there: a
   new shape gets a gate line in the sweep and a new refusal gets a
   file in `rakugan/test/refuse/`. A change to `crates/rakugan-stdlib`
-  also needs `cargo test -p rakugan-stdlib`.
+  also needs `cargo test -p rakugan-stdlib`; a change to
+  `crates/yokan-stdlib/stdlib.toml` regenerates first and runs all
+  three sweeps, since Yokan reads the same file and the C face carries
+  the library Wakakusa's dylib now holds too.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
   from the dialect, and the wakakusa sweep if it is reachable from
