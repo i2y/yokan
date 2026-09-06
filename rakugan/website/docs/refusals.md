@@ -1,0 +1,214 @@
+<!-- Written by website/tools/refusals_page.pl from test/refuse/. Edit the fixtures. -->
+# What Rakugan refuses
+
+The dialect is a subset, and `rakugan check` is where you meet its edge.
+It reads the app and names what it cannot take, with the file, the line
+and the column, the line itself, and what to write instead. perl reads
+the file first, so a shape perl rejects never reaches the translator.
+`check` runs before every build and every gate, needs no compiler and no
+window, and prints nothing at all when there is nothing to say.
+
+Each of the 24 below has a file under `test/refuse/` that triggers it and
+the message it must print, word for word. The sweep runs them, so a
+refusal cannot quietly change its wording, and this page is quoted from
+those same files.
+
+## The class
+
+The elements, the type names and `empty` are brought in by an import, and a Perl import is per package.
+
+```console
+test/refuse/class_pragma.pl:3:11: Rakugan cannot take this — `class App` needs `use Rakugan;` as its first line: a Perl import is per package, and the elements, `empty` and the type names have to be in this one
+    class App {
+              ^
+```
+
+A field's type is read from what it starts as, so a field with no initializer has no type to read.
+
+```console
+test/refuse/field_initializer.pl:5:11: Rakugan cannot take this — a field needs an initializer (`= 0`, `= ""`, `= empty(Str)`) — that is where its type comes from
+        field $n;
+              ^
+```
+
+The app's own fields are the app's alone: nothing hands them in and nothing reads them from outside.
+
+```console
+test/refuse/field_attribute.pl:5:14: Rakugan cannot take this — a field takes no attributes here (`:param`, `:reader`); its type is read from the initializer
+        field $n :param = 0;
+                 ^
+```
+
+The types of a method's parameters cannot be read off anything, so they are written down.
+
+```console
+test/refuse/method_without_sig.pl:7:12: Rakugan cannot take this — a method with parameters says what they are: `method add :Sig(Int) ($by) { ... }`
+        method add ($by) {
+               ^
+```
+
+perl reads the file first, and there a bare `s` begins a substitution.
+
+```console
+test/refuse/quote_method.pl:7:12: Rakugan cannot take this — a method named `s` reads as a regular expression to the parser; pick another name
+        method s { $n += 1 }
+               ^
+```
+
+The top of the file is where the app is made, not a second place to keep state.
+
+```console
+test/refuse/top_statement.pl:3:1: Rakugan cannot take this — a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`), a name for a literal (`my $WIDTH = 120;`) or the app itself (`my $app = Counter->new;`)
+    my @greetings = ("hello", "goodbye");
+    ^
+```
+
+## Types
+
+A container that starts empty has nothing in it to read a type from.
+
+```console
+test/refuse/empty_list.pl:5:20: Rakugan cannot take this — a list that starts empty says what it will hold: `field @items = empty(Str);`
+        field @items = ();
+                       ^
+```
+
+A list is one type, because the compiled run holds it as one.
+
+```console
+test/refuse/mixed_list.pl:5:24: Rakugan cannot take this — a list holds one type: this one started with Int and this is String
+        field @items = (1, "two");
+                           ^
+```
+
+A keyword takes the type the table gives it, and the table is what both sides of the engine count with.
+
+```console
+test/refuse/wrong_type.pl:7:30: Rakugan cannot take this — `size =>` takes a number (got String)
+            return text("hello", size => "large");
+                                 ^
+```
+
+The message lists what that element does take, so the name is one lookup away.
+
+```console
+test/refuse/unknown_keyword.pl:7:30: Rakugan cannot take this — `text` has no `weight =>`; it takes `a11y_label`, `align`, `animate`, `background`, `bold`, `border_color`, `border_radius`, `border_width`, `col_span`, `color`, `disabled`, `easing`, `enter`, `exit`, `grow`, `height`, `italic`, `max_lines`, `max_width`, `min_width`, `mono`, `padding`, `role`, `row_span`, `size`, `theme`, `tooltip`, `underline`, `width`, `wrap`
+            return text("hello", weight => 700);
+                                 ^
+```
+
+Perl's truthiness of a number or a string is not in the dialect: a condition is a `Bool`.
+
+```console
+test/refuse/truthiness.pl:9:35: Rakugan cannot take this — a condition is a bool (got Int); Perl's truthiness of a number or a string is not in the translator — compare it (`!= 0`, `ne ""`)
+            push @cells, text("some") if $n;
+                                      ^
+```
+
+Reading a string as a number is written out, the way perl would do it silently.
+
+```console
+test/refuse/string_and_number.pl:8:19: Rakugan cannot take this — `+` needs a number on both sides (got String and Int); `0 + $s` reads a string as a number, the way perl does
+            $n = "10" + 5;
+                      ^
+```
+
+Perl counts letters there, and the compiled run has no such counting in it.
+
+```console
+test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds a String, and Perl's `++` on a string counts letters (`"az"++` is `"ba"`), which the compiled run does not do; join or replace the string instead
+            $tag++;
+                ^
+```
+
+## Views and handlers
+
+Building a screen twice has to build the same screen, so building it only reads.
+
+```console
+test/refuse/view_calls_method.pl:13:21: Rakugan cannot take this — `bumped` touches the app's state, and building a view only reads; give it what it needs as parameters, or read a field
+            return text("n=@{[ $self->bumped ]}");
+                        ^
+```
+
+A row reads its own number; anything else is worked out where it can be checked.
+
+```console
+test/refuse/negative_index.pl:9:21: Rakugan cannot take this — an index a view cannot prove is not negative; a row reads its own index, and anything else is worked out in a handler
+            return text("at: $items[$at]");
+                        ^
+```
+
+A handler is called with what the event carries, and nothing else.
+
+```console
+test/refuse/handler_arity.pl:8:45: Rakugan cannot take this — this handler is called with nothing; drop the parameter
+            return button("go", on_click => sub ($x) { $n += 1 });
+                                                ^
+```
+
+The two runs would have to agree about a key that is not there, so the app says what to answer.
+
+```console
+test/refuse/bare_hash_read.pl:9:26: Rakugan cannot take this — a hash may not have that key, so say what to answer when it does not: `$prices{$k} // 0`
+            $picked = $prices{"apple"};
+                             ^
+```
+
+perl's order for a hash changes every time perl starts, and a screen cannot depend on that.
+
+```console
+test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `keys` back in the order perl happens to hold it, which is a different order every time perl starts; write `sort keys %h`
+            for my $k (keys %prices) {
+                       ^
+```
+
+## Perl the compiled run has no perl for
+
+A compiled app writes its screen, which is where the gate reads the tree from.
+
+```console
+test/refuse/say_to_stdout.pl:8:9: Rakugan cannot take this — a compiled app writes its screen, not its standard output; `warn` goes to standard error
+            say "n is $n";
+            ^
+```
+
+A shipped app carries no compiler.
+
+```console
+test/refuse/string_eval.pl:8:14: Rakugan cannot take this — a string `eval` compiles Perl while the app runs, and a shipped app carries no compiler; catch a failure with `try` / `catch`
+            $n = eval "1 + 1";
+                 ^
+```
+
+The pattern is compiled when the app is translated, so it has to be there to compile.
+
+```console
+test/refuse/pattern_built.pl:9:27: Rakugan cannot take this — a pattern here is written out; one built while the app runs would have to be compiled by something the shipped app does not carry
+            $found = "abc" =~ /$needle/;
+                              ^
+```
+
+A pattern that runs code needs perl, and the compiled run has none.
+
+```console
+test/refuse/pattern_code.pl:8:27: Rakugan cannot take this — a pattern that runs code (`(?{ … })`) is perl's own; the compiled run has no perl in it
+            $found = "abc" =~ /a(?{ print "hi" })b/;
+                              ^
+```
+
+The same reason: the replacement would be perl, run while the app runs.
+
+```console
+test/refuse/substitute_eval.pl:8:18: Rakugan cannot take this — a replacement here is text, with `$1` … `$9` for what the pattern caught; `/e` runs perl and the compiled run has none
+            $line =~ s/(\d+)/$1 + 1/e;
+                     ^
+```
+
+Outside that `if` it would be whatever the last successful match anywhere had left.
+
+```console
+test/refuse/capture_unguarded.pl:10:16: Rakugan cannot take this — what a pattern caught is read where the match is known to have happened: inside the `if` that made it
+            $got = $1;
+                   ^
+```

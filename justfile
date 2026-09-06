@@ -170,6 +170,35 @@ rakugan-gate app script='':
 rakugan-sweep:
     ./rakugan/tools/gate_all.sh
 
+# Rakugan's site is its own zensical project under `rakugan/website/`,
+# written for `i2y.github.io/rakugan/` so it can move to its own
+# repository whole. Both languages, in the order build.sh enforces.
+#
+# Build the Rakugan documentation site.
+rakugan-site:
+    cd rakugan/website && ./build.sh
+
+# The tour pages come from TOUR.md, the elements page from elements.toml,
+# the gallery from demo/ and the refusals from the fixtures; the checker
+# runs all four writers with --check and then reads what is left. The
+# sweep runs the checker, not the writers.
+#
+# Rewrite the Rakugan site's generated pages, and check the rest.
+rakugan-site-gen:
+    cd rakugan/website && perl tools/tour_pages.pl && perl tools/elements_page.pl \
+        && perl tools/demos_page.pl && perl tools/refusals_page.pl
+    perl rakugan/website/tools/site_check.pl
+
+# The pages carry absolute links (site_url ends in /rakugan/), so the
+# build has to sit under that path or every link 404s — hence the
+# symlinked docroot. Port 8003, so Yokan's and Wakakusa's can stay up.
+#
+# Build the Rakugan documentation site and read it at localhost:8003/rakugan/.
+rakugan-site-serve: rakugan-site
+    @mkdir -p rakugan/website/.serve && ln -sfn ../build rakugan/website/.serve/rakugan
+    @echo "http://localhost:8003/rakugan/  ·  http://localhost:8003/rakugan/ja/"
+    python3 -m http.server 8003 -d rakugan/website/.serve
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every

@@ -18,6 +18,10 @@ writing it" and "it works as shipped" are one claim, not two.
 Rakugan is the third language on this engine, after Yokan (Python) and
 Wakakusa (Ruby). It shares the substrate with them and nothing else.
 
+The language, in the order you meet it: **[TOUR.md](TOUR.md)** /
+**[TOUR.ja.md](TOUR.ja.md)**, and the same thing as a site under
+`website/` (`just rakugan-site-serve`).
+
 ## What an app looks like
 
 The app is a class. Its state is its fields, `view` is a method that
@@ -83,17 +87,34 @@ demo/counter.pl:16:35: Rakugan cannot take this — `text` has no `weight =>`; i
 
 ## Setup
 
-- A perl of 5.40 or newer for the app. `just rakugan-perl` fetches and
-  builds the pinned 5.44.0 into `~/.cache/perl/5.44.0` (a few minutes,
-  once); `RAKUGAN_PERL=/path/to/perl` points the command at another.
-- PPI, for the command itself, under whichever perl is first on your
-  path (the macOS system perl ships it; elsewhere `cpanm PPI`).
-- The Rust toolchain and the shared target dir, as for everything else
-  in this repository (`export CARGO_TARGET_DIR=~/.cache/pixie/target`).
+macOS on Apple silicon is the only port today; the engine draws through
+the platform's own GPU stack.
+
+- **A perl of 5.40 or newer for the app**, because that is where `class`
+  is a feature you can rely on. `just rakugan-perl` fetches and builds
+  the pinned 5.44.0 into `~/.cache/perl/5.44.0` (a few minutes, once);
+  `RAKUGAN_PERL=/path/to/perl` points the command at another.
+- **PPI, for the command itself**, under whichever perl is first on your
+  path. The macOS system perl ships it; elsewhere `cpanm PPI`, or
+  `cpanm --installdeps .` from this directory — the `cpanfile` lists it
+  and nothing else. The command and the app are deliberately two
+  different perls: the translator has no `class` in it, so it runs under
+  a system perl of 5.34.
+- **The Rust toolchain** ([rustup](https://rustup.rs); the exact
+  compiler is pinned by the repository and fetched on the first build)
+  and **Xcode's Metal toolchain**, because the engine compiles its
+  shaders at build time.
+- **The shared target dir**, as for everything else in this repository:
+  `export CARGO_TARGET_DIR=~/.cache/pixie/target`.
+
+Nothing else is fetched behind your back. The engine is a crate in the
+same checkout, built by `cargo` the first time you gate or build, and
+the XS door is built for your app's perl by the command itself, into
+`~/.cache/rakugan/door/<version>/`.
 
 Then, from `rakugan/`: `./bin/rakugan run demo/counter.pl` opens the
 window; `gate` with a script proves the two runs agree;
-`tools/gate_all.sh` runs every demo.
+`tools/gate_all.sh` runs every demo, both tours and the site's checks.
 
 ## The five things you can do to an app
 
@@ -102,14 +123,14 @@ window; `gate` with a script proves the two runs agree;
 | `check` | what the app writes that Rakugan cannot take; silent when it can |
 | `run` | the app under perl, in a window |
 | `translate` | the `.pix` project the compiled run is built from, under `demo/.gate/` |
-| `build` | the native binary (`--release`) |
+| `build` | the native binary (`--release`, `--app` for a macOS bundle) |
 | `gate` | both runs headless, one script, byte-compared |
 
 ## The vocabulary
 
-Every element an app can write — 33 of them — and the keywords each
-one takes come from one table, `crates/pixie-capi/elements.toml`, the
-engine's own. `tools/gen.pl` writes two files from it: the subs an app
+Every element an app can write — 33 of them — the keywords each one
+takes, and the canvas's ten drawing commands come from one table,
+`crates/pixie-capi/elements.toml`, the engine's own. `tools/gen.pl` writes two files from it: the subs an app
 calls (`lib/Rakugan/Elements.pm`) and the table as Perl data
 (`lib/Rakugan/Vocab.pm`), which the interpreted run writes elements
 from and the translator reads to write the `.pix`. The sweep fails
@@ -118,15 +139,17 @@ constants are written from the same table by its own generator.
 
 ## What is in today
 
-Thirty-eight demos gate green — the counter, the todo list, a
-calculator on two layouts, a roster that sorts, charts, a dashboard
-driven by a timer, work done off the window's thread — and every one
-of them is a line-by-line port of the same app in the two sibling
-languages, so the screens can be compared side by side. Twenty-eight of
-the thirty-eight windows are pixel-identical to Wakakusa's; of the ten
-that are not, three are alive when the picture is taken and the rest
-are differences this port meant (one of them is perl printing `0` where
-Ruby prints `0.0`, which is perl being right about perl).
+Forty-one demos gate green — the counter, the todo list, a calculator
+on two layouts, a roster that sorts, charts, a dashboard driven by a
+timer, work done off the window's thread, a pixel canvas and two of
+Pyxel's games — and every one of them is a line-by-line port of the
+same app in the two sibling languages, so the screens can be compared
+side by side. Twenty-eight of the thirty-nine still pictures are
+pixel-identical to Wakakusa's; of the eleven that are not, two are
+alive when the picture is taken (a timer is running) and the rest are
+differences this port meant (one of them is perl printing `0` where
+Ruby prints `0.0`, which is perl being right about perl). The two games
+carry a recording of play instead of a still.
 
 What an app can write:
 
@@ -167,17 +190,50 @@ What an app can write:
   links it through pixie's binding door and the interpreted one
   reaches the same Rust through the engine's C face, so what the gate
   compares is one library answering twice.
+- **The canvas.** A grid of virtual pixels painted by the commands in a
+  `paint` sub, colors by palette index, keys read as a device from the
+  tick, and a PNG of any frame without a window (`PIXIE_FRAMES=<dir>`).
+  `demo/jump.pl` and `demo/shooter.pl` are two of Pyxel's own examples
+  (Takashi Kitao, MIT), ported and gated frame by frame.
+- **Shipping.** `--release` drops the symbol table and `--app` wraps the
+  binary in a macOS application bundle, ad-hoc signed, with `<stem>.png`
+  or `<stem>.icns` beside the app as its icon. The bundle opens on a
+  machine with neither perl 5.40 nor the toolchain.
 
-What it refuses, it refuses by name. Twenty of those refusals have a
-file in `test/refuse/` that triggers them and the message they must
+What it refuses, it refuses by name. Twenty-four of those refusals have
+a file in `test/refuse/` that triggers them and the message they must
 print word for word, and the sweep checks them before it gates
 anything: an unsorted walk of a hash, `say` and `print`, a string
 `eval`, `local`, `wantarray`, `each`, `tie`, `"az"++`, a string where
 a number is wanted, a view that calls a method, and the rest.
 
-Still to come, in the order Wakakusa took them: the canvas and the two
-games, `--release` and a double-clickable bundle, the tour, and the
-site.
+## Numbers
+
+Measured here, on macOS/arm64, with the shared build directory warm.
+
+| what | value |
+|---|---|
+| `check`, no compiler started | 0.12 s |
+| a headless run, the screen as text | 0.07 s |
+| the translator's `.pix` output | 0.08 s, 631 bytes for the counter |
+| the compiled binary | 53.8 MB |
+| the shipped binary (`--release`) | 11.9 MB |
+| the application bundle (`--app`) | 11.9 MB |
+| launch to a window on screen | 0.2 s |
+| one gate round, engine already built | 2.8 s |
+
+## The tour and the site
+
+`TOUR.md` and `TOUR.ja.md` are the language in the order you meet it,
+and `tools/tour_check.pl` puts every complete example on them through
+the same command a demo goes through, so the page cannot drift from the
+vocabulary. `website/` is Rakugan's own zensical site, written for
+`i2y.github.io/rakugan/` so it can move to its own repository whole:
+`just rakugan-site`, `just rakugan-site-serve` on :8003. Four of its
+pages are generated — the tour from `TOUR.md`, the elements from the
+table, the gallery from `demo/`, the refusals from the fixtures — and
+`website/tools/site_check.pl`, which the sweep runs, fails when any of
+them is behind its source.
 
 ## The name
 

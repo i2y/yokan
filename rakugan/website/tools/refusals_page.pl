@@ -1,0 +1,210 @@
+#!/usr/bin/env perl
+# The site's Refusals page, in both languages, written from the fixtures.
+#
+# Every refusal under `test/refuse/` is a pair: an app outside the
+# dialect, and the message `rakugan check` must print for it, word for
+# word. That message is the page, quoted from the file the sweep holds
+# the translator to, so the page cannot describe a refusal in wording
+# the command no longer uses. What is written here is the order, the
+# grouping, and one line of why.
+#
+#   tools/refusals_page.pl            write docs/refusals.md and docs-ja/
+#   tools/refusals_page.pl --check    fail if either is behind the fixtures
+use strict;
+use warnings;
+use utf8;
+use open qw(:std :encoding(UTF-8));
+use File::Basename qw(basename dirname);
+use File::Spec;
+
+my $SITE = File::Spec->rel2abs(File::Spec->catdir(dirname(__FILE__), File::Spec->updir));
+my $ROOT = File::Spec->rel2abs(File::Spec->catdir($SITE, File::Spec->updir));
+my $FIX  = File::Spec->catdir($ROOT, 'test', 'refuse');
+
+my @GROUPS = qw(class types views perl);
+
+# group, fixture, the English line of why, the Japanese one.
+my @CATALOGUE = (
+['class', 'class_pragma',
+ 'The elements, the type names and `empty` are brought in by an import, and a Perl import is per package.',
+ '要素と型の名前と `empty` は import で入ってきますが、Perl の import はパッケージごとに効きます。'],
+['class', 'field_initializer',
+ "A field's type is read from what it starts as, so a field with no initializer has no type to read.",
+ 'フィールドの型は初期値から読むので、初期値がなければ読むものがありません。'],
+['class', 'field_attribute',
+ "The app's own fields are the app's alone: nothing hands them in and nothing reads them from outside.",
+ 'アプリ自身のフィールドはアプリだけのものです。外から渡すものも、外から読むものもありません。'],
+['class', 'method_without_sig',
+ 'The types of a method\'s parameters cannot be read off anything, so they are written down.',
+ 'メソッドの引数の型はどこからも読めないので、そこに書きます。'],
+['class', 'quote_method',
+ 'perl reads the file first, and there a bare `s` begins a substitution.',
+ 'ファイルを先に読むのは perl で、そこでは裸の `s` は置換の始まりです。'],
+['class', 'top_statement',
+ 'The top of the file is where the app is made, not a second place to keep state.',
+ 'ファイルの最上位はアプリを作る場所であって、状態を置く二つ目の場所ではありません。'],
+
+['types', 'empty_list',
+ 'A container that starts empty has nothing in it to read a type from.',
+ '空で始まる入れ物には、型を読むものが入っていません。'],
+['types', 'mixed_list',
+ 'A list is one type, because the compiled run holds it as one.',
+ 'リストは一つの型です。コンパイルした実行がそう持つからです。'],
+['types', 'wrong_type',
+ 'A keyword takes the type the table gives it, and the table is what both sides of the engine count with.',
+ 'キーワードの型は表が決めます。エンジンの両側が数えているのはその表です。'],
+['types', 'unknown_keyword',
+ 'The message lists what that element does take, so the name is one lookup away.',
+ '文面はその要素が取るものを並べるので、正しい名前はその場で分かります。'],
+['types', 'truthiness',
+ "Perl's truthiness of a number or a string is not in the dialect: a condition is a `Bool`.",
+ '数や文字列の真偽は方言に入っていません。条件は `Bool` です。'],
+['types', 'string_and_number',
+ 'Reading a string as a number is written out, the way perl would do it silently.',
+ '文字列を数として読むことは、書いて示します。perl が黙ってすることを、ここでは書きます。'],
+['types', 'string_increment',
+ 'Perl counts letters there, and the compiled run has no such counting in it.',
+ 'perl はそこで文字を数えますが、コンパイルした実行にその数え方は入っていません。'],
+
+['views', 'view_calls_method',
+ 'Building a screen twice has to build the same screen, so building it only reads.',
+ '同じ画面を二度組み立てたら同じ画面になる必要があるので、組み立てるときは読むだけです。'],
+['views', 'negative_index',
+ 'A row reads its own number; anything else is worked out where it can be checked.',
+ '行は自分の番号を読みます。それ以外は、確かめられる場所で計算します。'],
+['views', 'handler_arity',
+ 'A handler is called with what the event carries, and nothing else.',
+ 'ハンドラは、その出来事が運ぶものだけを受け取って呼ばれます。'],
+['views', 'bare_hash_read',
+ 'The two runs would have to agree about a key that is not there, so the app says what to answer.',
+ '鍵がないときに何が起きるかで両方の実行が一致する必要があるので、答えをアプリが決めます。'],
+['views', 'unsorted_keys',
+ "perl's order for a hash changes every time perl starts, and a screen cannot depend on that.",
+ 'ハッシュの順序は perl を起動するたびに変わります。画面がそれに依存するわけにはいきません。'],
+
+['perl', 'say_to_stdout',
+ "A compiled app writes its screen, which is where the gate reads the tree from.",
+ 'コンパイルしたアプリが書くのは画面で、ゲートが木を読むのもそこからです。'],
+['perl', 'string_eval',
+ 'A shipped app carries no compiler.',
+ '配ったアプリはコンパイラを積んでいません。'],
+['perl', 'pattern_built',
+ 'The pattern is compiled when the app is translated, so it has to be there to compile.',
+ 'パターンは翻訳のときにコンパイルするので、そのときそこになければなりません。'],
+['perl', 'pattern_code',
+ 'A pattern that runs code needs perl, and the compiled run has none.',
+ 'コードを走らせるパターンには perl が要りますが、コンパイルした実行に perl はありません。'],
+['perl', 'substitute_eval',
+ 'The same reason: the replacement would be perl, run while the app runs.',
+ '同じ理由です。置換の中身は、アプリが動いている最中に走る perl になります。'],
+['perl', 'capture_unguarded',
+ 'Outside that `if` it would be whatever the last successful match anywhere had left.',
+ 'その `if` の外では、どこかで最後に成功した一致が残したものになります。'],
+);
+
+my %WORDS = (
+    en => {
+        title => 'What Rakugan refuses',
+        intro => <<'MD',
+The dialect is a subset, and `rakugan check` is where you meet its edge.
+It reads the app and names what it cannot take, with the file, the line
+and the column, the line itself, and what to write instead. perl reads
+the file first, so a shape perl rejects never reaches the translator.
+`check` runs before every build and every gate, needs no compiler and no
+window, and prints nothing at all when there is nothing to say.
+
+Each of the %d below has a file under `test/refuse/` that triggers it and
+the message it must print, word for word. The sweep runs them, so a
+refusal cannot quietly change its wording, and this page is quoted from
+those same files.
+MD
+        groups => {
+            class => 'The class',
+            types => 'Types',
+            views => 'Views and handlers',
+            perl  => "Perl the compiled run has no perl for",
+        },
+    },
+    ja => {
+        title => '落雁が断る書き方',
+        intro => <<'MD',
+方言は部分集合で、その境目に出会う場所が `rakugan check` です。
+アプリを読み、受け取れない書き方があれば、ファイルと行と桁、その行そのもの、そして代わりの書き方を示します。
+ファイルを先に読むのは perl なので、perl が撥ねた書き方が翻訳器に届くことはありません。
+`check` はビルドの前にもゲートの前にも走ります。
+コンパイラもウィンドウも要らず、言うことがなければ何も印字しません。
+
+下の %d 個には、それぞれ `test/refuse/` に、それを起こすファイルと、印字されるべき文面がそのまま置いてあります。
+掃引がそれを回すので、断りの文面が黙って変わることはありません。
+このページも、その同じファイルから引いています。
+MD
+        groups => {
+            class => 'クラス',
+            types => '型',
+            views => 'ビューとハンドラ',
+            perl  => 'コンパイルした実行に perl がない、ということ',
+        },
+    },
+);
+
+sub fixture {
+    my ($name) = @_;
+    my $path = File::Spec->catfile($FIX, "$name.txt");
+    open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
+    local $/;
+    my $text = <$fh>;
+    close $fh;
+    $text =~ s/\s+\z//;
+    return $text;
+}
+
+# Every fixture is on the page, or the page is not the whole of it.
+opendir my $dh, $FIX or die "$FIX: $!\n";
+my @have = sort map { s/\.txt\z//r } grep { /\.txt\z/ } readdir $dh;
+closedir $dh;
+my %listed = map { $_->[1] => 1 } @CATALOGUE;
+my @absent = grep { !$listed{$_} } @have;
+die "the page has no entry for: @absent\n" if @absent;
+my @gone = grep { my $n = $_->[1]; !grep { $_ eq $n } @have } @CATALOGUE;
+die "the page lists refusals that have no fixture: "
+  . join(', ', map { $_->[1] } @gone) . "\n" if @gone;
+
+sub page {
+    my ($lang) = @_;
+    my $w = $WORDS{$lang};
+    my @out = ('<!-- Written by website/tools/refusals_page.pl from test/refuse/. Edit the fixtures. -->',
+               "# $w->{title}", '', sprintf($w->{intro}, scalar @have) =~ s/\s+\z//r, '');
+    for my $group (@GROUPS) {
+        my @in = grep { $_->[0] eq $group } @CATALOGUE;
+        next unless @in;
+        push @out, "## $w->{groups}{$group}", '';
+        for my $e (@in) {
+            my (undef, $name, $en, $ja) = @$e;
+            push @out, ($lang eq 'ja' ? $ja : $en), '';
+            push @out, '```console', fixture($name), '```', '';
+        }
+    }
+    my $text = join("\n", @out);
+    $text =~ s/\n{3,}/\n\n/g;
+    return $text;
+}
+
+my $check = grep { $_ eq '--check' } @ARGV;
+my $stale = 0;
+for my $lang (qw(en ja)) {
+    my $path = File::Spec->catfile($SITE, $lang eq 'ja' ? 'docs-ja' : 'docs', 'refusals.md');
+    my $text = page($lang);
+    if ($check) {
+        my $have = -e $path ? do { open my $f, '<:encoding(UTF-8)', $path; local $/; <$f> } : '';
+        if ($have ne $text) {
+            warn "FAIL refusals.md ($lang) is behind the fixtures\n";
+            $stale++;
+        }
+    } else {
+        open my $out, '>:encoding(UTF-8)', $path or die "$path: $!\n";
+        print {$out} $text;
+        close $out;
+        print "wrote $path\n";
+    }
+}
+exit($stale ? 1 : 0);

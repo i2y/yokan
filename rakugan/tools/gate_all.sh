@@ -114,5 +114,15 @@ else
   fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
 fi
 
+# The site quotes what lives elsewhere: the tour, the vocabulary table,
+# the list of demos, the refusals' own wording. Each has one source of
+# truth, and the checker fails when a page is behind it.
+if perl website/tools/site_check.pl > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   site"
+else
+  fail=$((fail + 1)); failed="$failed site"; echo "FAIL site"
+  perl website/tools/site_check.pl 2>&1 | grep FAIL
+fi
+
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

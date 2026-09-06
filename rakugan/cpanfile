@@ -1,0 +1,10 @@
+# What the `rakugan` command needs from CPAN, under whichever perl is
+# first on your path. The macOS system perl ships PPI already; elsewhere,
+# `cpanm --installdeps .` from this directory.
+#
+# PPI is the only one. Everything else the command uses is core, and the
+# app is a different perl (5.40 or newer, `just rakugan-perl`) that needs
+# nothing from CPAN at all: the XS door is built from `door/` by the
+# command itself, and everything above it is core.
+
+requires 'PPI', '1.270';
