@@ -1,12 +1,23 @@
-# Wakakusa's vocabulary, written once.
+# The engine's vocabulary, written once.
 #
-# Everything an app can say to the engine is here: the elements, the
-# keyword arguments each of them takes, their types and defaults, which
-# arguments are handlers and what a handler receives. `tools/gen.rb`
-# reads this file and writes the Ruby methods, the key numbers both
-# sides count with, and the Rust constants; a Rust test reads it too and
-# fails if a kind or a key has no arm on the other side. Adding an
+# Everything an app can say to the engine through its C face is here:
+# the elements, the keyword arguments each of them takes, their types
+# and defaults, which arguments are handlers and what a handler
+# receives. The table is pixie's, not any one language's: Wakakusa's
+# `tools/gen.rb` reads it and writes the Ruby methods, the key numbers
+# both sides count with, and the Rust constants; Rakugan's
+# `tools/gen.pl` reads it and writes the Perl subs and the translator's
+# element table; a Rust test in this crate reads it with a real parser
+# and fails if a kind or a key has no arm on the other side. Adding an
 # element is an entry here and one arm in `materialize`.
+#
+# The `.pix` spelling, for a language whose compiled run is a
+# translation: an element is its name in CamelCase (`text_field` is
+# `TextField`) and a keyword is its name in camelCase (`border_radius`
+# is `borderRadius`), except where a `pix = "..."` says otherwise. A
+# handler's `payload` names what the event carries at a `.pix` call
+# site; it defaults by kind (`text`, `checked`, `index`, `value`) and a
+# `payload = "..."` overrides it.
 #
 # The types: `str` `num` `int` `bool` are single values, `strs` `nums`
 # are lists of them, `nums2` a list of lists, and `rows` is the pair a
@@ -101,6 +112,7 @@ default = ""
 name = "a11y_label"
 type = "str"
 default = ""
+pix = "label"
 owned = "label"
 
 [[rider]]
@@ -116,7 +128,7 @@ native = "width"
 doc = "A run of text. `wrap` is \"\", \"nowrap\" or \"ellipsis\"; a background with padding and a radius makes a pill."
 props = [
   { name = "text", type = "str", pos = true },
-  { name = "size", type = "num", default = 0.0 },
+  { name = "size", type = "num", default = 0.0, pix = "fontSize" },
   { name = "color", type = "str", default = "" },
   { name = "align", type = "str", default = "" },
   { name = "grow", type = "num", default = 0.0 },
@@ -140,11 +152,11 @@ native = "size"
 doc = "A button. The block runs when it is pressed."
 primary = "on_click"
 props = [
-  { name = "label", type = "str", pos = true },
+  { name = "label", type = "str", pos = true, pix = "text" },
   { name = "on_click", handler = "none" },
   { name = "width", type = "num", default = 0.0 },
   { name = "height", type = "num", default = 0.0 },
-  { name = "size", type = "num", default = 0.0 },
+  { name = "size", type = "num", default = 0.0, pix = "fontSize" },
   { name = "background", type = "str", default = "" },
   { name = "grow", type = "num", default = 0.0 },
   { name = "color", type = "str", default = "" },
@@ -161,10 +173,10 @@ name = "text_field"
 doc = "A line a person types into. `on_change` fires per keystroke, `on_submit` when they press enter; `multiline` makes it a paragraph field."
 primary = "on_change"
 props = [
-  { name = "value", type = "str", pos = true },
+  { name = "value", type = "str", pos = true, pix = "text" },
   { name = "placeholder", type = "str", default = "" },
-  { name = "on_change", handler = "text" },
-  { name = "on_submit", handler = "text" },
+  { name = "on_change", handler = "text", pix = "onTextChanged" },
+  { name = "on_submit", handler = "text", pix = "onSubmitted" },
   { name = "multiline", type = "bool", default = false },
   { name = "rows", type = "num", default = 0.0 },
 ]
@@ -342,6 +354,7 @@ props = [
 
 [[element]]
 name = "progress"
+pix = "ProgressBar"
 native = "size"
 owns_label = true
 doc = "A track filled to `value` (0 to 1); `indeterminate` sweeps instead, for work with no known length."
@@ -361,7 +374,7 @@ primary = "on_change"
 props = [
   { name = "label", type = "str", pos = true },
   { name = "checked", type = "bool", default = false },
-  { name = "on_change", handler = "bool" },
+  { name = "on_change", handler = "bool", pix = "onToggle" },
 ]
 
 [[element]]
@@ -372,7 +385,7 @@ primary = "on_change"
 props = [
   { name = "label", type = "str", pos = true },
   { name = "checked", type = "bool", default = false },
-  { name = "on_change", handler = "bool" },
+  { name = "on_change", handler = "bool", pix = "onToggle" },
 ]
 
 [[element]]
@@ -384,7 +397,7 @@ props = [
   { name = "min", type = "num", default = 0.0 },
   { name = "max", type = "num", default = 1.0 },
   { name = "step", type = "num", default = 0.0 },
-  { name = "on_change", handler = "float" },
+  { name = "on_change", handler = "float", pix = "onChange" },
 ]
 
 [[element]]
@@ -394,7 +407,7 @@ primary = "on_change"
 props = [
   { name = "options", type = "strs", default = [] },
   { name = "selected", type = "int", default = 0 },
-  { name = "on_change", handler = "int" },
+  { name = "on_change", handler = "int", pix = "onSelect" },
 ]
 
 [[element]]
@@ -404,7 +417,7 @@ primary = "on_change"
 props = [
   { name = "options", type = "strs", default = [] },
   { name = "selected", type = "int", default = 0 },
-  { name = "on_change", handler = "int" },
+  { name = "on_change", handler = "int", pix = "onSelect" },
 ]
 
 [[element]]
@@ -414,7 +427,7 @@ primary = "on_change"
 props = [
   { name = "options", type = "strs", default = [] },
   { name = "selected", type = "int", default = 0 },
-  { name = "on_change", handler = "int" },
+  { name = "on_change", handler = "int", pix = "onSelect" },
 ]
 
 [[element]]
@@ -424,7 +437,7 @@ primary = "on_change"
 props = [
   { name = "labels", type = "strs", default = [] },
   { name = "active", type = "int", default = 0 },
-  { name = "on_change", handler = "int" },
+  { name = "on_change", handler = "int", pix = "onSelect" },
 ]
 
 [[element]]
@@ -437,7 +450,7 @@ props = [
   { name = "max", type = "num", default = 0.0 },
   { name = "step", type = "num", default = 0.0 },
   { name = "placeholder", type = "str", default = "" },
-  { name = "on_change", handler = "float" },
+  { name = "on_change", handler = "float", pix = "onChange" },
 ]
 
 [[element]]
@@ -450,16 +463,16 @@ props = [
   { name = "max", type = "int", default = 0 },
   { name = "step", type = "int", default = 1 },
   { name = "placeholder", type = "str", default = "" },
-  { name = "on_change", handler = "int" },
+  { name = "on_change", handler = "int", pix = "onChange", payload = "value" },
 ]
 
 [[element]]
 name = "link"
 doc = "Text that opens a page when clicked. There is no handler: opening a page is not the app's state."
 props = [
-  { name = "label", type = "str", pos = true },
+  { name = "label", type = "str", pos = true, pix = "text" },
   { name = "url", type = "str", pos = true },
-  { name = "size", type = "num", default = 0.0 },
+  { name = "size", type = "num", default = 0.0, pix = "fontSize" },
 ]
 
 [[element]]

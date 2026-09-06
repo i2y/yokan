@@ -12,7 +12,7 @@
 //! into it by number, and closes it with `pixie_end`, which builds the
 //! `Element` and wraps it in the riders. Adding an element to the
 //! vocabulary therefore adds an arm to `materialize` and nothing to the
-//! ABI. The numbers come from `wakakusa/elements.toml` through
+//! ABI. The numbers come from `elements.toml` beside this crate through
 //! `vocab.rs`, so neither side can invent one.
 //!
 //! Handles are 1-based indices into a per-build arena; 0 is "no

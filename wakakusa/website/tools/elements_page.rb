@@ -70,7 +70,7 @@ def parse_toml(text)
   doc
 end
 
-TABLE = parse_toml(File.read(File.join(ROOT, "elements.toml")))
+TABLE = parse_toml(File.read(File.join(ROOT, "..", "crates", "pixie-capi", "elements.toml")))
 RIDERS = TABLE.fetch("rider")
 ELEMENTS = TABLE.fetch("element")
 

@@ -75,8 +75,8 @@ fn id_of(table: &[(&str, i32)], name: &str) -> i32 {
 /// would then have to catch instead.
 #[test]
 fn every_keyword_in_the_table_reaches_an_arm() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../wakakusa/elements.toml");
-    let text = std::fs::read_to_string(path).expect("wakakusa/elements.toml");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/elements.toml");
+    let text = std::fs::read_to_string(path).expect("elements.toml beside the crate");
     let doc: toml::Value = toml::from_str(&text).expect("elements.toml parses");
 
     for el in doc["element"].as_array().expect("[[element]]") {

@@ -1,5 +1,5 @@
-# Generated from elements.toml by tools/gen.rb. Do not edit by hand;
-# edit the table and run `tools/gen.rb`.
+# Generated from crates/pixie-capi/elements.toml by tools/gen.rb. Do not
+# edit by hand; edit the table and run `tools/gen.rb`.
 
 # The numbers the two sides of the engine's C face count with.
 module WK

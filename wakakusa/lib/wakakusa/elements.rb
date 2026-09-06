@@ -1,5 +1,5 @@
-# Generated from elements.toml by tools/gen.rb. Do not edit by hand;
-# edit the table and run `tools/gen.rb`.
+# Generated from crates/pixie-capi/elements.toml by tools/gen.rb. Do not
+# edit by hand; edit the table and run `tools/gen.rb`.
 
 # A handler keyword that was not written holds one of these. They
 # are the shape a handler of that kind has, so the keyword always

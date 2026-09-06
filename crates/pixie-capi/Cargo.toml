@@ -27,7 +27,7 @@ rusqlite = "0.32"
 # gate comparing them.
 rodio = { version = "0.22", default-features = false, features = ["playback", "wav"] }
 
-# The table test reads wakakusa/elements.toml with a real parser, so a
+# The table test reads elements.toml beside this crate with a real parser, so a
 # mistake in the generator's own reader cannot pass quietly.
 [dev-dependencies]
 toml = { workspace = true }

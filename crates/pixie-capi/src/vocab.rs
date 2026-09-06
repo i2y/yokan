@@ -1,4 +1,4 @@
-//! Generated from `wakakusa/elements.toml` by `wakakusa/tools/gen.rb`.
+//! Generated from `elements.toml` beside this crate by `wakakusa/tools/gen.rb`.
 //! Do not edit by hand; edit the table and run the generator.
 //!
 //! The numbers here are the ones the caller's side counts with, and

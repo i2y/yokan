@@ -1,10 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Read elements.toml and write the three files that have to agree about
-# it: the numbers both sides count with, the Ruby an app calls, and the
-# Rust constants the engine reads. Nothing here is written by hand, so
-# an element cannot mean one thing in Ruby and another in the engine.
+# Read the engine's element table (crates/pixie-capi/elements.toml) and
+# write the three files that have to agree about it: the numbers both
+# sides count with, the Ruby an app calls, and the Rust constants the
+# engine reads. Nothing here is written by hand, so an element cannot
+# mean one thing in Ruby and another in the engine.
 #
 #   tools/gen.rb            write the files
 #   tools/gen.rb --check    fail if what is on disk is not what this
@@ -75,7 +76,7 @@ def parse_toml(text)
   doc
 end
 
-TABLE = parse_toml(File.read(File.join(ROOT, "elements.toml")))
+TABLE = parse_toml(File.read(File.join(REPO, "crates", "pixie-capi", "elements.toml")))
 RIDERS = TABLE.fetch("rider")
 ELEMENTS = TABLE.fetch("element")
 
@@ -117,8 +118,8 @@ end
 def rider_default(rider) = rider["presence"] ? "nil" : nil
 
 def banner(tool)
-  "# Generated from elements.toml by tools/gen.rb. Do not edit by hand;\n" \
-    "# edit the table and run `tools/gen.rb`#{tool}.\n"
+  "# Generated from crates/pixie-capi/elements.toml by tools/gen.rb. Do not\n" \
+    "# edit by hand; edit the table and run `tools/gen.rb`#{tool}.\n"
 end
 
 # --- lib/wakakusa/keys.rb ---------------------------------------------------
@@ -332,7 +333,7 @@ def rust_str(s) = s.inspect
 
 def gen_rust
   out = +""
-  out << "//! Generated from `wakakusa/elements.toml` by `wakakusa/tools/gen.rb`.\n"
+  out << "//! Generated from `elements.toml` beside this crate by `wakakusa/tools/gen.rb`.\n"
   out << "//! Do not edit by hand; edit the table and run the generator.\n"
   out << "//!\n"
   out << "//! The numbers here are the ones the caller's side counts with, and\n"
