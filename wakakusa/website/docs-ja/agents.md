@@ -8,9 +8,9 @@
 三つが答えるのは別々のことです。
 この書き方を受け取れるか、この画面はどうなるか、リリースしたアプリも同じ動きをするか。
 
-![エージェントの作業の流れ。app.rb を書いて wakakusa check とウィンドウなしの dump を繰り返し、どちらも 1 秒かからない。仕上がったら wakakusa gate にかけ、そのあとリリースする](images/loop-ja.svg#only-dark)
+![端末での一回分。エージェントが app.rb を書き、wakakusa check が直し方を示して断り、同じ check が今度は何も言わず、ウィンドウなしの実行が画面をテキストで印字し、wakakusa gate が両方の実行で同じ画面になったと報告する。どの答えもテキストなので、エージェントはそれを読んでまた回る](images/loop-ja.svg#only-dark)
 
-![エージェントの作業の流れ。app.rb を書いて wakakusa check とウィンドウなしの dump を繰り返し、どちらも 1 秒かからない。仕上がったら wakakusa gate にかけ、そのあとリリースする](images/loop-ja-light.svg#only-light)
+![端末での一回分。エージェントが app.rb を書き、wakakusa check が直し方を示して断り、同じ check が今度は何も言わず、ウィンドウなしの実行が画面をテキストで印字し、wakakusa gate が両方の実行で同じ画面になったと報告する。どの答えもテキストなので、エージェントはそれを読んでまた回る](images/loop-ja-light.svg#only-light)
 
 ## 三つのコマンド、三つの答え
 
@@ -36,6 +36,7 @@ app.rb:5:19: Wakakusa cannot take this — `text` has no `weight:`. It takes a11
 ```console
 $ PIXIE_SCRIPT="click:+1,dump" ./bin/wakakusa run app.rb
 Column(spacing=12, padding=16)[Text(count: 0, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
+Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
 Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
 ```
 

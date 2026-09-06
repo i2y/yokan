@@ -108,7 +108,7 @@ You find these on the first `wakakusa build`, not in the field.
 | a `require` the compiler does not carry | a compile error, not a run-time surprise |
 | a `Range` **object** over your own class | a compile error naming the class (`x.clamp(lo..hi)` still works) |
 
-Wakakusa adds four of its own on top, for shapes that would compile and
+Wakakusa adds five of its own on top, for shapes that would compile and
 then behave differently — [What Wakakusa refuses](refusals.md).
 
 ### 2. Answers differently, quietly

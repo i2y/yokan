@@ -3,7 +3,7 @@
 `wakakusa check` reads the app and names what it cannot take, with the
 line, a caret under it, and what to write instead. It starts no
 compiler and opens no window, so the answer comes back in about a
-second, and it runs before every build and every gate.
+tenth of a second, and it runs before every build and every gate.
 
 ```console
 $ wakakusa check demo/counter.rb        # silence: the app is inside the dialect

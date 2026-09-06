@@ -2140,3 +2140,33 @@ one, and it costs nothing while nobody is waiting.
 
 An idle window now paints nothing at all, and an app's own timers are
 the only ticks it has.
+
+## Wakakusa's pictures share Yokan's drawing system (2026-09-06)
+
+Wakakusa's site had two pictures of its own, drawn in a smaller frame
+with twelve-pixel text and one green for everything, and beside
+Yokan's they read worse. They are redrawn in the system Yokan's
+pictures use — the same canvas width, frame, grid and type sizes;
+blue for the side you develop on, amber for the compile, green for
+the binary; Wakakusa's own green kept for the gate, which is where
+its promise lives — so the two sites read as one family, and a
+reader who knows one picture can read the other.
+
+They are placed the way Yokan's are: the whole picture and the loop
+drawn as a ring on the landing page, one terminal session on the
+agents page, each drawn twice for the two colour schemes and
+translated. The landing page had been reusing the agents page's
+picture; it has its own now, and the site's stylesheet, which names
+each wide picture, names it. Every string printed inside a picture
+is real output, produced by running the commands on the twelve-line
+counter from the landing page: a refusal, the three lines a headless
+run prints, the gate's verdict. The binary is described as carrying
+no interpreter rather than no Ruby, since it carries the compiled
+Ruby.
+
+Drawing is also a proofreading pass. It found the agents page showing
+two lines for a headless run that prints three (start, `dump`, end —
+the count the gate reports), the refusals page giving `check` about
+a second where the table says a tenth, and one page counting
+Wakakusa's own refusals as four where the list, and every other page,
+say five. All three are fixed.

@@ -1,68 +1,117 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="t" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <title id="t">The loop: the agent writes app.rb, and check, run and gate hand back text it reads</title>
   <defs>
-    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    <marker id="ah-lav" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#b3a6ff"/>
     </marker>
-    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#8fd14f"/>
+    <marker id="ah-gate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#8fd14f"/>
     </marker>
     <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
       <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
     </pattern>
   </defs>
 
-  <rect x="2" y="2" width="1196" height="596" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
-  <rect x="2" y="2" width="1196" height="596" rx="20" fill="url(#dots)"/>
+  <!-- frame -->
+  <rect x="2" y="2" width="1196" height="716" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="716" rx="20" fill="url(#dots)"/>
 
-  <text x="60" y="62" font-size="15" font-weight="700" fill="#8fd14f">the fast ring: an answer in well under a second, on every edit</text>
+  <!-- caption -->
+  <text x="40" y="78" font-size="20" font-weight="600" fill="#dfe3f0">The loop</text>
+  <text x="40" y="101" font-size="15" fill="#8b91ab">every answer is text</text>
 
-  <!-- the ring -->
-  <rect x="60" y="86" width="300" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
-  <text x="210" y="126" text-anchor="middle" font-size="17" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
-  <text x="210" y="152" text-anchor="middle" font-size="12.5" fill="#9aa0b5">the agent writes one file,</text>
-  <text x="210" y="172" text-anchor="middle" font-size="12.5" fill="#9aa0b5">ordinary Ruby</text>
+  <!-- ===== the terminal: one session, four exchanges, a cost column ===== -->
+  <rect x="280" y="44" width="886" height="560" rx="12" fill="#0b0d14" stroke="#2b2f42" stroke-width="1"/>
+  <path d="M292,44 H1154 a12,12 0 0 1 12,12 V80 H280 V56 a12,12 0 0 1 12,-12 Z" fill="#12141d"/>
+  <line x1="280" y1="80.5" x2="1166" y2="80.5" stroke="#232739" stroke-width="1"/>
+  <circle cx="302" cy="62" r="4.5" fill="#3a3e54"/>
+  <circle cx="318" cy="62" r="4.5" fill="#3a3e54"/>
+  <circle cx="334" cy="62" r="4.5" fill="#3a3e54"/>
 
-  <path d="M360 146 L432 146" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <!-- the ledger's rules: one between each exchange, one before the cost column -->
+  <line x1="281" y1="254.5" x2="1165" y2="254.5" stroke="#232739" stroke-width="1"/>
+  <line x1="281" y1="338.5" x2="1165" y2="338.5" stroke="#232739" stroke-width="1"/>
+  <line x1="281" y1="470.5" x2="1165" y2="470.5" stroke="#232739" stroke-width="1"/>
+  <line x1="896.5" y1="81" x2="896.5" y2="603" stroke="#232739" stroke-width="1"/>
 
-  <rect x="440" y="86" width="300" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
-  <text x="590" y="122" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa check</text>
-  <text x="590" y="148" text-anchor="middle" font-size="12.5" fill="#a7de6b">0.1 s, no compiler started</text>
-  <text x="590" y="172" text-anchor="middle" font-size="12.5" fill="#9aa0b5">silence, or a refusal that names</text>
-  <text x="590" y="190" text-anchor="middle" font-size="12.5" fill="#9aa0b5">what to write instead</text>
+  <!-- transcript: 13.5px mono, baseline pitch 24 -->
+  <g font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="13.5" fill="#b6bcd2">
+    <!-- 1: check -> a refusal -->
+    <text x="306" y="112"><tspan fill="#5f6685">$ </tspan><tspan fill="#6fb7ff">wakakusa check</tspan><tspan fill="#aeb4c8"> app.rb</tspan></text>
+    <text x="306" y="136" fill="#f4a09a">app.rb:9:5: Wakakusa cannot take this — a view only reads.</text>
+    <text x="306" y="160" fill="#f4a09a">Move the write into a handler — the block on a button,</text>
+    <text x="306" y="184" fill="#f4a09a">or a method the app calls from one</text>
+    <text x="306" y="208" fill="#7d8399" xml:space="preserve">    @count = @count + 1</text>
+    <text x="306" y="232" fill="#f4a09a" xml:space="preserve">    ^</text>
 
-  <path d="M740 146 L812 146" stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+    <!-- 2: check -> silence -->
+    <text x="306" y="284"><tspan fill="#5f6685">$ </tspan><tspan fill="#6fb7ff">wakakusa check</tspan><tspan fill="#aeb4c8"> app.rb</tspan></text>
 
-  <rect x="820" y="86" width="320" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
-  <text x="980" y="120" text-anchor="middle" font-size="14" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">PIXIE_SCRIPT=… run</text>
-  <text x="980" y="146" text-anchor="middle" font-size="12.5" fill="#a7de6b">0.7 s, no window opened</text>
-  <text x="980" y="170" text-anchor="middle" font-size="12.5" fill="#9aa0b5">the screen, printed as text</text>
-  <text x="980" y="188" text-anchor="middle" font-size="12.5" fill="#9aa0b5">(and a PNG, for a canvas)</text>
+    <!-- 3: a headless run -> the screen, three times -->
+    <text x="306" y="368"><tspan fill="#5f6685">$ </tspan><tspan fill="#aeb4c8">PIXIE_SCRIPT="click:+1,dump" </tspan><tspan fill="#6fb7ff">wakakusa run</tspan><tspan fill="#aeb4c8"> app.rb</tspan></text>
+    <text x="306" y="392">Column(spacing=12, padding=16)[Text(count: 0, fontSize=34), Button(+1)]</text>
+    <text x="306" y="416">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Button(+1)]</text>
+    <text x="306" y="440">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Button(+1)]</text>
 
-  <!-- back round -->
-  <path d="M980 206 L980 258 Q980 274 964 274 L226 274 Q210 274 210 258 L210 206"
-        stroke="#5a6284" stroke-width="2" fill="none" marker-end="url(#ar)"/>
-  <rect x="470" y="256" width="260" height="34" rx="8" fill="#14161f"/>
-  <text x="600" y="279" text-anchor="middle" font-size="13" fill="#9aa0b5">read it, fix the file, go round again</text>
+    <!-- 4: gate -> GATE OK -->
+    <text x="306" y="500"><tspan fill="#5f6685">$ </tspan><tspan fill="#f2b45a">wakakusa gate</tspan><tspan fill="#aeb4c8"> app.rb --script "click:+1,dump"</tspan></text>
+    <text x="306" y="524" fill="#8fd14f">GATE OK — 3 dump lines identical in both runs</text>
 
-  <!-- out of the ring -->
-  <path d="M1140 146 Q1170 146 1170 200 L1170 396 Q1170 424 1140 424 L1096 424"
-        stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
-  <rect x="1136" y="222" width="24" height="176" rx="8" fill="#14161f"/>
-  <text x="1148" y="310" text-anchor="middle" font-size="12.5" fill="#a7de6b" transform="rotate(-90 1148 310)">when the work looks done</text>
+    <!-- the next prompt -->
+    <text x="306" y="572"><tspan fill="#5f6685">$ </tspan></text>
+  </g>
+  <rect x="322" y="560" width="8" height="15" fill="#c9cee0" fill-opacity="0.7"/>
 
-  <text x="60" y="366" font-size="15" font-weight="700" fill="#8fd14f">and out of it: the proof, and the thing you hand over</text>
+  <!-- ===== the cost column: what each exchange took ===== -->
+  <g font-size="15" fill="#8b91ab">
+    <text x="918" y="118" fill="#6fb7ff"><tspan font-size="28" font-weight="700">0.1</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <text x="918" y="142">no compiler, no window</text>
+    <text x="918" y="162">run on every edit</text>
 
-  <rect x="700" y="392" width="396" height="120" rx="14" fill="#1a2320" stroke="#3c5b33" stroke-width="1.8"/>
-  <text x="898" y="428" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">wakakusa gate</text>
-  <text x="898" y="454" text-anchor="middle" font-size="12.5" fill="#a7de6b">2.1 s, a real compile</text>
-  <text x="898" y="478" text-anchor="middle" font-size="12.5" fill="#9aa0b5">both runs, one script,</text>
-  <text x="898" y="496" text-anchor="middle" font-size="12.5" fill="#9aa0b5">compared byte for byte</text>
+    <text x="918" y="290" fill="#6fb7ff"><tspan font-size="28" font-weight="700">0.1</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <text x="918" y="314">silence: Wakakusa can take it</text>
 
-  <path d="M700 452 L628 452" stroke="#8fd14f" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+    <text x="918" y="374" fill="#6fb7ff"><tspan font-size="28" font-weight="700">0.7</tspan><tspan font-size="20" font-weight="600"> s</tspan></text>
+    <text x="918" y="398">no compiler, no window</text>
+    <text x="918" y="418">the screen, as text</text>
 
-  <rect x="240" y="392" width="380" height="120" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
-  <text x="430" y="428" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">build --release --app</text>
-  <text x="430" y="454" text-anchor="middle" font-size="12.5" fill="#9aa0b5">one native binary, and a .app</text>
-  <text x="430" y="478" text-anchor="middle" font-size="12.5" fill="#9aa0b5">that opens on a machine with</text>
-  <text x="430" y="496" text-anchor="middle" font-size="12.5" fill="#9aa0b5">neither Ruby nor the compiler</text>
+    <text x="918" y="506" fill="#f2b45a"><tspan font-size="28" font-weight="700">2.1</tspan><tspan font-size="20" font-weight="600"> s</tspan><tspan dx="14" font-size="16" font-weight="600">a compile</tspan></text>
+    <text x="918" y="530">both runs, byte-compared</text>
+    <text x="918" y="550">when the change is done</text>
+  </g>
+
+  <!-- ===== the agent and the loop (left) ===== -->
+  <circle cx="112" cy="320" r="60" fill="none" stroke="#b3a6ff" stroke-width="1.5" stroke-opacity="0.65"/>
+  <rect x="88" y="302" width="48" height="38" rx="11" fill="#1b1d2b" stroke="#b3a6ff" stroke-width="2"/>
+  <rect x="100" y="314" width="6" height="13" rx="3" fill="#b3a6ff"/>
+  <rect x="118" y="314" width="6" height="13" rx="3" fill="#b3a6ff"/>
+  <line x1="112" y1="302" x2="112" y2="293" stroke="#b3a6ff" stroke-width="2"/>
+  <circle cx="112" cy="290" r="3" fill="#b3a6ff"/>
+  <rect x="81" y="316" width="4" height="10" rx="2" fill="#b3a6ff"/>
+  <rect x="139" y="316" width="4" height="10" rx="2" fill="#b3a6ff"/>
+  <text x="112" y="404" text-anchor="middle" font-size="15" fill="#8b91ab">the agent</text>
+
+  <!-- feed: agent -> app.rb -> the prompt -->
+  <path d="M154,278 C172,252 190,226 207,197" fill="none" stroke="#b3a6ff" stroke-width="2"/>
+  <path d="M204,161 C216,138 244,108 280,108" fill="none" stroke="#b3a6ff" stroke-width="2" marker-end="url(#ah-lav)"/>
+  <g transform="translate(196,162)">
+    <path d="M0,0 H16 L26,10 V34 H0 Z" fill="#14161f" stroke="#b3a6ff" stroke-width="1.6"/>
+    <path d="M16,0 V10 H26" fill="none" stroke="#b3a6ff" stroke-width="1.6"/>
+  </g>
+  <text x="184" y="172" text-anchor="end" font-size="15" fill="#8b91ab">writes</text>
+  <text x="184" y="192" text-anchor="end" font-size="14.5" fill="#dfe3f0" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.rb</text>
+
+  <!-- return: what came back -> the agent -->
+  <path d="M280,568 C220,568 190,415 154,362" fill="none" stroke="#b3a6ff" stroke-width="2" marker-end="url(#ah-lav)"/>
+  <text x="222" y="568" text-anchor="end" font-size="16" font-weight="600" fill="#b3a6ff">reads the text</text>
+  <text x="222" y="589" text-anchor="end" font-size="15" fill="#8b91ab">edits, goes round again</text>
+
+  <!-- ===== ship: out of the terminal, from the GATE OK line ===== -->
+  <circle cx="680" cy="519" r="3" fill="#8fd14f"/>
+  <path d="M680,519 H748 a12,12 0 0 1 12,12 V632 a12,12 0 0 0 12,12 H902" fill="none" stroke="#8fd14f" stroke-width="2" stroke-opacity="0.8" marker-end="url(#ah-gate)"/>
+  <rect x="914" y="622" width="44" height="44" rx="12" fill="#12251c" stroke="#3ddc97" stroke-width="2"/>
+  <rect x="925" y="636" width="22" height="16" rx="3" fill="none" stroke="#3ddc97" stroke-width="1.6" stroke-opacity="0.85"/>
+  <line x1="925" y1="641" x2="947" y2="641" stroke="#3ddc97" stroke-width="1.6" stroke-opacity="0.85"/>
+  <text x="972" y="641" font-size="17" font-weight="600" fill="#3ddc97">ship</text>
+  <text x="972" y="661" font-size="15" fill="#8b91ab">a native binary</text>
 </svg>

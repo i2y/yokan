@@ -204,7 +204,7 @@
    one does not fill the first screen. Both are excluded here rather
    than overridden below, because a `:not()` more raises specificity
    and an override loses to it. */
-.md-typeset img[src*="images/"]:not(.wk-hero__mark):not([width]):not([src*="architecture"]):not([src*="images/loop"]) {
+.md-typeset img[src*="images/"]:not(.wk-hero__mark):not([width]):not([src*="architecture"]):not([src*="images/loop"]):not([src*="images/cycle"]) {
   max-height: 26rem;
   width: auto;
 }
@@ -219,7 +219,8 @@
 
 /* A diagram is a page's one wide picture: it takes the column. */
 .md-typeset img[src*="architecture"],
-.md-typeset img[src*="images/loop"] {
+.md-typeset img[src*="images/loop"],
+.md-typeset img[src*="images/cycle"] {
   width: 100%;
   padding: .8rem;
 }

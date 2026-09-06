@@ -163,9 +163,9 @@ Pyxel 自身の例（Takashi Kitao、MIT）が二つ、デモに入っていま�
 何をどう直せばいいかまで書かれた断りと、文字になった画面です。
 ゲートは、最後に確かめるためのものです。
 
-![エージェントの作業の流れ。app.rb を書いて wakakusa check とウィンドウなしの dump を繰り返し、仕上がったら wakakusa gate にかけ、そのあとリリースする](images/loop-ja.svg#only-dark)
+![エージェントが回す往復。中心の app.rb を書き、wakakusa check とウィンドウなしの実行をどちらも 1 秒かからずに周り、コンパイルする wakakusa gate で輪を離れて、リリースへ向かう](images/cycle-ja.svg#only-dark)
 
-![エージェントの作業の流れ。app.rb を書いて wakakusa check とウィンドウなしの dump を繰り返し、仕上がったら wakakusa gate にかけ、そのあとリリースする](images/loop-ja-light.svg#only-light)
+![エージェントが回す往復。中心の app.rb を書き、wakakusa check とウィンドウなしの実行をどちらも 1 秒かからずに周り、コンパイルする wakakusa gate で輪を離れて、リリースへ向かう](images/cycle-ja-light.svg#only-light)
 
 [エージェントと作る](agents.md)に、この流れをひととおり書いてあります。
 

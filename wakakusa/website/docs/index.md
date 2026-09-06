@@ -179,9 +179,9 @@ a second, with no compiler and no window: a refusal that names what to
 write instead, and the screen as text. The gate is the proof at the
 end.
 
-![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless dump, and leaves the ring for wakakusa gate and then for ship](images/loop.svg#only-dark)
+![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless run in well under a second each, and leaves the ring for wakakusa gate, the compile that proves the shipped binary agrees, and then for ship](images/cycle.svg#only-dark)
 
-![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless dump, and leaves the ring for wakakusa gate and then for ship](images/loop-light.svg#only-light)
+![The loop an agent works in: it writes app.rb at the centre of a ring, spins through wakakusa check and a headless run in well under a second each, and leaves the ring for wakakusa gate, the compile that proves the shipped binary agrees, and then for ship](images/cycle-light.svg#only-light)
 
 [Building with an agent](agents.md) walks the whole loop.
 

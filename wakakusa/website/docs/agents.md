@@ -9,9 +9,9 @@ compiler and open no window, and each answers one question: can
 Wakakusa take this, what does it draw, and will the shipped app do the
 same.
 
-![What an agent's loop looks like: it writes app.rb, runs wakakusa check and a headless dump over and over in well under a second each, and when the work looks done runs wakakusa gate and then ships](images/loop.svg#only-dark)
+![One session at the terminal: the agent writes app.rb, wakakusa check refuses and names the fix, the same check answers with silence, a headless run prints the screen as text, wakakusa gate reports both runs drew the same screen, and the agent reads every answer and goes round again](images/loop.svg#only-dark)
 
-![What an agent's loop looks like: it writes app.rb, runs wakakusa check and a headless dump over and over in well under a second each, and when the work looks done runs wakakusa gate and then ships](images/loop-light.svg#only-light)
+![One session at the terminal: the agent writes app.rb, wakakusa check refuses and names the fix, the same check answers with silence, a headless run prints the screen as text, wakakusa gate reports both runs drew the same screen, and the agent reads every answer and goes round again](images/loop-light.svg#only-light)
 
 ## Three commands, three answers
 
@@ -38,6 +38,7 @@ the code that triggers it.
 ```console
 $ PIXIE_SCRIPT="click:+1,dump" ./bin/wakakusa run app.rb
 Column(spacing=12, padding=16)[Text(count: 0, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
+Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
 Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1), Button(+10), Button(reset)], TextField(), Text(hello, )]
 ```
 
