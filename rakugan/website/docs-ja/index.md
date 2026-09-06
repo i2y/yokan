@@ -1,5 +1,5 @@
 ---
-title: "Perl で書いて、ネイティブで配る"
+title: "Write Perl. Ship native."
 hide:
   - navigation
   - toc
@@ -9,12 +9,12 @@ hide:
 <img class="rk-hero__mark" src="images/logo.svg#only-dark" alt="">
 <img class="rk-hero__mark" src="images/logo-light.svg#only-light" alt="">
 
-# 落雁
+# Rakugan
 
-<p class="rk-hero__tag">Perl で書いて、ネイティブで配る</p>
+<p class="rk-hero__tag">Write Perl. Ship native.</p>
 
 <!-- 日本語は行の折り返しが空白として描画されるので、リード文は一行で書く -->
-<p class="rk-hero__lede">落雁は、Perl で書いたデスクトップアプリを 1 本のネイティブバイナリにします。<strong>perl で動かしたものがそのまま配られ、そのことを確かめるのが <code>rakugan gate</code> です</strong>。配るときは、アプリを <a href="https://github.com/i2y/yokan/blob/main/docs/PIXIE.md">pixie</a> に翻訳し、Zed エディタを支える <strong>gpui</strong> の上に組んだ描画エンジンと一緒にコンパイルして、インタプリタの入っていない 1 本のバイナリにします。書いているあいだは、同じファイルを perl が動かし、小さな XS の門を通して同じエンジンに触ります。<code>rakugan gate</code> は一つのスクリプトで両方を動かし、描いた画面を 1 バイトずつ突き合わせます。アプリそのものは普通の Perl のクラスです。落雁が足すのは、画面を組み立てるサブルーチンと、二つの実行が一致することを確かめる仕組みです。</p>
+<p class="rk-hero__lede">Rakugan（落雁）は、Perl で書いたデスクトップアプリを 1 本のネイティブバイナリにします。<strong>perl で動かしたものがそのまま配られ、そのことを確かめるのが <code>rakugan gate</code> です</strong>。配るときは、アプリを <a href="https://github.com/i2y/yokan/blob/main/docs/PIXIE.md">pixie</a> に翻訳し、Zed エディタを支える <strong>gpui</strong> の上に組んだ描画エンジンと一緒にコンパイルして、インタプリタの入っていない 1 本のバイナリにします。書いているあいだは、同じファイルを perl が動かし、小さな XS の門を通して同じエンジンに触ります。<code>rakugan gate</code> は一つのスクリプトで両方を動かし、描いた画面を 1 バイトずつ突き合わせます。アプリそのものは普通の Perl のクラスです。落雁が足すのは、画面を組み立てるサブルーチンと、二つの実行が一致することを確かめる仕組みです。</p>
 
 <div class="rk-hero__cta" markdown>
 [はじめる](installation.md){ .md-button .md-button--primary }
