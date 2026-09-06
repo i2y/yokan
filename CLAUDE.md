@@ -195,12 +195,26 @@ PPI from CPAN (the macOS system perl ships it).
   element is a row in the table, an arm in `materialize`, and nothing
   in Perl; a `.pix` spelling that breaks the camelCase rule is a
   `pix = "..."` on the row.
+- `tools/refuse_test.sh` — every refusal that stands for a decision has
+  a file in `test/refuse/` that triggers it and a `.txt` beside it
+  holding the message word for word. The sweep runs this before it
+  gates anything.
+- `crates/rakugan-stdlib` holds the twins: what perl answers for itself
+  and the compiled run would answer differently (a number or a bool in
+  a string, `%` and `/` between whole numbers, `int`, `sprintf`,
+  `0 + $s`). The translator writes its `.rpi` into the generated
+  project; `cargo test -p rakugan-stdlib` holds each one to what perl
+  prints.
 - The door (`door/Door.xs`) is built for the app's perl into
   `~/.cache/rakugan/door/<version>/` by the command itself and rebuilt
   when its sources change, so nothing under `rakugan/` is generated in
   place except `demo/.gate/`.
 - A field's type is read from its initializer; a container that starts
-  empty says its type with `empty(Str)`. Types are spelled the way
+  empty says its type with `empty(Str)`. A method says what it is
+  called with and what it answers in a core attribute
+  (`method add :Sig(Int => Str) ($n)`). A second class in the file,
+  with fields and no `view`, is a value the app holds
+  (`field $x :param :reader = 0`). Types are spelled the way
   Types::Standard spells them (`Int`, `Str`, `ArrayRef[Int]`).
 
 ## What to verify for which change
@@ -215,7 +229,9 @@ PPI from CPAN (the macOS system perl ships it).
   on a stale table.
 - Anything under `rakugan/` → the touched demo's gate, then
   `rakugan/tools/gate_all.sh`. The translator is the checker there: a
-  new shape or a new refusal gets a gate line in the sweep.
+  new shape gets a gate line in the sweep and a new refusal gets a
+  file in `rakugan/test/refuse/`. A change to `crates/rakugan-stdlib`
+  also needs `cargo test -p rakugan-stdlib`.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
   from the dialect, and the wakakusa sweep if it is reachable from

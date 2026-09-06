@@ -118,7 +118,7 @@ constants are written from the same table by its own generator.
 
 ## What is in today
 
-Twenty-five demos gate green — the counter, the todo list, a
+Twenty-seven demos gate green — the counter, the todo list, a
 calculator on two layouts, a roster that sorts, charts, a dashboard
 driven by a timer, work done off the window's thread — and every one
 of them is a line-by-line port of the same app in the two sibling
