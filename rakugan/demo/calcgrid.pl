@@ -2,12 +2,13 @@
 # rows. `col_span =>` is what makes the zero key twice as wide.
 use Rakugan;
 
-my %KEY     = (background => "#313244", hover_background => "#45475a", grow => 1,
-               size => 22, border_radius => 8);
-my %FUN     = (%KEY, background => "#45475a");
-my %OP      = (%KEY, background => "#fab387", color => "#11111b");
-my %WIDE    = (%KEY, grow => 2);
-my %READOUT = (size => 40, align => "right", color => "#cdd6f4");
+my %KEY     = (grow => 1, size => 20, background => "panel",
+               hover_background => "#45475a", active_background => "#585b70");
+my %FUN     = (%KEY, background => "#313244", color => "#a6adc8");
+my %OP      = (%KEY, background => "#fab387", color => "#1e1e2e",
+               hover_background => "#f8c49b", active_background => "#f5e0dc");
+my %WIDE    = (%KEY, grow => 2, basis => 8);
+my %READOUT = (size => 40, color => "text", align => "right", grow => 1.4);
 my %KEYS    = (spacing => 8, grow => 1);
 
 class CalcGrid {
@@ -110,7 +111,7 @@ class CalcGrid {
                 $self->digit("7"), $self->digit("8"), $self->digit("9"), $self->op_key("×"),
                 $self->digit("4"), $self->digit("5"), $self->digit("6"), $self->op_key("-"),
                 $self->digit("1"), $self->digit("2"), $self->digit("3"), $self->op_key("+"),
-                grid_cell(button("0", %KEY, on_click => sub { $self->press("0") }), col_span => 2),
+                grid_cell(button("0", %WIDE, on_click => sub { $self->press("0") }), col_span => 2),
                 button(".", %KEY, on_click => sub { $self->dot }),
                 $self->equals,
                 columns => 4, rows => 5, spacing => 8, grow => 5,

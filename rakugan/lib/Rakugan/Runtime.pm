@@ -111,13 +111,23 @@ sub _on_task ($id) {
 # The app's file changed while its window is open: read it again. The
 # class is redefined and the object the window holds answers with the
 # new `view`, keeping every value it had.
+#
+# perl will not reopen a class that already exists, so the class's
+# symbol table is emptied first — the table is the same one the object
+# points at, so the new methods land where the old ones were and the
+# object's fields are untouched. A file that no longer compiles puts
+# the old table back, and the window carries on with what it had.
 sub _reload {
-    my $path = $0;
+    my $cls = ref $app or return 0;
+    no strict 'refs';
+    my %was = %{"${cls}::"};
+    undef %{"${cls}::"};
     {
         no warnings 'redefine';
         local $@;
-        do $path;
+        do $0;
         if ($@) {
+            %{"${cls}::"} = %was;
             warn "rakugan: $@";
             return 0;
         }
