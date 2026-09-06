@@ -115,8 +115,8 @@ Cursor と VSCodium と Windsurf はそれぞれ自分の拡張ディレクト�
 - **async と HTTP**：`async fn` と、バインディング呼び出しへの `await` です。
   ブロッキングする処理は gpui のスレッドプールへ回り、実行の意味はウィンドウでもヘッドレスでも一つです。
   組み込みの HTTP クライアントがその上に乗ります（`await Http.get(url)`、`Bytes` を返す `getBytes`、`post`、`Map<String, String>` のヘッダを取る `getWith`）。
-- **どこまで進んだかを伝える task**：`async fn load(..) @progress(onProgress)` は、走っている仕事からの報告を受け取るメソッドを指定します。
-  `Progress.report(fraction, note)` を呼ぶ場所は、`await` と `await` のあいだの async 本体でも、`await` が仕事を載せたワーカースレッドでもかまいません。
+- **どこまで進んだかを伝える task**：`async fn load(..) @progress(onProgress)` は、走っているタスクからの報告を受け取るメソッドを指定します。
+  `Progress.report(fraction, note)` を呼ぶ場所は、`await` と `await` のあいだの async 本体でも、`await` がタスクを載せたワーカースレッドでもかまいません。
   受け取るハンドラは、World を手にした UI スレッドで走ります。
   報告はすべて届き、最後のひとつは `await` の次の行より先に届きます。
 - **自分で走る宣言**：`fn tick @every(1000)` は繰り返し呼ばれるコールバック、`fn save @key("cmd-s")` はショートカット、`fn save @menu("File", "Save")` はアプリケーションのメニューバーの項目で、どれも store ができた時点で結び付きます。

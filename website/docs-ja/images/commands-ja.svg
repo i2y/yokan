@@ -59,7 +59,7 @@
   <text x="124" y="568" text-anchor="middle" class="sans num">3</text>
   <text x="176" y="548" class="mono cmd">yokan gate</text>
   <text x="176" y="572" class="sans small">同じ台本を開発実行とコンパイル済みに流し、画面をバイト単位で比べる</text>
-  <text x="520" y="548" class="sans q">出荷する側も同じことをするか。</text>
+  <text x="520" y="548" class="sans q">リリースする側も同じことをするか。</text>
   <text x="1104" y="548" text-anchor="end" class="sans big acc">コンパイルあり</text>
   <text x="1104" y="572" text-anchor="end" class="sans small">証明。変更が終わったときに走らせる</text>
   <text x="176" y="606" class="mono out acc">GATE OK — 341 dump lines identical in both runs</text>
@@ -75,6 +75,6 @@
   <path d="M 1096 586 V 680" stroke="#7ee0a5" stroke-width="1.25" fill="none"/>
   <path d="M 1091 680 L 1096 687 L 1101 680 Z" fill="#7ee0a5"/>
   <text x="1082" y="620" text-anchor="end" class="sans small">緑なら</text>
-  <text x="1104" y="720" text-anchor="end" class="sans big acc">出荷する</text>
+  <text x="1104" y="720" text-anchor="end" class="sans big acc">リリースする</text>
   <text x="1104" y="742" text-anchor="end" class="sans small">ネイティブバイナリ</text>
 </svg>

@@ -157,9 +157,9 @@ Buzz の画面と流れを、`@py` の中で動く mlx-whisper と組み合わ�
 返ってくるのは、代わりに何を書けばよいかを示す拒否と、テキストになった画面です。
 ゲートは最後の証明です。
 
-![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、出荷へ向かう](images/cycle-ja.svg#only-dark)
+![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、リリースへ向かう](images/cycle-ja.svg#only-dark)
 
-![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、出荷へ向かう](images/cycle-ja-light.svg#only-light)
+![エージェントが回す往復。中心の app.py を書き、yokan check と yokan show をそれぞれ約1秒で周り、コンパイルする yokan gate で輪を離れて、リリースへ向かう](images/cycle-ja-light.svg#only-light)
 
 往復の全体は[エージェントと作る](agents.md)にあります。
 エージェントに渡すガイドは [`skills/yokan/SKILL.md`](https://github.com/i2y/yokan/blob/main/skills/yokan/SKILL.md) です。

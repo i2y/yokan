@@ -103,6 +103,6 @@
   <rect x="888" y="632" width="44" height="44" rx="12" fill="#12251c" stroke="#7ee2a8" stroke-width="2"/>
   <rect x="899" y="646" width="22" height="16" rx="3" fill="none" stroke="#7ee2a8" stroke-width="1.6" stroke-opacity="0.85"/>
   <line x1="899" y1="651" x2="921" y2="651" stroke="#7ee2a8" stroke-width="1.6" stroke-opacity="0.85"/>
-  <text class="sans" x="946" y="651" font-size="17" font-weight="600" fill="#7ee2a8">出荷する</text>
+  <text class="sans" x="946" y="651" font-size="17" font-weight="600" fill="#7ee2a8">リリースする</text>
   <text class="sans lbl" x="946" y="671">ネイティブバイナリ</text>
 </svg>
