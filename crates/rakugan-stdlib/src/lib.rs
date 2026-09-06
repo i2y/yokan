@@ -637,3 +637,238 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
+
+// ---------------------------------------------------------------------------
+// Regular expressions.
+//
+// perl's own engine cannot be lifted out of the interpreter: there is
+// no way to hand a compiled program to anything else, and `use re
+// 'debug'` prints for a person to read. So the compiled run runs
+// PCRE2, whose stated design goal is Perl's syntax and semantics, and
+// the table `tools/gen_expected.pl` prints says where the two agree
+// for the syntax an app may write. What pcre2compat lists as
+// different, the translator refuses by name before it gets here.
+
+fn compile(pat: &str, flags: &str) -> pcre2::bytes::Regex {
+    let mut b = pcre2::bytes::RegexBuilder::new();
+    b.utf(true).ucp(true);
+    if flags.contains('i') {
+        b.caseless(true);
+    }
+    if flags.contains('x') {
+        b.extended(true);
+    }
+    if flags.contains('m') {
+        b.multi_line(true);
+    }
+    if flags.contains('s') {
+        b.dotall(true);
+    }
+    b.build(pat)
+        .unwrap_or_else(|e| panic!("this pattern does not compile: {e}"))
+}
+
+/// `$s =~ /pat/`.
+pub fn re_matches(pat: &str, flags: &str, s: &str) -> bool {
+    compile(pat, flags)
+        .is_match(s.as_bytes())
+        .unwrap_or_else(|e| panic!("matching failed: {e}"))
+}
+
+/// `$1`, `$2`, … after a match, and `$&` as group 0. Nothing matched
+/// answers nothing, which is what perl leaves in an unset group.
+pub fn re_capture(pat: &str, flags: &str, s: &str, n: i64) -> String {
+    let re = compile(pat, flags);
+    match re.captures(s.as_bytes()) {
+        Ok(Some(c)) => c
+            .get(n as usize)
+            .map(|m| String::from_utf8_lossy(m.as_bytes()).into_owned())
+            .unwrap_or_default(),
+        Ok(None) => String::new(),
+        Err(e) => panic!("matching failed: {e}"),
+    }
+}
+
+/// `$+{name}` after a match.
+pub fn re_capture_named(pat: &str, flags: &str, s: &str, name: &str) -> String {
+    let re = compile(pat, flags);
+    match re.captures(s.as_bytes()) {
+        Ok(Some(c)) => c
+            .name(name)
+            .map(|m| String::from_utf8_lossy(m.as_bytes()).into_owned())
+            .unwrap_or_default(),
+        Ok(None) => String::new(),
+        Err(e) => panic!("matching failed: {e}"),
+    }
+}
+
+/// `s/pat/repl/` and, with `g` among the flags, `s/pat/repl/g`. The
+/// replacement is text with `$1` … `$9` in it, which is what perl
+/// puts there.
+pub fn re_subst(pat: &str, flags: &str, s: &str, repl: &str) -> String {
+    let re = compile(pat, flags);
+    let all = flags.contains('g');
+    let bytes = s.as_bytes();
+    let mut out = String::new();
+    let mut at = 0usize;
+    loop {
+        let caps = match re.captures(&bytes[at..]) {
+            Ok(Some(c)) => c,
+            Ok(None) => break,
+            Err(e) => panic!("matching failed: {e}"),
+        };
+        let whole = caps.get(0).expect("a match has a whole");
+        out.push_str(&String::from_utf8_lossy(&bytes[at..at + whole.start()]));
+        out.push_str(&expand(repl, &caps));
+        let end = whole.end();
+        // A pattern that matched nothing moves on by one, the way
+        // perl's own `s///g` does rather than standing still.
+        if end == whole.start() {
+            if at + end >= bytes.len() {
+                at += end;
+                break;
+            }
+            let step = next_boundary(bytes, at + end) - (at + end);
+            out.push_str(&String::from_utf8_lossy(&bytes[at + end..at + end + step]));
+            at += end + step;
+        } else {
+            at += end;
+        }
+        if !all {
+            break;
+        }
+    }
+    out.push_str(&String::from_utf8_lossy(&bytes[at..]));
+    out
+}
+
+fn next_boundary(bytes: &[u8], i: usize) -> usize {
+    let mut j = i + 1;
+    while j < bytes.len() && (bytes[j] & 0xC0) == 0x80 {
+        j += 1;
+    }
+    j
+}
+
+fn expand(repl: &str, caps: &pcre2::bytes::Captures<'_>) -> String {
+    let mut out = String::new();
+    let mut cs = repl.chars().peekable();
+    while let Some(c) = cs.next() {
+        if c != '$' {
+            out.push(c);
+            continue;
+        }
+        match cs.peek() {
+            // `$0` is the program's name in perl, not a group.
+            Some(d) if d.is_ascii_digit() && *d != '0' => {
+                let n = cs.next().unwrap().to_digit(10).unwrap() as usize;
+                if let Some(m) = caps.get(n) {
+                    out.push_str(&String::from_utf8_lossy(m.as_bytes()));
+                }
+            }
+            _ => out.push('$'),
+        }
+    }
+    out
+}
+
+/// `split /pat/, $s`. perl drops the empty fields at the end, a
+/// separator that captures puts what it captured into the list, and a
+/// separator that matches nothing splits between characters — but
+/// never before the first one and never twice in the same place.
+pub fn re_split(pat: &str, flags: &str, s: &str) -> Vec<String> {
+    let re = compile(pat, flags);
+    let groups = re.captures_len() - 1;
+    let bytes = s.as_bytes();
+    let mut out: Vec<String> = Vec::new();
+    let mut field = 0usize;
+    let mut search = 0usize;
+    while search <= bytes.len() {
+        let caps = match re.captures(&bytes[search..]) {
+            Ok(Some(c)) => c,
+            Ok(None) => break,
+            Err(e) => panic!("matching failed: {e}"),
+        };
+        let m = caps.get(0).expect("a match has a whole");
+        let (ms, me) = (search + m.start(), search + m.end());
+        if ms == me {
+            if ms >= bytes.len() {
+                break;
+            }
+            // A separator of no width right where the last one ended
+            // is not a second split point.
+            if ms > field {
+                out.push(String::from_utf8_lossy(&bytes[field..ms]).into_owned());
+                push_groups(&mut out, &caps, groups);
+                field = ms;
+            }
+            search = next_boundary(bytes, ms);
+            continue;
+        }
+        out.push(String::from_utf8_lossy(&bytes[field..ms]).into_owned());
+        push_groups(&mut out, &caps, groups);
+        field = me;
+        search = me;
+    }
+    out.push(String::from_utf8_lossy(&bytes[field..]).into_owned());
+    while out.last().is_some_and(|f| f.is_empty()) {
+        out.pop();
+    }
+    out
+}
+
+fn push_groups(out: &mut Vec<String>, caps: &pcre2::bytes::Captures<'_>, groups: usize) {
+    for i in 1..=groups {
+        out.push(
+            caps.get(i)
+                .map(|g| String::from_utf8_lossy(g.as_bytes()).into_owned())
+                .unwrap_or_default(),
+        );
+    }
+}
+
+/// `$s =~ /pat/g` where a list is wanted: every match, or every first
+/// group when the pattern has one.
+pub fn re_all(pat: &str, flags: &str, s: &str) -> Vec<String> {
+    let re = compile(pat, flags);
+    let groups = re.captures_len() - 1;
+    let bytes = s.as_bytes();
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    while at <= bytes.len() {
+        let caps = match re.captures(&bytes[at..]) {
+            Ok(Some(c)) => c,
+            Ok(None) => break,
+            Err(e) => panic!("matching failed: {e}"),
+        };
+        let whole = caps.get(0).expect("a match has a whole");
+        if groups == 0 {
+            out.push(String::from_utf8_lossy(whole.as_bytes()).into_owned());
+        } else {
+            for i in 1..=groups {
+                out.push(
+                    caps.get(i)
+                        .map(|m| String::from_utf8_lossy(m.as_bytes()).into_owned())
+                        .unwrap_or_default(),
+                );
+            }
+        }
+        let end = whole.end();
+        at += if end == whole.start() {
+            if at + end >= bytes.len() {
+                break;
+            }
+            next_boundary(bytes, at + end) - at
+        } else {
+            end
+        };
+    }
+    out
+}
+
+/// `scalar(() = $s =~ /pat/g)` — how many VALUES the match hands
+/// back, which for a pattern with two groups is two per match, the
+/// way perl counts them.
+pub fn re_count(pat: &str, flags: &str, s: &str) -> i64 {
+    re_all(pat, flags, s).len() as i64
+}

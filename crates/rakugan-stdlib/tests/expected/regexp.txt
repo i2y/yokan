@@ -1,0 +1,766 @@
+# perl v5.44.0 — printed by rakugan/tools/gen_expected.pl, not by hand.
+re_matches s:%5cd+ s: s:a1b22c333 -> b:1
+re_capture s:%5cd+ s: s:a1b22c333 i:0 -> s:1
+re_capture s:%5cd+ s: s:a1b22c333 i:1 -> s:
+re_capture s:%5cd+ s: s:a1b22c333 i:2 -> s:
+re_split s:%5cd+ s: s:a1b22c333 -> [s:a,s:b,s:c]
+re_all s:%5cd+ s: s:a1b22c333 -> [s:1,s:22,s:333]
+re_count s:%5cd+ s: s:a1b22c333 -> i:3
+re_matches s:%5cd+ s: s:ABCdef -> b:0
+re_capture s:%5cd+ s: s:ABCdef i:0 -> s:
+re_capture s:%5cd+ s: s:ABCdef i:1 -> s:
+re_capture s:%5cd+ s: s:ABCdef i:2 -> s:
+re_split s:%5cd+ s: s:ABCdef -> [s:ABCdef]
+re_all s:%5cd+ s: s:ABCdef -> []
+re_count s:%5cd+ s: s:ABCdef -> i:0
+re_matches s:%5cd+ s: s:abc -> b:0
+re_capture s:%5cd+ s: s:abc i:0 -> s:
+re_capture s:%5cd+ s: s:abc i:1 -> s:
+re_capture s:%5cd+ s: s:abc i:2 -> s:
+re_split s:%5cd+ s: s:abc -> [s:abc]
+re_all s:%5cd+ s: s:abc -> []
+re_count s:%5cd+ s: s:abc -> i:0
+re_matches s:%5cd+ s: s:x42y -> b:1
+re_capture s:%5cd+ s: s:x42y i:0 -> s:42
+re_capture s:%5cd+ s: s:x42y i:1 -> s:
+re_capture s:%5cd+ s: s:x42y i:2 -> s:
+re_split s:%5cd+ s: s:x42y -> [s:x,s:y]
+re_all s:%5cd+ s: s:x42y -> [s:42]
+re_count s:%5cd+ s: s:x42y -> i:1
+re_matches s:%5cd+ s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%5cd+ s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%5cd+ s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%5cd+ s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%5cd+ s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%5cd+ s: s:a%20%20b%20%20%20c -> []
+re_count s:%5cd+ s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%5cd+ s: s:the%20quick%20fox -> b:0
+re_capture s:%5cd+ s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%5cd+ s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%5cd+ s: s:the%20quick%20fox i:2 -> s:
+re_split s:%5cd+ s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%5cd+ s: s:the%20quick%20fox -> []
+re_count s:%5cd+ s: s:the%20quick%20fox -> i:0
+re_matches s:%5cd+ s: s:12-34 -> b:1
+re_capture s:%5cd+ s: s:12-34 i:0 -> s:12
+re_capture s:%5cd+ s: s:12-34 i:1 -> s:
+re_capture s:%5cd+ s: s:12-34 i:2 -> s:
+re_split s:%5cd+ s: s:12-34 -> [s:,s:-]
+re_all s:%5cd+ s: s:12-34 -> [s:12,s:34]
+re_count s:%5cd+ s: s:12-34 -> i:2
+re_matches s:%5cd+ s: s: -> b:0
+re_capture s:%5cd+ s: s: i:0 -> s:
+re_capture s:%5cd+ s: s: i:1 -> s:
+re_capture s:%5cd+ s: s: i:2 -> s:
+re_split s:%5cd+ s: s: -> []
+re_all s:%5cd+ s: s: -> []
+re_count s:%5cd+ s: s: -> i:0
+re_matches s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 -> b:1
+re_capture s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:1
+re_capture s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac]
+re_all s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 -> [s:1]
+re_count s:%5cd+ s: s:%e6%97%a5%e6%9c%ac1 -> i:1
+re_matches s:%28%5cd+%29 s: s:a1b22c333 -> b:1
+re_capture s:%28%5cd+%29 s: s:a1b22c333 i:0 -> s:1
+re_capture s:%28%5cd+%29 s: s:a1b22c333 i:1 -> s:1
+re_capture s:%28%5cd+%29 s: s:a1b22c333 i:2 -> s:
+re_split s:%28%5cd+%29 s: s:a1b22c333 -> [s:a,s:1,s:b,s:22,s:c,s:333]
+re_all s:%28%5cd+%29 s: s:a1b22c333 -> [s:1,s:22,s:333]
+re_count s:%28%5cd+%29 s: s:a1b22c333 -> i:3
+re_matches s:%28%5cd+%29 s: s:ABCdef -> b:0
+re_capture s:%28%5cd+%29 s: s:ABCdef i:0 -> s:
+re_capture s:%28%5cd+%29 s: s:ABCdef i:1 -> s:
+re_capture s:%28%5cd+%29 s: s:ABCdef i:2 -> s:
+re_split s:%28%5cd+%29 s: s:ABCdef -> [s:ABCdef]
+re_all s:%28%5cd+%29 s: s:ABCdef -> []
+re_count s:%28%5cd+%29 s: s:ABCdef -> i:0
+re_matches s:%28%5cd+%29 s: s:abc -> b:0
+re_capture s:%28%5cd+%29 s: s:abc i:0 -> s:
+re_capture s:%28%5cd+%29 s: s:abc i:1 -> s:
+re_capture s:%28%5cd+%29 s: s:abc i:2 -> s:
+re_split s:%28%5cd+%29 s: s:abc -> [s:abc]
+re_all s:%28%5cd+%29 s: s:abc -> []
+re_count s:%28%5cd+%29 s: s:abc -> i:0
+re_matches s:%28%5cd+%29 s: s:x42y -> b:1
+re_capture s:%28%5cd+%29 s: s:x42y i:0 -> s:42
+re_capture s:%28%5cd+%29 s: s:x42y i:1 -> s:42
+re_capture s:%28%5cd+%29 s: s:x42y i:2 -> s:
+re_split s:%28%5cd+%29 s: s:x42y -> [s:x,s:42,s:y]
+re_all s:%28%5cd+%29 s: s:x42y -> [s:42]
+re_count s:%28%5cd+%29 s: s:x42y -> i:1
+re_matches s:%28%5cd+%29 s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%28%5cd+%29 s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%28%5cd+%29 s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%28%5cd+%29 s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%28%5cd+%29 s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%28%5cd+%29 s: s:a%20%20b%20%20%20c -> []
+re_count s:%28%5cd+%29 s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%28%5cd+%29 s: s:the%20quick%20fox -> b:0
+re_capture s:%28%5cd+%29 s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%28%5cd+%29 s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%28%5cd+%29 s: s:the%20quick%20fox i:2 -> s:
+re_split s:%28%5cd+%29 s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%28%5cd+%29 s: s:the%20quick%20fox -> []
+re_count s:%28%5cd+%29 s: s:the%20quick%20fox -> i:0
+re_matches s:%28%5cd+%29 s: s:12-34 -> b:1
+re_capture s:%28%5cd+%29 s: s:12-34 i:0 -> s:12
+re_capture s:%28%5cd+%29 s: s:12-34 i:1 -> s:12
+re_capture s:%28%5cd+%29 s: s:12-34 i:2 -> s:
+re_split s:%28%5cd+%29 s: s:12-34 -> [s:,s:12,s:-,s:34]
+re_all s:%28%5cd+%29 s: s:12-34 -> [s:12,s:34]
+re_count s:%28%5cd+%29 s: s:12-34 -> i:2
+re_matches s:%28%5cd+%29 s: s: -> b:0
+re_capture s:%28%5cd+%29 s: s: i:0 -> s:
+re_capture s:%28%5cd+%29 s: s: i:1 -> s:
+re_capture s:%28%5cd+%29 s: s: i:2 -> s:
+re_split s:%28%5cd+%29 s: s: -> []
+re_all s:%28%5cd+%29 s: s: -> []
+re_count s:%28%5cd+%29 s: s: -> i:0
+re_matches s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> b:1
+re_capture s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:1
+re_capture s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:1
+re_capture s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac,s:1]
+re_all s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:1]
+re_count s:%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> i:1
+re_matches s:%5ba-z%5d+ s:i s:a1b22c333 -> b:1
+re_capture s:%5ba-z%5d+ s:i s:a1b22c333 i:0 -> s:a
+re_capture s:%5ba-z%5d+ s:i s:a1b22c333 i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:a1b22c333 i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:a1b22c333 -> [s:,s:1,s:22,s:333]
+re_all s:%5ba-z%5d+ s:i s:a1b22c333 -> [s:a,s:b,s:c]
+re_count s:%5ba-z%5d+ s:i s:a1b22c333 -> i:3
+re_matches s:%5ba-z%5d+ s:i s:ABCdef -> b:1
+re_capture s:%5ba-z%5d+ s:i s:ABCdef i:0 -> s:ABCdef
+re_capture s:%5ba-z%5d+ s:i s:ABCdef i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:ABCdef i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:ABCdef -> []
+re_all s:%5ba-z%5d+ s:i s:ABCdef -> [s:ABCdef]
+re_count s:%5ba-z%5d+ s:i s:ABCdef -> i:1
+re_matches s:%5ba-z%5d+ s:i s:abc -> b:1
+re_capture s:%5ba-z%5d+ s:i s:abc i:0 -> s:abc
+re_capture s:%5ba-z%5d+ s:i s:abc i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:abc i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:abc -> []
+re_all s:%5ba-z%5d+ s:i s:abc -> [s:abc]
+re_count s:%5ba-z%5d+ s:i s:abc -> i:1
+re_matches s:%5ba-z%5d+ s:i s:x42y -> b:1
+re_capture s:%5ba-z%5d+ s:i s:x42y i:0 -> s:x
+re_capture s:%5ba-z%5d+ s:i s:x42y i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:x42y i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:x42y -> [s:,s:42]
+re_all s:%5ba-z%5d+ s:i s:x42y -> [s:x,s:y]
+re_count s:%5ba-z%5d+ s:i s:x42y -> i:2
+re_matches s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c -> b:1
+re_capture s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c i:0 -> s:a
+re_capture s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c -> [s:,s:%20%20,s:%20%20%20]
+re_all s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c -> [s:a,s:b,s:c]
+re_count s:%5ba-z%5d+ s:i s:a%20%20b%20%20%20c -> i:3
+re_matches s:%5ba-z%5d+ s:i s:the%20quick%20fox -> b:1
+re_capture s:%5ba-z%5d+ s:i s:the%20quick%20fox i:0 -> s:the
+re_capture s:%5ba-z%5d+ s:i s:the%20quick%20fox i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:the%20quick%20fox i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:the%20quick%20fox -> [s:,s:%20,s:%20]
+re_all s:%5ba-z%5d+ s:i s:the%20quick%20fox -> [s:the,s:quick,s:fox]
+re_count s:%5ba-z%5d+ s:i s:the%20quick%20fox -> i:3
+re_matches s:%5ba-z%5d+ s:i s:12-34 -> b:0
+re_capture s:%5ba-z%5d+ s:i s:12-34 i:0 -> s:
+re_capture s:%5ba-z%5d+ s:i s:12-34 i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:12-34 i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:12-34 -> [s:12-34]
+re_all s:%5ba-z%5d+ s:i s:12-34 -> []
+re_count s:%5ba-z%5d+ s:i s:12-34 -> i:0
+re_matches s:%5ba-z%5d+ s:i s: -> b:0
+re_capture s:%5ba-z%5d+ s:i s: i:0 -> s:
+re_capture s:%5ba-z%5d+ s:i s: i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s: i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s: -> []
+re_all s:%5ba-z%5d+ s:i s: -> []
+re_count s:%5ba-z%5d+ s:i s: -> i:0
+re_matches s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:%5ba-z%5d+ s:i s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:%5ea s: s:a1b22c333 -> b:1
+re_capture s:%5ea s: s:a1b22c333 i:0 -> s:a
+re_capture s:%5ea s: s:a1b22c333 i:1 -> s:
+re_capture s:%5ea s: s:a1b22c333 i:2 -> s:
+re_split s:%5ea s: s:a1b22c333 -> [s:,s:1b22c333]
+re_all s:%5ea s: s:a1b22c333 -> [s:a]
+re_count s:%5ea s: s:a1b22c333 -> i:1
+re_matches s:%5ea s: s:ABCdef -> b:0
+re_capture s:%5ea s: s:ABCdef i:0 -> s:
+re_capture s:%5ea s: s:ABCdef i:1 -> s:
+re_capture s:%5ea s: s:ABCdef i:2 -> s:
+re_split s:%5ea s: s:ABCdef -> [s:ABCdef]
+re_all s:%5ea s: s:ABCdef -> []
+re_count s:%5ea s: s:ABCdef -> i:0
+re_matches s:%5ea s: s:abc -> b:1
+re_capture s:%5ea s: s:abc i:0 -> s:a
+re_capture s:%5ea s: s:abc i:1 -> s:
+re_capture s:%5ea s: s:abc i:2 -> s:
+re_split s:%5ea s: s:abc -> [s:,s:bc]
+re_all s:%5ea s: s:abc -> [s:a]
+re_count s:%5ea s: s:abc -> i:1
+re_matches s:%5ea s: s:x42y -> b:0
+re_capture s:%5ea s: s:x42y i:0 -> s:
+re_capture s:%5ea s: s:x42y i:1 -> s:
+re_capture s:%5ea s: s:x42y i:2 -> s:
+re_split s:%5ea s: s:x42y -> [s:x42y]
+re_all s:%5ea s: s:x42y -> []
+re_count s:%5ea s: s:x42y -> i:0
+re_matches s:%5ea s: s:a%20%20b%20%20%20c -> b:1
+re_capture s:%5ea s: s:a%20%20b%20%20%20c i:0 -> s:a
+re_capture s:%5ea s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%5ea s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%5ea s: s:a%20%20b%20%20%20c -> [s:,s:%20%20b%20%20%20c]
+re_all s:%5ea s: s:a%20%20b%20%20%20c -> [s:a]
+re_count s:%5ea s: s:a%20%20b%20%20%20c -> i:1
+re_matches s:%5ea s: s:the%20quick%20fox -> b:0
+re_capture s:%5ea s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%5ea s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%5ea s: s:the%20quick%20fox i:2 -> s:
+re_split s:%5ea s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%5ea s: s:the%20quick%20fox -> []
+re_count s:%5ea s: s:the%20quick%20fox -> i:0
+re_matches s:%5ea s: s:12-34 -> b:0
+re_capture s:%5ea s: s:12-34 i:0 -> s:
+re_capture s:%5ea s: s:12-34 i:1 -> s:
+re_capture s:%5ea s: s:12-34 i:2 -> s:
+re_split s:%5ea s: s:12-34 -> [s:12-34]
+re_all s:%5ea s: s:12-34 -> []
+re_count s:%5ea s: s:12-34 -> i:0
+re_matches s:%5ea s: s: -> b:0
+re_capture s:%5ea s: s: i:0 -> s:
+re_capture s:%5ea s: s: i:1 -> s:
+re_capture s:%5ea s: s: i:2 -> s:
+re_split s:%5ea s: s: -> []
+re_all s:%5ea s: s: -> []
+re_count s:%5ea s: s: -> i:0
+re_matches s:%5ea s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:%5ea s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:%5ea s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%5ea s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%5ea s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:%5ea s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:%5ea s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:b%24 s: s:a1b22c333 -> b:0
+re_capture s:b%24 s: s:a1b22c333 i:0 -> s:
+re_capture s:b%24 s: s:a1b22c333 i:1 -> s:
+re_capture s:b%24 s: s:a1b22c333 i:2 -> s:
+re_split s:b%24 s: s:a1b22c333 -> [s:a1b22c333]
+re_all s:b%24 s: s:a1b22c333 -> []
+re_count s:b%24 s: s:a1b22c333 -> i:0
+re_matches s:b%24 s: s:ABCdef -> b:0
+re_capture s:b%24 s: s:ABCdef i:0 -> s:
+re_capture s:b%24 s: s:ABCdef i:1 -> s:
+re_capture s:b%24 s: s:ABCdef i:2 -> s:
+re_split s:b%24 s: s:ABCdef -> [s:ABCdef]
+re_all s:b%24 s: s:ABCdef -> []
+re_count s:b%24 s: s:ABCdef -> i:0
+re_matches s:b%24 s: s:abc -> b:0
+re_capture s:b%24 s: s:abc i:0 -> s:
+re_capture s:b%24 s: s:abc i:1 -> s:
+re_capture s:b%24 s: s:abc i:2 -> s:
+re_split s:b%24 s: s:abc -> [s:abc]
+re_all s:b%24 s: s:abc -> []
+re_count s:b%24 s: s:abc -> i:0
+re_matches s:b%24 s: s:x42y -> b:0
+re_capture s:b%24 s: s:x42y i:0 -> s:
+re_capture s:b%24 s: s:x42y i:1 -> s:
+re_capture s:b%24 s: s:x42y i:2 -> s:
+re_split s:b%24 s: s:x42y -> [s:x42y]
+re_all s:b%24 s: s:x42y -> []
+re_count s:b%24 s: s:x42y -> i:0
+re_matches s:b%24 s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:b%24 s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:b%24 s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:b%24 s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:b%24 s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:b%24 s: s:a%20%20b%20%20%20c -> []
+re_count s:b%24 s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:b%24 s: s:the%20quick%20fox -> b:0
+re_capture s:b%24 s: s:the%20quick%20fox i:0 -> s:
+re_capture s:b%24 s: s:the%20quick%20fox i:1 -> s:
+re_capture s:b%24 s: s:the%20quick%20fox i:2 -> s:
+re_split s:b%24 s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:b%24 s: s:the%20quick%20fox -> []
+re_count s:b%24 s: s:the%20quick%20fox -> i:0
+re_matches s:b%24 s: s:12-34 -> b:0
+re_capture s:b%24 s: s:12-34 i:0 -> s:
+re_capture s:b%24 s: s:12-34 i:1 -> s:
+re_capture s:b%24 s: s:12-34 i:2 -> s:
+re_split s:b%24 s: s:12-34 -> [s:12-34]
+re_all s:b%24 s: s:12-34 -> []
+re_count s:b%24 s: s:12-34 -> i:0
+re_matches s:b%24 s: s: -> b:0
+re_capture s:b%24 s: s: i:0 -> s:
+re_capture s:b%24 s: s: i:1 -> s:
+re_capture s:b%24 s: s: i:2 -> s:
+re_split s:b%24 s: s: -> []
+re_all s:b%24 s: s: -> []
+re_count s:b%24 s: s: -> i:0
+re_matches s:b%24 s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:b%24 s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:b%24 s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:b%24 s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:b%24 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:b%24 s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:b%24 s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 -> b:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 i:0 -> s:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 i:1 -> s:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 -> [s:a,s:1,s:b,s:22,s:c,s:333]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 -> [s:1,s:22,s:333]
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:a1b22c333 -> i:3
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef -> b:0
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef i:0 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef i:1 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef -> [s:ABCdef]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef -> []
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:ABCdef -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:abc -> b:0
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:abc i:0 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:abc i:1 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:abc i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:abc -> [s:abc]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:abc -> []
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:abc -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y -> b:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y i:0 -> s:42
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y i:1 -> s:42
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y -> [s:x,s:42,s:y]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y -> [s:42]
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y -> i:1
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c -> []
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox -> b:0
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox -> []
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:the%20quick%20fox -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 -> b:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 i:0 -> s:12
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 i:1 -> s:12
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 -> [s:,s:12,s:-,s:34]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 -> [s:12,s:34]
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:12-34 -> i:2
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s: -> b:0
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s: i:0 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s: i:1 -> s:
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s: i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s: -> []
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s: -> []
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s: -> i:0
+re_matches s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> b:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:1
+re_capture s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac,s:1]
+re_all s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:1]
+re_count s:%28%3f%3cnum%3e%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> i:1
+re_matches s:%5cs+ s: s:a1b22c333 -> b:0
+re_capture s:%5cs+ s: s:a1b22c333 i:0 -> s:
+re_capture s:%5cs+ s: s:a1b22c333 i:1 -> s:
+re_capture s:%5cs+ s: s:a1b22c333 i:2 -> s:
+re_split s:%5cs+ s: s:a1b22c333 -> [s:a1b22c333]
+re_all s:%5cs+ s: s:a1b22c333 -> []
+re_count s:%5cs+ s: s:a1b22c333 -> i:0
+re_matches s:%5cs+ s: s:ABCdef -> b:0
+re_capture s:%5cs+ s: s:ABCdef i:0 -> s:
+re_capture s:%5cs+ s: s:ABCdef i:1 -> s:
+re_capture s:%5cs+ s: s:ABCdef i:2 -> s:
+re_split s:%5cs+ s: s:ABCdef -> [s:ABCdef]
+re_all s:%5cs+ s: s:ABCdef -> []
+re_count s:%5cs+ s: s:ABCdef -> i:0
+re_matches s:%5cs+ s: s:abc -> b:0
+re_capture s:%5cs+ s: s:abc i:0 -> s:
+re_capture s:%5cs+ s: s:abc i:1 -> s:
+re_capture s:%5cs+ s: s:abc i:2 -> s:
+re_split s:%5cs+ s: s:abc -> [s:abc]
+re_all s:%5cs+ s: s:abc -> []
+re_count s:%5cs+ s: s:abc -> i:0
+re_matches s:%5cs+ s: s:x42y -> b:0
+re_capture s:%5cs+ s: s:x42y i:0 -> s:
+re_capture s:%5cs+ s: s:x42y i:1 -> s:
+re_capture s:%5cs+ s: s:x42y i:2 -> s:
+re_split s:%5cs+ s: s:x42y -> [s:x42y]
+re_all s:%5cs+ s: s:x42y -> []
+re_count s:%5cs+ s: s:x42y -> i:0
+re_matches s:%5cs+ s: s:a%20%20b%20%20%20c -> b:1
+re_capture s:%5cs+ s: s:a%20%20b%20%20%20c i:0 -> s:%20%20
+re_capture s:%5cs+ s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%5cs+ s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%5cs+ s: s:a%20%20b%20%20%20c -> [s:a,s:b,s:c]
+re_all s:%5cs+ s: s:a%20%20b%20%20%20c -> [s:%20%20,s:%20%20%20]
+re_count s:%5cs+ s: s:a%20%20b%20%20%20c -> i:2
+re_matches s:%5cs+ s: s:the%20quick%20fox -> b:1
+re_capture s:%5cs+ s: s:the%20quick%20fox i:0 -> s:%20
+re_capture s:%5cs+ s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%5cs+ s: s:the%20quick%20fox i:2 -> s:
+re_split s:%5cs+ s: s:the%20quick%20fox -> [s:the,s:quick,s:fox]
+re_all s:%5cs+ s: s:the%20quick%20fox -> [s:%20,s:%20]
+re_count s:%5cs+ s: s:the%20quick%20fox -> i:2
+re_matches s:%5cs+ s: s:12-34 -> b:0
+re_capture s:%5cs+ s: s:12-34 i:0 -> s:
+re_capture s:%5cs+ s: s:12-34 i:1 -> s:
+re_capture s:%5cs+ s: s:12-34 i:2 -> s:
+re_split s:%5cs+ s: s:12-34 -> [s:12-34]
+re_all s:%5cs+ s: s:12-34 -> []
+re_count s:%5cs+ s: s:12-34 -> i:0
+re_matches s:%5cs+ s: s: -> b:0
+re_capture s:%5cs+ s: s: i:0 -> s:
+re_capture s:%5cs+ s: s: i:1 -> s:
+re_capture s:%5cs+ s: s: i:2 -> s:
+re_split s:%5cs+ s: s: -> []
+re_all s:%5cs+ s: s: -> []
+re_count s:%5cs+ s: s: -> i:0
+re_matches s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:%5cs+ s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:a%7cb s: s:a1b22c333 -> b:1
+re_capture s:a%7cb s: s:a1b22c333 i:0 -> s:a
+re_capture s:a%7cb s: s:a1b22c333 i:1 -> s:
+re_capture s:a%7cb s: s:a1b22c333 i:2 -> s:
+re_split s:a%7cb s: s:a1b22c333 -> [s:,s:1,s:22c333]
+re_all s:a%7cb s: s:a1b22c333 -> [s:a,s:b]
+re_count s:a%7cb s: s:a1b22c333 -> i:2
+re_matches s:a%7cb s: s:ABCdef -> b:0
+re_capture s:a%7cb s: s:ABCdef i:0 -> s:
+re_capture s:a%7cb s: s:ABCdef i:1 -> s:
+re_capture s:a%7cb s: s:ABCdef i:2 -> s:
+re_split s:a%7cb s: s:ABCdef -> [s:ABCdef]
+re_all s:a%7cb s: s:ABCdef -> []
+re_count s:a%7cb s: s:ABCdef -> i:0
+re_matches s:a%7cb s: s:abc -> b:1
+re_capture s:a%7cb s: s:abc i:0 -> s:a
+re_capture s:a%7cb s: s:abc i:1 -> s:
+re_capture s:a%7cb s: s:abc i:2 -> s:
+re_split s:a%7cb s: s:abc -> [s:,s:,s:c]
+re_all s:a%7cb s: s:abc -> [s:a,s:b]
+re_count s:a%7cb s: s:abc -> i:2
+re_matches s:a%7cb s: s:x42y -> b:0
+re_capture s:a%7cb s: s:x42y i:0 -> s:
+re_capture s:a%7cb s: s:x42y i:1 -> s:
+re_capture s:a%7cb s: s:x42y i:2 -> s:
+re_split s:a%7cb s: s:x42y -> [s:x42y]
+re_all s:a%7cb s: s:x42y -> []
+re_count s:a%7cb s: s:x42y -> i:0
+re_matches s:a%7cb s: s:a%20%20b%20%20%20c -> b:1
+re_capture s:a%7cb s: s:a%20%20b%20%20%20c i:0 -> s:a
+re_capture s:a%7cb s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:a%7cb s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:a%7cb s: s:a%20%20b%20%20%20c -> [s:,s:%20%20,s:%20%20%20c]
+re_all s:a%7cb s: s:a%20%20b%20%20%20c -> [s:a,s:b]
+re_count s:a%7cb s: s:a%20%20b%20%20%20c -> i:2
+re_matches s:a%7cb s: s:the%20quick%20fox -> b:0
+re_capture s:a%7cb s: s:the%20quick%20fox i:0 -> s:
+re_capture s:a%7cb s: s:the%20quick%20fox i:1 -> s:
+re_capture s:a%7cb s: s:the%20quick%20fox i:2 -> s:
+re_split s:a%7cb s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:a%7cb s: s:the%20quick%20fox -> []
+re_count s:a%7cb s: s:the%20quick%20fox -> i:0
+re_matches s:a%7cb s: s:12-34 -> b:0
+re_capture s:a%7cb s: s:12-34 i:0 -> s:
+re_capture s:a%7cb s: s:12-34 i:1 -> s:
+re_capture s:a%7cb s: s:12-34 i:2 -> s:
+re_split s:a%7cb s: s:12-34 -> [s:12-34]
+re_all s:a%7cb s: s:12-34 -> []
+re_count s:a%7cb s: s:12-34 -> i:0
+re_matches s:a%7cb s: s: -> b:0
+re_capture s:a%7cb s: s: i:0 -> s:
+re_capture s:a%7cb s: s: i:1 -> s:
+re_capture s:a%7cb s: s: i:2 -> s:
+re_split s:a%7cb s: s: -> []
+re_all s:a%7cb s: s: -> []
+re_count s:a%7cb s: s: -> i:0
+re_matches s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:a%7cb s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 -> b:1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 i:0 -> s:a1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 i:1 -> s:a
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 i:2 -> s:1
+re_split s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 -> [s:,s:a,s:1,s:,s:b,s:2,s:2,s:c,s:3,s:,s:3,s:3]
+re_all s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 -> [s:a,s:1,s:b,s:2,s:c,s:3,s:3,s:3]
+re_count s:%28%5cw%29%28%5cd%29 s: s:a1b22c333 -> i:8
+re_matches s:%28%5cw%29%28%5cd%29 s: s:ABCdef -> b:0
+re_capture s:%28%5cw%29%28%5cd%29 s: s:ABCdef i:0 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:ABCdef i:1 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:ABCdef i:2 -> s:
+re_split s:%28%5cw%29%28%5cd%29 s: s:ABCdef -> [s:ABCdef]
+re_all s:%28%5cw%29%28%5cd%29 s: s:ABCdef -> []
+re_count s:%28%5cw%29%28%5cd%29 s: s:ABCdef -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:abc -> b:0
+re_capture s:%28%5cw%29%28%5cd%29 s: s:abc i:0 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:abc i:1 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:abc i:2 -> s:
+re_split s:%28%5cw%29%28%5cd%29 s: s:abc -> [s:abc]
+re_all s:%28%5cw%29%28%5cd%29 s: s:abc -> []
+re_count s:%28%5cw%29%28%5cd%29 s: s:abc -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:x42y -> b:1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:x42y i:0 -> s:x4
+re_capture s:%28%5cw%29%28%5cd%29 s: s:x42y i:1 -> s:x
+re_capture s:%28%5cw%29%28%5cd%29 s: s:x42y i:2 -> s:4
+re_split s:%28%5cw%29%28%5cd%29 s: s:x42y -> [s:,s:x,s:4,s:2y]
+re_all s:%28%5cw%29%28%5cd%29 s: s:x42y -> [s:x,s:4]
+re_count s:%28%5cw%29%28%5cd%29 s: s:x42y -> i:2
+re_matches s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c -> []
+re_count s:%28%5cw%29%28%5cd%29 s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox -> b:0
+re_capture s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox i:2 -> s:
+re_split s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox -> []
+re_count s:%28%5cw%29%28%5cd%29 s: s:the%20quick%20fox -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:12-34 -> b:1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:12-34 i:0 -> s:12
+re_capture s:%28%5cw%29%28%5cd%29 s: s:12-34 i:1 -> s:1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:12-34 i:2 -> s:2
+re_split s:%28%5cw%29%28%5cd%29 s: s:12-34 -> [s:,s:1,s:2,s:-,s:3,s:4]
+re_all s:%28%5cw%29%28%5cd%29 s: s:12-34 -> [s:1,s:2,s:3,s:4]
+re_count s:%28%5cw%29%28%5cd%29 s: s:12-34 -> i:4
+re_matches s:%28%5cw%29%28%5cd%29 s: s: -> b:0
+re_capture s:%28%5cw%29%28%5cd%29 s: s: i:0 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s: i:1 -> s:
+re_capture s:%28%5cw%29%28%5cd%29 s: s: i:2 -> s:
+re_split s:%28%5cw%29%28%5cd%29 s: s: -> []
+re_all s:%28%5cw%29%28%5cd%29 s: s: -> []
+re_count s:%28%5cw%29%28%5cd%29 s: s: -> i:0
+re_matches s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 -> b:1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:%e6%9c%ac1
+re_capture s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:%e6%9c%ac
+re_capture s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:1
+re_split s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5,s:%e6%9c%ac,s:1]
+re_all s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%9c%ac,s:1]
+re_count s:%28%5cw%29%28%5cd%29 s: s:%e6%97%a5%e6%9c%ac1 -> i:2
+re_matches s:x%2a s: s:a1b22c333 -> b:1
+re_capture s:x%2a s: s:a1b22c333 i:0 -> s:
+re_capture s:x%2a s: s:a1b22c333 i:1 -> s:
+re_capture s:x%2a s: s:a1b22c333 i:2 -> s:
+re_split s:x%2a s: s:a1b22c333 -> [s:a,s:1,s:b,s:2,s:2,s:c,s:3,s:3,s:3]
+re_all s:x%2a s: s:a1b22c333 -> [s:,s:,s:,s:,s:,s:,s:,s:,s:,s:]
+re_count s:x%2a s: s:a1b22c333 -> i:10
+re_matches s:x%2a s: s:ABCdef -> b:1
+re_capture s:x%2a s: s:ABCdef i:0 -> s:
+re_capture s:x%2a s: s:ABCdef i:1 -> s:
+re_capture s:x%2a s: s:ABCdef i:2 -> s:
+re_split s:x%2a s: s:ABCdef -> [s:A,s:B,s:C,s:d,s:e,s:f]
+re_all s:x%2a s: s:ABCdef -> [s:,s:,s:,s:,s:,s:,s:]
+re_count s:x%2a s: s:ABCdef -> i:7
+re_matches s:x%2a s: s:abc -> b:1
+re_capture s:x%2a s: s:abc i:0 -> s:
+re_capture s:x%2a s: s:abc i:1 -> s:
+re_capture s:x%2a s: s:abc i:2 -> s:
+re_split s:x%2a s: s:abc -> [s:a,s:b,s:c]
+re_all s:x%2a s: s:abc -> [s:,s:,s:,s:]
+re_count s:x%2a s: s:abc -> i:4
+re_matches s:x%2a s: s:x42y -> b:1
+re_capture s:x%2a s: s:x42y i:0 -> s:x
+re_capture s:x%2a s: s:x42y i:1 -> s:
+re_capture s:x%2a s: s:x42y i:2 -> s:
+re_split s:x%2a s: s:x42y -> [s:,s:4,s:2,s:y]
+re_all s:x%2a s: s:x42y -> [s:x,s:,s:,s:,s:]
+re_count s:x%2a s: s:x42y -> i:5
+re_matches s:x%2a s: s:a%20%20b%20%20%20c -> b:1
+re_capture s:x%2a s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:x%2a s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:x%2a s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:x%2a s: s:a%20%20b%20%20%20c -> [s:a,s:%20,s:%20,s:b,s:%20,s:%20,s:%20,s:c]
+re_all s:x%2a s: s:a%20%20b%20%20%20c -> [s:,s:,s:,s:,s:,s:,s:,s:,s:]
+re_count s:x%2a s: s:a%20%20b%20%20%20c -> i:9
+re_matches s:x%2a s: s:the%20quick%20fox -> b:1
+re_capture s:x%2a s: s:the%20quick%20fox i:0 -> s:
+re_capture s:x%2a s: s:the%20quick%20fox i:1 -> s:
+re_capture s:x%2a s: s:the%20quick%20fox i:2 -> s:
+re_split s:x%2a s: s:the%20quick%20fox -> [s:t,s:h,s:e,s:%20,s:q,s:u,s:i,s:c,s:k,s:%20,s:f,s:o]
+re_all s:x%2a s: s:the%20quick%20fox -> [s:,s:,s:,s:,s:,s:,s:,s:,s:,s:,s:,s:,s:x,s:]
+re_count s:x%2a s: s:the%20quick%20fox -> i:14
+re_matches s:x%2a s: s:12-34 -> b:1
+re_capture s:x%2a s: s:12-34 i:0 -> s:
+re_capture s:x%2a s: s:12-34 i:1 -> s:
+re_capture s:x%2a s: s:12-34 i:2 -> s:
+re_split s:x%2a s: s:12-34 -> [s:1,s:2,s:-,s:3,s:4]
+re_all s:x%2a s: s:12-34 -> [s:,s:,s:,s:,s:,s:]
+re_count s:x%2a s: s:12-34 -> i:6
+re_matches s:x%2a s: s: -> b:1
+re_capture s:x%2a s: s: i:0 -> s:
+re_capture s:x%2a s: s: i:1 -> s:
+re_capture s:x%2a s: s: i:2 -> s:
+re_split s:x%2a s: s: -> []
+re_all s:x%2a s: s: -> [s:]
+re_count s:x%2a s: s: -> i:1
+re_matches s:x%2a s: s:%e6%97%a5%e6%9c%ac1 -> b:1
+re_capture s:x%2a s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:x%2a s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:x%2a s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:x%2a s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5,s:%e6%9c%ac,s:1]
+re_all s:x%2a s: s:%e6%97%a5%e6%9c%ac1 -> [s:,s:,s:,s:]
+re_count s:x%2a s: s:%e6%97%a5%e6%9c%ac1 -> i:4
+re_matches s:%5cbfox%5cb s: s:a1b22c333 -> b:0
+re_capture s:%5cbfox%5cb s: s:a1b22c333 i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:a1b22c333 i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:a1b22c333 i:2 -> s:
+re_split s:%5cbfox%5cb s: s:a1b22c333 -> [s:a1b22c333]
+re_all s:%5cbfox%5cb s: s:a1b22c333 -> []
+re_count s:%5cbfox%5cb s: s:a1b22c333 -> i:0
+re_matches s:%5cbfox%5cb s: s:ABCdef -> b:0
+re_capture s:%5cbfox%5cb s: s:ABCdef i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:ABCdef i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:ABCdef i:2 -> s:
+re_split s:%5cbfox%5cb s: s:ABCdef -> [s:ABCdef]
+re_all s:%5cbfox%5cb s: s:ABCdef -> []
+re_count s:%5cbfox%5cb s: s:ABCdef -> i:0
+re_matches s:%5cbfox%5cb s: s:abc -> b:0
+re_capture s:%5cbfox%5cb s: s:abc i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:abc i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:abc i:2 -> s:
+re_split s:%5cbfox%5cb s: s:abc -> [s:abc]
+re_all s:%5cbfox%5cb s: s:abc -> []
+re_count s:%5cbfox%5cb s: s:abc -> i:0
+re_matches s:%5cbfox%5cb s: s:x42y -> b:0
+re_capture s:%5cbfox%5cb s: s:x42y i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:x42y i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:x42y i:2 -> s:
+re_split s:%5cbfox%5cb s: s:x42y -> [s:x42y]
+re_all s:%5cbfox%5cb s: s:x42y -> []
+re_count s:%5cbfox%5cb s: s:x42y -> i:0
+re_matches s:%5cbfox%5cb s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%5cbfox%5cb s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%5cbfox%5cb s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%5cbfox%5cb s: s:a%20%20b%20%20%20c -> []
+re_count s:%5cbfox%5cb s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%5cbfox%5cb s: s:the%20quick%20fox -> b:1
+re_capture s:%5cbfox%5cb s: s:the%20quick%20fox i:0 -> s:fox
+re_capture s:%5cbfox%5cb s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:the%20quick%20fox i:2 -> s:
+re_split s:%5cbfox%5cb s: s:the%20quick%20fox -> [s:the%20quick%20]
+re_all s:%5cbfox%5cb s: s:the%20quick%20fox -> [s:fox]
+re_count s:%5cbfox%5cb s: s:the%20quick%20fox -> i:1
+re_matches s:%5cbfox%5cb s: s:12-34 -> b:0
+re_capture s:%5cbfox%5cb s: s:12-34 i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:12-34 i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:12-34 i:2 -> s:
+re_split s:%5cbfox%5cb s: s:12-34 -> [s:12-34]
+re_all s:%5cbfox%5cb s: s:12-34 -> []
+re_count s:%5cbfox%5cb s: s:12-34 -> i:0
+re_matches s:%5cbfox%5cb s: s: -> b:0
+re_capture s:%5cbfox%5cb s: s: i:0 -> s:
+re_capture s:%5cbfox%5cb s: s: i:1 -> s:
+re_capture s:%5cbfox%5cb s: s: i:2 -> s:
+re_split s:%5cbfox%5cb s: s: -> []
+re_all s:%5cbfox%5cb s: s: -> []
+re_count s:%5cbfox%5cb s: s: -> i:0
+re_matches s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:%5cbfox%5cb s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 -> [s:a1b22c333]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:a1b22c333 -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef -> [s:ABCdef]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:ABCdef -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:abc -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:abc i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:abc i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:abc i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:abc -> [s:abc]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:abc -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:abc -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:x42y -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:x42y i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:x42y i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:x42y i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:x42y -> [s:x42y]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:x42y -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:x42y -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c -> [s:a%20%20b%20%20%20c]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:a%20%20b%20%20%20c -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox -> [s:the%20quick%20fox]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:the%20quick%20fox -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 -> b:1
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 i:0 -> s:12-34
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 i:1 -> s:12
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 i:2 -> s:34
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 -> [s:,s:12,s:34]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 -> [s:12,s:34]
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:12-34 -> i:2
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s: -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s: i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s: i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s: i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s: -> []
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s: -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s: -> i:0
+re_matches s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> b:0
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:0 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:1 -> s:
+re_capture s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 i:2 -> s:
+re_split s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> [s:%e6%97%a5%e6%9c%ac1]
+re_all s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> []
+re_count s:%28%5cd+%29-%28%5cd+%29 s: s:%e6%97%a5%e6%9c%ac1 -> i:0
+re_capture_named s:%28%3f%3cnum%3e%5cd+%29 s: s:x42y s:num -> s:42
+re_capture_named s:%28%3f%3cnum%3e%5cd+%29 s: s:no%20digits s:num -> s:
+re_subst s:%28%5cd+%29 s: s:a1b22 s:%5b%241%5d -> s:a%5b1%5db22
+re_subst s:%28%5cd+%29 s:g s:a1b22 s:%5b%241%5d -> s:a%5b1%5db%5b22%5d
+re_subst s:%5cs+ s:g s:a%20%20b%20c s:- -> s:a-b-c
+re_subst s:x%2a s:g s:abc s:- -> s:-a-b-c-
+re_subst s:%28%5cw%29%28%5cd%29 s:g s:a1%20b2 s:%242%241 -> s:1a%202b
+re_subst s:o s:g s:foo s:0 -> s:f00
+re_subst s:%5baeiou%5d s:gi s:Hello%20There s:_ -> s:H_ll_%20Th_r_

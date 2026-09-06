@@ -1,0 +1,3 @@
+test/refuse/pattern_built.pl:9:27: Rakugan cannot take this — a pattern here is written out; one built while the app runs would have to be compiled by something the shipped app does not carry
+            $found = "abc" =~ /$needle/;
+                              ^

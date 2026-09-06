@@ -1,0 +1,3 @@
+test/refuse/pattern_code.pl:8:27: Rakugan cannot take this — a pattern that runs code (`(?{ … })`) is perl's own; the compiled run has no perl in it
+            $found = "abc" =~ /a(?{ print "hi" })b/;
+                              ^

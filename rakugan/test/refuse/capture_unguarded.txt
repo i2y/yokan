@@ -1,0 +1,3 @@
+test/refuse/capture_unguarded.pl:10:16: Rakugan cannot take this — what a pattern caught is read where the match is known to have happened: inside the `if` that made it
+            $got = $1;
+                   ^

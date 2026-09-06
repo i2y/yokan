@@ -190,6 +190,13 @@ class Pl {
   static fn uniqInt(xs: List<Int>) List<Int> @rust("rakugan_stdlib::uniq_int")
   static fn strftimeUtc(fmt: String, epoch: Int) String @rust("rakugan_stdlib::strftime_utc")
   static fn strftimeLocal(fmt: String, epoch: Int) String @rust("rakugan_stdlib::strftime_local")
+  static fn reMatches(pat: String, mods: String, s: String) Bool @rust("rakugan_stdlib::re_matches")
+  static fn reCapture(pat: String, mods: String, s: String, n: Int) String @rust("rakugan_stdlib::re_capture")
+  static fn reCaptureNamed(pat: String, mods: String, s: String, name: String) String @rust("rakugan_stdlib::re_capture_named")
+  static fn reSubst(pat: String, mods: String, s: String, repl: String) String @rust("rakugan_stdlib::re_subst")
+  static fn reSplit(pat: String, mods: String, s: String) List<String> @rust("rakugan_stdlib::re_split")
+  static fn reAll(pat: String, mods: String, s: String) List<String> @rust("rakugan_stdlib::re_all")
+  static fn reCount(pat: String, mods: String, s: String) Int @rust("rakugan_stdlib::re_count")
 }
 RPI
 }
@@ -709,6 +716,7 @@ sub pix_text {
 # captures. Answers { ty, pix, lit? } — `lit` is the text of a string
 # literal, kept so two of them can be joined and a keyword checked.
 my %BP = ('or' => 1, '||' => 1, '//' => 1, 'and' => 2, '&&' => 2,
+          '=~' => 7, '!~' => 7,
           '==' => 5, '!=' => 5, '<' => 5, '>' => 5, '<=' => 5, '>=' => 5, 'eq' => 5, 'ne' => 5,
           'lt' => 5, 'gt' => 5, 'le' => 5, 'ge' => 5,
           '+' => 10, '-' => 10, '.' => 10, '*' => 20, '/' => 20, '%' => 20);
@@ -788,6 +796,13 @@ sub op_of {
 sub expr_bp {
     my ($ip, $toks, $env, $min) = @_;
     my $lhs = primary($ip, $toks, $env);
+    # `$s =~ /pat/` — what follows the operator is a pattern, not an
+    # expression, so it is read here rather than by `primary`.
+    while ($$ip < @$toks && (is_op($toks->[$$ip], '=~') || is_op($toks->[$$ip], '!~'))) {
+        my $op = $toks->[$$ip];
+        $$ip += 2;
+        $lhs = regexp_op($op, $lhs, $toks->[$$ip - 1], $env);
+    }
     # A hash may not hold the key it was asked for. Perl answers undef;
     # the app says what it wants instead, and both runs answer that.
     refuse($toks->[$$ip - 1], 'a hash may not have that key, so say what to answer when it does not: '
@@ -884,6 +899,85 @@ sub binop {
     return { ty => 'Bool', pix => group($l->{pix}) . " $pix_op " . group($r->{pix}) };
 }
 
+# `$s =~ /pat/`, `$s !~ /pat/`, `$s =~ s/pat/repl/r` — the shapes that
+# answer a value. The one that writes back is a statement, and
+# `substitution` below handles it.
+sub regexp_op {
+    my ($op, $subject, $tok, $env) = @_;
+    refuse($op, 'a pattern is matched against a string (got ' . $subject->{ty} . ')')
+        unless $subject->{ty} eq 'String';
+    refuse($op, 'what follows `' . $op->content . '` is a pattern: `/\d+/`')
+        unless $tok && $tok->isa('PPI::Token::Regexp');
+    my ($pat, $flags) = regexp_of($tok, $env);
+    $uses_pl = 1;
+    if ($tok->isa('PPI::Token::Regexp::Substitute')) {
+        refuse($tok, 'a substitution that writes back is a statement of its own; `s/…/…/r` answers a '
+                   . 'new string and leaves the old one alone')
+            unless $flags =~ /r/;
+        return { ty => 'String', pix => subst_call($tok, $pat, $flags, $subject->{pix}, $env) };
+    }
+    if ($flags =~ /g/) {
+        refuse($op, '`!~` asks whether a pattern is absent, and `g` finds every place it is present')
+            if $op->content eq '!~';
+        (my $keep = $flags) =~ s/g//;
+        return { ty => 'List<String>',
+                 pix => "Pl.reAll(\"" . pix_text($tok, $pat) . "\", \"$keep\", $subject->{pix})" };
+    }
+    remember_match($env, $pat, $flags, $subject->{pix});
+    my $call = "Pl.reMatches(\"" . pix_text($tok, $pat) . "\", \"$flags\", $subject->{pix})";
+    return { ty => 'Bool', pix => $op->content eq '!~' ? "!($call)" : $call };
+}
+
+# The pattern and the letters after it, with what PCRE2 does not do
+# refused by name rather than run differently.
+sub regexp_of {
+    my ($tok, $env) = @_;
+    my $pat = $tok->get_match_string;
+    my $mods = $tok->get_modifiers || {};
+    my $flags = join '', sort grep { $mods->{$_} } keys %$mods;
+    refuse($tok, 'a pattern here is written out; one built while the app runs would have to be '
+               . 'compiled by something the shipped app does not carry')
+        if $pat =~ /(?<!\\)[\$\@]\w/;
+    refuse($tok, 'a pattern that runs code (`(?{ … })`) is perl\'s own; the compiled run has no perl in it')
+        if $pat =~ /\(\?\??\{/;
+    refuse($tok, 'a character named with `\\N{…}` is not in the compiled run\'s engine; write the '
+               . 'character itself')
+        if $pat =~ /\\N\{/;
+    refuse($tok, 'the case escapes (`\\l \\u \\L \\U \\F`) are perl\'s own; `uc` and `lc` do the '
+               . 'same to a string')
+        if $pat =~ /\\[luLUF]/;
+    refuse($tok, 'a Unicode property written out in full is not in the compiled run\'s engine; the '
+               . 'short name (`\\p{L}`) is')
+        if $pat =~ /\\[pP]\{(\w{3,})\}/;
+    refuse($tok, '`\\K` inside a look-around is refused by the compiled run\'s engine')
+        if $pat =~ /\\K/ && $pat =~ /\(\?<?[=!]/;
+    # `e` reaches `subst_call`, which has the better thing to say
+    # about it.
+    refuse($tok, "the letter `$1` after a pattern is not in the translator")
+        if $flags =~ /([^imsxgre])/;
+    return ($pat, $flags);
+}
+
+# What `$1` and `$+{name}` will be read against, until the next match.
+sub remember_match {
+    my ($env, $pat, $flags, $subject) = @_;
+    return unless $env->{sink};
+    %{ $env->{sink} } = (pat => $pat, flags => $flags, subject => $subject);
+}
+
+sub subst_call {
+    my ($tok, $pat, $flags, $subject, $env) = @_;
+    my $repl = $tok->get_substitute_string;
+    refuse($tok, 'a replacement here is text, with `$1` … `$9` for what the pattern caught; `/e` runs '
+               . 'perl and the compiled run has none')
+        if $flags =~ /e/;
+    refuse($tok, 'a replacement reads `$1` … `$9`; anything else in it would have to be worked out '
+               . 'while the app runs')
+        if $repl =~ /(?<!\\)\$(?![1-9])/ || $repl =~ /(?<!\\)\@/;
+    (my $keep = $flags) =~ s/[r]//g;
+    return "Pl.reSubst(\"" . pix_text($tok, $pat) . "\", \"$keep\", $subject, \"" . pix_text($tok, $repl) . "\")";
+}
+
 sub group { my ($s) = @_; return $s =~ / / && $s !~ /\A\(.*\)\z/ && $s !~ /\A"/ ? "($s)" : $s }
 
 sub primary {
@@ -908,6 +1002,32 @@ sub primary {
         return { ty => $ty, pix => $pix, ($ty eq 'String' ? (lit => $t->literal) : ()) };
     }
     if ($t->isa('PPI::Token::Quote::Double')) { $$ip++; return interpolate($t, $env) }
+    # `$1` … `$9` and `$+{name}`. Every other magic name (`$_` among
+    # them) is a symbol like any other and goes on below.
+    if ($t->isa('PPI::Token::Magic') && ($t->content =~ /\A\$[1-9]\z/ || $t->content eq '$+')) {
+        my $m = $env->{capture}
+            or refuse($t, 'what a pattern caught is read where the match is known to have happened: '
+                        . 'inside the `if` that made it');
+        if ($t->content =~ /\A\$([1-9])\z/) {
+            $$ip++;
+            $uses_pl = 1;
+            return { ty => 'String',
+                     pix => "Pl.reCapture(\"" . pix_text($t, $m->{pat}) . "\", \"$m->{flags}\", "
+                          . "$m->{subject}, $1)" };
+        }
+        if ($t->content eq '$+' && is_sub($toks->[$$ip + 1], '{')) {
+            my $sub = $toks->[$$ip + 1];
+            my @st = sig(($sub->schildren)[0]);
+            refuse($sub, 'a named group is read `$+{name}`') unless @st == 1 && is_word($st[0]);
+            $$ip += 2;
+            $uses_pl = 1;
+            return { ty => 'String',
+                     pix => "Pl.reCaptureNamed(\"" . pix_text($t, $m->{pat}) . "\", \"$m->{flags}\", "
+                          . "$m->{subject}, \"" . $st[0]->content . "\")" };
+        }
+        refuse($t, 'the only variables a pattern leaves behind that the translator reads are `$1` … `$9` '
+                 . 'and `$+{name}`');
+    }
     if ($t->isa('PPI::Token::ArrayIndex')) {
         $$ip++;
         my $name = substr $t->content, 2;
@@ -1269,6 +1389,18 @@ sub word_expr {
         $uses_pl = 1;
         return { ty => ($name eq 'uniq' ? $v->{ty} : $inner), pix => "Pl.$fn($v->{pix})" };
     }
+    if ($name eq 'split' && $next && $next->isa('PPI::Token::Regexp::Match')) {
+        $$ip += 2;
+        my ($pat, $flags) = regexp_of($next, $env);
+        refuse($next, '`split` takes a pattern and the string: `split /,\\s*/, $line`')
+            unless is_op($toks->[$$ip], ',');
+        $$ip++;
+        my $v = expr_bp($ip, $toks, $env, 3);
+        refuse($w, "`split` reads a string (got $v->{ty})") unless $v->{ty} eq 'String';
+        $uses_pl = 1;
+        return { ty => 'List<String>',
+                 pix => "Pl.reSplit(\"" . pix_text($next, $pat) . "\", \"$flags\", $v->{pix})" };
+    }
     if ($name =~ /\A(?:substr|index|rindex|split|fmod|strftime)\z/) {
         $$ip++;
         refuse($w, "`$name` is called with parentheses here") unless $next && $next->isa('PPI::Structure::List');
@@ -1307,6 +1439,14 @@ sub pipeline_rhs {
         my @inner = map { sig($_) } $t[0]->schildren;
         return undef unless @inner && is_word($inner[0], 'first');
         return first_of(\@inner, [@t[2 .. $#t]], $env, $node);
+    }
+    # `my @found = ($line =~ /(\d+)/g);` — a match in the place a list
+    # goes, which perl reads as every place the pattern matched.
+    if (@t == 1 && $t[0]->isa('PPI::Structure::List')) {
+        my @a = split_args($t[0]);
+        if (@a == 1 && grep { is_op($_, '=~') } @{ $a[0]{toks} }) {
+            return parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+        }
     }
     return undef unless is_word($t[0]) && $t[0]->content =~ /\A(?:grep|map)\z/;
     my ($w, $block, @rest) = @t;
@@ -1521,6 +1661,14 @@ sub interpolate {
             $s = $rest;
             my $v = hole($tok, reparse($tok, $code, $env), $env);
             $out .= pix_text($tok, $buf) . '#{' . $v . '}';
+            $lit .= $buf;
+            ($buf, $plain) = ('', 0);
+            next;
+        }
+        # What a pattern caught: `$1` … `$9` and `$+{name}`.
+        if ($s =~ s/\A(\$[1-9])// || $s =~ s/\A(\$\+\{\w+\})//) {
+            my $v = reparse($tok, $1, $env);
+            $out .= pix_text($tok, $buf) . '#{' . hole($tok, $v, $env) . '}';
             $lit .= $buf;
             ($buf, $plain) = ('', 0);
             next;
@@ -2087,9 +2235,11 @@ sub stmt {
                 my @body = stmt_run(\@head, $inner, $st);
                 return ("for __it in $over->{over} {", (map { "  $_" } @body), '}');
             }
-            my $cond = cond_of(\@tail, $env, $t[$i]);
+            my %caught;
+            my $cond = cond_of(\@tail, $env, $t[$i], \%caught);
             $cond = "!($cond)" if $kw eq 'unless';
-            my @body = stmt_run(\@head, $env, $st);
+            my $guarded = %caught && $kw ne 'unless' ? { %$env, capture => \%caught } : $env;
+            my @body = stmt_run(\@head, $guarded, $st);
             return ("$kw $cond {", (map { "  $_" } @body), '}') if $kw eq 'while';
             return ("if $cond {", (map { "  $_" } @body), '}');
         }
@@ -2121,6 +2271,9 @@ sub simple_stmt {
         my $v = symbol_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
         refuse($t[$i], 'this does not continue the call') if $i < @t;
         return $v->{pix};
+    }
+    if (is_sym($head, '$') && is_op($t[1], '=~') && $t[2] && $t[2]->isa('PPI::Token::Regexp::Substitute')) {
+        return substitution(\@t, $env);
     }
     if (is_sym($head, '@') || is_sym($head, '%')) { return whole_assign(\@t, $env) }
     refuse($head, $NOT_TAKEN{ $head->content }) if is_word($head) && $NOT_TAKEN{ $head->content };
@@ -2318,6 +2471,24 @@ sub assign {
     return "$target = $target $o " . group($v->{pix});
 }
 
+# `$name =~ s/pat/repl/;` — the one that writes back. The compiled run
+# has no place that a pattern quietly changes, so it is a write.
+sub substitution {
+    my ($toks, $env) = @_;
+    my @t = @$toks;
+    refuse($t[0], 'a substitution stands on its own line: `$name =~ s/old/new/;`') if @t > 3;
+    my $name = substr $t[0]->content, 1;
+    my $v = read_var($t[0], $name, $env);
+    refuse($t[0], "`\$$name` holds a $v->{ty}, and a pattern changes a string") unless $v->{ty} eq 'String';
+    refuse($t[0], "`\$$name` cannot be written here; it is what this is called with")
+        if $env->{vars}{$name} && $env->{vars}{$name}{fixed};
+    my ($pat, $flags) = regexp_of($t[2], $env);
+    refuse($t[2], '`/r` answers a new string and changes nothing, so it belongs on the right of an `=`')
+        if $flags =~ /r/;
+    $uses_pl = 1;
+    return "$v->{pix} = " . subst_call($t[2], $pat, $flags, $v->{pix}, $env);
+}
+
 sub typed_rhs {
     my ($name, $fty, $toks, $env, $at) = @_;
     my $v = parse_expr($toks, { %$env, at => $at });
@@ -2326,11 +2497,11 @@ sub typed_rhs {
 }
 
 sub cond_of {
-    my ($toks, $env, $at) = @_;
+    my ($toks, $env, $at, $sink) = @_;
     my @t = @$toks;
     # `if ($c)` — the parentheses are the statement's, not the expression's
     @t = sig(($t[0]->schildren)[0]) if @t == 1 && $t[0]->isa('PPI::Structure::Condition');
-    my $v = parse_expr(\@t, { %$env, at => $at });
+    my $v = parse_expr(\@t, { %$env, at => $at, ($sink ? (sink => $sink) : ()) });
     refuse($at, "a condition is a bool (got $v->{ty}); Perl's truthiness of a number or a string is not in the translator — compare it (`!= 0`, `ne \"\"`)")
         unless $v->{ty} eq 'Bool';
     return $v->{pix};
@@ -2352,7 +2523,8 @@ sub compound {
             my ($cnd, $blk) = @t[$i + 1, $i + 2];
             refuse($kw, "`" . $kw->content . "` takes its condition in parentheses and a block")
                 unless $cnd && $cnd->isa('PPI::Structure::Condition') && $blk && $blk->isa('PPI::Structure::Block');
-            my $c = cond_of([$cnd], $env, $kw);
+            my %caught;
+            my $c = cond_of([$cnd], $env, $kw, \%caught);
             $c = "!($c)" if $kw->content eq 'unless';
             if ($kw->content eq 'elsif') {
                 push @out, '} else {';
@@ -2361,7 +2533,9 @@ sub compound {
             } else {
                 push @out, "if $c {";
             }
-            push @out, map { ('  ' x ($depth + 1)) . $_ } stmts($blk, scope($env));
+            my $branch = scope($env);
+            $branch->{capture} = \%caught if %caught && $kw->content ne 'unless';
+            push @out, map { ('  ' x ($depth + 1)) . $_ } stmts($blk, $branch);
             $i += 3;
         } elsif (is_word($kw, 'else')) {
             my $blk = $t[$i + 1];

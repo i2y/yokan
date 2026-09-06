@@ -204,6 +204,14 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "fmt_str" => V::S(fmt_str(&a[0].s(), &a[1].s())),
         // POSIX
         "strftime_utc" => V::S(strftime_utc(&a[0].s(), a[1].i())),
+        // regular expressions
+        "re_matches" => V::B(re_matches(&a[0].s(), &a[1].s(), &a[2].s())),
+        "re_capture" => V::S(re_capture(&a[0].s(), &a[1].s(), &a[2].s(), a[3].i())),
+        "re_capture_named" => V::S(re_capture_named(&a[0].s(), &a[1].s(), &a[2].s(), &a[3].s())),
+        "re_subst" => V::S(re_subst(&a[0].s(), &a[1].s(), &a[2].s(), &a[3].s())),
+        "re_split" => V::L(re_split(&a[0].s(), &a[1].s(), &a[2].s()).into_iter().map(V::S).collect()),
+        "re_all" => V::L(re_all(&a[0].s(), &a[1].s(), &a[2].s()).into_iter().map(V::S).collect()),
+        "re_count" => V::I(re_count(&a[0].s(), &a[1].s(), &a[2].s())),
         other => panic!("the table names `{other}`, which no twin answers"),
     }
 }
@@ -231,4 +239,9 @@ fn sprintf_matches_perl() {
 #[test]
 fn time_matches_perl() {
     check("time.txt", dispatch);
+}
+
+#[test]
+fn regular_expressions_match_perl() {
+    check("regexp.txt", dispatch);
 }

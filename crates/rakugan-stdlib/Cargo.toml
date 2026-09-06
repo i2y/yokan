@@ -12,3 +12,8 @@ license.workspace = true
 # characters make that distinction. The table is taken rather than
 # written.
 unicode-case-mapping = "1"
+# The regular-expression engine. perl's own cannot be lifted out of the
+# interpreter, so the compiled run runs PCRE2, whose design goal is
+# Perl's syntax and semantics — and a table perl printed says where the
+# two agree.
+pcre2 = "0.2"

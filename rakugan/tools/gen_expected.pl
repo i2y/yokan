@@ -187,6 +187,68 @@ sub time_table {
     return join('', map { "$_\n" } @rows);
 }
 
+# Regular expressions. perl's own engine cannot be lifted out of the
+# interpreter, so the compiled run runs PCRE2; these rows are where
+# the two have to agree. Each case is real perl, run by perl.
+sub regexp {
+    @rows = ();
+    my @cases = (
+        ['\\d+', ''],
+        ['(\\d+)', ''],
+        ['[a-z]+', 'i'],
+        ['^a', ''],
+        ['b$', ''],
+        ['(?<num>\\d+)', ''],
+        ['\\s+', ''],
+        ['a|b', ''],
+        ['(\\w)(\\d)', ''],
+        ['x*', ''],
+        ['\\bfox\\b', ''],
+        ['(\\d+)-(\\d+)', ''],
+    );
+    my @inputs = ('a1b22c333', 'ABCdef', 'abc', 'x42y', 'a  b   c', 'the quick fox', '12-34', '', '日本1');
+    for my $c (@cases) {
+        my ($pat, $flags) = @$c;
+        for my $s (@inputs) {
+            my $ok = perl_re("\$s =~ /$pat/$flags ? 1 : 0", $s);
+            row('re_matches', [tag_str($pat), tag_str($flags), tag_str($s)], tag_bool($ok));
+            for my $n (0, 1, 2) {
+                my $got = perl_re("\$s =~ /$pat/$flags; defined \$-[$n] ? substr(\$s, \$-[$n], \$+[$n] - \$-[$n]) : ''", $s);
+                row('re_capture', [tag_str($pat), tag_str($flags), tag_str($s), tag_int($n)], tag_str($got));
+            }
+            my @parts = @{ perl_re("[ split /$pat/$flags, \$s ]", $s) };
+            row('re_split', [tag_str($pat), tag_str($flags), tag_str($s)], tag_list(map { tag_str($_) } @parts));
+            my @all = @{ perl_re("[ \$s =~ /$pat/${flags}g ]", $s) };
+            row('re_all', [tag_str($pat), tag_str($flags), tag_str($s)], tag_list(map { tag_str($_ // '') } @all));
+            my $n = perl_re("scalar(() = \$s =~ /$pat/${flags}g)", $s);
+            row('re_count', [tag_str($pat), tag_str($flags), tag_str($s)], tag_int($n));
+        }
+    }
+    my @named = ('x42y', 'no digits');
+    for my $s (@named) {
+        my $got = perl_re("\$s =~ /(?<num>\\d+)/; \$+{num} // ''", $s);
+        row('re_capture_named', [tag_str('(?<num>\\d+)'), tag_str(''), tag_str($s), tag_str('num')], tag_str($got));
+    }
+    for my $c (['(\\d+)', '', 'a1b22', '[$1]'], ['(\\d+)', 'g', 'a1b22', '[$1]'],
+               ['\\s+', 'g', 'a  b c', '-'], ['x*', 'g', 'abc', '-'],
+               ['(\\w)(\\d)', 'g', 'a1 b2', '$2$1'], ['o', 'g', 'foo', '0'],
+               ['[aeiou]', 'gi', 'Hello There', '_']) {
+        my ($pat, $flags, $s, $repl) = @$c;
+        my $got = perl_re("my \$t = \$s; \$t =~ s/$pat/$repl/$flags; \$t", $s);
+        row('re_subst', [tag_str($pat), tag_str($flags), tag_str($s), tag_str($repl)], tag_str($got));
+    }
+    return join('', map { "$_\n" } @rows);
+}
+
+# One case, run by perl itself. This file is a tool, so a string eval
+# here is perl doing the work rather than this file guessing at it.
+sub perl_re {
+    my ($code, $s) = @_;
+    my $out = eval "no warnings; my \$s = \$_[1]; $code";
+    die "perl could not run `$code`: $@" if $@;
+    return $out;
+}
+
 # --- write, or check ---------------------------------------------------------
 
 my $banner = "# perl $^V — printed by rakugan/tools/gen_expected.pl, not by hand.\n";
@@ -196,6 +258,7 @@ my %TABLES = (
     'list_util.txt' => $banner . list_util(),
     'sprintf.txt'   => $banner . sprintf_table(),
     'time.txt'      => $banner . time_table(),
+    'regexp.txt'    => $banner . regexp(),
 );
 
 my $check = grep { $_ eq '--check' } @ARGV;

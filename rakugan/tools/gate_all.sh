@@ -70,7 +70,7 @@ gate shared  ./bin/rakugan gate demo/shared.pl --script "click:lock,click:save,i
 gate lookup  ./bin/rakugan gate demo/lookup.pl --script "click:apple,dump,click:cherry,dump,click:miss,dump"
 gate table   ./bin/rakugan gate demo/table.pl --script "click:refresh,dump,click:refresh"
 gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,click:next month"
-gate stdlib  ./bin/rakugan gate demo/stdlib.pl --script "click:measure,click:stats,click:sift,click:combine,dump,click:stamp,click:words,click:set,click:first,dump"
+gate stdlib  ./bin/rakugan gate demo/stdlib.pl --script "click:measure,click:stats,click:sift,click:combine,dump,click:stamp,click:words,click:set,click:first,click:scan,click:tidy,dump"
 gate flow    ./bin/rakugan gate demo/flow.pl --script "click:step,click:tally,dump,click:bump3,click:find,dump"
 gate forms   ./bin/rakugan gate demo/forms.pl --script "click:Dark mode,slide:7,select:banana"
 gate roster  ./bin/rakugan gate demo/roster.pl --script "select:member 7,dump,click:score,dump,click:score,dump"

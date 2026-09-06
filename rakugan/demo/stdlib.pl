@@ -22,6 +22,8 @@ class Stdlib {
     field $words  = "-";
     field $unique = "-";
     field $picked = 0;
+    field $found  = "-";
+    field $tidy   = "-";
     field @scores = (3, 5, 8, 13, 21);
     field @votes  = ("ivy", "momo", "ivy", "ada", "momo", "ivy", "ada");
 
@@ -75,6 +77,30 @@ class Stdlib {
         $picked = (first { $_ > 5 } @scores) // -1;
     }
 
+    # Regular expressions. perl's own engine cannot be lifted out of
+    # the interpreter, so the compiled run runs one whose syntax and
+    # semantics were designed to be Perl's, and a table perl printed
+    # says where the two agree.
+    method scan {
+        my $line = "a1b22c333";
+        my @numbers = ($line =~ /(\d+)/g);
+        my @widths = map { length($_) } @numbers;
+        my $total = sum(@widths);
+        my $first = "-";
+        if ($line =~ /(?<head>[a-z])(\d+)/) {
+            $first = "$+{head}=$2";
+        }
+        $found = join("+", @numbers) . " digits=$total first=$first";
+    }
+
+    method tidy_up {
+        my $messy = "  one,two ,  three  ";
+        my $clean = $messy =~ s/\s+//gr;
+        my @parts = split /,/, $clean;
+        my $n = scalar @parts;
+        $tidy = join(" | ", @parts) . " ($n parts)";
+    }
+
     method view {
         return column(
             text("Perl's own, in both runs", size => 16, bold => true),
@@ -86,6 +112,8 @@ class Stdlib {
             text("words: $words"),
             text("set: $unique"),
             text("first over five: $picked"),
+            text("scan: $found"),
+            text("tidy: $tidy"),
             row(
                 button("measure", on_click => sub { $self->measure }),
                 button("stats",   on_click => sub { $self->stats }),
@@ -98,6 +126,8 @@ class Stdlib {
                 button("words",  on_click => sub { $self->capitalize }),
                 button("set",    on_click => sub { $self->distinct }),
                 button("first",  on_click => sub { $self->find }),
+                button("scan",   on_click => sub { $self->scan }),
+                button("tidy",   on_click => sub { $self->tidy_up }),
                 spacing => 6,
             ),
             spacing => 6,
