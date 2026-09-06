@@ -15,8 +15,9 @@ hide:
 
 <p class="wk-hero__lede">
 Wakakusa turns a Ruby desktop app into one native binary:
-<strong>what you run under CRuby is what it ships, and each build
-verifies it</strong>. When you ship,
+<strong>what you run under CRuby is what it ships, and
+<code>wakakusa gate</code> is how you check that</strong>. When you
+ship,
 <a href="https://github.com/matz/spinel">spinel</a> — an ahead-of-time
 Ruby compiler — takes your Ruby to C, and it links with the drawing
 engine into one binary; while you are working, the same file runs

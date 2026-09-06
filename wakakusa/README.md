@@ -1,7 +1,8 @@
 # Wakakusa
 
-**Wakakusa turns a Ruby desktop app into one native binary — and what
-you run under CRuby is what it ships, which each build verifies.**
+**Wakakusa turns a Ruby desktop app into one native binary, and
+`wakakusa gate` is how you check that what it ships behaves like what
+you ran.**
 
 `wakakusa build` takes the app's Ruby through
 [spinel](https://github.com/matz/spinel) to C and links it with the

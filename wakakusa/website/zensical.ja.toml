@@ -1,7 +1,7 @@
 [project]
 site_name = "Wakakusa"
 site_url = "https://i2y.github.io/wakakusa/ja/"
-site_description = "Ruby のデスクトップアプリを 1 本のネイティブバイナリにして配る。CRuby で動かしたものが、そのまま配れることを、ビルドのたびに確かめる。"
+site_description = "Ruby のデスクトップアプリを 1 本のネイティブバイナリにして配る。CRuby で動かした実行とコンパイルしたバイナリを、wakakusa gate が 1 バイトずつ突き合わせる。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
 

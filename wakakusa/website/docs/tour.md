@@ -3,8 +3,10 @@
 Wakakusa turns a Ruby desktop app into one native binary. `wakakusa
 build` takes your Ruby through [spinel](https://github.com/matz/spinel)
 to C and links it with the drawing engine; while you are working, the
-same file runs under CRuby instead, and each build verifies that the
-two are the same program. Neither half is Wakakusa's own — spinel
+same file runs under CRuby instead. Whether the two are the same
+program is something you check rather than hope: `wakakusa gate` drives
+both with one interaction script and compares the screens they drew,
+byte for byte. Neither half is Wakakusa's own — spinel
 compiles, the engine draws — and what it adds is the join between them
 and the check that they agree. The methods that build the screen —
 `text`, `button`, `column` and thirty more — come with Wakakusa; the
