@@ -197,15 +197,15 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 
 | what | value |
 |---|---|
-| the engine's crate, rebuilt after an edit | 2.6 s |
+| the engine's crate, rebuilt after an edit | 2.7 s |
 | the compiler's C output (the library and an app) | under 10 ms, 100 KB |
 | `cc` link of the compiled run | 0.29 s |
 | the compiled binary | 15.2 MB |
 | the shipped binary (`--release`) | 11.5 MB |
 | the application bundle | 11.7 MB |
 | launch to a window on screen | under 0.3 s |
-| one gate round, engine already built | 1.8 s |
-| every demo, both runs | 36 s |
+| one gate round, engine already built | 2.1 s |
+| every demo, both runs, and the tour | 1 min 53 s |
 
 ## How to start
 
