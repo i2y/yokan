@@ -321,9 +321,10 @@ A game asks what the hands are doing rather than waiting to be told.
 ```
 
 `key_down` is "held right now", `key_pressed` is "went down since the
-last frame" (a held key answers once), and `key_released` is the other
-edge. Read them in a timer, never in a view: a view that read the
-keyboard would draw one thing in a window and another under a script.
+previous tick" (a held key answers once), and `key_released` is the
+other edge. Read them in a timer, never in a view: a view that read
+the keyboard would draw one thing in a window and another under a
+script.
 
 `demo/jump.rb` and `demo/shooter.rb` are two of Pyxel's own examples
 (Takashi Kitao, MIT), ported to this vocabulary and gated.
@@ -357,6 +358,8 @@ it: a `text`'s `width` is the text's, and the box leaves it alone.
 
 ## Themes and animation
 
+The palette and any movement are keywords too.
+
 ```ruby
   column(theme: "dark") { ... }
   text "saved", animate: 0.2, easing: "ease-out", enter: true
@@ -367,6 +370,8 @@ how long a change takes, with `enter:` and `exit:` for what appears and
 disappears.
 
 ## The window
+
+Four things come from the window itself:
 
 ```ruby
 shortcut("cmd+s") { app.save }
@@ -427,6 +432,8 @@ comes back as text, and the column's affinity converts on the way in.
 
 ## Timers, work off the window's thread, and threads
 
+Work you want repeated goes to `every`.
+
 ```ruby
 app = Clock.new
 every(1.0) { app.tick }
@@ -436,6 +443,9 @@ run(app, title: "clock")
 A timer is declared before `run` and lives as long as the app. Both
 runs tick off one clock: a frame in a window, an `advance:` step in a
 script.
+
+A handler that blocks freezes the window. Hand the slow work to
+`task`, and write what to do when it is done in `on_done`.
 
 ```ruby
   def start
@@ -449,8 +459,8 @@ script.
 Neither call waits. `task` starts the work and answers a number,
 `on_done` only says what to do later; the handler ends and the window
 carries on. Nothing inside the work may touch the app's state or the
-screen — the handler is where that belongs, and it is the reason the
-answer comes back this way.
+screen — the handler is where that belongs, and it is why the answer
+comes back through `on_done` rather than from the work itself.
 
 Anything perpetual is an ordinary `Thread`, and what it produces
 should be picked up by a timer rather than written into the app's
@@ -462,11 +472,19 @@ writing the app and does not once you ship it.
 ## While you are writing it
 
 `wakakusa run` watches the app's file. Save, and the window picks the
-edit up: the class is read again, the object the window is holding is
-an instance of that same class, so it answers with the new `view` and
-keeps every value it had. `initialize` is not run again, which is the
-point — that is where the state came from. A file that does not parse
-leaves the window on what it had and says so in the terminal.
+edit up: the file is read again, the class with it, and the object the
+window is holding is an instance of that same class, so it answers
+with the new `view` and keeps every value it had. `initialize` is not
+run again on it, which is the point — that is where the state came
+from. A file that does not parse leaves the window on what it had and
+says so in the terminal.
+
+Reading the file runs the bottom of it too, so the object made there
+is a second one and it is dropped: an `initialize` that opens a
+database or starts a thread does so once per save. What was declared
+before `run` keeps what it was given when the window opened. A timer
+goes on ticking at the period it had, and one added while the window
+is open takes effect the next time you start the app.
 
 ## Headless runs and the gate
 

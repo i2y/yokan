@@ -131,13 +131,18 @@ recorded that way, from a script that plays the game.
 ## While you are writing it
 
 `wakakusa run` watches the app's file. Save, and the window picks the
-edit up: the class is read again, the object the window is holding is
-an instance of that same class, so it answers with the new `view` and
-keeps every value it had. A file that does not parse leaves the window
-on what it had and says so in the terminal.
+edit up: the file is read again, the class with it, and the object the
+window is holding is an instance of that same class, so it answers
+with the new `view` and keeps every value it had. A file that does not
+parse leaves the window on what it had and says so in the terminal.
 
-`initialize` is not run again, which is the point — that is where the
-state came from. A timer keeps the one it was given.
+`initialize` is not run again on that object, which is the point —
+that is where the state came from. Reading the file does run the
+bottom of it again, and the object made there is a second one that is
+dropped, so an `initialize` that opens a database or starts a thread
+does so once per save. A timer keeps the one it was given, and one
+added while the window is open takes effect the next time you start
+the app.
 
 ```ruby
 every(1.0) { app.tick }   # before `run`; both runs tick off one clock
