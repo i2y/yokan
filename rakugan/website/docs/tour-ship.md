@@ -84,8 +84,8 @@ prints, so a refusal cannot quietly change its wording.
 
 ```console
 $ rakugan build demo/todo.pl --release --app
-built: demo/.gate/todo (11.6 MB)
-bundle: demo/dist/todo.app (11.8 MB)
+built: ~/.cache/pixie/target/release/main (11.9 MB)
+bundle: demo/dist/todo.app (11.9 MB)
 ```
 
 `--release` drops the symbol table; `--app` wraps the binary in a macOS

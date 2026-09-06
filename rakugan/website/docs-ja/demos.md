@@ -16,7 +16,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
 
 ## まずはここから
 
-#### counter — 基本形。アプリはクラスで、状態はそのフィールド、ハンドラはそのフィールドが見える無名サブルーチン
+#### counter — 基本形。アプリはクラスで、状態はそのフィールド、ハンドラはフィールドがそのまま見える無名サブルーチン
 <img src="images/demos/counter.png" width="360">
 
 ??? note "counter.pl"
@@ -467,7 +467,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Mixer->new, title => "mixer");
     ```
 
-#### lookup — アプリが持つハッシュ。既定値つきの読み出し、鍵の有無の確認、ウィンドウを開けたまま増やす
+#### lookup — アプリが持つハッシュ。既定値つきの読み出し、鍵があるかどうかの確認、ウィンドウを開けたままの追加
 <img src="images/demos/lookup.png" width="360">
 
 ??? note "lookup.pl"
@@ -747,7 +747,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Cards->new, title => "cards");
     ```
 
-#### styled — 見た目をひとところに。キーワードのハッシュを要素に渡し、`theme` でパネルごと切り替える
+#### styled — 見た目をひとところに。キーワードのハッシュを要素に渡し、`theme` でパネルを丸ごと切り替える
 <img src="images/demos/styled.png" width="360">
 
 ??? note "styled.pl"
@@ -978,7 +978,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Dialog->new, title => "dialog");
     ```
 
-#### labels — 画面読み上げに伝える名前と、ポインタが見せる説明。`role` は値を取るので、見出しであることを途中でやめられる
+#### labels — 画面読み上げに伝える名前と、ポインタが見せる説明。`role` は値を取るので、行が見出しであるかどうかを切り替えられる
 <img src="images/demos/labels.png" width="360">
 
 ??? note "labels.pl"
@@ -1087,7 +1087,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Locks->new, title => "shared");
     ```
 
-#### loading — 満ちていくバーの 3 つの形と、終わりの見えない仕事のための行き来する表示
+#### loading — 満ちていくバーの 3 つの形と、終わりの見えない仕事のために行き来する表示
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.pl"
@@ -1126,7 +1126,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Loading->new, title => "loading");
     ```
 
-#### filter — リストの見せかたを変える選択。行は必要なぶんだけ作られる
+#### filter — リストが見せるものを変える選択。行は必要なぶんだけ作られる
 <img src="images/demos/filter.png" width="360">
 
 ??? note "filter.pl"
@@ -1492,7 +1492,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Trend->new, title => "trend");
     ```
 
-#### charts — 0 の線より下に垂れる損失、固定した範囲、目盛りと補助線のある軸、色を持つ 2 本の系列
+#### charts — 0 の線より下に伸びる損失、固定した範囲、目盛りと補助線のある軸、色を持つ 2 本の系列
 <img src="images/demos/charts.png" width="360">
 
 ??? note "charts.pl"
@@ -2466,7 +2466,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Files->new, title => "files");
     ```
 
-#### reader — 入れ子の JSON を経路で読む。ファイルに書いて読み直すので、両方の実行が同じバイト列を読む
+#### reader — 入れ子の JSON をドットパスで読む。ファイルに書いて読み直すので、両方の実行が同じバイト列を読む
 <img src="images/demos/reader.png" width="360">
 
 ??? note "reader.pl"
@@ -2682,7 +2682,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Ledger->new, title => "ledger");
     ```
 
-#### edges — 端の話。リストの終わりを越えた添字と、64 ビットをはるかに越えた数
+#### edges — 端の話。リストの終わりを越えた添字と、64 ビットをはるかに超えた数
 <img src="images/demos/edges.png" width="360">
 
 ??? note "edges.pl"

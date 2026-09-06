@@ -213,7 +213,7 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 
 | what | value |
 |---|---|
-| `check`, no compiler started | 0.12 s |
+| `check`, no compiler started | 0.07 s |
 | a headless run, the screen as text | 0.07 s |
 | the translator's `.pix` output | 0.08 s, 631 bytes for the counter |
 | the compiled binary | 53.8 MB |

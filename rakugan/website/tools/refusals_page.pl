@@ -33,10 +33,10 @@ my @CATALOGUE = (
  'フィールドの型は初期値から読むので、初期値がなければ読むものがありません。'],
 ['class', 'field_attribute',
  "The app's own fields are the app's alone: nothing hands them in and nothing reads them from outside.",
- 'アプリ自身のフィールドはアプリだけのものです。外から渡すものも、外から読むものもありません。'],
+ "アプリ自身のフィールドはアプリだけのものです。\n外から渡すものも、外から読むものもありません。"],
 ['class', 'method_without_sig',
  'The types of a method\'s parameters cannot be read off anything, so they are written down.',
- 'メソッドの引数の型はどこからも読めないので、そこに書きます。'],
+ 'メソッドの引数の型はどこからも読めないので、メソッドに書いて示します。'],
 ['class', 'quote_method',
  'perl reads the file first, and there a bare `s` begins a substitution.',
  'ファイルを先に読むのは perl で、そこでは裸の `s` は置換の始まりです。'],
@@ -49,19 +49,19 @@ my @CATALOGUE = (
  '空で始まる入れ物には、型を読むものが入っていません。'],
 ['types', 'mixed_list',
  'A list is one type, because the compiled run holds it as one.',
- 'リストは一つの型です。コンパイルした実行がそう持つからです。'],
+ "リストは一つの型です。\nコンパイルした実行がそう持つからです。"],
 ['types', 'wrong_type',
  'A keyword takes the type the table gives it, and the table is what both sides of the engine count with.',
- 'キーワードの型は表が決めます。エンジンの両側が数えているのはその表です。'],
+ "キーワードの型は表が決めます。\nエンジンの両側が数えているのはその表です。"],
 ['types', 'unknown_keyword',
  'The message lists what that element does take, so the name is one lookup away.',
  '文面はその要素が取るものを並べるので、正しい名前はその場で分かります。'],
 ['types', 'truthiness',
  "Perl's truthiness of a number or a string is not in the dialect: a condition is a `Bool`.",
- '数や文字列の真偽は方言に入っていません。条件は `Bool` です。'],
+ "数や文字列の真偽は方言に入っていません。\n条件は `Bool` です。"],
 ['types', 'string_and_number',
  'Reading a string as a number is written out, the way perl would do it silently.',
- '文字列を数として読むことは、書いて示します。perl が黙ってすることを、ここでは書きます。'],
+ '文字列を数として読むことは、perl なら黙ってしますが、ここでは書いて示します。'],
 ['types', 'string_increment',
  'Perl counts letters there, and the compiled run has no such counting in it.',
  'perl はそこで文字を数えますが、コンパイルした実行にその数え方は入っていません。'],
@@ -71,7 +71,7 @@ my @CATALOGUE = (
  '同じ画面を二度組み立てたら同じ画面になる必要があるので、組み立てるときは読むだけです。'],
 ['views', 'negative_index',
  'A row reads its own number; anything else is worked out where it can be checked.',
- '行は自分の番号を読みます。それ以外は、確かめられる場所で計算します。'],
+ "行は自分の番号を読みます。\nそれ以外は、確かめられる場所で計算します。"],
 ['views', 'handler_arity',
  'A handler is called with what the event carries, and nothing else.',
  'ハンドラは、その出来事が運ぶものだけを受け取って呼ばれます。'],
@@ -80,7 +80,7 @@ my @CATALOGUE = (
  '鍵がないときに何が起きるかで両方の実行が一致する必要があるので、答えをアプリが決めます。'],
 ['views', 'unsorted_keys',
  "perl's order for a hash changes every time perl starts, and a screen cannot depend on that.",
- 'ハッシュの順序は perl を起動するたびに変わります。画面がそれに依存するわけにはいきません。'],
+ "ハッシュの順序は perl を起動するたびに変わります。\n画面がそれに依存するわけにはいきません。"],
 
 ['perl', 'say_to_stdout',
  "A compiled app writes its screen, which is where the gate reads the tree from.",
@@ -90,13 +90,13 @@ my @CATALOGUE = (
  '配ったアプリはコンパイラを積んでいません。'],
 ['perl', 'pattern_built',
  'The pattern is compiled when the app is translated, so it has to be there to compile.',
- 'パターンは翻訳のときにコンパイルするので、そのときそこになければなりません。'],
+ 'パターンは翻訳のときにコンパイルするので、そのときにはもうファイルに書かれていなければなりません。'],
 ['perl', 'pattern_code',
  'A pattern that runs code needs perl, and the compiled run has none.',
  'コードを走らせるパターンには perl が要りますが、コンパイルした実行に perl はありません。'],
 ['perl', 'substitute_eval',
  'The same reason: the replacement would be perl, run while the app runs.',
- '同じ理由です。置換の中身は、アプリが動いている最中に走る perl になります。'],
+ "同じ理由です。\n置換の中身は、アプリが動いている最中に走る perl になります。"],
 ['perl', 'capture_unguarded',
  'Outside that `if` it would be whatever the last successful match anywhere had left.',
  'その `if` の外では、どこかで最後に成功した一致が残したものになります。'],
@@ -134,7 +134,7 @@ MD
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も印字しません。
 
-下の %d 個には、それぞれ `test/refuse/` に、それを起こすファイルと、印字されるべき文面がそのまま置いてあります。
+下の %d 個には、それを起こすファイルと、印字されるべき文面が、`test/refuse/` にそのまま置いてあります。
 掃引がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 MD
@@ -142,7 +142,7 @@ MD
             class => 'クラス',
             types => '型',
             views => 'ビューとハンドラ',
-            perl  => 'コンパイルした実行に perl がない、ということ',
+            perl  => 'コンパイルした実行に perl がないこと',
         },
     },
 );

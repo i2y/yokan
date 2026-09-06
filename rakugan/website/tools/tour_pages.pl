@@ -47,7 +47,7 @@ my @PAGES = (
         en   => ['The canvas and the keyboard',
                  'A grid of virtual pixels, and keys read as a device rather than waited for.'],
         ja   => ['キャンバスとキーボード',
-                 '仮想的な画素の格子と、知らせを待つのではなく尋ねるキーボード。'],
+                 '仮想的な画素の格子と、知らせを待つのではなくこちらから尋ねるキーボード。'],
         take => ['The canvas', 'The keyboard'],
     },
     {

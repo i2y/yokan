@@ -105,7 +105,8 @@ Text that opens a page when clicked. There is no handler: opening a page is not 
 
 Its children down the page.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 | キーワード | 型 | 既定値 |
 |---|---|---|
@@ -121,7 +122,8 @@ Its children down the page.
 
 Its children across the page.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 | キーワード | 型 | 既定値 |
 |---|---|---|
@@ -137,7 +139,8 @@ Its children across the page.
 
 Its children on tracks. `columns` counts the tracks; `col_span` on a child covers more than one.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 | キーワード | 型 | 既定値 |
 |---|---|---|
@@ -155,7 +158,8 @@ Its children on tracks. `columns` counts the tracks; `col_span` on a child cover
 
 The span written out: this and `col_span:` on the child itself are the same tree.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 固有のキーワードはありません。
 
@@ -163,7 +167,8 @@ The span written out: this and `col_span:` on the child itself are the same tree
 
 Its children on top of one another.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 固有のキーワードはありません。
 
@@ -171,7 +176,8 @@ Its children on top of one another.
 
 A pane that scrolls when its children do not fit.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 `height` は自分で決めます。
 共通キーワードは手を出しません。
@@ -184,7 +190,8 @@ A pane that scrolls when its children do not fit.
 
 A pane that scrolls sideways.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 固有のキーワードはありません。
 
@@ -192,7 +199,8 @@ A pane that scrolls sideways.
 
 A panel over the rest of the window while `open`.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 | キーワード | 型 | 既定値 |
 |---|---|---|
@@ -359,7 +367,8 @@ A table whose rows are built on demand, laid on tracks whose shares are `widths`
 
 The first `row` child is the header; the later ones are data rows, shaded in alternation, in a frame that comes with the element.
 
-要素を子に取ります（引数として書きます）。
+要素を子に取ります。
+子は引数として書きます。
 
 固有のキーワードはありません。
 
@@ -494,12 +503,13 @@ A turning ring, for work with no known length.
 
 ## キャンバスの描画命令
 
-次の 10 個の命令は、`canvas` の `paint` サブルーチンの中に書きます。
+次の 10 個の命令は、`canvas` の `paint` に渡すサブルーチンの中に書きます。
 これらは要素ではありません。
 上のキーワードをどれも取らず、押すこともできず、書かれたキャンバスの外では意味を持ちません。
 座標はすべて仮想的な画素の整数で、色はすべて番号です。
 番号はそのキャンバスの配色の何番目か、というだけのものです。
-既定値のある値は省略でき、書くときは名前を添えます。
+既定値のある値は省略できます。
+書くときは名前を添えます。
 
 | 命令 | 書き方 |
 |---|---|
@@ -517,6 +527,7 @@ A turning ring, for work with no known length.
 ## 要素を足すとき
 
 要素を足す作業は、`elements.toml` に 1 行足すことと、エンジンの `materialize` に分岐を 1 つ足すことです。
-`tools/gen.pl` が表から Perl のサブルーチンと Perl のデータを書き出し、どちらかが表より古ければ掃引が落ちます。
+`tools/gen.pl` が、表から Perl のサブルーチンと、表そのものを写した Perl のデータを書き出します。
+どちらかが表より古ければ、掃引が落ちます。
 だから、ある要素が Perl では 1 つの意味を持ち、描かれる側では別の意味を持つ、ということが起きません。
-同じ表を、このエンジンの上のほかの二つの言語も読んでいます。
+このエンジンの上にあるほかの二つの言語も、同じ表を読んでいます。

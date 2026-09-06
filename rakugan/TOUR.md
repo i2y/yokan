@@ -418,12 +418,12 @@ the `if` that made the match:
 ```
 
 The pattern itself is compiled when the app is translated, so both runs
-match with one engine. Two things follow. A pattern built from a
-variable is refused, because a shipped app carries nothing to compile it
-with; and `/e`, which runs perl on the replacement, is refused for the
-same reason. `$1` outside the `if` is refused too: it would be whatever
-the last successful match anywhere had left, which is not a thing two
-runs can be held to.
+match with one engine. Two things follow from that. A pattern built from
+a variable is refused, because a shipped app carries nothing to compile
+it with; and `/e`, which runs perl on the replacement, is refused for the
+same reason. A third refusal has a reason of its own: `$1` outside the
+`if` would be whatever the last successful match anywhere had left, which
+is not a thing two runs can be held to.
 
 ## The canvas
 
@@ -869,8 +869,8 @@ prints, so a refusal cannot quietly change its wording.
 
 ```console
 $ rakugan build demo/todo.pl --release --app
-built: demo/.gate/todo (11.6 MB)
-bundle: demo/dist/todo.app (11.8 MB)
+built: ~/.cache/pixie/target/release/main (11.9 MB)
+bundle: demo/dist/todo.app (11.9 MB)
 ```
 
 `--release` drops the symbol table; `--app` wraps the binary in a macOS

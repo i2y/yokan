@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も印字しません。
 
-下の 24 個には、それぞれ `test/refuse/` に、それを起こすファイルと、印字されるべき文面がそのまま置いてあります。
+下の 24 個には、それを起こすファイルと、印字されるべき文面が、`test/refuse/` にそのまま置いてあります。
 掃引がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -29,7 +29,8 @@ test/refuse/field_initializer.pl:5:11: Rakugan cannot take this — a field need
               ^
 ```
 
-アプリ自身のフィールドはアプリだけのものです。外から渡すものも、外から読むものもありません。
+アプリ自身のフィールドはアプリだけのものです。
+外から渡すものも、外から読むものもありません。
 
 ```console
 test/refuse/field_attribute.pl:5:14: Rakugan cannot take this — a field takes no attributes here (`:param`, `:reader`); its type is read from the initializer
@@ -37,7 +38,7 @@ test/refuse/field_attribute.pl:5:14: Rakugan cannot take this — a field takes 
                  ^
 ```
 
-メソッドの引数の型はどこからも読めないので、そこに書きます。
+メソッドの引数の型はどこからも読めないので、メソッドに書いて示します。
 
 ```console
 test/refuse/method_without_sig.pl:7:12: Rakugan cannot take this — a method with parameters says what they are: `method add :Sig(Int) ($by) { ... }`
@@ -71,7 +72,8 @@ test/refuse/empty_list.pl:5:20: Rakugan cannot take this — a list that starts 
                        ^
 ```
 
-リストは一つの型です。コンパイルした実行がそう持つからです。
+リストは一つの型です。
+コンパイルした実行がそう持つからです。
 
 ```console
 test/refuse/mixed_list.pl:5:24: Rakugan cannot take this — a list holds one type: this one started with Int and this is String
@@ -79,7 +81,8 @@ test/refuse/mixed_list.pl:5:24: Rakugan cannot take this — a list holds one ty
                            ^
 ```
 
-キーワードの型は表が決めます。エンジンの両側が数えているのはその表です。
+キーワードの型は表が決めます。
+エンジンの両側が数えているのはその表です。
 
 ```console
 test/refuse/wrong_type.pl:7:30: Rakugan cannot take this — `size =>` takes a number (got String)
@@ -95,7 +98,8 @@ test/refuse/unknown_keyword.pl:7:30: Rakugan cannot take this — `text` has no 
                                  ^
 ```
 
-数や文字列の真偽は方言に入っていません。条件は `Bool` です。
+数や文字列の真偽は方言に入っていません。
+条件は `Bool` です。
 
 ```console
 test/refuse/truthiness.pl:9:35: Rakugan cannot take this — a condition is a bool (got Int); Perl's truthiness of a number or a string is not in the translator — compare it (`!= 0`, `ne ""`)
@@ -103,7 +107,7 @@ test/refuse/truthiness.pl:9:35: Rakugan cannot take this — a condition is a bo
                                       ^
 ```
 
-文字列を数として読むことは、書いて示します。perl が黙ってすることを、ここでは書きます。
+文字列を数として読むことは、perl なら黙ってしますが、ここでは書いて示します。
 
 ```console
 test/refuse/string_and_number.pl:8:19: Rakugan cannot take this — `+` needs a number on both sides (got String and Int); `0 + $s` reads a string as a number, the way perl does
@@ -129,7 +133,8 @@ test/refuse/view_calls_method.pl:13:21: Rakugan cannot take this — `bumped` to
                         ^
 ```
 
-行は自分の番号を読みます。それ以外は、確かめられる場所で計算します。
+行は自分の番号を読みます。
+それ以外は、確かめられる場所で計算します。
 
 ```console
 test/refuse/negative_index.pl:9:21: Rakugan cannot take this — an index a view cannot prove is not negative; a row reads its own index, and anything else is worked out in a handler
@@ -153,7 +158,8 @@ test/refuse/bare_hash_read.pl:9:26: Rakugan cannot take this — a hash may not 
                              ^
 ```
 
-ハッシュの順序は perl を起動するたびに変わります。画面がそれに依存するわけにはいきません。
+ハッシュの順序は perl を起動するたびに変わります。
+画面がそれに依存するわけにはいきません。
 
 ```console
 test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `keys` back in the order perl happens to hold it, which is a different order every time perl starts; write `sort keys %h`
@@ -161,7 +167,7 @@ test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `k
                        ^
 ```
 
-## コンパイルした実行に perl がない、ということ
+## コンパイルした実行に perl がないこと
 
 コンパイルしたアプリが書くのは画面で、ゲートが木を読むのもそこからです。
 
@@ -179,7 +185,7 @@ test/refuse/string_eval.pl:8:14: Rakugan cannot take this — a string `eval` co
                  ^
 ```
 
-パターンは翻訳のときにコンパイルするので、そのときそこになければなりません。
+パターンは翻訳のときにコンパイルするので、そのときにはもうファイルに書かれていなければなりません。
 
 ```console
 test/refuse/pattern_built.pl:9:27: Rakugan cannot take this — a pattern here is written out; one built while the app runs would have to be compiled by something the shipped app does not carry
@@ -195,7 +201,8 @@ test/refuse/pattern_code.pl:8:27: Rakugan cannot take this — a pattern that ru
                               ^
 ```
 
-同じ理由です。置換の中身は、アプリが動いている最中に走る perl になります。
+同じ理由です。
+置換の中身は、アプリが動いている最中に走る perl になります。
 
 ```console
 test/refuse/substitute_eval.pl:8:18: Rakugan cannot take this — a replacement here is text, with `$1` … `$9` for what the pattern caught; `/e` runs perl and the compiled run has none
