@@ -1,0 +1,338 @@
+#!/usr/bin/env perl
+# The Rakugan command: one Perl app, five things you can do to it.
+#
+#   rakugan check     demo/counter.pl
+#   rakugan run       demo/counter.pl
+#   rakugan translate demo/counter.pl
+#   rakugan build     demo/counter.pl [--release]
+#   rakugan gate      demo/counter.pl --script "click:+1,dump"
+#
+# `gate` is the one that matters. It runs the app twice — under a perl
+# with the class feature, through the XS door over pixie's C face, and
+# as the native binary pixie built from the translated .pix — with one
+# interaction script, and compares the two transcripts byte for byte.
+# Everything else is a step of that round you may want on its own.
+#
+# This program is tooling. It runs under whichever perl is first on the
+# path — it needs PPI, and nothing else from CPAN — and it starts the
+# app's perl itself: RAKUGAN_PERL, or the one tools/perl_setup.sh built.
+use strict;
+use warnings;
+use utf8;
+use open qw(:std :encoding(UTF-8));
+use FindBin;
+use File::Basename qw(basename dirname);
+use File::Copy qw(copy);
+use File::Path qw(make_path remove_tree);
+use File::Spec;
+use File::Temp qw(tempfile);
+use Encode qw(decode encode);
+use lib "$FindBin::Bin/../lib";
+use Rakugan::Translator;
+
+# The arguments arrive as bytes; a script step may be Japanese.
+$_ = decode('UTF-8', $_) for @ARGV;
+
+my $ROOT   = File::Spec->rel2abs(File::Spec->catdir($FindBin::Bin, '..'));   # rakugan/
+my $REPO   = File::Spec->rel2abs(File::Spec->catdir($ROOT, '..'));            # the checkout
+my $TARGET = $ENV{CARGO_TARGET_DIR} // "$ENV{HOME}/.cache/pixie/target";
+$ENV{CARGO_TARGET_DIR} = $TARGET;
+
+my $USAGE = <<'TXT';
+usage: rakugan <command> <app.pl> [--script "step,step"] [--fresh <path>] [--release]
+
+  check      what the app writes that Rakugan cannot take
+  run        run it interpreted, in a window
+  translate  emit the .pix the compiled run is built from
+  build      build the native binary [--release]
+  gate       run it both ways headless and compare the two runs
+
+--fresh deletes a path before EACH run, so an app that keeps a file or a
+database starts both runs from the same nothing. Repeatable.
+TXT
+
+sub die_ { warn "rakugan: $_[0]\n"; exit 1 }
+
+# --- running things ---------------------------------------------------------
+
+# Run a command with extra environment in a directory; answer its stdout.
+# Success is silent: what a tool prints on the way is noise beside the
+# gate's own answer, and everything it printed is shown when it fails.
+sub capture {
+    my ($what, $env, $dir, @cmd) = @_;
+    my ($ofh, $out) = tempfile(UNLINK => 1);
+    my ($efh, $err) = tempfile(UNLINK => 1);
+    my $pid = fork // die_("fork: $!");
+    if (!$pid) {
+        chdir $dir or die "chdir $dir: $!";
+        $ENV{$_} = encode('UTF-8', $env->{$_}) for keys %$env;
+        open STDOUT, '>&', $ofh or die "stdout: $!";
+        open STDERR, '>&', $efh or die "stderr: $!";
+        exec @cmd or die "exec @cmd: $!";
+    }
+    waitpid $pid, 0;
+    my $status = $?;
+    my $o = do { local $/; open my $f, '<:encoding(UTF-8)', $out or die; <$f> } // '';
+    my $e = do { local $/; open my $f, '<:encoding(UTF-8)', $err or die; <$f> } // '';
+    if ($status != 0) {
+        print STDERR trim($e) if length $e;
+        print STDERR $o if length $o;
+        die_("$what failed");
+    }
+    return $o;
+}
+
+# What a failed run is worth reading. A refusal in the engine says its
+# line and then the process aborts where it stands, because a panic
+# cannot cross the call that brought the engine in; under perl the abort
+# then brings a crash report with it. The line is the message.
+sub trim {
+    my ($err) = @_;
+    my @lines;
+    for my $l (split /^/m, $err) {
+        last if $l =~ /fatal runtime error|Crashed Thread|Abort trap/;
+        push @lines, $l;
+    }
+    my $s = join '', @lines;
+    $s =~ s/\s+\z//;
+    return length $s ? "$s\n" : '';
+}
+
+# --- where the two halves come from -----------------------------------------
+
+# pixie's C face: one library, opened by the interpreted run through the
+# door and matched, function for function, by what the compiled run
+# links through pixie itself. Built here so a run cannot be a version
+# behind.
+my $engine;
+sub engine {
+    return $engine if $engine;
+    capture('the engine build', {}, $REPO, 'cargo', 'build', '--release', '-q', '-p', 'pixie-capi');
+    return $engine = "$TARGET/release";
+}
+
+# The app's perl: one with the class feature. RAKUGAN_PERL names one;
+# otherwise the one tools/perl_setup.sh builds, which is where the pin is.
+my $perl;
+sub app_perl {
+    return $perl if $perl;
+    my $p = $ENV{RAKUGAN_PERL};
+    if (!$p) {
+        chomp(my $dir = `"$ROOT/tools/perl_setup.sh" --path`);
+        $p = "$dir/bin/perl";
+    }
+    die_("no perl at $p — run `just rakugan-perl` once to build the pinned one, or set RAKUGAN_PERL")
+        unless -x $p;
+    my $ok = system($p, '-e', 'use v5.40; 1') == 0;
+    die_("$p is older than 5.40; Rakugan apps are written with the class feature") unless $ok;
+    return $perl = $p;
+}
+
+# The XS door, built for the app's perl outside the tree, and rebuilt
+# when its sources are newer than the bundle.
+my $door;
+sub door {
+    return $door if $door;
+    my $p = app_perl();
+    chomp(my $ver = `"$p" -e 'print \$^V'`);
+    my $dir = "$ENV{HOME}/.cache/rakugan/door/$ver";
+    my @src = ('Makefile.PL', 'Door.xs', 'lib/Rakugan/Door.pm');
+    my $bundle = "$dir/blib/arch/auto/Rakugan/Door/Door.bundle";
+    my $stale = !-f $bundle;
+    for my $f (@src) {
+        $stale = 1 if !$stale && (stat "$ROOT/door/$f")[9] > (stat $bundle)[9];
+    }
+    if ($stale) {
+        remove_tree($dir);
+        make_path("$dir/lib/Rakugan");
+        copy("$ROOT/door/$_", "$dir/$_") or die_("copy $_: $!") for @src;
+        my $env = { PIXIE_CAPI_DIR => engine() };
+        capture('the door build', $env, $dir, $p, 'Makefile.PL');
+        capture('the door build', $env, $dir, 'make');
+    }
+    return $door = $dir;
+}
+
+# What an app is read with: the shared Perl, and the door beside it.
+sub inc {
+    my $d = door();
+    return ('-I', "$ROOT/lib", '-I', "$d/blib/lib", '-I', "$d/blib/arch");
+}
+
+# --- the steps --------------------------------------------------------------
+
+sub rel {
+    my ($path) = @_;
+    my $here = File::Spec->rel2abs('.') . '/';
+    return index($path, $here) == 0 ? substr($path, length $here) : $path;
+}
+
+sub gate_dir {
+    my ($app) = @_;
+    my $dir = File::Spec->catdir(dirname(File::Spec->rel2abs($app)), '.gate');
+    make_path($dir);
+    return $dir;
+}
+
+sub stem { basename($_[0], '.pl') }
+
+# What the app writes that Rakugan cannot take, named with the line.
+# perl reads the file first (it is the parser of record: a shape it
+# rejects never reaches the translator), then the translator names the
+# first thing outside the dialect. Nothing is printed when there is
+# nothing to say.
+sub check {
+    my ($app) = @_;
+    my $abs = File::Spec->rel2abs($app);
+    my @cmd = (app_perl(), inc(), '-c', $abs);   # resolved here, so the door is built once, by us
+    my ($ofh, $err) = tempfile(UNLINK => 1);
+    my $pid = fork // die_("fork: $!");
+    if (!$pid) {
+        open STDERR, '>&', $ofh or die;
+        open STDOUT, '>&', $ofh or die;
+        exec @cmd or die;
+    }
+    waitpid $pid, 0;
+    if ($? != 0) {
+        my $e = do { local $/; open my $f, '<:encoding(UTF-8)', $err or die; <$f> } // '';
+        $e =~ s/^.* syntax OK\n//m;
+        print STDERR $e;
+        return 0;
+    }
+    my $tr = eval { Rakugan::Translator::translate($abs) };
+    if (!$tr) {
+        print STDERR $@;
+        return 0;
+    }
+    return $tr;
+}
+
+# The .pix project the compiled run is built from, next to the app.
+sub translate {
+    my ($app, $tr) = @_;
+    my $proj = File::Spec->catdir(gate_dir($app), stem($app));
+    make_path("$proj/src");
+    write_file("$proj/src/main.pix", $tr->{pix});
+    write_file("$proj/pixie.toml", Rakugan::Translator::project_toml(stem($app), $tr->{window}));
+    return $proj;
+}
+
+sub write_file {
+    my ($path, $text) = @_;
+    open my $fh, '>:encoding(UTF-8)', $path or die_("$path: $!");
+    print {$fh} $text;
+    close $fh;
+}
+
+# pixie builds the project. The gate's binary is never debugged or
+# hot-reloaded, so it leaves the interpreter out of the crate graph,
+# which is most of the link; a release build strips instead.
+sub build {
+    my ($app, $tr, $release) = @_;
+    my $proj = translate($app, $tr);
+    my $out = capture('pixie build', {}, $proj,
+                      'cargo', 'run', '-q', '--manifest-path', "$REPO/Cargo.toml", '-p', 'pixie-cli', '--',
+                      'build', ($release ? '--release' : '--no-interp'));
+    my ($binary) = $out =~ /^built: (.*)$/m
+        or die_("pixie printed no `built:` line:\n$out");
+    return ($proj, $binary);
+}
+
+sub interpreted {
+    my ($app, $script) = @_;
+    return capture('the interpreted run', { PIXIE_SCRIPT => $script }, File::Spec->rel2abs('.'),
+                   app_perl(), inc(), File::Spec->rel2abs($app));
+}
+
+sub size_of { sprintf '%.1f MB', (-s $_[0]) / 1_000_000 }
+
+# What each run must find missing when it starts.
+sub wipe { remove_tree($_) for @{ $_[0] } }
+
+# --- the commands -----------------------------------------------------------
+
+sub cmd_check {
+    my ($app, $opts) = @_;
+    exit 1 unless check($app);
+}
+
+sub cmd_run {
+    my ($app, $opts) = @_;
+    exec app_perl(), inc(), File::Spec->rel2abs($app) or die_("exec: $!");
+}
+
+sub cmd_translate {
+    my ($app, $opts) = @_;
+    my $tr = check($app) or exit 1;
+    my $proj = translate($app, $tr);
+    print "emitted: ", rel("$proj/src/main.pix"), "\n";
+}
+
+sub cmd_build {
+    my ($app, $opts) = @_;
+    my $tr = check($app) or exit 1;
+    my ($proj, $binary) = build($app, $tr, $opts->{release});
+    print "built: $binary (", size_of($binary), ")\n";
+    print "  not gate-checked — `gate` with a script proves the two runs agree\n";
+}
+
+sub cmd_gate {
+    my ($app, $opts) = @_;
+    my $tr = check($app) or exit 1;
+    my $script = $opts->{script};
+    wipe($opts->{fresh});
+    (my $a = interpreted($app, $script)) =~ s/\n\z//;
+    my ($proj, $binary) = build($app, $tr, 0);
+    wipe($opts->{fresh});
+    (my $b = capture('the compiled run', { PIXIE_SCRIPT => $script }, File::Spec->rel2abs('.'), $binary)) =~ s/\n\z//;
+
+    if ($a eq $b) {
+        my $n = () = $a =~ /\n/g;
+        printf "GATE OK — %d dump lines identical in both runs\n", $n + 1;
+        print  "  script:   ", ($script eq '' ? '(none — startup dump only)' : $script), "\n";
+        print  "  emitted:  ", rel("$proj/src/main.pix"), "\n";
+        print  "  binary:   $binary (", size_of($binary), ")\n";
+        return;
+    }
+    print "GATE FAILED — the two runs diverge:\n";
+    my @al = split /\n/, $a, -1;
+    my @bl = split /\n/, $b, -1;
+    for my $i (0 .. ($#al > $#bl ? $#al : $#bl)) {
+        next if defined $al[$i] && defined $bl[$i] && $al[$i] eq $bl[$i];
+        print "  perl:     ", $al[$i] // '(no line)', "\n";
+        print "  compiled: ", $bl[$i] // '(no line)', "\n";
+    }
+    exit 1;
+}
+
+# --- the argument line ------------------------------------------------------
+
+my %COMMANDS = map { $_ => 1 } qw(check run translate build gate);
+my $mode = shift @ARGV;
+die_("no command\n\n$USAGE") unless defined $mode;
+die_("unknown command `$mode`\n\n$USAGE") unless $COMMANDS{$mode};
+
+my $app;
+my %opts = (script => '', fresh => [], release => 0);
+while (@ARGV) {
+    my $arg = shift @ARGV;
+    if    ($arg eq '--script')  { $opts{script} = shift(@ARGV) // '' }
+    elsif ($arg eq '--fresh')   { push @{ $opts{fresh} }, shift(@ARGV) // '' }
+    elsif ($arg eq '--release') { $opts{release} = 1 }
+    elsif ($arg =~ /\A--/)      { die_("unknown option `$arg`\n\n$USAGE") }
+    else {
+        die_("rakugan $mode takes one app") if defined $app;
+        $app = $arg;
+    }
+}
+die_("rakugan $mode takes an app: rakugan $mode demo/counter.pl") unless defined $app;
+die_("no such file: $app") unless -f $app;
+die_("$mode takes no --script — replaying a script is the gate's job")
+    if $opts{script} ne '' && $mode ne 'gate';
+die_("--fresh belongs to gate: it is there so the two runs start alike")
+    if @{ $opts{fresh} } && $mode ne 'gate';
+die_("--release belongs to build: it is how an app ships")
+    if $opts{release} && $mode ne 'build';
+
+no strict 'refs';
+&{"cmd_$mode"}($app, \%opts);

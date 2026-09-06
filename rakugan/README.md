@@ -1,0 +1,118 @@
+# Rakugan
+
+**Rakugan turns a Perl desktop app into one native binary, and
+`rakugan gate` is how you check that what it ships behaves like what
+you ran.**
+
+An app is a Perl 5 class, written with the `class` feature of perl 5.40
+and newer. `rakugan build` translates it into pixie's `.pix` (the
+checked intermediate source Yokan emits from Python) and has pixie
+compile that, with the drawing engine — **gpui**, the engine behind the
+Zed editor — into one native binary with no interpreter in it. While
+you are working, the same file runs under perl instead, reaching the
+same engine through an XS door, so it is the real interpreter
+answering. The gate drives both with one interaction script and
+compares what they drew, byte for byte — so "it worked while I was
+writing it" and "it works as shipped" are one claim, not two.
+
+Rakugan is the third language on this engine, after Yokan (Python) and
+Wakakusa (Ruby). It shares the substrate with them and nothing else.
+
+## What an app looks like
+
+The app is a class. Its state is its fields, `view` is a method that
+answers one element, and a handler is an anonymous sub that closes over
+the fields. `use Rakugan;` is written twice: at the top it turns on what
+the dialect assumes (what `use v5.40` would, plus utf8 and the class
+feature) and brings `run`; inside the class it brings the elements, the
+type names and `empty`, because a Perl import is per package.
+
+```perl
+use Rakugan;
+
+class Counter {
+    use Rakugan;
+    field $count = 0;
+    field $name  = "";
+
+    method view {
+        column(
+            text("count: $count", size => 34),
+            row(
+                button("+1",    on_click => sub { $count += 1 }),
+                button("+10",   on_click => sub { $count += 10 }),
+                button("reset", on_click => sub { $count = 0 }),
+                spacing => 8,
+            ),
+            text_field($name, placeholder => "your name",
+                       on_change => sub ($s) { $name = $s }),
+            text("hello, $name"),
+            spacing => 12,
+            padding => 16,
+        );
+    }
+}
+
+run(Counter->new, title => "counter");
+```
+
+Nothing in it says a type, and the compiled run is typed all the same:
+a field's type is read from its initializer (`0` is an Int, `""` a
+Str), a handler's parameter type from the element it is written on
+(`on_change` hands over a Str). A container that starts empty says what
+it will hold, `field @items = empty(Str);`, and that is the whole
+annotation syntax.
+
+```console
+$ ./bin/rakugan gate demo/counter.pl --script "click:+1,dump,input:Momo\, again"
+GATE OK — 3 dump lines identical in both runs
+  script:   click:+1,dump,input:Momo\, again
+  emitted:  demo/.gate/counter/src/main.pix
+  binary:   /Users/you/.cache/pixie/target/debug/main (53.8 MB)
+```
+
+What the dialect cannot take is refused before anything is built, with
+the file, line and column, the line itself, and what to write instead:
+
+```console
+$ ./bin/rakugan check demo/counter.pl
+demo/counter.pl:16:35: Rakugan cannot take this — `text` has no `weight =>`; it takes `size`
+                text("count: $count", weight => 2),
+                                      ^
+```
+
+## Setup
+
+- A perl of 5.40 or newer for the app. `just rakugan-perl` fetches and
+  builds the pinned 5.44.0 into `~/.cache/perl/5.44.0` (a few minutes,
+  once); `RAKUGAN_PERL=/path/to/perl` points the command at another.
+- PPI, for the command itself, under whichever perl is first on your
+  path (the macOS system perl ships it; elsewhere `cpanm PPI`).
+- The Rust toolchain and the shared target dir, as for everything else
+  in this repository (`export CARGO_TARGET_DIR=~/.cache/pixie/target`).
+
+Then, from `rakugan/`: `./bin/rakugan run demo/counter.pl` opens the
+window; `gate` with a script proves the two runs agree.
+
+## The five things you can do to an app
+
+| command | what |
+|---|---|
+| `check` | what the app writes that Rakugan cannot take; silent when it can |
+| `run` | the app under perl, in a window |
+| `translate` | the `.pix` project the compiled run is built from, under `demo/.gate/` |
+| `build` | the native binary (`--release`) |
+| `gate` | both runs headless, one script, byte-compared |
+
+## What is in today
+
+The counter's shape: one class, scalar fields with literal
+initializers, a `view` method, handlers as anonymous subs, and the
+elements `text`, `button`, `text_field`, `column` and `row`. The rest of
+the vocabulary, list and hash fields, app methods, live reload, timers
+and work off the window's thread follow, in the order Wakakusa took.
+
+## The name
+
+落雁 (rakugan) is a pressed dry confection, in the line of castella,
+yōkan and wakakusa; it also sounds like rakuda, the camel.
