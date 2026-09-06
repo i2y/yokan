@@ -14,15 +14,16 @@ hide:
 <p class="wk-hero__tag">Write Ruby. Ship native.</p>
 
 <p class="wk-hero__lede">
-A compiler for Ruby desktop apps: <strong>what you run under CRuby is
-what it ships as a native binary, and each build verifies it</strong>.
-When you ship, <a href="https://github.com/matz/spinel">spinel</a> — an
-ahead-of-time Ruby compiler — takes your Ruby to C, and it links with
-the drawing engine into one binary; while you are working, the same
-file runs under CRuby, and <code>wakakusa gate</code> drives both with
-the same script and compares what they drew, byte for byte. An app is
-a plain Ruby class; what Wakakusa adds is the methods that build the
-screen.
+Wakakusa turns a Ruby desktop app into one native binary:
+<strong>what you run under CRuby is what it ships, and each build
+verifies it</strong>. When you ship,
+<a href="https://github.com/matz/spinel">spinel</a> — an ahead-of-time
+Ruby compiler — takes your Ruby to C, and it links with the drawing
+engine into one binary; while you are working, the same file runs
+under CRuby, and <code>wakakusa gate</code> drives both with the same
+script and compares what they drew, byte for byte. An app is a plain
+Ruby class; what Wakakusa adds is the methods that build the screen,
+and the check that the two runs agree.
 </p>
 
 <div class="wk-hero__cta" markdown>

@@ -1,8 +1,7 @@
 # Wakakusa
 
-**Wakakusa is a compiler for Ruby desktop apps: what you run under
-CRuby is what it ships as a native binary, and each build verifies
-it.**
+**Wakakusa turns a Ruby desktop app into one native binary — and what
+you run under CRuby is what it ships, which each build verifies.**
 
 `wakakusa build` takes the app's Ruby through
 [spinel](https://github.com/matz/spinel) to C and links it with the

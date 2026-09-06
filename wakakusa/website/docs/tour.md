@@ -1,12 +1,14 @@
 # First app
 
-Wakakusa is a compiler for Ruby desktop apps. `wakakusa build` takes
-your Ruby through spinel to C and links it with the drawing engine
-into one native binary; while you are working, the same file runs
-under CRuby instead, and each build verifies that the two are the same
-program. The methods that build the screen — `text`, `button`,
-`column` and thirty more — come with Wakakusa; the app itself is a
-plain Ruby class. How much of Ruby you can write is set out in
+Wakakusa turns a Ruby desktop app into one native binary. `wakakusa
+build` takes your Ruby through [spinel](https://github.com/matz/spinel)
+to C and links it with the drawing engine; while you are working, the
+same file runs under CRuby instead, and each build verifies that the
+two are the same program. Neither half is Wakakusa's own — spinel
+compiles, the engine draws — and what it adds is the join between them
+and the check that they agree. The methods that build the screen —
+`text`, `button`, `column` and thirty more — come with Wakakusa; the
+app itself is a plain Ruby class. How much of Ruby you can write is set out in
 [Three Rubys, nested](two-runs.md#three-rubys-nested).
 
 This tour is one pass over how apps are written, in the order you meet

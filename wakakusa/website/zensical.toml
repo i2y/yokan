@@ -1,7 +1,7 @@
 [project]
 site_name = "Wakakusa"
 site_url = "https://i2y.github.io/wakakusa/"
-site_description = "A compiler for Ruby desktop apps: what runs under CRuby is what ships as a native binary."
+site_description = "Ruby desktop apps, shipped as one native binary: what runs under CRuby is what ships, and each build verifies it."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
 
