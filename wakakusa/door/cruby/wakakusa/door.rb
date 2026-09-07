@@ -4,11 +4,14 @@
 # shared half ever drifts apart.
 require "fiddle"
 require "fiddle/import"
+require "rbconfig"
 
 module PixieC
   extend Fiddle::Importer
   # The engine builds into the shared target dir, like every crate here.
-  dlload ENV.fetch("PIXIE_CAPI", File.join(ENV.fetch("CARGO_TARGET_DIR", File.expand_path("~/.cache/pixie/target")), "release", "libpixie_capi.dylib"))
+  # cargo names the cdylib for the platform (.dylib on macOS, .so on
+  # Linux); PIXIE_CAPI still wins over both.
+  dlload ENV.fetch("PIXIE_CAPI", File.join(ENV.fetch("CARGO_TARGET_DIR", File.expand_path("~/.cache/pixie/target")), "release", "libpixie_capi.#{RbConfig::CONFIG["SOEXT"]}"))
   extern "long pixie_el(int)"
   extern "void pixie_str(long, int, const char*)"
   extern "void pixie_num(long, int, double)"

@@ -1,8 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Every Wakakusa demo through both runs — CRuby over pixie's C ABI, and
 # the spinel-compiled binary linking the same library — failing on any
 # difference. Run it before any commit that touches the door, the ABI or
 # a demo.
+# `env bash`, not a login shell's own: nothing here is zsh's, and
+# bash is the one interpreter both supported platforms have.
 cd "$(dirname "$0")/.." || exit 1
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/pixie/target}"
 pass=0; fail=0; failed=""

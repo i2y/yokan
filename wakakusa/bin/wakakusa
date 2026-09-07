@@ -31,7 +31,7 @@ TARGET = ENV["CARGO_TARGET_DIR"] || File.expand_path("~/.cache/pixie/target")
 # cc's own; `-lc++` is the engine's C++ lower half and `-lsqlite3` the
 # platform's database, neither of which that list mentions. Re-run the
 # command after a dependency change.
-FRAMEWORKS = %w[
+MAC_LIBS = %w[
   -framework AudioToolbox -framework CoreAudio
   -framework ApplicationServices -framework CoreFoundation -framework CoreVideo
   -framework AppKit -framework CoreText -framework Carbon -framework Security
@@ -39,6 +39,23 @@ FRAMEWORKS = %w[
   -framework QuartzCore -framework CoreGraphics -framework OpenGL -framework Metal
   -lobjc -liconv -lc++ -lm -lsqlite3
 ].freeze
+
+# The same question asked of the same crate on Linux, where the lower
+# half is Vulkan and Wayland or X11 rather than Metal and AppKit. No
+# sqlite here: yokan-stdlib asks for the bundled one, and cargo gives
+# both crates the same rusqlite.
+LINUX_LIBS = %w[
+  -lasound -lxcb -lfontconfig -lfreetype -lxkbcommon -lxkbcommon-x11
+  -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+].freeze
+
+MACOS = RbConfig::CONFIG["host_os"].include?("darwin")
+SYSLIBS = (MACOS ? MAC_LIBS : LINUX_LIBS).freeze
+
+# Drop what the app never reaches, so the binary is the size of the app
+# rather than the size of the engine. Each linker spells it its own
+# way: ld64 takes `-dead_strip`, GNU ld `--gc-sections`.
+DEAD_STRIP = MACOS ? "-Wl,-dead_strip" : "-Wl,--gc-sections"
 
 USAGE = <<~TXT
   usage: wakakusa <command> <app.rb> [--script "step,step"] [--fresh <path>]
@@ -87,6 +104,12 @@ end
 
 # pixie's C face: one library, opened by the interpreted run and linked
 # by the compiled one. Built here so neither run can be a version behind.
+# What cargo names the C face on this platform: .dylib on macOS, .so on
+# Linux. One library, two spellings, and nothing above here cares which.
+def capi
+  "libpixie_capi.#{RbConfig::CONFIG["SOEXT"]}"
+end
+
 def engine
   @engine ||= begin
     ok = system({ "CARGO_TARGET_DIR" => TARGET },
@@ -169,17 +192,18 @@ def packages(app)
   end
 end
 
-# The engine's lower half needs its frameworks, and `-dead_strip` keeps
-# the binary the size of the app rather than the size of the engine
-# (measured on the counter: 35.4 MB to 14.9 MB). The threaded runtime
-# is not optional: every app has `task` behind it.
+# The engine's lower half needs the platform's own libraries (SYSLIBS),
+# and dropping what the app never reaches keeps the binary the size of
+# the app rather than the size of the engine (measured on the counter,
+# on macOS: 35.4 MB to 14.9 MB). The threaded runtime is not optional:
+# every app has `task` behind it.
 def build(app, release: false)
   c = translate(app)
   bin = File.join(gate_dir(app), stem(app))
-  sh!("cc", "-O2", "-w", "-Wl,-dead_strip", "-DSP_THREADS", "-ftls-model=initial-exec",
+  sh!("cc", "-O2", "-w", DEAD_STRIP, "-DSP_THREADS", "-ftls-model=initial-exec",
       "-I#{spinel_dir}/lib", "-I#{spinel_dir}/lib/regexp", c,
       *packages(app), "#{spinel_dir}/lib/libspinel_rt_mt.a",
-      "#{engine}/libpixie_capi.a", *FRAMEWORKS, "-lpthread",
+      "#{engine}/libpixie_capi.a", *SYSLIBS, "-lpthread",
       "-o", bin, what: "cc")
   # The symbol table is a fifth of the file and nothing on the machine
   # it ships to reads it. A gate build keeps it: the round is a
@@ -296,7 +320,7 @@ def dir_size(root)
 end
 
 def interpreted(app, script)
-  capture({ "PIXIE_SCRIPT" => script, "PIXIE_CAPI" => "#{engine}/libpixie_capi.dylib" },
+  capture({ "PIXIE_SCRIPT" => script, "PIXIE_CAPI" => "#{engine}/#{capi}" },
           "ruby", *load_path("cruby"), File.expand_path(app),
           what: "the interpreted run")
 end
@@ -329,7 +353,7 @@ def cmd_check(app, _opts)
 end
 
 def cmd_run(app, _opts)
-  exec({ "PIXIE_CAPI" => "#{engine}/libpixie_capi.dylib" },
+  exec({ "PIXIE_CAPI" => "#{engine}/#{capi}" },
        "ruby", *load_path("cruby"), File.expand_path(app))
 end
 
@@ -408,6 +432,14 @@ if !opts[:fresh].empty? && mode != "gate"
 end
 if (opts[:release] || opts[:app]) && mode != "build"
   die "--release and --app belong to build: they are how an app ships"
+end
+# The bundle is a macOS shape — an Info.plist, an ad-hoc signature, a
+# directory the Finder opens — and none of it has a meaning elsewhere.
+# The binary `build` writes is native on both, so this names the flag
+# rather than producing a directory nothing here opens.
+if opts[:app] && !MACOS
+  die "--app wraps the artifact as a macOS .app, and this is not macOS — " \
+      "`wakakusa build #{File.basename(app)}` alone writes the native binary"
 end
 
 send("cmd_#{mode}", app, opts)
