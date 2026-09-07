@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "yokan"
-version = "0.4.1"
+version = "0.5.0"
 description = "Compiles a statically typed subset of Python to native desktop apps."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -14,7 +14,9 @@ keywords = ["gui", "desktop", "compiler", "native", "ui"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: MacOS X",
+    "Environment :: X11 Applications",
     "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Rust",
     "Topic :: Software Development :: User Interfaces",
