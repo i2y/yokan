@@ -1,8 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Gate every demo through both runs (interpreted CPython and the
 # compiled binary) and fail on any dump difference. Run from
 # crates/yokan. Two demos are development-only BY DESIGN (dict
 # state — the honest-list item) and are listed, not gated.
+# `env bash`, not a login shell's own: nothing here is zsh's, and
+# bash is the one interpreter both supported platforms have.
 cd "$(dirname "$0")/.." || exit 1
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/pixie/target}"
 pass=0; fail=0; failed=""

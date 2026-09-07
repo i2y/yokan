@@ -12675,6 +12675,19 @@ def main():
     pix_path = os.path.join(gate_dir, f"{stem}.pix")
     open(pix_path, "w").write(pix)
 
+    # Packaging is the half of `build` that is still Apple's: the
+    # runtime folder rewrites a Mach-O load command, the artifacts are
+    # ad-hoc signed, and `.app` is a macOS shape. None of the three has
+    # a meaning here, and the binary `build` writes is already native on
+    # both platforms — so this names the flag rather than quietly
+    # producing a bundle nothing on this platform opens.
+    if sys.platform != "darwin":
+        for on, flag, what in ((args.bundle, "--bundle", "ships a macOS runtime folder"),
+                               (args.onefile, "--onefile", "packs that folder into one file"),
+                               (args.app_bundle, "--app", "wraps the artifact as a macOS .app")):
+            if on:
+                sys.exit(f"{flag} {what}, and this is not macOS — "
+                         f"`yokan build {os.path.basename(args.app)}` alone writes the native binary")
     if args.onefile:
         args.bundle = True
     if args.bundle and not tr.escapes:

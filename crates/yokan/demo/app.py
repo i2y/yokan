@@ -5,8 +5,7 @@
 """yokan demo: real CPython + numpy driving pixie's gpui engine.
 
 Build the module, then run:
-    cargo build -p yokan --release --features extension-module
-    cp <target>/release/libyokan.dylib crates/yokan/yokan.so
+    just dev-so
     uv run crates/yokan/demo/app.py
 
 While it runs, edit view() below and save — the window updates in

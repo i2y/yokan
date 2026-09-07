@@ -27,13 +27,15 @@ default:
 
 # `--features extension-module` is not optional: without it the build
 # links a system libpython and the module aborts at import under uv's
-# CPython. The ad-hoc signature keeps macOS from killing it.
+# CPython. The ad-hoc signature keeps macOS from killing it, and is
+# macOS's alone — cargo's own suffix for the same artifact differs by
+# platform, so both the name and the signing step read off `os()`.
 #
 # Rebuild the importable extension module (crates/yokan/yokan.so).
 dev-so:
     cargo build --release -p yokan --features extension-module
-    cp "$CARGO_TARGET_DIR/release/libyokan.dylib" {{pkg}}/yokan.so
-    codesign -f -s - {{pkg}}/yokan.so
+    cp "$CARGO_TARGET_DIR/release/libyokan.{{ if os() == 'macos' { 'dylib' } else { 'so' } }}" {{pkg}}/yokan.so
+    {{ if os() == 'macos' { 'codesign -f -s - ' + pkg + '/yokan.so' } else { 'true' } }}
 
 # Prints the first refusal in file:line:col form, and nothing at all
 # when the app is inside the dialect.
