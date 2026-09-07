@@ -85,6 +85,12 @@ and encodes the invariants below, so prefer it over typing the raw
 commands; the raw forms stay documented here because they are what
 the recipes run.
 
+A release has two halves, because the module carries the engine and a
+Mac cannot build Linux's: `just publish <version>` uploads macOS's
+wheel and pushes the tag, the release workflow then builds the Linux
+wheels and attaches them to that tag's release, and
+`just publish-linux <version>` puts those on PyPI.
+
 Run these from `crates/yokan/` (they also work via
 `uv run yokan_gate.py …`):
 

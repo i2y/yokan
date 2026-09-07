@@ -1,0 +1,144 @@
+name: release
+
+# Build the Linux wheels for a tagged version, prove each one runs, and
+# attach them to that tag's release.
+#
+# The maintainer's machine is a Mac, and a Mac cannot make these: the
+# module carries the engine, and on Linux the engine links against that
+# platform's own graphics, font and audio libraries. macOS's wheel still
+# comes from `just publish` there; this workflow is the other half.
+#
+# PyPI refuses a wheel tagged `linux_x86_64`, so the build happens inside
+# a manylinux container and auditwheel repairs what comes out — it
+# carries every library the policy does not already let the host
+# provide. That carried list is what breaks a wheel on a machine other
+# than the one that built it, so the build prints it.
+#
+# The image is manylinux_2_34 (AlmaLinux 9) rather than an older one
+# because the engine needs libxkbcommon 1.x, which the 2_28 image
+# predates. glibc 2.34 is RHEL 9, Ubuntu 22.04 and Fedora 35 onwards.
+#
+# The wheels land on the GitHub release. Putting them on PyPI stays a
+# command someone runs — `just publish-linux <version>` — because that
+# is the one step nothing takes back.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wheels:
+    name: wheel (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # The rustc version lives in rust-toolchain.toml and is read from
+      # there, so the pin has one home.
+      - name: Read the toolchain pin
+        id: pin
+        run: |
+          channel=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' rust-toolchain.toml | head -1)
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "building with rustc $channel"
+
+      # Each architecture builds on a machine of its own shape: GitHub's
+      # arm64 runners are free for a public repository, and this build
+      # compiles the whole engine, which is more than emulation should
+      # be asked to do.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: "2_34"
+          working-directory: crates/yokan
+          rust-toolchain: ${{ steps.pin.outputs.channel }}
+          args: --release --out dist
+          # The container is AlmaLinux 9. This is the list the
+          # installation page names for Fedora, minus the two that are
+          # only needed to open a window (the Vulkan loader and a driver)
+          # and the Python headers, which only an app with `@py` escapes
+          # links against.
+          before-script-linux: |
+            dnf install -y dnf-plugins-core
+            dnf config-manager --set-enabled crb
+            dnf install -y alsa-lib-devel fontconfig-devel freetype-devel \
+              libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel \
+              wayland-devel
+
+      - name: Say what the wheel carries
+        run: python3 -m zipfile -l crates/yokan/dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: crates/yokan/dist/*.whl
+
+  # The same smoke test the maintainer runs before a macOS upload, on the
+  # artifact rather than the checkout. It is one recipe, so the two
+  # cannot drift; `uv` fetches the Python it wants. On x86_64 this is
+  # also the first time the project has been RUN on that architecture.
+  smoke:
+    name: smoke (${{ matrix.target }})
+    needs: wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v8.1.0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: wheels
+
+      # `just smoke` installs the newest wheel in the shared wheels
+      # directory, so the downloaded one is put there.
+      - name: Drive an app with the installed wheel
+        run: |
+          mkdir -p ~/.cache/pixie/target/wheels
+          cp wheels/*.whl ~/.cache/pixie/target/wheels/
+          uvx --from rust-just just smoke
+
+  attach:
+    name: attach to the release
+    needs: smoke
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
+
+      - name: Upload them to the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "Yokan ${TAG#v}" \
+                 --notes "See the commits since the previous tag."
+          gh release upload "$TAG" dist/*.whl --clobber

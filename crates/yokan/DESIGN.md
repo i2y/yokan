@@ -2367,3 +2367,42 @@ and a Rust process gets there by calling `setlocale` once, which it
 otherwise never does. The tables stay a claim about the C locale and
 pin it themselves; setting `%ENV` was not enough, because perl fixes
 its locale before a `BEGIN` block runs.
+
+## The wheel a Mac cannot make (2026-09-08)
+
+Linux became a supported platform, which made a claim on the index:
+`uv run app.py` there has to find something to install. It could not.
+Every release so far has put one wheel on PyPI, built on the
+maintainer's machine, and that machine is a Mac — while the module
+carries the engine, and on Linux the engine links against that
+platform's own graphics, font and audio libraries. So the release has
+two halves now, and the second one is built where it can be.
+
+PyPI decides the shape of that half. A wheel tagged `linux_x86_64` is
+refused at upload; a Linux wheel must claim a manylinux tag, and
+claiming one means auditwheel has looked at what the module needs and
+carried whatever the policy does not already let the host provide.
+libc, libstdc++, libGL and the X11 neighbours are the host's; alsa,
+fontconfig, freetype, xkbcommon and xcb ride along. That is the same
+decision the AppImage packer makes and it carries the same risk — a
+carried library meeting the host's — so the build prints the list
+rather than leaving it to be discovered on someone else's machine.
+
+The image is manylinux_2_34 rather than an older one because the
+engine needs libxkbcommon 1.x and the 2_28 image predates it. What
+that costs is a floor: RHEL 9, Ubuntu 22.04, Fedora 35 and newer.
+
+Both architectures build, each on a machine of its own shape, since
+arm64 runners are free to a public repository and this build compiles
+the whole engine. That also moves the honest edge the port left. The
+workflow installs the x86_64 wheel and drives an app with it, so
+x86_64 is no longer only proved to build: the module imports there,
+builds a tree and reacts to a click. A smoke run is still not the
+gate, and the gate on such a machine is what would settle it.
+
+The upload to PyPI is not in the workflow. It is the one step nothing
+takes back, the credential belongs on a person's machine rather than
+in a repository's secrets, and the wheels are already somewhere real
+by then — attached to the tag's release. `just publish-linux` takes
+them from there and asks before it uploads, which is the question
+`just publish` already asks on the other half.

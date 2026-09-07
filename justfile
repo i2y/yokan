@@ -266,6 +266,10 @@ smoke:
 # Stops before the upload if the smoke run fails. The upload is the
 # one irreversible step — PyPI never takes a version back.
 #
+# This releases the half a Mac can make. Pushing the tag starts the
+# release workflow, which builds the Linux wheels and attaches them to
+# the same release; `just publish-linux` then puts those on PyPI.
+#
 # Release VERSION: bump, build, smoke, upload, tag, publish notes.
 publish version:
     #!/usr/bin/env bash
@@ -293,3 +297,20 @@ publish version:
         --notes "See the commits since the previous tag." \
         {{wheels}}/yokan-{{version}}-*.whl
     echo "released {{version}}"
+
+# The Linux wheels are built by the release workflow, because the engine
+# links against that platform's own libraries and no Mac can produce
+# them. They arrive on the tag's release; this is the step that puts
+# them where `pip install yokan` looks.
+#
+# Upload VERSION's Linux wheels from its release to PyPI.
+publish-linux version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    gh release download v{{version}} --pattern '*manylinux*.whl' --dir "$tmp"
+    ls -l "$tmp"
+    read -r -p "upload these to PyPI? [y/N] " ok
+    [ "$ok" = "y" ] || { echo "aborted"; exit 1; }
+    uvx twine upload "$tmp"/*.whl
+    echo "uploaded the Linux wheels for {{version}}"
