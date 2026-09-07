@@ -1,8 +1,5 @@
 # Rakugan language tour
 
-<!-- The identity paragraph is the owner's to write. What follows is a
-     draft standing in for it, in the shape the other two tours use. -->
-
 Rakugan turns a Perl desktop app into one native binary. `rakugan
 build` reads your Perl, translates it to [pixie](../docs/PIXIE.md) and
 links it with the drawing engine (**gpui**, the engine behind the Zed
@@ -12,7 +9,7 @@ same program is something you check rather than hope: `rakugan gate`
 drives both with one interaction script and compares the screens they
 drew, byte for byte. The subs that build the screen — `text`, `button`,
 `column` and thirty more — come with Rakugan; the app itself is a plain
-Perl class. How much of Perl you can write is the dialect this page
+Perl class. How much of Perl you can write is the dialect this tour
 describes, and what falls outside it is named at
 [What Rakugan refuses](#what-rakugan-refuses).
 

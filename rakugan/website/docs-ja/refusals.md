@@ -1,5 +1,5 @@
 <!-- Written by website/tools/refusals_page.pl from test/refuse/. Edit the fixtures. -->
-# 落雁が断る書き方
+# Rakugan が断る書き方
 
 方言は部分集合で、その境目に出会う場所が `rakugan check` です。
 アプリを読み、受け取れない書き方があれば、ファイルと行と桁、その行そのもの、そして代わりの書き方を示します。

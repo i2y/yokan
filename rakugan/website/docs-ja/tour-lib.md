@@ -6,7 +6,7 @@ Perl 自身のライブラリ、枠組みのライブラリ、ウィンドウを
 ## Perl 自身の標準ライブラリ
 
 名前が Perl のものであるかぎり、仕様を決めるのは perl です。
-`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、落雁のものではなく言語自身のものです。
+`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
 
 <!-- script: click:run,dump -->
 ```perl

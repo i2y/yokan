@@ -25,7 +25,7 @@ nav = [
   ] },
   { "要素" = "elements.md" },
   { "二つの実行" = "two-runs.md" },
-  { "落雁が断る書き方" = "refusals.md" },
+  { "Rakugan が断る書き方" = "refusals.md" },
   { "エージェントと一緒に書く" = "agents.md" },
   { "デモ" = "demos.md" },
 ]

@@ -93,6 +93,28 @@ sub slug {
     return $s;
 }
 
+# What the tour says before its first section: the paragraph that names
+# the language. The site's first tour page carries it, the way the other
+# two languages' first pages do, so a reader who lands there from a
+# search meets the language before the vocabulary. Only the first
+# paragraph travels — what follows it in the file is about the file (the
+# checker, the other language's copy) and the site says both elsewhere.
+sub identity {
+    my ($path) = @_;
+    open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
+    local $/;
+    my $text = <$fh>;
+    close $fh;
+    my ($intro) = $text =~ /\A\#\ [^\n]*\n(.*?)^\#\# /ms
+        or die "$path: no intro before the first section\n";
+    $intro =~ s/<!--.*?-->//gs;                    # the draft marker is the owner's, not a reader's
+    my ($first) = grep { /\S/ } split /\n\s*\n/, $intro;
+    die "$path: the intro is empty\n" unless defined $first;
+    $first =~ s/\A\s+//;
+    $first =~ s/\s+\z//;
+    return $first;
+}
+
 sub sections {
     my ($path) = @_;
     open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
@@ -117,7 +139,9 @@ sub render {
     my $page = $PAGES[$i];
     my ($title, $lede) = @{ $page->{$lang} };
     my $out = "<!-- Written by website/tools/tour_pages.pl from the tour. Edit the tour. -->\n"
-             . "# $title\n\n$lede\n";
+             . "# $title\n\n";
+    $out .= $where->{identity} . "\n\n" if $i == 0;
+    $out .= "$lede\n";
     for my $head (@{ $page->{take} }) {
         my $key = $lang eq 'ja' ? $where->{ja_of}{$head} : $head;
         die "$page->{file}: the tour has no section \"$head\"\n" unless exists $body->{$key};
@@ -158,6 +182,7 @@ for my $lang (qw(en ja)) {
     }
     my %where;
     $where{ja_of} = \%ja_of;
+    $where{identity} = identity($tour);
     for my $i (0 .. $#PAGES) {
         for my $head (@{ $PAGES[$i]{take} }) {
             my $key = $lang eq 'ja' ? $ja_of{$head} : $head;

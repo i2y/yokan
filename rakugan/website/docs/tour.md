@@ -1,6 +1,19 @@
 <!-- Written by website/tools/tour_pages.pl from the tour. Edit the tour. -->
 # The first app
 
+Rakugan turns a Perl desktop app into one native binary. `rakugan
+build` reads your Perl, translates it to [pixie](https://github.com/i2y/yokan/blob/main/docs/PIXIE.md) and
+links it with the drawing engine (**gpui**, the engine behind the Zed
+editor); while you are working, the same file runs under perl instead,
+reaching that engine through a small XS door. Whether the two are the
+same program is something you check rather than hope: `rakugan gate`
+drives both with one interaction script and compares the screens they
+drew, byte for byte. The subs that build the screen — `text`, `button`,
+`column` and thirty more — come with Rakugan; the app itself is a plain
+Perl class. How much of Perl you can write is the dialect this tour
+describes, and what falls outside it is named at
+[What Rakugan refuses](tour-ship.md#what-rakugan-refuses).
+
 An app is a class, its state is its fields, and types are written in only two places.
 
 ## The smallest app
