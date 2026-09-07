@@ -54,11 +54,19 @@ the same change.
 
 ## Setup
 
-- macOS on Apple silicon (the only supported platform today),
-  Python ≥ 3.14, [uv](https://docs.astral.sh/uv/), Rust via
+- macOS on Apple silicon, or Linux. Python ≥ 3.14,
+  [uv](https://docs.astral.sh/uv/), Rust via
   [rustup](https://rustup.rs) (the exact rustc is pinned by
-  `rust-toolchain.toml` and fetched automatically), and Xcode's
-  Metal toolchain (gpui compiles shaders at build time).
+  `rust-toolchain.toml` and fetched automatically).
+- macOS also needs Xcode's Metal toolchain (gpui compiles shaders
+  at build time). Linux draws through Vulkan and opens its window
+  on Wayland or X11, so it needs a C compiler and the development
+  packages the engine links: alsa, fontconfig, freetype, xkbcommon
+  and its x11 half, xcb, and the Vulkan loader with a driver. Add
+  sqlite for `cargo test --workspace`, which builds `pixie-capi`
+  against the system one (yokan-stdlib bundles its own). The three
+  packaging flags are macOS's and refuse by name elsewhere — see
+  the ledger entry for why.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast.
@@ -114,7 +122,14 @@ Run these from `crates/yokan/` (they also work via
   follows the list's element type).
   `uv run tools/gen_expected.py` prints CPython's answers into
   `crates/yokan-stdlib/tests/expected/` (`--check` fails when a
-  table is stale); `uv run tools/stdlib_coverage.py` reports how far
+  table is stale). A table carries the CPython that printed it and
+  that machine's libm, and `--check` compares bytes: under another
+  Python every table reads stale on the version header alone, and on
+  another platform the libm rows read stale too (measured: 44 in
+  `math`, 2 in `random`). So regenerate on macOS and read the diff;
+  what makes ONE table true on both platforms is the `~>` arrow,
+  which the TEST honours by allowing an ulp.
+  `uv run tools/stdlib_coverage.py` reports how far
   each module reaches into Python's.
 - Website: `website/build.sh` builds both languages, always in that
   order — building only one silently loses the other.

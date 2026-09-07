@@ -43,8 +43,8 @@ themselves.
 compiles, at any point along the way.
 
 !!! note "Platforms"
-    Today: **macOS on Apple silicon**, Python **3.14+**. Linux
-    support lands shortly.
+    Today: **macOS on Apple silicon** and **Linux**, Python
+    **3.14+**.
 
 ## Ship: a Rust toolchain
 
@@ -53,6 +53,19 @@ compiles, at any point along the way.
   the first build.
 - On macOS you also need Xcode's Metal toolchain (the GPU engine
   builds shaders).
+- On Linux the engine draws through Vulkan and opens its window on
+  Wayland or X11, so the build needs a C compiler and the libraries
+  it links against. On Fedora:
+
+    ```console
+    $ sudo dnf install gcc alsa-lib-devel fontconfig-devel \
+        freetype-devel libxkbcommon-devel libxkbcommon-x11-devel \
+        libxcb-devel vulkan-loader mesa-vulkan-drivers python3-devel
+    ```
+
+    Other distributions carry the same libraries under their own
+    names. `python3-devel` is only for apps with `@py` escapes,
+    whose build embeds CPython.
 - The crates the build compiles against live in the repository, and
   the first `gate` or `build` fetches the checkout matching your
   version into `~/.cache/yokan/` (about 11 MB). There is nothing to
@@ -117,5 +130,9 @@ in about 40 ms. Add `--app` (alone or with `--bundle`) for a macOS
 `.app` bundle in `dist/` — Dock identity, double-click launch, an
 icon from `<stem>.png` if present. Either way, the receiving
 machine needs no Python and no pip.
+
+Those three flags build Apple's shapes, and on Linux each one names
+itself and stops; `yokan build` alone writes the native binary
+there.
 
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload.

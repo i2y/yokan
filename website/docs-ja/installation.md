@@ -42,14 +42,25 @@ $ yokan build app.py --release --onefile    # 1 ファイルで配る
 この流れのどこででも `yokan translate app.py` を実行すれば、リリースビルドがコンパイルする `.pix` が出てきます。
 
 !!! note "対応環境"
-    現在は **Apple silicon の macOS**、Python **3.14 以上**です。
-    Linux にはまもなく対応します。
+    現在は **Apple silicon の macOS** と **Linux**、Python **3.14 以上**です。
 
 ## リリースに要るのは Rust ツールチェーン
 
 - Rust は [rustup](https://rustup.rs) で入れておきます。
   コンパイラの版はリポジトリ側で固定してあり、初回ビルドのときに自動で取得されます。
 - macOS では Xcode の Metal ツールチェーンも必要です（GPU エンジンのシェーダをビルドするため）。
+- Linux では、エンジンは Vulkan で描き、ウィンドウは Wayland か X11 に開きます。
+  そのため、C コンパイラと、リンクするライブラリが要ります。
+  Fedora の場合:
+
+    ```console
+    $ sudo dnf install gcc alsa-lib-devel fontconfig-devel \
+        freetype-devel libxkbcommon-devel libxkbcommon-x11-devel \
+        libxcb-devel vulkan-loader mesa-vulkan-drivers python3-devel
+    ```
+
+    ほかのディストリビューションにも、同じライブラリがそれぞれの名前で入っています。
+    `python3-devel` が要るのは `@py` エスケープを持つアプリだけです（そのビルドは CPython を埋め込みます）。
 - コンパイル先の Rust クレート群はリポジトリに入っています。
   最初の `gate` か `build` が、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます（約 11 MB）。
   手で clone するものはありません。
@@ -109,5 +120,8 @@ $ yokan build app.py --release --onefile   # 1 ファイル配布
 Dock に名前が出て、ダブルクリックで起動できます。
 隣に `<名前>.png` を置いておけば、それがアイコンになります。
 どちらの場合も、受け取る側のマシンに Python も pip も要りません。
+
+この三つのフラグが作るのは Apple の形なので、Linux ではそれぞれが名前を挙げて止まります。
+そのプラットフォームのネイティブバイナリは、`yokan build` だけで作れます。
 
 実測値（macOS/arm64、リリースビルド）: 起動 4.7 ms、ライブリロード約 1 ms。

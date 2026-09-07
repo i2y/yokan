@@ -148,8 +148,8 @@ the end of the tour, each item with its reason.
 
 ## Platforms
 
-Today: macOS on Apple silicon, Python 3.14+; Linux support lands
-shortly. Everything you develop with arrives via `uv run app.py`
+Today: macOS on Apple silicon and Linux, Python 3.14+.
+Everything you develop with arrives via `uv run app.py`
 (the three-line comment in the example above declares the
 dependency). In a project, `uv add yokan`; for the `yokan` command,
 `uv tool install yokan` — plain pip works too, and `yokan init
@@ -171,12 +171,28 @@ $ yokan build app.py --release --onefile
   build.
 - On macOS you also need Xcode's Metal toolchain (the GPU engine
   builds shaders).
+- On Linux the engine draws through Vulkan and opens its window on
+  Wayland or X11, so the build needs a C compiler and the libraries
+  it links against. On Fedora:
+
+  ```console
+  $ sudo dnf install gcc alsa-lib-devel fontconfig-devel freetype-devel \
+      libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel \
+      vulkan-loader mesa-vulkan-drivers python3-devel
+  ```
+
+  Other distributions carry the same libraries under their own
+  names. `python3-devel` is only for apps with `@py` escapes, whose
+  build embeds CPython.
 - The first native build fetches the checkout matching your version
   into `~/.cache/yokan/` (about 11 MB), so there is nothing to clone
   by hand. Inside a checkout `yokan` uses that one; `PIXIE_REPO`
   points it anywhere else.
 - That first build compiles the engine and takes a few minutes;
   later builds are incremental.
+- Packaging is macOS's: `--bundle`, `--onefile` and `--app` build
+  Apple's shapes, and on Linux each names itself and stops, where
+  `yokan build` writes the native binary.
 
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload;
 sizes as in the shipping paragraph above.

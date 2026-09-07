@@ -2170,3 +2170,108 @@ the count the gate reports), the refusals page giving `check` about
 a second where the table says a tenth, and one page counting
 Wakakusa's own refusals as four where the list, and every other page,
 say five. All three are fixed.
+
+## Linux, and what a port turned out to cost (2026-09-07)
+
+Yokan runs on Linux. What that took is worth writing down, because
+almost none of it was in Yokan.
+
+The window is gpui's, and gpui has carried a Linux lower half —
+Wayland and X11, drawing through wgpu — for as long as this tree has
+pinned it. It was simply never reached. `gpui_platform` defaults to
+no back end at all, and the pin here asked for `font-kit` alone,
+which is the mac side's text; so a Linux build compiled a platform
+layer with nothing behind it. gpui says as much itself, in the panic
+that picks a client: at least one of the wayland or x11 features has
+to be on. Turning both on is the whole of that change, and it rides
+the one declaration already there rather than a second target-gated
+copy of it, because resolver 2 ignores a feature whose dependency is
+not active for the target — which leaves exactly one revision to bump
+when gpui moves. The lock gained three hundred lines and lost none:
+the macOS resolution is untouched.
+
+The rest of the port is smaller than the fear of it, and two
+invariants already in this ledger are why. One implementation, both
+runs means the gate compares an app against itself rather than
+against a platform: every standard-library answer comes from the same
+Rust on both sides of the comparison, so a difference between macOS
+and Linux cannot open a gap between the two runs. And a compiled run
+under a script never enters the engine at all — the generated `main`
+branches on `PIXIE_SCRIPT` into the kernel's headless harness — so
+the gate opens no window and asks the platform for nothing. The sweep
+is the same sweep.
+
+What did have to change were the places that had quietly answered a
+question with macOS's answer. `fs.app_dir` built `~/Library/
+Application Support/<name>` on every platform; it now asks each
+platform its own question, and answers with the XDG data home
+elsewhere. Because it is one implementation, one fix moved both runs
+— and the gate could not have found it, because both runs were wrong
+in the same way, which is the one thing a gate cannot see. The
+sweep's shebang was zsh's, which macOS ships and Linux does not;
+nothing in the file was zsh's, so it is `env bash` now.
+
+The ground-truth tables turned out to carry a platform inside them
+too. `random.gauss` is not a libm function and so was compared to the
+bit — but CPython computes it as `cos(2*pi*u) * sqrt(-2*log(1-v))`,
+and two of those three are the platform's answer rather than
+IEEE-754's. Read on Linux, a table printed on macOS put 2 of its 56
+gauss rows a single ulp away. The mechanism for that was already
+here: `~>` in place of `->` allows one ulp, and `math.txt` has used
+it on 415 rows all along. So `gauss` joins the generator's libm set
+and its rows keep the numbers CPython printed, because the arrow is
+the claim and the number is only evidence for it. One table that is
+true on both platforms, rather than one table per platform.
+
+Packaging stays macOS's, and says so. `--bundle` rewrites a Mach-O
+load command, every artifact is ad-hoc signed, and `.app` is a shape
+only one platform opens. They could have been made to produce
+something — an AppDir with a `.desktop` entry is the shape that fits
+— but a flag that silently means a different thing on each platform
+is worse than one that names itself and stops. So each of the three
+names itself and points at plain `build`, which writes a native
+binary on both.
+
+The honest edge: this was gated on Linux/arm64. Nothing in the change
+is architecture-specific and x86_64 resolves the same graph, but it
+has not been run.
+
+## The frame a compositor will not draw (2026-09-07)
+
+The Linux port opened a window with nothing around it: no titlebar,
+no close button, no edge to pull. The app was in there and worked;
+there was simply no frame.
+
+Whether a Wayland window is decorated at all is the compositor's
+choice, and GNOME's answer is never. A protocol dump of a running app
+shows `zxdg_decoration_manager_v1` exactly zero times — the manager
+is not advertised, so the `WindowDecorations::Server` gpui asks for
+cannot be answered, and gpui then does the only thing left: it
+reports the decorations as the client's and hands the problem up.
+Nothing was listening. X11 was never affected; under a window manager
+the same binary gets a 37-pixel titlebar, and always did.
+
+So the engine draws the frame when it is told the frame is its own: a
+32-pixel bar carrying the window's title and the controls the
+platform admits to having, and grips around the rim that ask the
+compositor to resize. Two things about how are worth writing down.
+
+The bar is painted in the APP's palette rather than the desktop's.
+The palette is the one thing the engine knows, it is already what the
+rest of the window is painted in, and reading the desktop's would be
+a second theme system for one strip of pixels — one that would then
+have to answer for a dark app sitting on a light desktop.
+
+And the drag handle is a SIBLING of the buttons rather than the
+parent of them. The obvious shape — the whole bar starts a window
+move, the buttons sit inside it — needs an event to stop travelling
+at exactly the right moment, or pressing close also begins dragging
+the window away. Laid out side by side, the two regions never overlap
+and there is no rule left to get right.
+
+None of it is built where the platform decorates. macOS, X11 under a
+window manager, KDE and wlroots all report `Decorations::Server`, and
+that branch is what it always was. A headless run never reaches the
+engine at all, so no dump moves and the gate cannot see any of this
+— which is why the sweep answered 59 of 59 before the change and 59
+of 59 after it.

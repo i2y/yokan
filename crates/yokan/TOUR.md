@@ -1389,6 +1389,11 @@ runtime rides inside the bundle, so nothing lives outside it. Put
 icon. `--onefile` is the single-file shape, so it and `--app` are
 mutually exclusive.
 
+Those three flags are macOS's, and each shape is Apple's: a
+rewritten load command, an ad-hoc signature, a `.app`. On Linux each
+one names itself and stops, and `yokan build` alone writes the
+native binary that platform runs.
+
 ## A real app
 
 `demo/opsboard/` is a dashboard in three modules.
@@ -1450,6 +1455,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused, and the error says what and why.
+- **Packaging is macOS's.** `--bundle`, `--onefile` and `--app` build Apple's shapes, and refuse by name on Linux; `yokan build` writes the native binary on both. Everything else — the window, the gate, the standard library — is the same on either platform, because it is one implementation in both runs on both.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 
 This list is updated every time a design lands.

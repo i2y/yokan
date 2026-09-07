@@ -209,7 +209,7 @@ is the guide to hand your agent.
 -   :material-rocket-launch: __[Installation](installation.md)__
 
     `uv run` covers development; a native build needs a Rust toolchain.
-    macOS on Apple silicon today.
+    macOS on Apple silicon and Linux today.
 
 -   :material-book-open-variant: __[Language tour](tour.md)__
 

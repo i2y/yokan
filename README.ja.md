@@ -136,8 +136,7 @@ GATE OK — 2 dump lines identical in both runs
 
 ## 対応環境
 
-現在は Apple silicon の macOS、Python 3.14 以上です。
-Linux にはまもなく対応します。
+現在は Apple silicon の macOS と Linux、Python 3.14 以上です。
 開発に必要なものは、`uv run app.py` だけで揃います（冒頭の例の 3 行コメントが依存宣言です）。
 プロジェクトに入れるなら `uv add yokan`、`yokan` コマンドは `uv tool install yokan` です。
 pip でも入ります。
@@ -155,11 +154,26 @@ $ yokan build app.py --release --onefile
 - Rust は [rustup](https://rustup.rs) で入れておきます。
   コンパイラの版はリポジトリ側で固定してあり、初回ビルド時に自動で取得されます。
 - macOS では Xcode の Metal ツールチェーンも必要です（GPU エンジンのシェーダをビルドするため）。
+- Linux では、エンジンは Vulkan で描き、ウィンドウは Wayland か X11 に開きます。
+  そのため、C コンパイラと、リンクするライブラリが要ります。
+  Fedora の場合：
+
+  ```console
+  $ sudo dnf install gcc alsa-lib-devel fontconfig-devel freetype-devel \
+      libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel \
+      vulkan-loader mesa-vulkan-drivers python3-devel
+  ```
+
+  ほかのディストリビューションにも、同じライブラリがそれぞれの名前で入っています。
+  `python3-devel` が要るのは `@py` エスケープを持つアプリだけです（そのビルドは CPython を埋め込みます）。
 - 最初のネイティブビルドが、使っている版に合うチェックアウトを `~/.cache/yokan/` に取ってきます（約 11 MB）。
   手で clone するものはありません。
   チェックアウトの中で `yokan` を実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 - 初回はエンジンからコンパイルするので数分かかります。
   二回目からは差分だけです。
+- パッケージングは macOS のものです。
+  `--bundle`、`--onefile`、`--app` が作るのは Apple の形なので、Linux ではそれぞれが名前を挙げて止まります。
+  ネイティブバイナリは `yokan build` が作ります。
 
 実測値（macOS/arm64、リリースビルド）：起動 4.7 ms、ライブリロード約 1 ms。
 サイズは上の配布の節の通りです。
