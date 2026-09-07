@@ -6,8 +6,9 @@ Rakugan は今のところリポジトリの中にあります。
 
 ## 必要なもの
 
-- **Apple シリコンの macOS**。
-  エンジンはプラットフォーム自身の GPU の仕組みで描くので、今のところ動くのはこの環境だけです。
+- **Apple silicon の macOS、または Linux**。
+  エンジンはプラットフォーム自身の GPU の仕組みで描きます。
+  macOS では Metal、Linux では Vulkan で、ウィンドウは Wayland か X11 に開きます。
 - **アプリを動かす perl 5.40 以降**。
   `class` を機能として当てにできるのがそこからです。
   `just rakugan-perl` が、固定してある 5.44.0 を取ってきて `~/.cache/perl/5.44.0` にビルドします。
@@ -19,8 +20,10 @@ Rakugan は今のところリポジトリの中にあります。
   入っていなければ `cpanm PPI`、または `rakugan/` で `cpanm --installdeps .` です。
 - **Rust**（[rustup](https://rustup.rs) から）。
   コンパイラの版はリポジトリが固定していて、最初のビルドで取ってきます。
-- **Xcode の Metal ツールチェイン**。
+- **macOS では Xcode の Metal ツールチェーン**。
   エンジンがビルド時にシェーダをコンパイルするからです。
+  Linux では代わりに、C コンパイラと、エンジンがリンクするライブラリが要ります。
+  alsa、fontconfig、freetype、xkbcommon（x11 の分も）、xcb、そして Vulkan のローダとドライバです。
 
 コマンドとアプリで perl を分けているのは意図したものです。
 翻訳器そのものは `class` の出てこない普通の Perl なので、システムの 5.34 でも動きます。

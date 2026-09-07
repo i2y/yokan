@@ -6,8 +6,9 @@
 
 ## 必要なもの
 
-- **macOS の Apple silicon。**
-  エンジンはこのプラットフォーム自身の GPU の仕組みで描くので、今のところ動くのはこの環境だけです。
+- **Apple silicon の macOS、または Linux**。
+  エンジンはプラットフォーム自身の GPU の仕組みで描きます。
+  macOS では Metal、Linux では Vulkan で、ウィンドウは Wayland か X11 に開きます。
 - **Ruby 4**（CRuby）。
   書いているあいだ、アプリを動かすインタプリタです。
 - **[spinel](https://github.com/matz/spinel)**。
@@ -17,8 +18,10 @@
   数分かかりますが、一度きりです。
 - **Rust**（[rustup](https://rustup.rs) から）。
   使うコンパイラの版はリポジトリが固定していて、最初のビルドで取ってきます。
-- **Xcode の Metal ツールチェーン。**
+- **macOS では Xcode の Metal ツールチェーン**。
   エンジンがビルド時にシェーダをコンパイルするからです。
+  Linux では代わりに、C コンパイラと、エンジンがリンクするライブラリが要ります。
+  alsa、fontconfig、freetype、xkbcommon（x11 の分も）、xcb、そして Vulkan のローダとドライバです。
 
 ## マシンごとに一度だけ
 

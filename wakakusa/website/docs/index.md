@@ -222,7 +222,7 @@ end.
 -   :material-rocket-launch: __[Installation](installation.md)__
 
     What you need, the one-time setup, and the five commands. macOS on
-    Apple silicon today.
+    Apple silicon and Linux today.
 
 -   :material-book-open-variant: __[Language tour](tour.md)__
 

@@ -2321,3 +2321,49 @@ already fetches its checkout into, and it carries its own mksquashfs,
 so a machine needs nothing installed to make one. That is the promise
 the rest of the command already makes — what a build needs, it goes
 and gets — rather than a new thing to install first.
+
+## The other two languages, and what a second port finds (2026-09-08)
+
+Wakakusa and Rakugan run on Linux. The engine was already there — they
+share the substrate, and the window came with it — so most of this was
+the same short list Yokan's port had: two zsh shebangs each, a
+`sysctl -n hw.ncpu` in each setup script that Linux answers with
+`nproc`, and `--app` naming itself and stopping where a `.app` has no
+meaning.
+
+Wakakusa needed one real thing. Its compiled run links the C face
+itself rather than letting pixie do it, so it carries a list of what
+the engine's lower half needs, and that list was sixteen Apple
+frameworks. The list is not written by hand: it is what
+`rustc --print native-static-libs` says of `pixie-capi`, and asking the
+same question on Linux answers `-lasound -lxcb -lfontconfig -lfreetype
+-lxkbcommon …`. Asking it also caught `-Wl,-dead_strip`, which is
+ld64's spelling of what GNU ld calls `--gc-sections` — the link would
+have failed outright on the flag before it ever reached a library.
+
+Rakugan needed nothing at all for its door: `Makefile.PL` already asks
+for `-lpixie_capi` with an rpath, and a linker finds `.so` or `.dylib`
+from that either way. What it did need was PPI.
+
+The dialect is read with PPI, and PPI has changed how it splits an
+attribute list. Older releases fold `param :` into one Label token,
+swallowing the colon after it; 1.28x gives the colon and the word
+apart. The translator was written against the first, so under the
+second EVERY value class was refused — four demos, the tour and the
+site — and refused with a message showing the writer the exact line
+they had already written correctly. That is the worst kind of refusal:
+one that teaches something false. It reads either shape now, so the
+dialect stops depending on which PPI a machine happens to ship.
+
+The last one is not about Linux at all, and the port only stood where
+it could be seen. `strftime`'s `%A`, `%a`, `%B` and `%b` are the
+locale's answer, and perl gives the machine's: on a Japanese machine
+perl says 木曜日 where the twin, holding a written-out English table,
+said Thursday. The two runs disagreed, which is the one thing a gate
+exists to prevent — and no demo used those four directives, so it had
+never had the chance to. The tour says `strftime` is the language's
+own, not Rakugan's, so the twin now asks the platform as perl does,
+and a Rust process gets there by calling `setlocale` once, which it
+otherwise never does. The tables stay a claim about the C locale and
+pin it themselves; setting `%ENV` was not enough, because perl fixes
+its locale before a `BEGIN` block runs.

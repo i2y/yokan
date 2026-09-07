@@ -197,7 +197,7 @@ Pyxel 自身の例（Takashi Kitao、MIT）が二つ、デモに入っていま�
 
 -   :material-rocket-launch: __[インストール](installation.md)__
 
-    必要なもの、一度だけの用意、五つのコマンド。今のところ macOS の Apple silicon だけです。
+    必要なもの、一度だけの用意、五つのコマンド。今のところ Apple silicon の macOS と Linux です。
 
 -   :material-book-open-variant: __[言語ツアー](tour.md)__
 

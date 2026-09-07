@@ -580,5 +580,6 @@ with neither Ruby nor the compiler installed.
 - `check` names those and five more, but it does not yet see
   everything the compiler gets wrong; the gate is still what catches
   the rest.
-- macOS only. The binary carries the engine it draws with, so even a
-  small app weighs about 12 MB.
+- macOS and Linux. `--app` is a macOS shape and names itself off it;
+  the binary `build` writes is native on both. It carries the engine it
+  draws with, so even a small app weighs about 12 MB.

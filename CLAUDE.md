@@ -197,7 +197,12 @@ Run these from `rakugan/`. `just rakugan-perl` once per machine fetches
 and builds the pinned perl (5.44.0) into `~/.cache/perl/<version>`; any
 perl of 5.40 or newer runs an app when `RAKUGAN_PERL` points at it. The
 command itself runs under whichever perl is first on the path and needs
-PPI from CPAN (the macOS system perl ships it).
+PPI from CPAN (the macOS system perl ships it; `perl-PPI` packages it
+on Fedora). Any PPI version reads: the translator takes either way PPI
+has split an attribute list, which is not the same across its own
+releases. The ground-truth tables are a claim about the C locale —
+`strftime`'s `%A`/`%a`/`%B`/`%b` follow LC_TIME in both runs — so the
+generator and the twin test pin it and the sweep needs no help.
 
 - `./bin/rakugan gate demo/counter.pl --script "click:+1,dump"` — **the
   gate**: the app under perl through the XS door over pixie's C face,

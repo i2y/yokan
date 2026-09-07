@@ -897,5 +897,6 @@ bundle is the whole program: it opens on a machine with neither perl
   The two games do, in a few lines of arithmetic.
 - `check` names what is listed above, but it does not yet see everything
   the translator gets wrong; the gate is still what catches the rest.
-- macOS only. The binary carries the engine it draws with, so even a
-  small app weighs about 12 MB.
+- macOS and Linux. `--app` is a macOS shape and names itself off it;
+  the binary `build` writes is native on both. It carries the engine it
+  draws with, so even a small app weighs about 12 MB.

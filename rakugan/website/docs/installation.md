@@ -7,15 +7,18 @@ command line.
 
 ## What you need
 
-- **macOS on Apple silicon.** The engine draws through the platform's
-  own GPU stack, and that is the only port today.
+- **macOS on Apple silicon, or Linux.** The engine draws through the
+  platform's own GPU stack: Metal there, Vulkan here, on Wayland or
+  X11.
 - **A perl of 5.40 or newer** to run your app, because that is where
   `class` is a feature you can rely on. `just rakugan-perl` fetches and
   builds the pinned 5.44.0 into `~/.cache/perl/5.44.0`; set
   `RAKUGAN_PERL=/path/to/perl` to use one you already have.
 - **PPI**, for the command itself, under whichever perl is first on your
-  path. The macOS system perl ships it; elsewhere, `cpanm PPI` or
-  `cpanm --installdeps .` from `rakugan/`.
+  path. The macOS system perl ships it; elsewhere, your distribution's
+  package (`perl-PPI` on Fedora), `cpanm PPI`, or `cpanm --installdeps .`
+  from `rakugan/`. Any version reads: the translator takes either way
+  PPI has split an attribute list.
 - **Rust**, via [rustup](https://rustup.rs). The exact compiler is
   pinned by the repository and fetched on the first build.
 - **Xcode's Metal toolchain**, because the engine compiles its shaders

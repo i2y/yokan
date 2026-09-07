@@ -143,5 +143,6 @@ Measured on macOS/arm64, with the shared build directory warm.
 - **A thread the app starts for itself** runs in both, but how far it
   gets by a given moment is not something the two runs agree about —
   which is what `task` is for.
-- **macOS on Apple silicon only.** The binary carries the engine it
-  draws with, so even a small app weighs about 12 MB.
+- **macOS and Linux.** `--app` is a macOS shape and names itself off
+  it; the binary `build` writes is native on both. It carries the
+  engine it draws with, so even a small app weighs about 12 MB.

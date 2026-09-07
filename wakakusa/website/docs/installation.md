@@ -6,8 +6,9 @@ once, and then `./bin/wakakusa` is the whole command line.
 
 ## What you need
 
-- **macOS on Apple silicon.** The engine draws through the platform's
-  own GPU stack, and that is the only port today.
+- **macOS on Apple silicon, or Linux.** The engine draws through the
+  platform's own GPU stack: Metal there, Vulkan here, on Wayland or
+  X11.
 - **Ruby 4** (CRuby) — the interpreter that runs your app while you are
   writing it.
 - **[spinel](https://github.com/matz/spinel)** — the ahead-of-time Ruby
@@ -16,8 +17,10 @@ once, and then `./bin/wakakusa` is the whole command line.
   into `~/.cache/spinel/<sha>`, a few minutes, once.
 - **Rust**, via [rustup](https://rustup.rs). The exact compiler is
   pinned by the repository and fetched on the first build.
-- **Xcode's Metal toolchain**, because the engine compiles its shaders
-  at build time.
+- **Xcode's Metal toolchain** on macOS, because the engine compiles
+  its shaders at build time. On Linux, a C compiler and the libraries
+  the engine links instead: alsa, fontconfig, freetype, xkbcommon with
+  its x11 half, xcb, and the Vulkan loader with a driver.
 
 ## Once per machine
 
