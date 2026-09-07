@@ -2232,9 +2232,20 @@ is worse than one that names itself and stops. So each of the three
 names itself and points at plain `build`, which writes a native
 binary on both.
 
-The honest edge: this was gated on Linux/arm64. Nothing in the change
-is architecture-specific and x86_64 resolves the same graph, but it
-has not been run.
+The honest edge is about the other architecture. This was gated on
+Linux/arm64; x86_64 has been taken as far as a machine of the wrong
+shape can take it. It resolves the same graph — `cargo fetch
+--target x86_64-unknown-linux-gnu` leaves the lock byte for byte
+alone — and the whole workspace cross-checks clean for it, the
+`yokan` crate included, against a Fedora cross toolchain. Nothing in
+these crates is architecture-specific: not a `target_arch`, not an
+intrinsic, not a line of assembly.
+
+What has NOT happened there is a run. A check compiles and never
+links, so x86_64 is proved to BUILD and is not yet proved to BEHAVE
+— and behaving is the whole of what this project's gate measures.
+Only the gate on an x86_64 machine settles that, which is a machine
+away rather than a decision away.
 
 ## The frame a compositor will not draw (2026-09-07)
 
