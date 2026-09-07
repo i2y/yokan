@@ -198,7 +198,7 @@ Buzz の画面と流れを、`@py` の中で動く mlx-whisper と組み合わ�
 
     開発は `uv run` だけ。
     ネイティブビルドには Rust ツールチェーンが要ります。
-    いまのところ Apple silicon の macOS と Linux です。
+    いまのところ macOS（Apple silicon）と Linux です。
 
 -   :material-book-open-variant: __[言語ツアー](tour.md)__
 

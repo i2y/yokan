@@ -42,7 +42,7 @@ $ yokan build app.py --release --onefile    # 1 ファイルで配る
 この流れのどこででも `yokan translate app.py` を実行すれば、リリースビルドがコンパイルする `.pix` が出てきます。
 
 !!! note "対応環境"
-    現在は **Apple silicon の macOS** と **Linux**、Python **3.14 以上**です。
+    現在は **macOS（Apple silicon）**と **Linux**、Python **3.14 以上**です。
 
 ## リリースに要るのは Rust ツールチェーン
 

@@ -136,7 +136,7 @@ GATE OK — 2 dump lines identical in both runs
 
 ## 対応環境
 
-現在は Apple silicon の macOS と Linux、Python 3.14 以上です。
+現在は macOS（Apple silicon）と Linux、Python 3.14 以上です。
 開発に必要なものは、`uv run app.py` だけで揃います（冒頭の例の 3 行コメントが依存宣言です）。
 プロジェクトに入れるなら `uv add yokan`、`yokan` コマンドは `uv tool install yokan` です。
 pip でも入ります。
