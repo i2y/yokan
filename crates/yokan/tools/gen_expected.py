@@ -59,10 +59,17 @@ OUT = os.path.join(HERE, "..", "..", "yokan-stdlib", "tests", "expected")
 # computes the first two itself rather than calling the platform, and
 # `fma` is exactly rounded by the standard, so the twin has to match
 # to the bit.
+#
+# `gauss` is not a libm function, but it is built out of three:
+# CPython computes it as `cos(2*pi*u) * sqrt(-2*log(1-v))`, and two of
+# those the platform decides. It rounded the same on both platforms
+# until a table printed by one was read by the other, where 2 of its
+# 56 rows came out a single ulp apart.
 LIBM = {
     "sin", "cos", "tan", "sinh", "cosh", "tanh", "exp", "exp2", "expm1",
     "log", "log1p", "log2", "log10", "atan", "atan2", "asin", "acos",
     "asinh", "acosh", "atanh", "cbrt", "pow",
+    "gauss",
 }
 
 # Boundary values first, then a few ordinary ones. A double that
