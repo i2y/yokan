@@ -13,7 +13,13 @@ pixie-kernel.workspace = true
 # 2026-08-23 - API drift ahead of the widget fan-out, plus P1). The
 # physical vendor + carried patches replace this git pin next.
 gpui = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48", features = ["font-kit"] }
+# `font-kit` is the mac side's text (without it nothing renders);
+# `wayland`/`x11` are the Linux side's windowing, and gpui_platform
+# defaults to NEITHER, so a Linux build without them has no backend
+# to open a window with. Resolver 2 ignores a feature whose dependency
+# is not active for the target, so all three ride one declaration and
+# there stays exactly one rev to bump.
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48", features = ["font-kit", "wayland", "x11"] }
 # `render_el` recurses once per element AND once per rider around it,
 # and an unoptimized build gives that one giant function a frame near a
 # megabyte — a tree nine wrappers deep overran the main thread's 8 MiB.
