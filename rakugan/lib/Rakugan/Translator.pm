@@ -33,7 +33,9 @@ package Rakugan::Translator;
 # a method whose name is a quote-like operator (`m`, `s`, `y`, `tr`,
 # `q`, `qq`, `qw`, `qr`) is read as a regular expression, so those
 # names are refused; and `method name :Sig(...)` mis-tokenizes the name
-# and its colon as one Label.
+# and its colon as one Label. How PPI splits an attribute list has
+# changed between its own versions, so `attr_names` reads either shape
+# rather than pinning the dialect to one PPI.
 use strict;
 use warnings;
 use utf8;
@@ -230,6 +232,35 @@ sub is_sym  { my ($t, $kind) = @_; $t && $t->isa('PPI::Token::Symbol') && (!defi
 sub is_sub  { my ($t, $b) = @_; $t && $t->isa('PPI::Structure::Subscript') && $t->start->content eq $b }
 sub strip_semicolon { my @t = @_; pop @t if @t && $t[-1]->isa('PPI::Token::Structure') && $t[-1]->content eq ';'; @t }
 
+# The attribute names after a field, and where the list ends. PPI has
+# tokenized `:param :reader` two ways across its own versions: older
+# ones fold `param :` into a single Label, swallowing the next colon,
+# and 1.28x gives the colon and the word apart. Reading both is what
+# keeps the dialect from depending on which PPI a machine happens to
+# ship — a field that is written correctly must not be refused because
+# the parser underneath was upgraded.
+sub attr_names {
+    my ($toks, $i) = @_;
+    my @names;
+    while (is_op($toks->[$i], ':')) {
+        my $t = $toks->[$i + 1] or return (undef, $i);
+        if ($t->isa('PPI::Token::Label')) {
+            (my $n = $t->content) =~ s/\s*:\s*\z//;
+            push @names, $n;
+            $i += 2;
+            # the Label ate the NEXT attribute's colon, so a word here
+            # is that attribute rather than the end of the list
+            if (is_word($toks->[$i])) { push @names, $toks->[$i]->content; $i++ }
+        } elsif ($t->isa('PPI::Token::Word')) {
+            push @names, $t->content;
+            $i += 2;
+        } else {
+            return (undef, $i);
+        }
+    }
+    return (\@names, $i);
+}
+
 # --- the file's declarations ---------------------------------------------
 # `use` lines, hashes of keywords, one class, the app, its timers and
 # the `run(...)` line. PPI reads `class Name { ... }` and whatever
@@ -321,11 +352,12 @@ sub value_class {
                     . 'is the app, and there is one of those')
             unless is_word($t[0], 'field');
         my $sym = $t[1];
+        my ($attrs, $j) = attr_names(\@t, 2);
         refuse($t[0], 'a field of a value is written `field $x :param :reader = 0;`')
-            unless is_sym($sym, '$') && is_op($t[2], ':') && $t[3] && $t[3]->isa('PPI::Token::Label')
-                && $t[3]->content =~ /\Aparam\s*:\z/ && is_word($t[4], 'reader')
-                && is_op($t[5], '=') && @t >= 7;
-        my ($ty, $pix) = literal_run([@t[6 .. $#t]]);
+            unless is_sym($sym, '$') && $attrs && @$attrs == 2
+                && $attrs->[0] eq 'param' && $attrs->[1] eq 'reader'
+                && is_op($t[$j], '=') && @t > $j + 1;
+        my ($ty, $pix) = literal_run([@t[$j + 1 .. $#t]]);
         push @fields, { name => substr($sym->content, 1), ty => $ty, init => $pix };
     }
     refuse($block, "`class $name` needs `use Rakugan;` as its first line") unless $pragma;
