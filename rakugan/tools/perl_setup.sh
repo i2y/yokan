@@ -9,6 +9,12 @@
 # perl of 5.40 or newer runs an app (RAKUGAN_PERL=/path/to/perl points
 # at one); this is the one the sweep is run with. Bumping it is its own
 # commit, with the sweep green.
+# How many jobs to build with. `sysctl -n hw.ncpu` is macOS's answer and
+# `nproc` is Linux's; either missing, one job still builds.
+build_jobs() {
+  nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1
+}
+
 set -eu
 
 PERL_PIN=5.44.0
@@ -37,7 +43,7 @@ if [ ! -x "$DIR/bin/perl" ]; then
   (
     cd "$SRC/perl-$PERL_PIN" &&
     sh Configure -des -Dprefix="$DIR" -Dusethreads > "$SRC/configure.log" 2>&1 &&
-    make -j"$(sysctl -n hw.ncpu)" > "$SRC/make.log" 2>&1 &&
+    make -j"$(build_jobs)" > "$SRC/make.log" 2>&1 &&
     make install > "$SRC/install.log" 2>&1
   ) || { echo "rakugan: the perl build failed; see $SRC/*.log" >&2; exit 1; }
 fi

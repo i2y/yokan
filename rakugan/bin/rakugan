@@ -477,6 +477,13 @@ die_("--fresh belongs to gate: it is there so the two runs start alike")
     if @{ $opts{fresh} } && $mode ne 'gate';
 die_("--release and --app belong to build: they are how an app ships")
     if ($opts{release} || $opts{app}) && $mode ne 'build';
+# The bundle is a macOS shape — an Info.plist, an ad-hoc signature, a
+# directory the Finder opens — and none of it has a meaning elsewhere.
+# The binary `build` writes is native on both, so this names the flag
+# rather than producing a directory nothing here opens.
+die_("--app wraps the artifact as a macOS .app, and this is not macOS — "
+     . "`rakugan build " . basename($app) . "` alone writes the native binary")
+    if $opts{app} && $^O ne 'darwin';
 
 no strict 'refs';
 &{"cmd_$mode"}($app, \%opts);

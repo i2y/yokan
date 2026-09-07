@@ -1,8 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Every Rakugan demo through both runs — perl over pixie's C ABI, and
 # the binary pixie built from the translated .pix — failing on any
 # difference. Run it before any commit that touches the door, the
 # translator, the generator or a demo.
+# `env bash`, not a login shell's own: nothing here is zsh's, and
+# bash is the one interpreter both supported platforms have.
 cd "$(dirname "$0")/.." || exit 1
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/pixie/target}"
 pass=0; fail=0; failed=""
@@ -52,6 +54,9 @@ if ! "$PERL_FOR_TABLES" tools/gen_expected.pl --check; then
   echo "FAIL tables (crates/rakugan-stdlib/tests/expected is behind what perl prints)"
   exit 1
 fi
+# No locale to set here: the tables are a claim about the C locale and
+# the test pins it itself, so this passes under whatever the machine
+# happens to be.
 if ! (cd .. && cargo test -q -p rakugan-stdlib > /dev/null 2>&1); then
   echo "FAIL twins (a twin does not answer what perl printed)"
   (cd .. && cargo test -q -p rakugan-stdlib 2>&1 | tail -20)
