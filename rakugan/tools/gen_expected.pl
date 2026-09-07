@@ -1,6 +1,11 @@
 #!/usr/bin/env perl
 # What perl answers, printed by perl.
 #
+# Pinned to the C locale, because `strftime`'s %A/%a/%B/%b read
+# LC_TIME and the twin reads it too: a table printed on a Japanese
+# machine would say 木曜日 and be false everywhere else. The table is a
+# claim about the C locale, and the test that reads it pins the same.
+#
 # The gate proves the two runs AGREE. It cannot prove they agree with
 # perl: a twin that is wrong the same way in both runs still passes it.
 # That is what these tables are for. The interpreted run IS perl, so
@@ -28,6 +33,11 @@ use Encode qw(encode);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use File::Spec;
+
+# See the note above: the table is a claim about the C locale. Setting
+# %ENV here would be too late — perl fixes its locale before this file
+# runs — so the locale itself is set, which is what strftime reads.
+POSIX::setlocale(POSIX::LC_ALL(), 'C');
 
 my $ROOT = File::Spec->rel2abs(File::Spec->catdir(dirname(__FILE__), '..'));
 my $OUT  = File::Spec->rel2abs(File::Spec->catdir($ROOT, '..', 'crates', 'rakugan-stdlib', 'tests', 'expected'));

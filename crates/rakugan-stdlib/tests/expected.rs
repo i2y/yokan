@@ -238,6 +238,13 @@ fn sprintf_matches_perl() {
 
 #[test]
 fn time_matches_perl() {
+    // The table is a claim about the C locale, and the twin reads
+    // LC_TIME as perl does — under a Japanese locale it answers 木曜日,
+    // which is right and is not what is written down here. Pinned
+    // before the first `strftime` call, because that is when the twin
+    // asks the environment; otherwise this test would pass or fail on
+    // whoever ran it.
+    unsafe { std::env::set_var("LC_ALL", "C") };
     check("time.txt", dispatch);
 }
 

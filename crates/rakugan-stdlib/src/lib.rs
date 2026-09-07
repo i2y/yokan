@@ -540,21 +540,6 @@ fn local_offset(epoch: i64) -> i64 {
     unsafe extern "C" {
         fn localtime_r(t: *const i64, tm: *mut CTm) -> *mut CTm;
     }
-    #[repr(C)]
-    #[derive(Default)]
-    struct CTm {
-        sec: i32,
-        min: i32,
-        hour: i32,
-        mday: i32,
-        mon: i32,
-        year: i32,
-        wday: i32,
-        yday: i32,
-        isdst: i32,
-        gmtoff: i64,
-        zone: *const i8,
-    }
     let mut tm = CTm {
         zone: std::ptr::null(),
         ..Default::default()
@@ -562,6 +547,77 @@ fn local_offset(epoch: i64) -> i64 {
     let t = epoch;
     unsafe { localtime_r(&t, &mut tm) };
     tm.gmtoff
+}
+
+/// `strftime`'s `tm`, as the platform lays it out.
+#[repr(C)]
+#[derive(Default)]
+struct CTm {
+    sec: i32,
+    min: i32,
+    hour: i32,
+    mday: i32,
+    mon: i32,
+    year: i32,
+    wday: i32,
+    yday: i32,
+    isdst: i32,
+    gmtoff: i64,
+    zone: *const std::ffi::c_char,
+}
+
+/// LC_TIME, which is not the same number everywhere.
+#[cfg(target_os = "macos")]
+const LC_TIME: i32 = 5;
+#[cfg(not(target_os = "macos"))]
+const LC_TIME: i32 = 2;
+
+/// A day or month name, asked of the platform rather than written out
+/// here. perl's `POSIX::strftime` answers in the machine's LC_TIME
+/// locale, and this is a twin of perl: on a Japanese machine both runs
+/// have to say 木曜日, or the gate is comparing two different programs
+/// rather than two runs of one.
+///
+/// A Rust process never calls `setlocale`, so it begins in "C" and
+/// would answer English for ever; the call below is what reaches the
+/// platform's own table at all. LC_TIME alone, because nothing else
+/// here wants the locale's opinion — a decimal comma inside a number
+/// would be a different bug. Held to a table printed under LC_ALL=C,
+/// so what the table claims is true wherever it is read.
+fn locale_name(fmt: &str, wday: i64, mon: i64) -> String {
+    unsafe extern "C" {
+        fn setlocale(category: i32, locale: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+        fn strftime(
+            s: *mut std::ffi::c_char,
+            max: usize,
+            format: *const std::ffi::c_char,
+            tm: *const CTm,
+        ) -> usize;
+    }
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        setlocale(LC_TIME, c"".as_ptr());
+    });
+    // Only the two fields these four directives read are filled: the
+    // rest of `tm` never reaches the answer.
+    let tm = CTm {
+        wday: wday as i32,
+        mon: (mon - 1) as i32,
+        zone: std::ptr::null(),
+        ..Default::default()
+    };
+    let cfmt = std::ffi::CString::new(fmt).expect("a literal with no NUL");
+    let mut buf = [0i8; 256];
+    let n = unsafe {
+        strftime(
+            buf.as_mut_ptr() as *mut std::ffi::c_char,
+            buf.len(),
+            cfmt.as_ptr(),
+            &tm,
+        )
+    };
+    let bytes: Vec<u8> = buf[..n].iter().map(|&c| c as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// The directives an app may write, and no others: an unknown one is
@@ -576,9 +632,6 @@ fn strftime_at(fmt: &str, epoch: i64, offset: i64) -> String {
     // 1970-01-01 was a Thursday.
     let wday = (days + 4).rem_euclid(7);
     let yday = days - days_from_civil(y, 1, 1) + 1;
-    const WDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June",
-                                "July", "August", "September", "October", "November", "December"];
     let mut out = String::new();
     let mut cs = fmt.chars().peekable();
     while let Some(c) = cs.next() {
@@ -598,10 +651,10 @@ fn strftime_at(fmt: &str, epoch: i64, offset: i64) -> String {
             Some('j') => out.push_str(&format!("{yday:03}")),
             Some('F') => out.push_str(&format!("{y}-{m:02}-{d:02}")),
             Some('T') => out.push_str(&format!("{hh:02}:{mm:02}:{ss:02}")),
-            Some('A') => out.push_str(WDAYS[wday as usize]),
-            Some('a') => out.push_str(&WDAYS[wday as usize][..3]),
-            Some('B') => out.push_str(MONTHS[(m - 1) as usize]),
-            Some('b') => out.push_str(&MONTHS[(m - 1) as usize][..3]),
+            Some('A') => out.push_str(&locale_name("%A", wday, m)),
+            Some('a') => out.push_str(&locale_name("%a", wday, m)),
+            Some('B') => out.push_str(&locale_name("%B", wday, m)),
+            Some('b') => out.push_str(&locale_name("%b", wday, m)),
             Some('n') => out.push('\n'),
             Some('t') => out.push('\t'),
             Some('%') => out.push('%'),
