@@ -12370,6 +12370,189 @@ def make_app_bundle(app_py: str, tr, binary: str, payload_dir: str | None = None
     return root
 
 
+# ---- Linux packaging: the AppDir and the AppImage --------------------
+
+# The libraries an AppDir must NOT carry. Every target system provides
+# these, and a bundled copy meeting the host's is how an AppImage
+# breaks on a machine that is not the one that built it — the graphics
+# stack in particular has to be the host's or it does not talk to the
+# host's driver. This is the AppImage project's own excludelist
+# (pkg2appimage), reduced to sonames; `libfontconfig`, `libfreetype`,
+# `libasound` and `libharfbuzz` are on it, which is exactly the set a
+# first guess would have bundled.
+APPIMAGE_EXCLUDE = frozenset("""
+    ld-linux-x86-64.so.2 ld-linux.so.2 libBrokenLocale.so.1
+    libEGL.so.1 libGL.so.1 libGLX.so.0 libGLdispatch.so.0
+    libICE.so.6 libOpenGL.so.0 libSM.so.6 libX11-xcb.so.1
+    libX11.so.6 libanl.so.1 libasound.so.2 libc.so.6 libcidn.so.1
+    libcom_err.so.2 libdl.so.2 libdrm.so.2 libexpat.so.1
+    libfontconfig.so.1 libfreetype.so.6 libfribidi.so.0 libgbm.so.1
+    libgcc_s.so.1 libglapi.so.0 libgmp.so.10 libgpg-error.so.0
+    libharfbuzz.so.0 libjack.so.0 libm.so.6 libmvec.so.1
+    libnss_compat.so.2 libnss_dns.so.2 libnss_files.so.2
+    libnss_hesiod.so.2 libnss_nis.so.2 libnss_nisplus.so.2
+    libpipewire-0.3.so.0 libpthread.so.0 libresolv.so.2 librt.so.1
+    libstdc++.so.6 libthread_db.so.1 libusb-1.0.so.0 libutil.so.1
+    libuuid.so.1 libwayland-client.so.0 libxcb-dri2.so.0 libxcb-
+    dri3.so.0 libxcb.so.1 libz.so.1
+""".split())
+
+
+def appimage_arch() -> str:
+    """What appimagetool calls this machine."""
+    import platform  # noqa: PLC0415
+
+    m = platform.machine()
+    return {"arm64": "aarch64", "amd64": "x86_64"}.get(m, m)
+
+
+def bundled_libs(binary: str) -> list[str]:
+    """The shared libraries the AppDir carries: what the binary
+    resolves, less the excludelist. `ldd` rather than a static read,
+    because what the loader actually picks is the answer that matters."""
+    r = subprocess.run(["ldd", binary], capture_output=True, text=True)
+    out = set()
+    for line in r.stdout.splitlines():
+        soname, sep, rest = line.strip().partition(" => ")
+        if not sep:
+            continue
+        path = rest.split(" (")[0].strip()
+        if path and os.path.exists(path) and soname.strip() not in APPIMAGE_EXCLUDE:
+            out.add(path)
+    return sorted(out)
+
+
+def write_icon(path: str, rgb: int = 0x89B4FA) -> None:
+    """A plain square in the engine's accent. appimagetool requires the
+    file the .desktop entry names, so an app that brought no icon of
+    its own still gets one rather than a refusal."""
+    import struct  # noqa: PLC0415
+    import zlib  # noqa: PLC0415
+
+    side = 256
+    px = bytes(((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255))
+    raw = (b"\x00" + px * side) * side
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n")
+        f.write(chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 2, 0, 0, 0)))
+        f.write(chunk(b"IDAT", zlib.compress(raw, 9)))
+        f.write(chunk(b"IEND", b""))
+
+
+def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None) -> str:
+    """`--app` on Linux: the AppDir, which is both a runnable directory
+    and the thing appimagetool packs. `AppRun` puts the carried
+    libraries ahead of the host's for this process only, so nothing is
+    installed and nothing leaks out of the directory."""
+    import shutil  # noqa: PLC0415
+
+    app_dir = os.path.dirname(os.path.abspath(app_py))
+    stem = os.path.splitext(os.path.basename(app_py))[0]
+    title = (getattr(tr, "window", None) or {}).get("title") or stem
+    # Both artifacts here are handled from a shell — a file someone
+    # downloads and runs — so the name carries no spaces. The readable
+    # one lives in the .desktop `Name`, which is what a desktop shows.
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", title).strip("_") or stem
+    root = os.path.join(app_dir, "dist", f"{safe}.AppDir")
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(os.path.join(root, "usr", "bin"))
+    os.makedirs(os.path.join(root, "usr", "lib"))
+
+    if payload_dir:
+        shutil.copytree(payload_dir, os.path.join(root, "usr", "bin"), dirs_exist_ok=True)
+        exe_rel = os.path.relpath(binary, payload_dir)
+    else:
+        exe_rel = stem
+        shutil.copy2(binary, os.path.join(root, "usr", "bin", exe_rel))
+    exe = os.path.join(root, "usr", "bin", exe_rel)
+    os.chmod(exe, 0o755)
+    for lib in bundled_libs(exe):
+        shutil.copy2(lib, os.path.join(root, "usr", "lib", os.path.basename(lib)))
+
+    icon = os.path.join(root, f"{stem}.png")
+    src_icon = os.path.join(app_dir, f"{stem}.png")
+    if os.path.isfile(src_icon):
+        shutil.copyfile(src_icon, icon)
+    else:
+        write_icon(icon)
+
+    with open(os.path.join(root, f"{stem}.desktop"), "w") as f:
+        f.write(
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            f"Name={title}\n"
+            f"Exec={exe_rel}\n"
+            f"Icon={stem}\n"
+            "Categories=Utility;\n"
+            "Terminal=false\n"
+        )
+    run = os.path.join(root, "AppRun")
+    with open(run, "w") as f:
+        f.write(
+            "#!/bin/sh\n"
+            '# Generated by yokan. The carried libraries go ahead of the\n'
+            "# host's for this process only.\n"
+            'HERE="$(dirname "$(readlink -f "$0")")"\n'
+            'export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
+            f'exec "$HERE/usr/bin/{exe_rel}" "$@"\n'
+        )
+    os.chmod(run, 0o755)
+    return root
+
+
+def appimagetool() -> str:
+    """The packer, fetched once into the cache the native build already
+    fetches its checkout into. It carries its own mksquashfs, so a
+    machine needs nothing installed to build one."""
+    arch = appimage_arch()
+    dest = os.path.join(cache_root(), f"appimagetool-{arch}")
+    if os.path.exists(dest):
+        return dest
+    url = (
+        "https://github.com/AppImage/appimagetool/releases/download/"
+        f"continuous/appimagetool-{arch}.AppImage"
+    )
+    print(f"fetching appimagetool ({arch}) into {dest}", file=sys.stderr)
+    print("  first --appimage build only; later builds reuse it", file=sys.stderr)
+    os.makedirs(cache_root(), exist_ok=True)
+    tmp = f"{dest}.part"
+    try:
+        import urllib.request  # noqa: PLC0415
+
+        with urllib.request.urlopen(url) as r, open(tmp, "wb") as f:
+            shutil.copyfileobj(r, f)
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"could not fetch appimagetool from {url}: {e}")
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, dest)
+    return dest
+
+
+def make_appimage(appdir: str) -> str:
+    """`--appimage`: the AppDir packed into the one file Linux hands
+    someone else. APPIMAGE_EXTRACT_AND_RUN keeps the packer working
+    where FUSE is not available, which is most containers."""
+    arch = appimage_arch()
+    name = os.path.basename(appdir)[: -len(".AppDir")]
+    out = os.path.join(os.path.dirname(appdir), f"{name}-{arch}.AppImage")
+    if os.path.exists(out):
+        os.remove(out)
+    r = subprocess.run(
+        [appimagetool(), appdir, out],
+        capture_output=True, text=True,
+        env=dict(os.environ, ARCH=arch, APPIMAGE_EXTRACT_AND_RUN="1"),
+    )
+    if r.returncode != 0 or not os.path.exists(out):
+        sys.exit(f"appimagetool failed:\n{r.stdout}\n{r.stderr}")
+    os.chmod(out, 0o755)
+    return out
+
+
 def do_add(args) -> None:
     """`yokan add <app.py> <crate> [VERSION] [--path DIR]
     [--features a,b]` — declare the crate where the app's crates
@@ -12592,7 +12775,9 @@ def main():
     ap.add_argument("--onefile", action="store_true",
                     help="one distributable file: launcher + embedded runtime, unpacked to the user cache on first run")
     ap.add_argument("--app", dest="app_bundle", action="store_true",
-                    help="build only: wrap the artifact as a macOS .app bundle in <app>/dist/")
+                    help="build only: the platform's application directory in <app>/dist/ — a macOS .app, or a Linux AppDir")
+    ap.add_argument("--appimage", action="store_true",
+                    help="build only (Linux): pack that AppDir into one distributable .AppImage")
     ap.add_argument("--bundle", action="store_true",
                     help="ship a python-build-standalone runtime next to the binary (@ui.py apps)")
     ap.add_argument("--frames", default=None,
@@ -12675,19 +12860,22 @@ def main():
     pix_path = os.path.join(gate_dir, f"{stem}.pix")
     open(pix_path, "w").write(pix)
 
-    # Packaging is the half of `build` that is still Apple's: the
-    # runtime folder rewrites a Mach-O load command, the artifacts are
-    # ad-hoc signed, and `.app` is a macOS shape. None of the three has
-    # a meaning here, and the binary `build` writes is already native on
-    # both platforms — so this names the flag rather than quietly
-    # producing a bundle nothing on this platform opens.
+    # A packaging shape belongs to its platform, and a flag that builds
+    # one names the other rather than producing something nothing there
+    # opens. `--bundle` rewrites a Mach-O load command and ad-hoc signs,
+    # so it and the `--onefile` built on top of it stay macOS's;
+    # `--appimage` is Linux's. `--app` is on both, and means the same
+    # thing on each: the platform's own application directory.
+    here = os.path.basename(args.app)
     if sys.platform != "darwin":
         for on, flag, what in ((args.bundle, "--bundle", "ships a macOS runtime folder"),
-                               (args.onefile, "--onefile", "packs that folder into one file"),
-                               (args.app_bundle, "--app", "wraps the artifact as a macOS .app")):
+                               (args.onefile, "--onefile", "packs that folder into one file")):
             if on:
                 sys.exit(f"{flag} {what}, and this is not macOS — "
-                         f"`yokan build {os.path.basename(args.app)}` alone writes the native binary")
+                         f"`yokan build {here} --appimage` is the one file this platform hands someone else")
+    elif args.appimage:
+        sys.exit("--appimage builds a Linux AppImage, and this is macOS — "
+                 f"`yokan build {here} --app` wraps it as a .app instead")
     if args.onefile:
         args.bundle = True
     if args.bundle and not tr.escapes:
@@ -12711,13 +12899,23 @@ def main():
                     binary = make_onefile(proj, stem, os.path.dirname(binary))
         else:
             _, binary = tier_b(pix_path, "", args.release, run=False)
-        if args.app_bundle:
+        if args.app_bundle or args.appimage:
             if args.onefile:
                 sys.exit("--app makes a folder-shaped bundle; --onefile makes a single file — pick one")
             payload = os.path.dirname(binary) if args.bundle else None
-            approot = make_app_bundle(args.app, tr, binary, payload_dir=payload)
-            print(f"built: {approot}")
-            print("  double-clickable; the executable inside replays PIXIE_SCRIPT like any build")
+            if sys.platform == "darwin":
+                approot = make_app_bundle(args.app, tr, binary, payload_dir=payload)
+                print(f"built: {approot}")
+                print("  double-clickable; the executable inside replays PIXIE_SCRIPT like any build")
+                return
+            appdir = make_appdir(args.app, tr, binary, payload_dir=payload)
+            if not args.appimage:
+                print(f"built: {appdir}")
+                print("  run the AppRun inside it; --appimage packs it into one file")
+                return
+            out = make_appimage(appdir)
+            print(f"built: {out} ({describe_artifact(out)})")
+            print("  one file, carrying the libraries the host is not expected to have")
             return
         print(f"built: {binary} ({describe_artifact(binary)})")
         print("  not gate-checked — `gate` with a script proves the two runs agree")
