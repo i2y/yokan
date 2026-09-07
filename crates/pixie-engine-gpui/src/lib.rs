@@ -105,6 +105,10 @@ struct Root<C: Component> {
     /// The inset between the window and the app's tree, in logical
     /// pixels (`ROOT_PADDING` unless the app asked for another).
     padding: f32,
+    /// The window's title. The platform gets it either way; the
+    /// engine needs its own copy only where it draws the titlebar
+    /// itself (`title_bar`).
+    title: SharedString,
 }
 
 /// What the canvases in one window keep between frames.
@@ -1228,6 +1232,34 @@ impl<C: Component> Render for Root<C> {
         if window.focused(cx).is_none() {
             window.focus(&self.root_focus, cx);
         }
+        // Whether this window arrived with a frame, or has to draw
+        // one for itself. Asked every frame, because the answer can
+        // change under the window: tiling it is reported right here.
+        let decorations = window.window_decorations();
+        // The ring the engine paints around the app's tree. 16 px is
+        // right for an app made of controls and wrong for one that IS
+        // a picture — a canvas, a map, a video — so it is a number the
+        // app sets rather than a fact of the framework. It is window
+        // chrome, not an element, so no dump changes with it.
+        let app_area = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p(px(self.padding))
+            .child(body);
+        // Where the platform decorates, the app's area IS the window,
+        // exactly as it has always been. Where it does not, the
+        // engine's own bar goes above it and the area takes the rest.
+        let framed = match decorations {
+            gpui::Decorations::Server => app_area.size_full().into_any_element(),
+            gpui::Decorations::Client { .. } => div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(title_bar(self.title.clone(), th, window))
+                .child(app_area.w_full().flex_1().min_h(px(0.0)))
+                .into_any_element(),
+        };
         gpui::image_cache(self.images.clone())
             .relative()
             .flex()
@@ -1308,25 +1340,178 @@ impl<C: Component> Render for Root<C> {
                     ))
                     .bg(rgb(th.window_bg))
                     .text_color(rgb(th.text))
-                    .child(
-                        // The ring the engine paints around the app's
-                        // tree. 16 px is right for an app made of
-                        // controls and wrong for one that IS a
-                        // picture — a canvas, a map, a video — so it
-                        // is a number the app sets rather than a fact
-                        // of the framework. It is window chrome, not
-                        // an element, so no dump changes with it.
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .p(px(self.padding))
-                            .size_full()
-                            .child(body),
-                    )
-                    .children(pass.overlays),
+                    .child(framed)
+                    .children(pass.overlays)
+                    // Last, so an edge stays takeable over whatever
+                    // the app has drawn against the window's rim.
+                    .children(resize_grips(decorations)),
             )
     }
+}
+
+/// How tall the engine's own titlebar is, in logical pixels.
+const TITLE_BAR_H: f32 = 32.0;
+
+/// The frame the engine draws when the platform says the frame is the
+/// client's.
+///
+/// Whether a window is decorated at all is the compositor's call on
+/// Wayland, and GNOME's answer is never: it advertises no
+/// `xdg-decoration` manager, so the `WindowDecorations::Server` gpui
+/// asks for cannot be honoured and the window arrives with nothing to
+/// drag, nothing to close and no edge to pull. macOS, X11 under a
+/// window manager, and every compositor that does decorate all report
+/// `Decorations::Server`, where none of this is built and the window
+/// is exactly what it was.
+///
+/// The bar is painted in the APP's palette rather than the desktop's.
+/// The palette is the one thing the engine knows, and it is already
+/// what the rest of the window is painted in; reading the desktop's
+/// would be a second theme system for one strip of pixels.
+fn title_bar(title: SharedString, th: &'static Theme, window: &Window) -> gpui::AnyElement {
+    let controls = window.window_controls();
+    // A control is one glyph in a box a little wider than the bar is
+    // tall, so the set of them squares off at the trailing end.
+    let control = move |glyph: &'static str| {
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .w(px(TITLE_BAR_H + 6.0))
+            .h(px(TITLE_BAR_H))
+            .text_size(px(13.0))
+            .text_color(rgb(th.text))
+            .hover(move |s| s.bg(rgb(th.surface_hover)))
+            .child(glyph)
+    };
+    // Minimize and maximize are offered only where the platform says
+    // it has them; closing is always possible, so it is never asked.
+    let mut buttons: Vec<gpui::AnyElement> = Vec::new();
+    if controls.minimize {
+        buttons.push(
+            control("\u{2212}")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    |_ev: &MouseDownEvent, window: &mut Window, _cx: &mut App| {
+                        window.minimize_window();
+                    },
+                )
+                .into_any_element(),
+        );
+    }
+    if controls.maximize {
+        buttons.push(
+            control("\u{25a1}")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    |_ev: &MouseDownEvent, window: &mut Window, _cx: &mut App| {
+                        window.zoom_window();
+                    },
+                )
+                .into_any_element(),
+        );
+    }
+    buttons.push(
+        control("\u{00d7}")
+            .on_mouse_down(
+                MouseButton::Left,
+                |_ev: &MouseDownEvent, _window: &mut Window, cx: &mut App| {
+                    cx.quit();
+                },
+            )
+            .into_any_element(),
+    );
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .w_full()
+        .h(px(TITLE_BAR_H))
+        .bg(rgb(th.panel))
+        .border_b_1()
+        .border_color(rgb(th.border))
+        .child(
+            // The title, and the whole empty run of bar beside it, is
+            // the drag handle. It is a SIBLING of the controls rather
+            // than the parent of them, so pressing a control is never
+            // also the beginning of a window move — no propagation
+            // rule to get right, because the two never overlap.
+            div()
+                .flex()
+                .flex_1()
+                .min_w(px(0.0))
+                .items_center()
+                .h_full()
+                .px(px(10.0))
+                .text_size(px(13.0))
+                .text_color(rgb(th.text))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    |ev: &MouseDownEvent, window: &mut Window, _cx: &mut App| {
+                        // The double click a titlebar has always
+                        // meant: zoom, rather than move.
+                        if ev.click_count >= 2 {
+                            window.zoom_window();
+                        } else {
+                            window.start_window_move();
+                        }
+                    },
+                )
+                .child(title),
+        )
+        .children(buttons)
+        .into_any_element()
+}
+
+/// The grips a client-decorated window is resized by. The compositor
+/// does the resizing; a grip only says which edge was taken hold of.
+/// An edge the window is tiled against is left out, because pulling
+/// it would fight the tiling.
+fn resize_grips(decorations: gpui::Decorations) -> Vec<gpui::AnyElement> {
+    let gpui::Decorations::Client { tiling } = decorations else {
+        return Vec::new();
+    };
+    use gpui::{CursorStyle as Cs, ResizeEdge as E};
+    // Thin along an edge, square at a corner. The corners are pushed
+    // last, so where they overlap an edge it is the corner that takes
+    // the press.
+    const EDGE: f32 = 5.0;
+    const CORNER: f32 = 12.0;
+    let grip = |edge: E, cursor: Cs| {
+        div().absolute().cursor(cursor).on_mouse_down(
+            MouseButton::Left,
+            move |_ev: &MouseDownEvent, window: &mut Window, _cx: &mut App| {
+                window.start_window_resize(edge);
+            },
+        )
+    };
+    let mut out: Vec<gpui::AnyElement> = Vec::new();
+    if !tiling.top {
+        out.push(grip(E::Top, Cs::ResizeUpDown).top_0().left_0().w_full().h(px(EDGE)).into_any_element());
+    }
+    if !tiling.bottom {
+        out.push(grip(E::Bottom, Cs::ResizeUpDown).bottom_0().left_0().w_full().h(px(EDGE)).into_any_element());
+    }
+    if !tiling.left {
+        out.push(grip(E::Left, Cs::ResizeLeftRight).top_0().left_0().h_full().w(px(EDGE)).into_any_element());
+    }
+    if !tiling.right {
+        out.push(grip(E::Right, Cs::ResizeLeftRight).top_0().right_0().h_full().w(px(EDGE)).into_any_element());
+    }
+    if !tiling.top && !tiling.left {
+        out.push(grip(E::TopLeft, Cs::ResizeUpLeftDownRight).top_0().left_0().size(px(CORNER)).into_any_element());
+    }
+    if !tiling.top && !tiling.right {
+        out.push(grip(E::TopRight, Cs::ResizeUpRightDownLeft).top_0().right_0().size(px(CORNER)).into_any_element());
+    }
+    if !tiling.bottom && !tiling.left {
+        out.push(grip(E::BottomLeft, Cs::ResizeUpRightDownLeft).bottom_0().left_0().size(px(CORNER)).into_any_element());
+    }
+    if !tiling.bottom && !tiling.right {
+        out.push(grip(E::BottomRight, Cs::ResizeUpLeftDownRight).bottom_0().right_0().size(px(CORNER)).into_any_element());
+    }
+    out
 }
 
 /// One menu item, dispatched by the index it was declared at. gpui
@@ -4543,6 +4728,7 @@ pub fn run_app<C: Component>(
                         images,
                         root_focus: cx.focus_handle(),
                         padding: padding.unwrap_or(ROOT_PADDING) as f32,
+                        title: title.clone(),
                     })
                 },
             )
