@@ -3671,13 +3671,24 @@ pub fn fs_make_dir(path: &str) -> i64 {
 }
 
 /// The directory an app may keep its own files in, created on the way
-/// out: `~/Library/Application Support/<name>` on macOS.
+/// out: `~/Library/Application Support/<name>` on macOS, and
+/// `$XDG_DATA_HOME/<name>` (default `~/.local/share/<name>`)
+/// elsewhere — each platform's own answer to the same question. One
+/// implementation, so both runs of an app land in one directory and
+/// the gate compares an app against itself, not against a path.
 pub fn fs_app_dir(name: &str) -> String {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let dir = std::path::Path::new(&home)
-        .join("Library")
-        .join("Application Support")
-        .join(name);
+    let base = if cfg!(target_os = "macos") {
+        std::path::Path::new(&home)
+            .join("Library")
+            .join("Application Support")
+    } else {
+        match std::env::var("XDG_DATA_HOME") {
+            Ok(x) if !x.is_empty() => std::path::PathBuf::from(x),
+            _ => std::path::Path::new(&home).join(".local").join("share"),
+        }
+    };
+    let dir = base.join(name);
     if let Err(e) = std::fs::create_dir_all(&dir) {
         panic!("fs.app_dir {name}: {e}");
     }
