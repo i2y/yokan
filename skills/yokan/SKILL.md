@@ -754,9 +754,10 @@ it, so an upgrade compiles what changed rather than the engine again.
 `yokan version` prints package, checkout and build tree; `yokan
 clean` drops the cache; `translate` works anywhere. `--app`
 makes `dist/<Title>.app` (a `<stem>.png` beside the file becomes
-the icon); it excludes `--onefile`. The three packaging flags are
-macOS's and refuse by name on Linux, where plain `build` writes the
-native binary.
+the icon); it excludes `--onefile`. On Linux `--app` writes an
+AppDir instead and `--appimage` packs it into one `.AppImage`, with
+the libraries a host is not expected to have inside. `--bundle` and
+`--onefile` carry CPython in Apple's layout and refuse by name there.
 
 **The loop.** `check` (a second, no compiler) → `show` (a second, no
 window: the screen as text, and with `--frames` a PNG of each step's
@@ -843,8 +844,8 @@ reason.
   own, or whose wrapper calls the function twice or uses its value.
 - At the Rust-crate boundary: payload-carrying enums and methods
   on a twin; enum- or list-typed struct fields.
-- Packaging (`--bundle`, `--onefile`, `--app`) is macOS's; the
-  binary, the window, the gate and the library are the same on
-  Linux.
+- An `@py` app cannot carry its Python on Linux: `--bundle` and
+  `--onefile` are Apple's runtime folder. `--app` and `--appimage`
+  package an escape-free app there.
 - macOS on Apple silicon is the measured platform; Linux runs the
   same gate.

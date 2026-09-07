@@ -1555,6 +1555,7 @@ $ yokan build app.py --release --app        # macOS の .app バンドル
 $ yokan build app.py --release --bundle     # @py あり: ランタイム同梱フォルダ
 $ yokan build app.py --release --bundle --app   # ランタイムごと .app に
 $ yokan build app.py --release --onefile    # 1 ファイル配布
+$ yokan build app.py --release --appimage   # Linux: 1 つの .AppImage
 ```
 
 ネイティブビルドの前提は Rust ツールチェーンだけです。
@@ -1574,10 +1575,14 @@ Dock に名前が出て、ダブルクリックで起動でき、Finder から A
 アプリのファイルの隣に `<名前>.png`（または `.icns`）を置くと、アイコンとして取り込まれます。
 `--onefile` は 1 ファイル形式なので `.app` とは排他です。
 
-この三つのフラグは macOS のものです。
-作られる形はどれも Apple のもので、ロードコマンドの書き換え、アドホック署名、`.app` がそれにあたります。
-Linux では、それぞれが自分の名前を挙げて止まります。
-そのプラットフォームが動かすネイティブバイナリは、`yokan build` だけで作れます。
+Linux では、形も Linux のものになります。
+`--app` は `dist/<タイトル>.AppDir` を作ります。
+中身はバイナリ、`AppRun`、`.desktop` エントリ、アイコン、そしてホストにあるとは限らないライブラリです。
+`--appimage` はそれを `dist/<タイトル>-<arch>.AppImage` に詰めます。
+このプラットフォームで人に渡す 1 ファイルがこれです。
+同梱するライブラリは AppImage プロジェクトの excludelist が決めます。
+`libfontconfig` や `libasound` を同梱するとホスト側のものとぶつかり、それが AppImage の壊れ方なので、外してあります。
+`--bundle` と `--onefile` は CPython を Apple の流儀で運ぶものなので、ここでは名前を挙げて止まります。
 
 ## 本格アプリの例
 
@@ -1707,11 +1712,10 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   残る二つのうち、ペイロード enum は rpi-gen 自体の残件です。
   メソッドは、rpi で宣言済みの struct に実装を接ぐところが残っています。
   構造体のフィールドに enum やリストを置く形もまだで、どれも、呼べば理由を挙げて断られます。
-- **パッケージングは macOS のものです**。
-  `--bundle`、`--onefile`、`--app` が作るのは Apple の形なので、Linux では名前を挙げて断ります。
-  ネイティブバイナリは、どちらでも `yokan build` が作ります。
-  それ以外（ウィンドウ、ゲート、標準ライブラリ）は、どちらのプラットフォームでも同じです。
-  どちらの実行でも一つの実装が動く、という作りが両方で変わらないからです。
+- **`@py` を持つアプリは、Linux では Python を同梱できません**。
+  `--bundle` と `--onefile` が作るのは Apple のランタイムフォルダ（ロードコマンドの書き換えとアドホック署名）なので、Linux では名前を挙げて止まります。
+  エスケープを使わないアプリはどちらでも自己完結で、Linux では `--app` と `--appimage` が package します。
+  エスケープを使うアプリは、いまのところホスト側の Python が要ります。
 - 実測値はすべて macOS/arm64 のものです。
   ほかのプラットフォームは、まだ測っていません。
 

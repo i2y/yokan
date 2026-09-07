@@ -64,9 +64,10 @@ the same change.
   packages the engine links: alsa, fontconfig, freetype, xkbcommon
   and its x11 half, xcb, and the Vulkan loader with a driver. Add
   sqlite for `cargo test --workspace`, which builds `pixie-capi`
-  against the system one (yokan-stdlib bundles its own). The three
-  packaging flags are macOS's and refuse by name elsewhere — see
-  the ledger entry for why.
+  against the system one (yokan-stdlib bundles its own). Packaging
+  follows the platform: `--app` writes a `.app` or an AppDir,
+  `--appimage` packs the AppDir, and `--bundle` / `--onefile` stay
+  macOS's — see the ledger entries for why.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast.

@@ -171,9 +171,9 @@ $ yokan build app.py --release --onefile
   チェックアウトの中で `yokan` を実行すればそちらを使い、`PIXIE_REPO` を指せば別の場所も使えます。
 - 初回はエンジンからコンパイルするので数分かかります。
   二回目からは差分だけです。
-- パッケージングは macOS のものです。
-  `--bundle`、`--onefile`、`--app` が作るのは Apple の形なので、Linux ではそれぞれが名前を挙げて止まります。
-  ネイティブバイナリは `yokan build` が作ります。
+- パッケージングはプラットフォームごとです。
+  `--app` は macOS の `.app` か Linux の AppDir を作り、`--appimage` はその AppDir を 1 つの `.AppImage` に詰めます。
+  `--bundle` と `--onefile` は CPython を Apple の流儀で運ぶものなので、macOS 以外では名前を挙げて止まります。
 
 実測値（macOS/arm64、リリースビルド）：起動 4.7 ms、ライブリロード約 1 ms。
 サイズは上の配布の節の通りです。

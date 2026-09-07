@@ -190,9 +190,10 @@ $ yokan build app.py --release --onefile
   points it anywhere else.
 - That first build compiles the engine and takes a few minutes;
   later builds are incremental.
-- Packaging is macOS's: `--bundle`, `--onefile` and `--app` build
-  Apple's shapes, and on Linux each names itself and stops, where
-  `yokan build` writes the native binary.
+- Packaging follows the platform: `--app` writes a macOS `.app` or a
+  Linux AppDir, and `--appimage` packs that AppDir into one
+  `.AppImage`. `--bundle` and `--onefile` carry CPython in Apple's
+  layout, so they name themselves and stop off macOS.
 
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload;
 sizes as in the shipping paragraph above.

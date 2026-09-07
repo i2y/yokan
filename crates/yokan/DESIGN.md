@@ -2286,3 +2286,38 @@ that branch is what it always was. A headless run never reaches the
 engine at all, so no dump moves and the gate cannot see any of this
 — which is why the sweep answered 59 of 59 before the change and 59
 of 59 after it.
+
+## The shape a platform hands someone else (2026-09-07)
+
+Packaging was macOS's, and the Linux port said so by refusing. That
+was the right answer while every shape was Apple's — a rewritten load
+command, an ad-hoc signature, a `.app` — and the wrong one to keep,
+because Linux has a shape of its own and nothing here was producing
+it.
+
+`--app` now means one thing on both platforms and produces each one's
+own directory: `Contents/MacOS` and an `Info.plist` there, an AppDir
+here, with an `AppRun` that puts the carried libraries ahead of the
+host's for that process alone. `--appimage` packs the AppDir into the
+one file this platform hands someone else. `--bundle` and `--onefile`
+stay macOS's, because they were never about packaging: they are about
+carrying CPython in Apple's layout. So an app with `@py` escapes still
+wants the host's Python on Linux, and the tour's honest list says that
+rather than implying the platforms are level.
+
+The decision worth recording is which libraries ride along. The first
+guess is everything `ldd` reports, and that is exactly how an AppImage
+breaks on a machine that is not the one that built it: a carried
+`libfontconfig` meets the host's, or the graphics stack is asked to
+talk to a driver it was not built against, and one of the two loses.
+The AppImage project keeps an excludelist for this, and it is embedded
+here rather than fetched, because what a build depends on should not
+be able to change under it between two builds. The counter demo
+resolves twenty-one shared libraries: eight are on the list and
+thirteen are carried.
+
+The packer is fetched once into the same cache the native build
+already fetches its checkout into, and it carries its own mksquashfs,
+so a machine needs nothing installed to make one. That is the promise
+the rest of the command already makes — what a build needs, it goes
+and gets — rather than a new thing to install first.

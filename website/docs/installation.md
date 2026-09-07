@@ -131,8 +131,9 @@ in about 40 ms. Add `--app` (alone or with `--bundle`) for a macOS
 icon from `<stem>.png` if present. Either way, the receiving
 machine needs no Python and no pip.
 
-Those three flags build Apple's shapes, and on Linux each one names
-itself and stops; `yokan build` alone writes the native binary
-there.
+On Linux the shapes are Linux's: `--app` writes an AppDir and
+`--appimage` packs it into one `.AppImage`, carrying the libraries a
+host is not expected to have. `--bundle` and `--onefile` carry CPython
+in Apple's layout, so they name themselves and stop there.
 
 Measured (macOS/arm64, release): 4.7 ms start, ~1 ms live reload.
