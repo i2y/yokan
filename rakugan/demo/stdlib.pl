@@ -55,8 +55,13 @@ class Stdlib {
         $runs = "doubled @{[ join(\",\", @text) ]} floor $down ceil $up";
     }
 
+    # `%A`, `%a`, `%B` and `%b` are the locale's answer rather than the
+    # format's: perl reads LC_TIME, and so does the twin. They are here
+    # so the gate has something to compare them on — a twin that said
+    # Thursday where perl said 木曜日 passed every sweep there was,
+    # because nothing an app could run reached those four directives.
     method take_stamp {
-        $stamp = strftime("%Y-%m-%d %H:%M:%S UTC", gmtime(1700000000));
+        $stamp = strftime("%A %a %d %B %b %Y %H:%M:%S UTC", gmtime(1700000000));
     }
 
     method capitalize {
