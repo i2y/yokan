@@ -43,7 +43,7 @@ jobs:
             target: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The rustc version lives in rust-toolchain.toml and is read from
       # there, so the pin has one home.
@@ -81,7 +81,7 @@ jobs:
       - name: Say what the wheel carries
         run: python3 -m zipfile -l crates/yokan/dist/*.whl
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.target }}
           path: crates/yokan/dist/*.whl
@@ -103,11 +103,11 @@ jobs:
             target: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: astral-sh/setup-uv@v10.0.1
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wheel-${{ matrix.target }}
           path: wheels
@@ -126,7 +126,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wheel-*
           merge-multiple: true
