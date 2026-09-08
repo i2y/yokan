@@ -15,6 +15,7 @@ it with the steps, and prints what the steps asked for.
 | `submit` | press enter in it |
 | `slide:<n>` | move a slider |
 | `select:<option>` | pick an option in a chooser |
+| `click@1:<label>` | the second button with that label; n counts from 0 in tree order, and `input@n:`, `submit@n`, `slide@n:`, `select@n:` count the same way |
 | `key:<chord>` | a keystroke bound to a shortcut |
 | `keydown:<key>` / `keyup:<key>` | hold a key down, let it up |
 | `menu:<item>` | pick a menu item |

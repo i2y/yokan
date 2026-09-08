@@ -15,6 +15,7 @@
 | `submit` | その欄で改行する |
 | `slide:<n>` | つまみを動かす |
 | `select:<option>` | 選択肢を選ぶ |
+| `click@1:<label>` | 同じ文字のボタンの二つ目（n はツリー順に 0 から数える）、`input@n:`、`submit@n`、`slide@n:`、`select@n:` も同じ |
 | `key:<chord>` | shortcut に結ばれた打鍵 |
 | `keydown:<key>` / `keyup:<key>` | キーを押したままにする、離す |
 | `menu:<item>` | メニュー項目を選ぶ |

@@ -1348,7 +1348,7 @@ It is what `yokan gate` and `yokan show --script` set for you, so one script tex
 The name is the substrate's because the code that reads it is: the harness belongs to [pixie](https://github.com/i2y/yokan/blob/main/docs/PIXIE.md), the layer Yokan compiles through, and is spelled the same way there.
 
 The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's column header), `input[@n]:<text>`, `submit[@n]`, `slide[@n]:<value>`, `select[@n]:<label>` (a chooser's option, or a table's row by its first cell), `key:<chord>`, `keydown:<key>` / `keyup:<key>`, `menu:<item>`, `file:<path>`, `drop:<path>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`, `dump`.
-`@n` picks the n-th match in tree order, so a row of identical buttons is reachable (`click@2:delete`).
+`@n` picks the n-th match in tree order, counting from 0, so a row of identical buttons is reachable (`click@2:delete` presses the third).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
 A comma inside text is written `\,` (`input:hello\, world`).
 The screen tree is dumped to stdout before and after the steps, and from tests `yokan.headless(view, state, script)` returns the same string.

@@ -796,6 +796,8 @@ it with the steps, and prints the dumps:
 click:<label>      press a button by the label it shows
 input:<text>       type into a field   submit    press enter in it
 slide / select     move a slider, pick an option
+click@1:<label>    the second button with that label (n counts from 0, in tree order)
+                   and the same for input@n:, submit@n, slide@n:, select@n:
 key:<chord>        a keystroke bound to a shortcut
 keydown:<key> / keyup:<key>    hold a key down, let it up
 menu:<item>        pick a menu item    file:<path>   answer a dialog
