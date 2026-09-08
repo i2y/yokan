@@ -1,35 +1,41 @@
-<!-- Gomamochi mark: two pieces of 胡麻餅 (mochi with black sesame kneaded through) in Yokan's flat isometric language. One material all the way through, so a piece is the same off-white on every face, and the seeds show on every face too, because they are in the dough rather than on it. Mochi is soft, so the corners are rounded and each edge is a narrow band of the tone between its two faces. Palette for dark grounds. -->
+<!-- Gomamochi mark: two pieces of 胡麻餅, mochi under a coat of black sesame, in Yokan's flat isometric language. Every outer face is the coat, dark with the grain of the seeds in it, and the small piece is cut, so its front face shows the white mochi inside the rim. Mochi is soft, so the corners are rounded and each edge is a narrow band of the tone between its two faces. Palette for dark grounds. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <g stroke-linejoin="round">
-    <!-- the small piece: the rounded outline it is cut to, then top, right side, front -->
+    <!-- the small piece, cut: the rounded outline it is cut to, then top, right side, front -->
     <clipPath id="gm-dark-small"><path d="M2 35.4 Q2 32 4.4 29.6 L7.6 26.4 Q10 24 13.4 24 L21.4 24 Q26 24 26 28.6 L26 36.6 Q26 40 23.6 42.4 L20.4 45.6 Q18 48 14.6 48 L6.6 48 Q2 48 2 43.4 Z"/></clipPath>
     <g clip-path="url(#gm-dark-small)">
-      <path d="M2 32 L10 24 L26 24 L18 32 Z" fill="#f7f1e6"/>
-      <path d="M18 32 L26 24 L26 40 L18 48 Z" fill="#c9bfb0"/>
-      <path d="M2 32 L18 32 L18 48 L2 48 Z" fill="#e6ddcf"/>
+      <path d="M2 32 L10 24 L26 24 L18 32 Z" fill="#4c413a"/>
+      <path d="M18 32 L26 24 L26 40 L18 48 Z" fill="#2a231f"/>
+      <path d="M2 32 L18 32 L18 48 L2 48 Z" fill="#3a322b"/>
       <!-- the three edges, softened -->
-      <path d="M2 33 L18 33 L18 31 L2 31 Z" fill="#eee7da"/>
-      <path d="M18.71 32.71 L26.71 24.71 L25.29 23.29 L17.29 31.29 Z" fill="#e0d8cb"/>
-      <path d="M17 32 L17 48 L19 48 L19 32 Z" fill="#d8cec0"/>
-      <!-- its sesame: on the top, the front, and the shaded side -->
-      <path d="M17.5 27 L19.5 27 L21.5 25 L19.5 25 Z M9.5 29.5 L11.5 29.5 L12.5 28.5 L10.5 28.5 Z M15 30 L17 30 L18 29 L16 29 Z M14 27 L16 27 L18 25 L16 25 Z M9.5 26 L11.5 26 L12.5 25 L10.5 25 Z M8 28 L9 28 L10 27 L9 27 Z M13.5 25.5 L14.5 25.5 L15.5 24.5 L14.5 24.5 Z M12.5 30 L13.5 30 L15.5 28 L14.5 28 Z M5 31 L6 31 L8 29 L7 29 Z M21 26.5 L22 26.5 L23 25.5 L22 25.5 Z M17.5 30.5 L18.5 30.5 L20.5 28.5 L19.5 28.5 Z M11.5 27.5 L12.5 27.5 L13.5 26.5 L12.5 26.5 Z M6.5 31.5 L8.5 31.5 L9.5 30.5 L7.5 30.5 Z" fill="#2b2421"/>
-      <path d="M10.5 44h1v2h-1z M9.5 40h1v2h-1z M4 37h1v1h-1z M13 42h2v1h-2z M15 45.5h2v1h-2z M10.5 35h2v2h-2z M6 33.5h2v1h-2z M8.5 43h1v2h-1z M11.5 39h1v2h-1z M7 36h1v1h-1z M4 43h2v1h-2z M14 37.5h1v2h-1z M14 33h1v1h-1z M4 45h2v2h-2z M14 35.5h2v1h-2z M6 39h2v1h-2z M16 41.5h1v1h-1z M12.5 44h1v2h-1z M3.5 41h1v1h-1z M3 34.5h1v1h-1z M3 39h2v1h-2z M9.5 38h1v1h-1z M11.5 33h1v1h-1z M16 43.5h1v1h-1z M16 33.5h1v1h-1z M16 38h1v1h-1z M7.5 46h2v1h-2z M5.5 41h1v1h-1z M9.5 33h1v1h-1z M7.5 41h1v1h-1z" fill="#2b2421"/>
-      <path d="M23.5 31.5 L24.5 30.5 L24.5 32.5 L23.5 33.5 Z M23.5 35.5 L24.5 34.5 L24.5 36.5 L23.5 37.5 Z M20.5 36 L22.5 34 L22.5 35 L20.5 37 Z M19.5 32.5 L21.5 30.5 L21.5 32.5 L19.5 34.5 Z M24 28 L25 27 L25 29 L24 30 Z M20 40.5 L21 39.5 L21 40.5 L20 41.5 Z M22 41 L23 40 L23 41 L22 42 Z M19.5 43 L20.5 42 L20.5 43 L19.5 44 Z M20 38.5 L21 37.5 L21 38.5 L20 39.5 Z M18.5 36.5 L19.5 35.5 L19.5 36.5 L18.5 37.5 Z M24.5 39 L25.5 38 L25.5 39 L24.5 40 Z" fill="#1e1917"/>
+      <path d="M2 33 L18 33 L18 31 L2 31 Z" fill="#433a32"/>
+      <path d="M18.71 32.71 L26.71 24.71 L25.29 23.29 L17.29 31.29 Z" fill="#3b322c"/>
+      <path d="M17 32 L17 48 L19 48 L19 32 Z" fill="#322a25"/>
+      <!-- the grain of the coat: seeds a tone lighter than the face, and a few darker -->
+      <path d="M9.5 29.5 L11.5 29.5 L12.5 28.5 L10.5 28.5 Z M8 28 L9 28 L10 27 L9 27 Z M13.5 25.5 L14.5 25.5 L15.5 24.5 L14.5 24.5 Z M21 26.5 L22 26.5 L23 25.5 L22 25.5 Z M11.5 27.5 L12.5 27.5 L13.5 26.5 L12.5 26.5 Z" fill="#7d6d62"/>
+      <path d="M17.5 27 L19.5 27 L21.5 25 L19.5 25 Z M15 30 L17 30 L18 29 L16 29 Z M14 27 L16 27 L18 25 L16 25 Z M9.5 26 L11.5 26 L12.5 25 L10.5 25 Z M12.5 30 L13.5 30 L15.5 28 L14.5 28 Z M5 31 L6 31 L8 29 L7 29 Z M17.5 30.5 L18.5 30.5 L20.5 28.5 L19.5 28.5 Z M6.5 31.5 L8.5 31.5 L9.5 30.5 L7.5 30.5 Z" fill="#16120f"/>
+      <path d="M23.5 35.5 L24.5 34.5 L24.5 36.5 L23.5 37.5 Z M20.5 36 L22.5 34 L22.5 35 L20.5 37 Z M19.5 32.5 L21.5 30.5 L21.5 32.5 L19.5 34.5 Z M24 28 L25 27 L25 29 L24 30 Z M20 38.5 L21 37.5 L21 38.5 L20 39.5 Z" fill="#55483f"/>
+      <path d="M23.5 31.5 L24.5 30.5 L24.5 32.5 L23.5 33.5 Z M20 40.5 L21 39.5 L21 40.5 L20 41.5 Z M22 41 L23 40 L23 41 L22 42 Z M19.5 43 L20.5 42 L20.5 43 L19.5 44 Z M18.5 36.5 L19.5 35.5 L19.5 36.5 L18.5 37.5 Z M24.5 39 L25.5 38 L25.5 39 L24.5 40 Z" fill="#16120f"/>
+      <!-- the cut face: the white mochi inside, within the rim of the coat -->
+      <rect x="4" y="34" width="12" height="12" rx="2" fill="#f7f1e6"/>
     </g>
-    <!-- the large piece: the rounded outline it is cut to, then top, right side, front -->
+    <!-- the large piece, whole: the rounded outline it is cut to, then top, right side, front -->
     <clipPath id="gm-dark-large"><path d="M28 36 Q28 32 30.83 29.17 L33.17 26.83 Q36 24 40 24 L56.5 24 Q62 24 62 29.5 L62 36 Q62 40 59.17 42.83 L56.83 45.17 Q54 48 50 48 L33.5 48 Q28 48 28 42.5 Z"/></clipPath>
     <g clip-path="url(#gm-dark-large)">
-      <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#f7f1e6"/>
-      <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#c9bfb0"/>
-      <path d="M28 32 L54 32 L54 48 L28 48 Z" fill="#e6ddcf"/>
+      <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#4c413a"/>
+      <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#2a231f"/>
+      <path d="M28 32 L54 32 L54 48 L28 48 Z" fill="#3a322b"/>
       <!-- the three edges, softened -->
-      <path d="M28 33 L54 33 L54 31 L28 31 Z" fill="#eee7da"/>
-      <path d="M54.71 32.71 L62.71 24.71 L61.29 23.29 L53.29 31.29 Z" fill="#e0d8cb"/>
-      <path d="M53 32 L53 48 L55 48 L55 32 Z" fill="#d8cec0"/>
-      <!-- its sesame: on the top, the front, and the shaded side -->
-      <path d="M41.5 29 L42.5 29 L43.5 28 L42.5 28 Z M53 26 L55 26 L56 25 L54 25 Z M35.5 28.5 L36.5 28.5 L38.5 26.5 L37.5 26.5 Z M43.5 30 L44.5 30 L45.5 29 L44.5 29 Z M43.5 27 L45.5 27 L47.5 25 L45.5 25 Z M49.5 29 L50.5 29 L51.5 28 L50.5 28 Z M47 29.5 L48 29.5 L49 28.5 L48 28.5 Z M37 30.5 L38 30.5 L40 28.5 L39 28.5 Z M56 27.5 L57 27.5 L58 26.5 L57 26.5 Z M48 27 L49 27 L50 26 L49 26 Z M40 26 L41 26 L42 25 L41 25 Z M51 29.5 L53 29.5 L54 28.5 L52 28.5 Z M35 27 L36 27 L37 26 L36 26 Z M32 31 L33 31 L34 30 L33 30 Z M34.5 30.5 L35.5 30.5 L36.5 29.5 L35.5 29.5 Z M41 27.5 L42 27.5 L44 25.5 L43 25.5 Z M39.5 31 L40.5 31 L41.5 30 L40.5 30 Z M33 29 L34 29 L35 28 L34 28 Z M30 31 L31 31 L32 30 L31 30 Z M57.5 25.5 L58.5 25.5 L59.5 24.5 L58.5 24.5 Z M53 30.5 L54 30.5 L55 29.5 L54 29.5 Z M50 27 L51 27 L52 26 L51 26 Z M38.5 25.5 L39.5 25.5 L40.5 24.5 L39.5 24.5 Z M47.5 31 L48.5 31 L49.5 30 L48.5 30 Z M49 31.5 L51 31.5 L52 30.5 L50 30.5 Z M45 31.5 L46 31.5 L47 30.5 L46 30.5 Z" fill="#2b2421"/>
-      <path d="M33 40.5h1v1h-1z M45.5 34.5h2v2h-2z M43.5 39.5h1v2h-1z M49 38h1v2h-1z M51 38h2v2h-2z M40.5 36h1v2h-1z M46 45h2v1h-2z M46.5 42.5h1v1h-1z M29.5 44.5h2v1h-2z M36.5 33.5h1v1h-1z M34.5 33h1v2h-1z M43 34h1v1h-1z M38 45.5h2v1h-2z M34 36.5h1v2h-1z M50 41.5h2v1h-2z M36 42h1v2h-1z M37 38.5h1v2h-1z M38 35.5h1v1h-1z M29.5 40.5h1v1h-1z M42.5 42.5h1v2h-1z M49.5 35.5h1v1h-1z M50.5 44h2v1h-2z M51.5 34h1v2h-1z M32 37.5h1v2h-1z M39 39h1v1h-1z M29 36h1v1h-1z M44 37.5h2v1h-2z M33 42.5h2v1h-2z M33.5 46h2v1h-2z M31.5 33.5h1v1h-1z M48.5 33h2v1h-2z M38.5 41.5h2v1h-2z M40 33.5h2v1h-2z M50.5 46h1v1h-1z M39 43.5h1v1h-1z M29.5 42.5h2v1h-2z M47 39.5h1v1h-1z M29.5 34h1v1h-1z M41 39.5h1v1h-1z M30 38h1v1h-1z M35 40h1v1h-1z M42.5 46h2v1h-2z M36 36.5h1v1h-1z M44.5 42.5h1v1h-1z M47 37.5h1v1h-1z M31.5 35.5h1v1h-1z" fill="#2b2421"/>
-      <path d="M58 32 L59 31 L59 33 L58 34 Z M55 41 L57 39 L57 40 L55 42 Z M55.5 32.5 L57.5 30.5 L57.5 31.5 L55.5 33.5 Z M59 35 L61 33 L61 34 L59 36 Z M56.5 36.5 L57.5 35.5 L57.5 36.5 L56.5 37.5 Z M55 44 L56 43 L56 44 L55 45 Z M58 38 L59 37 L59 38 L58 39 Z M58 41.5 L59 40.5 L59 41.5 L58 42.5 Z M59 28 L61 26 L61 27 L59 29 Z M60 36 L61 35 L61 37 L60 38 Z M60 31 L61 30 L61 31 L60 32 Z M55 35.5 L56 34.5 L56 35.5 L55 36.5 Z M60 39.5 L61 38.5 L61 39.5 L60 40.5 Z M60 29 L61 28 L61 29 L60 30 Z M54.5 38.5 L55.5 37.5 L55.5 39.5 L54.5 40.5 Z" fill="#1e1917"/>
+      <path d="M28 33 L54 33 L54 31 L28 31 Z" fill="#433a32"/>
+      <path d="M54.71 32.71 L62.71 24.71 L61.29 23.29 L53.29 31.29 Z" fill="#3b322c"/>
+      <path d="M53 32 L53 48 L55 48 L55 32 Z" fill="#322a25"/>
+      <!-- the grain of the coat: seeds a tone lighter than the face, and a few darker -->
+      <path d="M35 28 L36 28 L37 27 L36 27 Z M43 25.5 L45 25.5 L46 24.5 L44 24.5 Z M41 30 L42 30 L44 28 L43 28 Z M47 29.5 L48 29.5 L49 28.5 L48 28.5 Z M32 30 L34 30 L35 29 L33 29 Z M51 29.5 L53 29.5 L54 28.5 L52 28.5 Z M48 30.5 L49 30.5 L50 29.5 L49 29.5 Z M44.5 27 L45.5 27 L46.5 26 L45.5 26 Z M54 26.5 L55 26.5 L56 25.5 L55 25.5 Z M51 26.5 L53 26.5 L54 25.5 L52 25.5 Z M57.5 25.5 L58.5 25.5 L59.5 24.5 L58.5 24.5 Z M37 26 L38 26 L39 25 L38 25 Z M40.5 27.5 L41.5 27.5 L42.5 26.5 L41.5 26.5 Z" fill="#7d6d62"/>
+      <path d="M44 29 L46 29 L47 28 L45 28 Z M36 29 L37 29 L38 28 L37 28 Z M37 30.5 L38 30.5 L40 28.5 L39 28.5 Z M56 27.5 L57 27.5 L58 26.5 L57 26.5 Z M48 27 L49 27 L50 26 L49 26 Z M40 26 L41 26 L42 25 L41 25 Z M50 28.5 L51 28.5 L52 27.5 L51 27.5 Z M34.5 31 L35.5 31 L36.5 30 L35.5 30 Z M33.5 27.5 L34.5 27.5 L35.5 26.5 L34.5 26.5 Z M42 31 L43 31 L44 30 L43 30 Z M53 30.5 L54 30.5 L55 29.5 L54 29.5 Z M43.5 31.5 L44.5 31.5 L45.5 30.5 L44.5 30.5 Z M49 31.5 L51 31.5 L52 30.5 L50 30.5 Z" fill="#16120f"/>
+      <path d="M56.5 36.5 L57.5 35.5 L57.5 36.5 L56.5 37.5 Z M57.5 39.5 L58.5 38.5 L58.5 40.5 L57.5 41.5 Z M57 30 L59 28 L59 29 L57 31 Z M55 40.5 L56 39.5 L56 40.5 L55 41.5 Z M55 34.5 L57 32.5 L57 34.5 L55 36.5 Z M60 31 L61 30 L61 31 L60 32 Z M60 27.5 L61 26.5 L61 27.5 L60 28.5 Z M58 42 L59 41 L59 42 L58 43 Z M55 32 L56 31 L56 32 L55 33 Z M57.5 37.5 L58.5 36.5 L58.5 37.5 L57.5 38.5 Z" fill="#55483f"/>
+      <path d="M55 44 L56 43 L56 44 L55 45 Z M59.5 33.5 L60.5 32.5 L60.5 34.5 L59.5 35.5 Z M59.5 38 L60.5 37 L60.5 38 L59.5 39 Z M58 31 L59 30 L59 32 L58 33 Z M60 39.5 L61 38.5 L61 39.5 L60 40.5 Z M54.5 38 L55.5 37 L55.5 38 L54.5 39 Z" fill="#16120f"/>
+      <path d="M46.5 42.5h1v1h-1z M49.5 36.5h1v2h-1z M29.5 44.5h2v1h-2z M38 45.5h2v1h-2z M34 36.5h1v2h-1z M50 41.5h2v1h-2z M38 35.5h1v1h-1z M29.5 40.5h1v1h-1z M42.5 42.5h1v2h-1z M51.5 34h1v2h-1z M47 44.5h2v1h-2z M39 39h1v1h-1z M40 36h2v1h-2z M48.5 34h1v1h-1z M31.5 33.5h1v1h-1z M44.5 45h1v1h-1z M39 43.5h1v1h-1z M29.5 34h1v1h-1z M35 40h1v1h-1z M42 45.5h1v1h-1z M44.5 43h1v1h-1z" fill="#6a5b51"/>
+      <path d="M36.5 33.5h1v1h-1z M46 36.5h1v1h-1z M34.5 33h1v2h-1z M44.5 40h1v2h-1z M43 34h1v1h-1z M36 42h1v2h-1z M37 38.5h1v2h-1z M45.5 33h2v1h-2z M50.5 44h2v1h-2z M32 37.5h1v2h-1z M31.5 40.5h2v1h-2z M29 36h1v1h-1z M51.5 38.5h1v2h-1z M33 42.5h2v1h-2z M33.5 46h2v1h-2z M41.5 38.5h1v2h-1z M47.5 39.5h2v1h-2z M38.5 41.5h2v1h-2z M43.5 36h1v2h-1z M40 33.5h2v1h-2z M50.5 46h1v1h-1z M29.5 42.5h2v1h-2z M30 38h1v1h-1z M36 36.5h1v1h-1z M31.5 35.5h1v1h-1z" fill="#16120f"/>
     </g>
   </g>
 </svg>
