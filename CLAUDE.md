@@ -318,11 +318,19 @@ run, so neither run is a version behind.
 - The interpreted run is yaegi v0.16.1, pinned, whose Go is 1.22's.
   `internal/check` rewrites the file it reads: every loop variable a
   closure captures gets a per-iteration copy on the same line, because
-  yaegi keeps the pre-1.22 rule; and `check` refuses what yaegi cannot
-  run (`min`/`max`, `range` over a number, the app handed to `Run`
-  straight from a call) by name. An undefined package-level name comes
-  back from yaegi as "constant definition loop": read it as
-  "undefined". A panic inside a
+  yaegi keeps the pre-1.22 rule. `check` has two layers: rules read off
+  the file alone (what yaegi cannot run — `min`/`max`, `range` over a
+  number, the app handed to `Run` straight from a call, `%T`, `reflect`,
+  `unsafe`, cgo, `//go:embed`, a module outside the standard library —
+  and what a view may not do: write a field, start a goroutine, read the
+  clock, the environment, a file, a random number or the keyboard), and,
+  when `go` is on the path, go/types with the toolchain's export data
+  (`go list -export -deps`), which adds Go's own type errors and the
+  `range` over a map, a variable number or a function. Every refusal has
+  a fixture in `test/refuse/` with the message word for word
+  (`tools/refuse_test.sh`, run by the sweep). An undefined package-level
+  name comes back from yaegi as "constant definition loop"; `check`
+  says "undefined" first. A panic inside a
   callback is said and stops the process — it cannot unwind through
   the engine's frames.
 - `PIXIE_CAPI` points both runs at a library other than the shared
@@ -359,7 +367,8 @@ run, so neither run is a version behind.
   table, a demo or a refusal moves a site page too: run
   `just rakugan-site-gen`, which the sweep only checks.
 - Anything under `gomamochi/` → the touched demo's gate, then
-  `gomamochi/tools/gate_all.sh`. A change to `elements.toml`
+  `gomamochi/tools/gate_all.sh`. A new refusal gets a file in
+  `gomamochi/test/refuse/` and its message beside it. A change to `elements.toml`
   regenerates first (`go run ./tools/gen`); the sweep fails on a stale
   table. A change to the door or the elements
   is a change to both runs at once, so a gate proves less there than
