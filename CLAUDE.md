@@ -324,9 +324,15 @@ run, so neither run is a version behind.
   the engine's frames.
 - `PIXIE_CAPI` points both runs at a library other than the shared
   target dir's; a compiled binary otherwise looks beside itself first.
-- `elements.go` and `internal/symbols` are hand-written for the first
-  demos, in the shape the generator will write from
-  `crates/pixie-capi/elements.toml` (phase 1). The design memo is
+- `go run ./tools/gen` writes `elements.go` (one type per element, one
+  method per keyword, the riders promoted from one generic `box`, the
+  canvas's drawing commands on `Painter`) and `internal/symbols`
+  (every exported name of the package, for yaegi) from
+  `crates/pixie-capi/elements.toml`; `--check` fails when either is
+  stale, and the sweep runs it. The symbols are read off the package's
+  own source, so a new function in `gomamochi.go` reaches the
+  interpreted run by regenerating. A new element is a row in the table,
+  an arm in `materialize`, and nothing in Go. The design memo is
   `docs/GOMAMOCHI.local.md` (main checkout only).
 
 ## What to verify for which change
@@ -350,7 +356,9 @@ run, so neither run is a version behind.
   table, a demo or a refusal moves a site page too: run
   `just rakugan-site-gen`, which the sweep only checks.
 - Anything under `gomamochi/` → the touched demo's gate, then
-  `gomamochi/tools/gate_all.sh`. A change to the door or the elements
+  `gomamochi/tools/gate_all.sh`. A change to `elements.toml`
+  regenerates first (`go run ./tools/gen`); the sweep fails on a stale
+  table. A change to the door or the elements
   is a change to both runs at once, so a gate proves less there than
   it does for a translated language: look at the dump.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
