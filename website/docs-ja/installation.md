@@ -20,6 +20,18 @@ $ uv run app.py
 GPU で描くウィンドウも、状態を保ったままのライブリロードも、ヘッドレス実行も、これだけで動きます。
 Rust は要りません。
 
+Linux では、ウィンドウはマシンにあるグラフィック、フォント、キーボードのライブラリをそのまま使います。
+コピーを持ち歩かないので、開発中に見えているものが、リリースしたアプリの描くものと同じになります。
+デスクトップならどれも入っていますが、素のコンテナには入れる必要があります。
+
+```console
+$ sudo dnf install alsa-lib fontconfig libxcb libxkbcommon \
+    libxkbcommon-x11
+```
+
+Debian と Ubuntu では、同じ 5 つが `libasound2t64`、`libfontconfig1`、`libxcb1`、`libxkbcommon0`、`libxkbcommon-x11-0` です。
+ウィンドウを開くには、あとの「リリース」の節にある Vulkan のローダとドライバも要ります。
+
 スクリプトではなくプロジェクトで使うなら `uv add yokan` です。
 `yokan` コマンド自体を入れるなら `uv tool install yokan` を使います。
 pip でも入ります。

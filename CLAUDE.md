@@ -64,7 +64,10 @@ the same change.
   packages the engine links: alsa, fontconfig, freetype, xkbcommon
   and its x11 half, xcb, and the Vulkan loader with a driver. Add
   sqlite for `cargo test --workspace`, which builds `pixie-capi`
-  against the system one (yokan-stdlib bundles its own). Packaging
+  against the system one (yokan-stdlib bundles its own). The wheel
+  leaves those libraries to the machine rather than carrying them, so
+  a container that only RUNS an app still needs the runtime halves:
+  alsa-lib, fontconfig, libxcb and libxkbcommon with its x11 half. Packaging
   follows the platform: `--app` writes a `.app` or an AppDir,
   `--appimage` packs the AppDir, and `--bundle` / `--onefile` stay
   macOS's — see the ledger entries for why. What a Linux package

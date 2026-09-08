@@ -21,6 +21,21 @@ That covers the whole develop experience — the GPU window, the
 state-preserving live reload, headless script runs. No Rust
 involved.
 
+On Linux the window uses the machine's own graphics, font and
+keyboard libraries rather than carrying copies, so what you see
+while developing is what the app you ship draws. A desktop already
+has them; a bare container needs them installed:
+
+```console
+$ sudo dnf install alsa-lib fontconfig libxcb libxkbcommon \
+    libxkbcommon-x11
+```
+
+Debian and Ubuntu call the same five `libasound2t64`,
+`libfontconfig1`, `libxcb1`, `libxkbcommon0` and
+`libxkbcommon-x11-0`. Opening a window also wants the Vulkan loader
+and a driver, which the Ship section below names.
+
 In a project instead of a script: `uv add yokan`. For the `yokan`
 command: `uv tool install yokan`. Plain pip works too.
 

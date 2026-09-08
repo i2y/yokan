@@ -2406,3 +2406,48 @@ in a repository's secrets, and the wheels are already somewhere real
 by then — attached to the tag's release. `just publish-linux` takes
 them from there and asks before it uploads, which is the question
 `just publish` already asks on the other half.
+
+## What a package leaves to the machine (2026-09-08)
+
+The wheel and the AppDir had been answering the same question and
+giving different answers. A wheel installed on Fedora printed five
+`unrecognized keysym` errors before its window appeared: it carried a
+libxkbcommon from 2020, and that library parses the host's own Compose
+data, which is not from 2020. The AppDir had never carried one of the
+libraries at the root of that — its packer reads the AppImage project's
+excludelist, so fontconfig, freetype and asound were always the host's.
+So the window a developer looked at and the window their users opened
+were not drawing with the same libraries, and nothing said so.
+
+One table now, in `yokan_gate.py` where the AppDir packer already had
+it, and the release workflow reads it to repair the wheel. maturin's
+own repair takes no such list, so the build skips it and auditwheel is
+run with the table's sonames. The table gains the two xkbcommon lines,
+which the AppImage project's list does not carry: a library that parses
+the host's data files has to be the host's, or it is old the moment the
+host moves.
+
+The table also had to split. The C runtime and the loader are what no
+package may carry on any machine — carrying them breaks the app on the
+machine that built it — and the rest is what a Linux desktop provides
+for itself. Only the second half is a decision, so only the second half
+has a flag: `--carry-libs` gives it to whoever is shipping, since they
+are the ones who know whether the target is a desktop.
+
+Two things fell out of writing it down. `libxcb-dri3.so.0` had been
+wrapped across two lines in the old table, so the set held `libxcb-`
+and `dri3.so.0` and every AppDir carried the library the line meant to
+exclude. And the two wheels were not the same package on two
+architectures: `--as-needed` kept the fontconfig entry on aarch64 and
+dropped it on x86_64, so one asked the machine for the library and the
+other did not. Both now open it by name at runtime, and the workflow
+compares what each wheel links against and carries before either one is
+attached to a release — the only way that difference was ever going to
+be noticed.
+
+What it costs is stated where it is felt: a machine with none of the
+desktop's libraries cannot import the wheel, and the installation page
+names the five it needs. That list is not a guess. The smoke run
+installs exactly it on a plain runner, which is how the missing one was
+found in the first place — as an ImportError, on the run right after
+the wheel stopped carrying it.
