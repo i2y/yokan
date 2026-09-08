@@ -53,7 +53,7 @@ my @CATALOGUE = (
 
 ['look', 'forms',
  'the controls a person changes: a box, a switch, a track, and the four choosers',
- '人が動かす部品。チェックボックス、スイッチ、スライダ、そして 4 種類の選択'],
+ '人が動かす要素。チェックボックス、スイッチ、スライダ、そして 4 種類の選択'],
 ['look', 'quantities',
  'the two fields that hold a number rather than text: enter commits, text that is not a number is dropped',
  '文字ではなく数を持つ 2 つの入力欄。enter で確定し、数でない文字は捨てられる'],
@@ -83,7 +83,7 @@ my @CATALOGUE = (
  '共通のキーワードを、種類の違う要素それぞれに付けてみる'],
 ['look', 'loading',
  'the bar that fills, in its three forms, and the sweep for work with no known length',
- '満ちていくバーの 3 つの形と、終わりの見えない仕事のために行き来する表示'],
+ '満ちていくバーの 3 つの形と、終わりの見えない処理のために行き来する表示'],
 ['look', 'filter',
  'a chooser that changes what a list shows, with the rows built on demand',
  'リストが見せるものを変える選択。行は必要なぶんだけ作られる'],
@@ -119,7 +119,7 @@ my @CATALOGUE = (
  'Perl 自身のものをゲートにかける。`sprintf`、`sort`、`grep`、`map`、`List::Util`、`POSIX`、正規表現'],
 ['perl', 'files',
  "files through the framework's own library: one implementation answers both runs",
- '枠組みのライブラリでファイルを扱う。一つの実装が両方の実行に答える'],
+ 'フレームワークのライブラリでファイルを扱う。一つの実装が両方の実行に答える'],
 ['perl', 'reader',
  'nested JSON, reached by path, written to a file and read back so both runs read the same bytes',
  '入れ子の JSON をドットパスで読む。ファイルに書いて読み直すので、両方の実行が同じバイト列を読む'],
@@ -154,7 +154,7 @@ my @CATALOGUE = (
  'アプリを走らせる前に宣言するタイマー。両方の実行で同じだけ時を刻む（ゲートは `advance:` で進める）'],
 ['work', 'tasks',
  "work that takes a while, done off the window's thread; the answer comes back through `on_done`",
- '時間のかかる仕事をウィンドウのスレッドの外へ。答えは `on_done` で受け取る'],
+ '時間のかかる処理をウィンドウのスレッドの外へ。答えは `on_done` で受け取る'],
 );
 
 my %WORDS = (
@@ -209,7 +209,7 @@ MD
             canvas => 'キャンバス',
             perl   => 'Perl とファイルとデータ',
             window => 'ウィンドウまわり',
-            work   => 'タイマーと仕事',
+            work   => 'タイマーとタスク',
         },
     },
 );

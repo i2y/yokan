@@ -73,7 +73,7 @@ run($app, title => "sky");
 これらを読むのはタイマーの中だけで、ビューの中では読みません。
 ビューでキーボードを読むと、ウィンドウとスクリプトで違う画面を描くことになります。
 
-`demo/jump.pl` と `demo/shooter.pl` は、Pyxel 自身の例（Takashi Kitao、MIT）をこの命令の語彙に移し、ゲートに通したものです。
+`demo/jump.pl` と `demo/shooter.pl` は、Pyxel 自身の例（Takashi Kitao、MIT）をこの描画命令に移植し、ゲートに通したものです。
 
 キャンバスはウィンドウなしでも見られます。
 `PIXIE_FRAMES=<dir>` を与えると、スクリプトの一手ごとに、最初のキャンバスを PNG に書き出します。

@@ -54,7 +54,7 @@ run(Two->new, title => "two");
 
 ビューの中に書くのも、普通の Perl です。
 `if`、`unless`、条件演算子、`for`、`my`、メソッド呼び出しがそのまま使えます。
-部品はリストに集め、そのリストをコンテナに渡します。
+要素はリストに集め、そのリストをコンテナに渡します。
 
 <!-- script: dump,click:hint,dump,click:pick 1,dump -->
 ```perl
@@ -105,7 +105,7 @@ run(Control->new, title => "control");
 数や文字列の真偽は方言に入っていないので、`if ($picked)` は `if ($picked >= 0)` と書きます。
 
 
-## 入力の部品
+## 入力の要素
 
 ```perl
     text_field($name, placeholder => "name", on_change => sub ($s) { $name = $s });
@@ -132,7 +132,7 @@ run(Control->new, title => "control");
 
 ハンドラは、要素がそのために用意したキーワードに書く無名サブルーチンです。
 受け取る引数は、そのイベントが運ぶものだけです。
-ボタンなら何もなく、値の変わる部品なら一つです。
+ボタンなら何もなく、値の変わる要素なら一つです。
 
 ```perl
     button("save", on_click => sub { $self->save });

@@ -25,13 +25,13 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### opsboard — 旗艦デモ。3 モジュールで組んだダッシュボード（ストア 2 つ、直和型のヘルスモデル、チャート、仮想化したアラートフィード、テーマ切替、fs へのレポート出力）
 <img src="screenshots/opsboard.png" width="720">
 
-#### forms — フォーム部品一式。checkbox / switch / slider / select / radio_group / tab_bar があり、どのハンドラも新しい値をひとつ受け取る
+#### forms — フォームの要素一式。checkbox / switch / slider / select / radio_group / tab_bar があり、どのハンドラも新しい値をひとつ受け取る
 <img src="screenshots/forms.png" width="360">
 
 #### calc — 定番の電卓：レイアウトは `grow` だけで組んであり（行が高さを分け合い、キーが行の幅を分け合い、0 キーは 2 コマ分）、ウィンドウを伸ばせばパッド全体が隙間なく追従する
 <img src="screenshots/calc.png" width="300">
 
-#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で書いた版：等分トラックのコンテナ一つに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
+#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で書いたもの：等分トラックのコンテナ一つに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
 <img src="screenshots/calcgrid.png" width="300">
 
 ## 状態の持ち方
@@ -45,7 +45,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### links — モデルがモデルを参照する。所有は `Node | None`、逆向きは `Weak[Node]`（循環しないので、根を手放すと連鎖ごと解放される）
 <img src="screenshots/links.png" width="360">
 
-#### stateful — @component + local。呼び出し位置ごとに独立した状態を持つ部品
+#### stateful — @component + local。呼び出し位置ごとに独立した状態を持つコンポーネント
 <img src="screenshots/stateful.png" width="360">
 
 #### lookup — 辞書セル。読みは `.get(key, default)` と `in`、書き込みは `cell[k] = v` のその場更新
@@ -85,7 +85,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### tryfetch — try/except の全形。失敗する http 呼び出しを捕まえ、`f"{e}"` の文言まで両実行で一致する
 <img src="screenshots/tryfetch.png" width="360">
 
-## 画面部品
+## 画面の要素
 
 #### todo — 定番の TODO リスト
 <img src="screenshots/todo.png" width="360">
@@ -102,7 +102,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### styled — 名前付きスタイル（`style` + `**` 展開 + `|` 合成）とテーマスコープ
 <img src="screenshots/styled.png" width="360">
 
-#### cards — スロット付きコンポーネント（子要素を受け取る部品）
+#### cards — スロット付きコンポーネント（子要素を受け取る）
 <img src="screenshots/cards.png" width="360">
 
 #### layout — spacer と divider。spacer がボタンを行の端に押しやり、divider が罫線を引く（節の間は太い accent 色の線）

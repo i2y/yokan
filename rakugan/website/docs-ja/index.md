@@ -14,7 +14,7 @@ hide:
 <p class="rk-hero__tag">Write Perl. Ship native.</p>
 
 <!-- 日本語は行の折り返しが空白として描画されるので、リード文は一行で書く -->
-<p class="rk-hero__lede">Rakugan（落雁）を使うと、Perl で書いたデスクトップアプリを 1 本のネイティブバイナリとしてリリースできます。<strong>perl で動かしたものが、そのままリリースするものになります。そのことを確かめるのが <code>rakugan gate</code> です</strong>。配るときは、アプリを <a href="https://github.com/i2y/yokan/blob/main/docs/PIXIE.md">pixie</a> に翻訳し、Zed エディタを支える <strong>gpui</strong> の上に組んだ描画エンジンと一緒にコンパイルして、インタプリタの入っていない 1 本のバイナリにします。書いているあいだは、同じファイルを perl が動かし、小さな XS の門を通して同じエンジンに触ります。<code>rakugan gate</code> は一つのスクリプトで両方を動かし、描いた画面を 1 バイトずつ突き合わせます。アプリそのものは普通の Perl のクラスです。Rakugan が足すのは、画面を組み立てるサブルーチンと、二つの実行が一致することを確かめる仕組みです。</p>
+<p class="rk-hero__lede">Rakugan（落雁）を使うと、Perl で書いたデスクトップアプリを 1 本のネイティブバイナリとしてリリースできます。<strong>perl で動かしたものが、そのままリリースするものになります。そのことを確かめるのが <code>rakugan gate</code> です</strong>。配るときは、アプリを <a href="https://github.com/i2y/yokan/blob/main/docs/PIXIE.md">pixie</a> に翻訳し、Zed エディタを支える <strong>gpui</strong> の上に組んだ描画エンジンと一緒にコンパイルして、インタプリタの入っていない 1 本のバイナリにします。書いているあいだは、同じファイルを perl が動かし、小さな XS モジュールを通して同じエンジンに触ります。<code>rakugan gate</code> は一つのスクリプトで両方を動かし、描いた画面を 1 バイトずつ突き合わせます。アプリそのものは普通の Perl のクラスです。Rakugan が足すのは、画面を組み立てるサブルーチンと、二つの実行が一致することを確かめる仕組みです。</p>
 
 <div class="rk-hero__cta" markdown>
 [はじめる](installation.md){ .md-button .md-button--primary }
@@ -28,12 +28,12 @@ hide:
 
 一つのソースと、それを動かす二つの道です。
 
-![Rakugan がアプリを動かす道筋。1 本の Perl のファイルが、書いているあいだは XS の門を通って perl で動き、配るときは pixie に翻訳されてネイティブバイナリになる。その下にあるエンジンは一つで、ゲートが二つを突き合わせる](images/architecture-ja.svg#only-dark)
+![Rakugan がアプリを動かす道筋。1 本の Perl のファイルが、書いているあいだは XS モジュールを通って perl で動き、配るときは pixie に翻訳されてネイティブバイナリになる。その下にあるエンジンは一つで、ゲートが二つを突き合わせる](images/architecture-ja.svg#only-dark)
 
-![Rakugan がアプリを動かす道筋。1 本の Perl のファイルが、書いているあいだは XS の門を通って perl で動き、配るときは pixie に翻訳されてネイティブバイナリになる。その下にあるエンジンは一つで、ゲートが二つを突き合わせる](images/architecture-ja-light.svg#only-light)
+![Rakugan がアプリを動かす道筋。1 本の Perl のファイルが、書いているあいだは XS モジュールを通って perl で動き、配るときは pixie に翻訳されてネイティブバイナリになる。その下にあるエンジンは一つで、ゲートが二つを突き合わせる](images/architecture-ja-light.svg#only-light)
 
 どちらの道も一つのエンジンに行き着きます。
-解釈実行は XS の門を通して共有ライブラリとして開き、コンパイルした実行は pixie がリンクします。
+解釈実行は XS モジュールを通して共有ライブラリとして開き、コンパイルした実行は pixie がリンクします。
 エンジンは Perl の値を持ちません。
 だからインタプリタと、perl の入っていないバイナリとが、まったく同じコードを動かせます。
 
@@ -125,7 +125,7 @@ GATE OK — 3 dump lines identical in both runs
 `length`、`substr`、`uc`、`sort`、`grep`、`map`、`sprintf`、`List::Util`、`POSIX`、正規表現は言語自身のものです。
 これらを Rakugan のライブラリで置き換えてはいません。
 コンパイルした実行に perl は入っていないので、これらは Rust で一度ずつ書いてリンクしてあります。
-そのうえで、perl 自身が印字した 1000 行あまりの表に照らして確かめます。
+そのうえで、perl 自身が出力した 1000 行あまりの表に照らして確かめます。
 perl と一致することは、願いではなく検査です。
 
 ```perl
@@ -133,7 +133,7 @@ perl と一致することは、願いではなく検査です。
     my $line = sprintf("mean %.1f max %d", sum(@scores) / scalar @scores, max(@scores));
 ```
 
-ファイル、データベース、ネットワーク、クリップボードは枠組みのものです。
+ファイル、データベース、ネットワーク、クリップボードはフレームワークのものです。
 そちらでは、一つの実装が両方の実行に答えます。
 
 ```perl
@@ -165,7 +165,7 @@ Pyxel 自身の例（Takashi Kitao、MIT）を二つ、ほぼ 1 行ずつ移し�
 エージェントはファイルを書き、返ってきたものを読みます。
 だから、返ってくるものの形で作業の進み方が決まります。
 三つのコマンドのうち二つは、コンパイラもウィンドウもなしに 0.1 秒ほどで答えます。
-何を書けばよいかを名指しする断りと、文字になった画面です。
+何を書けばよいかが書かれた断りと、文字になった画面です。
 最後の証明がゲートです。
 
 ![エージェントが回るループ。輪の中心で app.pl を書き、rakugan check とウィンドウなしの実行を 0.07 秒ずつで回り、輪の外に出て rakugan gate で、配るバイナリが一致することを証明する](images/cycle-ja.svg#only-dark)
@@ -180,7 +180,7 @@ Pyxel 自身の例（Takashi Kitao、MIT）を二つ、ほぼ 1 行ずつ移し�
 
 <div class="grid cards" markdown>
 
--   :material-table-large: __一つの表、一つの語彙__
+-   :material-table-large: __要素はすべて一つの表から__
 
     33 個の要素、15 個の共通キーワード、10 個の描画命令が、`elements.toml` に一度だけ書いてあります。
     アプリが呼ぶ Perl も、エンジンが数える番号も、そこから生成されます。
@@ -198,7 +198,7 @@ Pyxel 自身の例（Takashi Kitao、MIT）を二つ、ほぼ 1 行ずつ移し�
 
     翻訳器が受け取れない書き方は、何かを組み立てるより先に断ります。
     断りには、その行と、代わりにどう書くかが出ます。
-    どの断りにも、印字される文面をそのまま置いたファイルがあります。
+    どの断りにも、出力される文面をそのまま置いたファイルがあります。
 
 </div>
 

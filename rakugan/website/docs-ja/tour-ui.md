@@ -86,7 +86,7 @@ run($app, title => "keys");
 ```
 
 ファイルダイアログは人の操作を待つので、ウィンドウのスレッドの外に出します。
-そのためにあるのが [`task`](tour-lib.md#タイマーとウィンドウの外でする仕事) です。
+そのためにあるのが [`task`](tour-lib.md#タイマーとウィンドウの外でする処理) です。
 
 ```perl
     task(sub { fs_open_dialog("Choose a file") },

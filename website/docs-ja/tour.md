@@ -205,7 +205,7 @@ def view():
   `grid(columns=, rows=)` は等分のトラックを敷き、中の要素は `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py`）。
   `spacer()` は余った幅を引き受けます（`grow=` で分け合えます）。
   `divider()` は親を横切る罫線で、行の中では縦線になります。
-- **入力**：`button` と[フォーム部品](#フォーム部品)。
+- **入力**：`button` と[フォームの要素](#フォームの要素)。
 - **見せる**：`text`、`link`、`image`、`svg`、`progress`、`spinner`、`bar_chart`、`line_chart`。
   `link("Docs", "https://…")` は、クリックすると URL をブラウザで開きます（ヘッドレス実行では `click:` を受けても開きません）。
 - **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
@@ -240,7 +240,7 @@ if show():
         button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
-## フォーム部品
+## フォームの要素
 
 値の入力はどれも同じ形です。
 表示する値は状態から渡します。

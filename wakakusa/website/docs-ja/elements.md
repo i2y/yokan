@@ -464,7 +464,7 @@ A grid of virtual pixels, painted by the commands written in its block. A color 
 | `background` | 整数 | `0` |
 | `palette` | 文字列のリスト | `[]` |
 
-## 小さな部品
+## 小さな要素
 
 ### `spacer`
 

@@ -65,7 +65,7 @@ app.rb:12:22: Wakakusa cannot take this — a block on an element cannot be writ
 
 `demo/control.rb` が、この話をまるごと一画面にしたものです。
 
-## 入力の部品
+## 入力の要素
 
 どれも表示する値を引数に取り、変化した値はブロックが受け取ります。
 

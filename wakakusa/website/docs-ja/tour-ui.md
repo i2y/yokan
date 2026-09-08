@@ -49,14 +49,14 @@
 
 `demo/panels.rb` が四つのコンテナを一画面に、`demo/dialog.rb` が modal を見せます。
 
-## 小さな部品
+## 小さな要素
 
 ```ruby
   spacer(grow: 1.0)                     # 親の余りを取る
   divider(thickness: 2.0, color: "accent")
-  spinner(size: 18.0)                   # 終わりの見えない仕事に
+  spinner(size: 18.0)                   # 終わりの見えない処理に
   progress(0.4, label: "copying…")      # 0 から 1 まで満ちるバー
-  progress(0.0, indeterminate: true)    # 同じ仕事を、往復で見せる
+  progress(0.0, indeterminate: true)    # 同じ処理を、往復で見せる
   link("Website", "https://example.org")
   image("assets/postcard.png", width: 180.0)
   svg("assets/search.svg", width: 20.0, height: 20.0)

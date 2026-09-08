@@ -556,7 +556,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
 
 ## 見た目と配置
 
-#### forms — 人が動かす部品。チェックボックス、スイッチ、スライダ、そして 4 種類の選択
+#### forms — 人が動かす要素。チェックボックス、スイッチ、スライダ、そして 4 種類の選択
 <img src="images/demos/forms.png" width="360">
 
 ??? note "forms.pl"
@@ -1087,7 +1087,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Locks->new, title => "shared");
     ```
 
-#### loading — 満ちていくバーの 3 つの形と、終わりの見えない仕事のために行き来する表示
+#### loading — 満ちていくバーの 3 つの形と、終わりの見えない処理のために行き来する表示
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.pl"
@@ -2392,7 +2392,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Stdlib->new, title => "stdlib");
     ```
 
-#### files — 枠組みのライブラリでファイルを扱う。一つの実装が両方の実行に答える
+#### files — フレームワークのライブラリでファイルを扱う。一つの実装が両方の実行に答える
 <img src="images/demos/files.png" width="360">
 
 ??? note "files.pl"
@@ -3034,7 +3034,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run(Sound->new, title => "sound");
     ```
 
-## タイマーと仕事
+## タイマーとタスク
 
 #### dashboard — アプリを走らせる前に宣言するタイマー。両方の実行で同じだけ時を刻む（ゲートは `advance:` で進める）
 <img src="images/demos/dashboard.png" width="360">
@@ -3091,7 +3091,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
     run($app, title => "dashboard");
     ```
 
-#### tasks — 時間のかかる仕事をウィンドウのスレッドの外へ。答えは `on_done` で受け取る
+#### tasks — 時間のかかる処理をウィンドウのスレッドの外へ。答えは `on_done` で受け取る
 <img src="images/demos/tasks.png" width="360">
 
 ??? note "tasks.pl"

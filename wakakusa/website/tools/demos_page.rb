@@ -63,7 +63,7 @@ CATALOGUE = [
 
   ["look", "forms",
    "the controls a person changes: a box, a switch, a track, and the four choosers",
-   "人が動かす部品。チェックボックス、スイッチ、スライダ、そして 4 種類の選択"],
+   "人が動かす要素。チェックボックス、スイッチ、スライダ、そして 4 種類の選択"],
   ["look", "quantities",
    "the two fields that hold a number rather than text: enter commits, text that is not a number is dropped",
    "文字ではなく数を持つ 2 つの入力欄。enter で確定し、数でない文字は捨てられる"],

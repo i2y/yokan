@@ -463,7 +463,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### forms — フォーム部品一式。checkbox / switch / slider / select / radio_group / tab_bar があり、どのハンドラも新しい値をひとつ受け取る
+#### forms — フォームの要素一式。checkbox / switch / slider / select / radio_group / tab_bar があり、どのハンドラも新しい値をひとつ受け取る
 <img src="images/demos/forms.png" width="360">
 
 <!-- source -->
@@ -739,7 +739,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で書いた版：等分トラックのコンテナ一つに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
+#### calcgrid — 同じ電卓を `grid(columns=4, rows=5)` で書いたもの：等分トラックのコンテナ一つに全キーが並び、0 キーは `col_span=2` で 2 セルにまたがる
 <img src="images/demos/calcgrid.png" width="300">
 
 <!-- source -->
@@ -1107,7 +1107,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### stateful — @component + local。呼び出し位置ごとに独立した状態を持つ部品
+#### stateful — @component + local。呼び出し位置ごとに独立した状態を持つコンポーネント
 <img src="images/demos/stateful.png" width="360">
 
 <!-- source -->
@@ -2201,7 +2201,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-## 画面部品
+## 画面の要素
 
 #### todo — 定番の TODO リスト
 <img src="images/demos/todo.png" width="360">
@@ -2523,7 +2523,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### cards — スロット付きコンポーネント（子要素を受け取る部品）
+#### cards — スロット付きコンポーネント（子要素を受け取る）
 <img src="images/demos/cards.png" width="360">
 
 <!-- source -->
