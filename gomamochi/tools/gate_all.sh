@@ -111,7 +111,7 @@ gate shared  ./bin/gomamochi gate demo/shared.go --script "click:lock,click:save
 
 # The tour teaches the vocabulary, so it has to hold to it: every
 # complete app in either language, through the same command.
-if go run ./tools/tourcheck TOUR.md > /dev/null 2>&1; then
+if go run ./tools/tourcheck TOUR.md TOUR.ja.md > /dev/null 2>&1; then
   pass=$((pass + 1)); echo "OK   tour"
 else
   fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"

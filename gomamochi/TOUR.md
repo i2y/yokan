@@ -150,8 +150,8 @@ func main() {
 }
 ```
 
-The one rule of shape: give the app a name before handing it to `Run`.
-`Run(newMixer(), …)` is refused, because the interpreted run hands a
+One shape is refused: the app handed to `Run` straight from a call.
+`Run(newMixer(), …)` fails in the interpreted run, which hands a
 call's result over without the wrapper that lets an interpreted type
 stand in for the package's `App` interface. `app := newMixer()` and
 then `Run(app, …)` is what to write, and `check` says so with the line.
@@ -159,9 +159,8 @@ then `Run(app, …)` is what to write, and `check` says so with the line.
 Types are Go's own, and there is nothing to annotate: `count int`,
 `title string`, `volume float64`, a slice, a map, a struct of your
 own. The compiled run is typed by the Go compiler; the interpreted run
-reads the same declarations. What the two do not share is a copy of
-each other's conversions, so a string and a number never meet without
-`strconv` between them — which is Go, not a rule of ours.
+reads the same declarations. A string and a number never meet without
+`strconv` between them, which is Go, not a rule of ours.
 
 ## Writing views
 
@@ -862,10 +861,11 @@ func main() {
 }
 ```
 
-What the interpreter knows is Go 1.22's: the packages and functions
-of that release. `min` and `max`, `range` over a number or a
-function, and anything added in 1.23 or later are not there, and
-`check` says so by name for the first three. Files are `os`, the
+What the interpreter knows of the library is Go 1.22's: the packages
+and functions of that release. Of the language it knows less: `min`
+and `max` (1.21), `range` over a number (1.22) and over a function
+(1.23) are not there, nor is anything the library gained in 1.23 or
+later, and `check` says so by name for the first three. Files are `os`, the
 network is `net/http`, a big number is `math/big`; the demos read a
 file, serve a page to themselves and fetch it, and parse CSV, with
 nothing but the standard library.
@@ -1004,9 +1004,9 @@ Timers and shortcuts the file declares are bound again to the new app.
 A file that does not compile leaves the window on what it had and says
 so in the terminal, and the next save that does compile takes.
 
-A save is a fresh read of the whole file, so a change to `main` takes
-too: the initial values it gives are carried over from the old app
-rather than read again, which is the point.
+A save is a fresh read of the whole file, and `main` runs again. The
+starting values it gives the app do not replace the ones the window
+has, since those are carried over — which is the point.
 
 ## Headless runs and the gate
 
@@ -1062,9 +1062,9 @@ need anyway.
 
 What the interpreted run cannot run as the compiled one does:
 
-- `min` and `max`, and `range` over a number or a function: Go 1.21's
-  and 1.22's, which the interpreter does not have. Write the comparison
-  out, or `for i := 0; i < n; i++`.
+- `min` and `max` (Go 1.21), and `range` over a number (1.22) or a
+  function (1.23), which the interpreter does not have. Write the
+  comparison out, or `for i := 0; i < n; i++`.
 - The app handed to `Run` straight from a call. Give it a name first.
 - `%T`, and `reflect`: the interpreter names the app's own types
   differently.
@@ -1105,10 +1105,11 @@ machine that may not have them.
 
 ## What does not work yet
 
-- The interpreter's Go is 1.22's. `min` and `max`, `range` over a
-  number or a function, and what the standard library gained in 1.23
-  and later are not there; `check` names the first three, and the
-  interpreter's own error names the rest.
+- The interpreter's library is Go 1.22's, and its language is short of
+  that: `min` and `max` (1.21), `range` over a number (1.22) or a
+  function (1.23), and what the library gained in 1.23 and later are
+  not there; `check` names the first three, and the interpreter's own
+  error names the rest.
 - A module outside the standard library cannot be read by the
   interpreted run yet, and an app is one file.
 - Under the dot import, an app cannot declare a name the package
