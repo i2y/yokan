@@ -43,6 +43,20 @@ env:
     libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel
     wayland-devel
   IMAGE_PREFIX: quay.io/pypa/manylinux_2_34_
+  # fontconfig is opened at runtime rather than linked. Left to the
+  # linker, the two architectures disagreed about whether the module
+  # needs it at all — `--as-needed` kept it on one and dropped it on the
+  # other — and a package that differs by architecture is the thing the
+  # comparison below exists to catch. Opening it by name is also what
+  # the AppDir does in effect, since the table leaves fontconfig to the
+  # host either way.
+  RUST_FONTCONFIG_DLOPEN: "1"
+
+  # What an app needs from the machine at runtime, in Debian's names.
+  # The smoke run installs exactly this and nothing else, so it is the
+  # list the installation page can promise.
+  RUNTIME_DEPS: >-
+    libxkbcommon0 libxkbcommon-x11-0 libxcb1 libfontconfig1
 
 jobs:
   wheels:
@@ -82,7 +96,7 @@ jobs:
           args: --release --auditwheel skip --out dist-raw
           # The action starts its own container and forwards nothing of
           # its own accord, so the package list is handed in.
-          docker-options: -e DEPS
+          docker-options: -e DEPS -e RUST_FONTCONFIG_DLOPEN
           before-script-linux: |
             dnf install -y dnf-plugins-core
             dnf config-manager --set-enabled crb
@@ -158,6 +172,15 @@ jobs:
 
       # `just smoke` installs the newest wheel in the shared wheels
       # directory, so the downloaded one is put there.
+      # A runner is close to a bare machine: it had no libxkbcommon-x11
+      # until this line, which is what an ImportError said the first
+      # time the wheel stopped carrying one.
+      - name: Install what an app needs from the machine
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq $RUNTIME_DEPS
+          sudo apt-get install -y -qq libasound2t64 || sudo apt-get install -y -qq libasound2
+
       - name: Drive an app with the installed wheel
         run: |
           mkdir -p ~/.cache/pixie/target/wheels
@@ -188,7 +211,8 @@ jobs:
             unzip -q wheels/*manylinux*"$arch".whl -d "u-$arch"
             readelf -d "u-$arch"/yokan/yokan.abi3.so \
               | sed -n 's/.*NEEDED.*\[\(.*\)\].*/\1/p' \
-              | sed 's/-[0-9a-f]\{8\}\.so/.so/' | sort > "needs-$arch"
+              | sed 's/-[0-9a-f]\{8\}\.so/.so/' \
+              | grep -v '^ld-linux' | sort > "needs-$arch"
             ( ls "u-$arch"/yokan.libs 2>/dev/null || true ) \
               | sed 's/-[0-9a-f]\{8\}\.so/.so/' | sort > "carries-$arch"
           done
