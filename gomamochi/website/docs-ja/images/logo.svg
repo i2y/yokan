@@ -2,7 +2,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <g stroke-linejoin="round">
     <!-- the small piece, cut: the rounded outline it is cut to, then top, right side, front -->
-    <clipPath id="gm-dark-small"><path d="M2 35.4 Q2 32 4.4 29.6 L7.6 26.4 Q10 24 13.4 24 L21.4 24 Q26 24 26 28.6 L26 36.6 Q26 40 23.6 42.4 L20.4 45.6 Q18 48 14.6 48 L6.6 48 Q2 48 2 43.4 Z"/></clipPath>
+    <clipPath id="gm-dark-small"><path d="M2 36.2 Q2 32 4.97 29.03 L7.03 26.97 Q10 24 14.2 24 L20.2 24 Q26 24 26 29.8 L26 35.8 Q26 40 23.03 42.97 L20.97 45.03 Q18 48 13.8 48 L7.8 48 Q2 48 2 42.2 Z"/></clipPath>
     <g clip-path="url(#gm-dark-small)">
       <path d="M2 32 L10 24 L26 24 L18 32 Z" fill="#4c413a"/>
       <path d="M18 32 L26 24 L26 40 L18 48 Z" fill="#2a231f"/>
@@ -16,11 +16,12 @@
       <path d="M17.5 27 L19.5 27 L21.5 25 L19.5 25 Z M15 30 L17 30 L18 29 L16 29 Z M14 27 L16 27 L18 25 L16 25 Z M9.5 26 L11.5 26 L12.5 25 L10.5 25 Z M12.5 30 L13.5 30 L15.5 28 L14.5 28 Z M5 31 L6 31 L8 29 L7 29 Z M17.5 30.5 L18.5 30.5 L20.5 28.5 L19.5 28.5 Z M6.5 31.5 L8.5 31.5 L9.5 30.5 L7.5 30.5 Z" fill="#16120f"/>
       <path d="M23.5 35.5 L24.5 34.5 L24.5 36.5 L23.5 37.5 Z M20.5 36 L22.5 34 L22.5 35 L20.5 37 Z M19.5 32.5 L21.5 30.5 L21.5 32.5 L19.5 34.5 Z M24 28 L25 27 L25 29 L24 30 Z M20 38.5 L21 37.5 L21 38.5 L20 39.5 Z" fill="#55483f"/>
       <path d="M23.5 31.5 L24.5 30.5 L24.5 32.5 L23.5 33.5 Z M20 40.5 L21 39.5 L21 40.5 L20 41.5 Z M22 41 L23 40 L23 41 L22 42 Z M19.5 43 L20.5 42 L20.5 43 L19.5 44 Z M18.5 36.5 L19.5 35.5 L19.5 36.5 L18.5 37.5 Z M24.5 39 L25.5 38 L25.5 39 L24.5 40 Z" fill="#16120f"/>
-      <!-- the cut face: the white mochi inside, within the rim of the coat -->
-      <rect x="4" y="34" width="12" height="12" rx="2" fill="#f7f1e6"/>
+      <!-- the cut face: the white mochi inside, within the rim of the coat, with the few seeds the knife went through -->
+      <rect x="4" y="34" width="12" height="12" rx="3.5" fill="#f7f1e6"/>
+      <path d="M8.5 36.5h1v1h-1z M8.5 41.5h2v1h-2z M13 40h1v1h-1z" fill="#3a322b"/>
     </g>
     <!-- the large piece, whole: the rounded outline it is cut to, then top, right side, front -->
-    <clipPath id="gm-dark-large"><path d="M28 36 Q28 32 30.83 29.17 L33.17 26.83 Q36 24 40 24 L56.5 24 Q62 24 62 29.5 L62 36 Q62 40 59.17 42.83 L56.83 45.17 Q54 48 50 48 L33.5 48 Q28 48 28 42.5 Z"/></clipPath>
+    <clipPath id="gm-dark-large"><path d="M28 37 Q28 32 31.54 28.46 L32.46 27.54 Q36 24 41 24 L55 24 Q62 24 62 31 L62 35 Q62 40 58.46 43.54 L57.54 44.46 Q54 48 49 48 L35 48 Q28 48 28 41 Z"/></clipPath>
     <g clip-path="url(#gm-dark-large)">
       <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#4c413a"/>
       <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#2a231f"/>
