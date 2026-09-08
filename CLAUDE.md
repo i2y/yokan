@@ -25,6 +25,12 @@ builds native desktop apps. This repository holds both halves:
   `crates/pixie-capi` through an XS door, as Wakakusa's does. It has
   its own gate, demos, tour and site, and shares the substrate and
   nothing else.
+- **The fourth language** — `gomamochi/`: Go on the same engine, with
+  no translator in it. Both of its runs are Go: the interpreted run is
+  yaegi, compiled into the command with the door and the standard
+  library, and the compiled run is gc's own binary. Both open
+  `crates/pixie-capi` through purego, without cgo. It has its own
+  command, demos and gate, and shares the substrate and nothing else.
 
 User-facing docs: `README.md` / `README.ja.md` (landing),
 `crates/yokan/TOUR*.md` (the language tour, one file per language
@@ -282,6 +288,47 @@ generator and the twin test pin it and the sweep needs no help.
   (`field $x :param :reader = 0`). Types are spelled the way
   Types::Standard spells them (`Int`, `Str`, `ArrayRef[Int]`).
 
+## Commands — Gomamochi
+
+Run these from `gomamochi/`. The command is a Go program: `bin/gomamochi`
+builds `cmd/gomamochi` into `~/.cache/gomamochi/bin/` (go's cache makes
+an unchanged build a tenth of a second) and runs it. Go 1.25 or newer;
+the engine is built with cargo into the shared target dir before every
+run, so neither run is a version behind.
+
+- `./bin/gomamochi gate demo/counter.go --script "click:+1,dump"` — **the
+  gate**: the file under yaegi (embedded in the command, with the door
+  and the standard library compiled in) and the binary gc built from
+  the same file, both opening pixie's C face through purego, driven by
+  one interaction script and byte-compared.
+- `check` (the refusals alone), `run` (a window; a save re-reads the
+  file, and the app's values carry over into the new code), `build` (the
+  native binary, `CGO_ENABLED=0`; `--release` strips; the engine's
+  library rides beside it, as a link into the shared target dir here).
+  There is no `translate`: the compiled run is gc's own.
+- `./tools/gate_all.sh` — the sweep: `go vet` on the package, the
+  command and the door, then every demo. Run it before merging anything
+  under `gomamochi/`. The demos are not a package (each is its own
+  `main`), so `go vet ./...` is not what the sweep runs.
+- `go.mod` is `github.com/i2y/yokan/gomamochi`; an app imports it with a
+  dot import (`import . "github.com/i2y/yokan/gomamochi"`) so the
+  elements read as they do in the other languages. The package's public
+  API stays free of generic functions: yaegi cannot see a compiled
+  generic function, which is why `Task` takes and answers `any`.
+- The interpreted run is yaegi v0.16.1, pinned, whose Go is 1.22's.
+  `internal/check` rewrites the file it reads: every loop variable a
+  closure captures gets a per-iteration copy on the same line, because
+  yaegi keeps the pre-1.22 rule; and `check` refuses what yaegi cannot
+  run (`min`/`max`, `range` over a number) by name. A panic inside a
+  callback is said and stops the process — it cannot unwind through
+  the engine's frames.
+- `PIXIE_CAPI` points both runs at a library other than the shared
+  target dir's; a compiled binary otherwise looks beside itself first.
+- `elements.go` and `internal/symbols` are hand-written for the first
+  demos, in the shape the generator will write from
+  `crates/pixie-capi/elements.toml` (phase 1). The design memo is
+  `docs/GOMAMOCHI.local.md` (main checkout only).
+
 ## What to verify for which change
 
 - Translator / runtime / stdlib / demo change → the touched demo's
@@ -302,6 +349,10 @@ generator and the twin test pin it and the sweep needs no help.
   the library Wakakusa's dylib now holds too. A change to the tour, the
   table, a demo or a refusal moves a site page too: run
   `just rakugan-site-gen`, which the sweep only checks.
+- Anything under `gomamochi/` → the touched demo's gate, then
+  `gomamochi/tools/gate_all.sh`. A change to the door or the elements
+  is a change to both runs at once, so a gate proves less there than
+  it does for a translated language: look at the dump.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
   pixie tier gate, plus the yokan sweep if the change is reachable
   from the dialect, and the wakakusa sweep if it is reachable from

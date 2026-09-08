@@ -201,6 +201,19 @@ rakugan-site-serve: rakugan-site
     @echo "http://localhost:8003/yokan/rakugan/  ·  http://localhost:8003/yokan/rakugan/ja/"
     python3 -m http.server 8003 -d rakugan/website/.serve
 
+# ---- Gomamochi -------------------------------------------------------------
+# Go on the same engine, with no translator: both runs are Go — yaegi
+# embedded in the command, and gc's binary — each opening pixie's C face
+# through purego, without cgo.
+#
+# Run one Go app through both runs and byte-compare the screens.
+gomamochi-gate app script='':
+    cd gomamochi && ./bin/gomamochi gate {{app}} {{ if script == '' { '' } else { '--script "' + script + '"' } }}
+
+# Every Gomamochi demo, both runs.
+gomamochi-sweep:
+    ./gomamochi/tools/gate_all.sh
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every
