@@ -1,0 +1,3 @@
+test/refuse/range_function.go:13:17: Gomamochi cannot take this — `range` over a function is Go 1.23's, and the interpreted run stops on it. Call the function and range over what it answers
+    	for i := range pair {
+    	               ^

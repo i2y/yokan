@@ -1,0 +1,3 @@
+test/refuse/percent_t.go:11:57: Gomamochi cannot take this — `%T` names the app's own types differently in the interpreted run. Print the value (`%v`), or give the type a `String` method
+    func (a *Demo) View() Element { return Text(fmt.Sprintf("%T", a)) }
+                                                            ^

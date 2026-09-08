@@ -1,0 +1,3 @@
+test/refuse/loop_variable_written.go:11:4: Gomamochi cannot take this — the loop's own variable is written inside its body and a closure captures it: the two runs would disagree about which iteration the closure sees. Copy it first (`j := i`) and let the closure use the copy
+    			i = 2
+    			^

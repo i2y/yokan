@@ -1,0 +1,3 @@
+test/refuse/view_keyboard.go:8:5: Gomamochi cannot take this — `KeyDown` reads the keyboard, and a view is built again from the same state whenever anything changes. Call it from a handler or a timer, and keep what it answers on the app
+    	if KeyDown("space") {
+    	   ^

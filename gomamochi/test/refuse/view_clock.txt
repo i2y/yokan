@@ -1,0 +1,3 @@
+test/refuse/view_clock.go:11:45: Gomamochi cannot take this — `time.Now` reads the clock, and a view may only read the app: it is built again from the same state whenever anything changes. Read the clock in a timer and keep the answer on the app
+    func (a *Demo) View() Element { return Text(time.Now().Format("15:04")) }
+                                                ^

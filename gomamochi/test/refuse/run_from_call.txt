@@ -1,0 +1,3 @@
+test/refuse/run_from_call.go:11:19: Gomamochi cannot take this — the app is handed to `Run` straight from a call, and the interpreted run cannot take it that way. Give it a name first: `app := newApp()`, then `Run(app, …)`
+    func main() { Run(newApp(), Title("x")) }
+                      ^

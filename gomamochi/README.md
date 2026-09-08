@@ -77,7 +77,13 @@ GATE OK — 3 dump lines identical in both runs
 
 `check` names what the app writes that Gomamochi cannot take, with the
 line and what to write instead, and says nothing when there is nothing
-to say. `run` opens a window and watches the file. `build` writes the
+to say: what the interpreted run cannot run as the compiled one does
+(`min` and `max`, `range` over a number, a map or a function, `%T`,
+`reflect`, a module outside the standard library), and what a view may
+not do, because a view is built again from the same state whenever
+anything changes (write a field, start a goroutine, read the clock, the
+environment, a file or the keyboard). With `go` on the path it also
+type-checks the file the way the compiler will. `run` opens a window and watches the file. `build` writes the
 native binary under `demo/.gate/<name>/`, with the engine's library
 beside it. `gate` runs the app both ways headless and compares the two
 transcripts; `tools/gate_all.sh` does that for every demo.

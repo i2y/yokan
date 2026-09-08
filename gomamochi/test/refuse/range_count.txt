@@ -1,0 +1,3 @@
+test/refuse/range_count.go:9:17: Gomamochi cannot take this — `range` over a number is Go 1.22's, and the interpreted run stops on it. Write `for i := 0; i < n; i++`
+    	for i := range a.n {
+    	               ^

@@ -1,0 +1,3 @@
+test/refuse/view_environment.go:11:45: Gomamochi cannot take this — `os.Getenv` reads the environment or a file, and a view may only read the app: it is built again from the same state whenever anything changes. Read it in a handler and keep the answer on the app
+    func (a *Demo) View() Element { return Text(os.Getenv("HOME")) }
+                                                ^

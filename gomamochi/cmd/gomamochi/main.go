@@ -125,15 +125,17 @@ func gateDir(app string) string {
 // What the app writes that Gomamochi cannot take, named with the line.
 // Nothing is printed when there is nothing to say.
 func refusals(app string) bool {
-	rs, err := check.Run(app)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return false
-	}
+	rs, err := check.Run(app, root)
 	src, _ := os.ReadFile(app)
 	lines := strings.Split(string(src), "\n")
 	for _, r := range rs {
 		fmt.Fprintln(os.Stderr, check.Render(r, lines))
+	}
+	// Go's own verdict, in Go's own words: a parse error, or what the
+	// type checker found once nothing here had anything to say.
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return false
 	}
 	return len(rs) == 0
 }
@@ -260,7 +262,9 @@ func cmdCheck(app string, _ options) {
 }
 
 func cmdRun(app string, _ options) {
-	if !refusals(app) {
+	// The gate checks the file once and then runs it here as a
+	// subprocess; the second look would find the same.
+	if os.Getenv("GOMAMOCHI_CHECKED") == "" && !refusals(app) {
 		os.Exit(1)
 	}
 	if os.Getenv("PIXIE_CAPI") == "" {
@@ -300,7 +304,7 @@ func cmdGate(app string, o options) {
 	if err != nil {
 		die(err.Error())
 	}
-	env := []string{"PIXIE_SCRIPT=" + o.script, "PIXIE_CAPI=" + libPath()}
+	env := []string{"PIXIE_SCRIPT=" + o.script, "PIXIE_CAPI=" + libPath(), "GOMAMOCHI_CHECKED=1"}
 	wipe(o.fresh)
 	a := strings.TrimRight(capture(env, "the interpreted run", exe, "run", app), "\n")
 	bin := build(app, false)

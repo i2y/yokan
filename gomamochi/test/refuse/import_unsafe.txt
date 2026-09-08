@@ -1,0 +1,3 @@
+test/refuse/import_unsafe.go:4:2: Gomamochi cannot take this — `unsafe`: the interpreted run does not take it. Write the same thing in plain Go
+    	"unsafe"
+    	^

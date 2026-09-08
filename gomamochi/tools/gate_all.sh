@@ -33,6 +33,14 @@ if ! go vet . ./cmd/... ./internal/... ./tools/... ; then
 fi
 echo "OK   vet"
 
+# Every refusal has a fixture and the message it must print.
+if ! ./tools/refuse_test.sh > /dev/null; then
+  echo "FAIL refusals"
+  ./tools/refuse_test.sh
+  exit 1
+fi
+echo "OK   refusals"
+
 # Scripted gates, with the same steps the other languages' sweeps drive
 # their copies of each demo with.
 gate counter ./bin/gomamochi gate demo/counter.go --script "click:+1,dump,input:Momo\, again"

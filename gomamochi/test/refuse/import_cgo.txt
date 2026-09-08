@@ -1,0 +1,3 @@
+test/refuse/import_cgo.go:3:8: Gomamochi cannot take this — cgo: the interpreted run cannot call C, and the compiled run is built without it. Reach the engine through the package, and anything else through Go
+    import "C"
+           ^

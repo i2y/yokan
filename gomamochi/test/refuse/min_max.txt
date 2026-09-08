@@ -1,0 +1,3 @@
+test/refuse/min_max.go:9:32: Gomamochi cannot take this — `min` is Go 1.21's, and the interpreted run does not know it. Write the comparison out (`if a < b { … }`), or a small function of your own
+    func (a *Demo) clamp() { a.n = min(a.n, 10) }
+                                   ^
