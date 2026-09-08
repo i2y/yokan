@@ -117,7 +117,7 @@ Measured on macOS/arm64, with the engine built and the caches warm.
 | `check`, through `bin/gomamochi` | 0.6 s, of which the check itself is about a tenth; the rest is `go build` confirming the command is current |
 | a headless run under `PIXIE_SCRIPT` | 1.0 s |
 | one gate round | about 2 s |
-| the whole sweep: 44 demos, the refusals, the tour | about a minute |
+| the whole sweep: 44 demos, the refusals, the tour in both languages and on the site | about three minutes |
 
 The binary is the Go compiler's own, built without cgo, and links
 nothing but the system's own libraries; the engine rides beside it as
