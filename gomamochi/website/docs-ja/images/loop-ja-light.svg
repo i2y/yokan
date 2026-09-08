@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 824" role="img" aria-labelledby="t" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <title id="t">端末での、ひとつづきの作業。エージェントが app.go を書き、gomamochi check が `min` を断って直し方を直す場所に置き、エージェントが直すと同じ check は何も出さず、ウィンドウなしの実行が画面を文字で返し、gomamochi gate が二つの実行で同じ画面になったと報告する。check は 0.6 秒ほど、実行は 1 秒ほどで答え、go でビルドする gate は 2 秒ほどで答える</title>
+  <defs>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#e9ecf4"/>
+    </pattern>
+  </defs>
+
+  <!-- frame -->
+  <rect x="2" y="2" width="1196" height="820" rx="20" fill="#fbfcfe" stroke="#dcdfe9" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="820" rx="20" fill="url(#dots)"/>
+
+  <!-- caption -->
+  <text x="40" y="58" font-size="20" font-weight="600" fill="#1d2030">往復</text>
+  <text x="40" y="81" font-size="15" fill="#5d6380">端末での、ひとつづきの作業</text>
+
+  <!-- ===== the terminal: one session as a ledger, six rows, a cost column ===== -->
+  <rect x="40" y="96" width="1120" height="696" rx="12" fill="#ffffff" stroke="#d5d9e4" stroke-width="1"/>
+  <path d="M52,96 H1148 a12,12 0 0 1 12,12 V132 H40 V108 a12,12 0 0 1 12,-12 Z" fill="#f7f8fb"/>
+  <line x1="40" y1="132.5" x2="1160" y2="132.5" stroke="#e4e7ef" stroke-width="1"/>
+  <circle cx="62" cy="114" r="4.5" fill="#c8ccd8"/>
+  <circle cx="78" cy="114" r="4.5" fill="#c8ccd8"/>
+  <circle cx="94" cy="114" r="4.5" fill="#c8ccd8"/>
+
+  <!-- the ledger's rules: one between each row, one before the cost column -->
+  <line x1="41" y1="193.5" x2="1159" y2="193.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="340.5" x2="1159" y2="340.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="401.5" x2="1159" y2="401.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="510.5" x2="1159" y2="510.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="41" y1="634.5" x2="1159" y2="634.5" stroke="#e4e7ef" stroke-width="1"/>
+  <line x1="856.5" y1="133" x2="856.5" y2="791" stroke="#e4e7ef" stroke-width="1"/>
+
+  <!-- row 1: the agent writes app.go -->
+  <rect x="66" y="145" width="256" height="36" rx="8" fill="#edeff6" stroke="#5f45cc" stroke-width="1.2" stroke-opacity="0.7"/>
+  <g transform="translate(80,155)">
+    <path d="M0,0 H7 L12,5 V16 H0 Z" fill="#fbfcfe" stroke="#5f45cc" stroke-width="1.4"/>
+    <path d="M7,0 V5 H12" fill="none" stroke="#5f45cc" stroke-width="1.4"/>
+  </g>
+  <text x="102" y="168" font-size="13.5" fill="#1d2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.go</text>
+  <text x="166" y="168" font-size="15" font-weight="600" fill="#5f45cc">エージェントが書く</text>
+
+  <!-- row 3: the agent fixes it -->
+  <rect x="66" y="353" width="530" height="36" rx="8" fill="#edeff6" stroke="#5f45cc" stroke-width="1.2" stroke-opacity="0.7"/>
+  <g transform="translate(80,363)">
+    <path d="M0,0 H7 L12,5 V16 H0 Z" fill="#fbfcfe" stroke="#5f45cc" stroke-width="1.4"/>
+    <path d="M7,0 V5 H12" fill="none" stroke="#5f45cc" stroke-width="1.4"/>
+  </g>
+  <text x="102" y="376" font-size="13.5" fill="#1d2030" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.go</text>
+  <text x="166" y="376" font-size="15" font-weight="600" fill="#5f45cc">エージェントが直す</text>
+  <text x="312" y="376" xml:space="preserve" font-size="13.5" font-family="ui-monospace,'SF Mono',Menlo,monospace"><tspan fill="#6f7590">min(c.n, 10)</tspan><tspan fill="#7e849c"> → </tspan><tspan fill="#3f4560">minInt(c.n, 10)</tspan></text>
+
+  <!-- transcript: 13.5px mono, baseline pitch 24 -->
+  <g font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="13.5" fill="#3f4560">
+    <!-- row 2: check -> a refusal, at the line -->
+    <text x="66" y="224" xml:space="preserve"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">gomamochi check</tspan><tspan fill="#4a5068"> app.go</tspan></text>
+    <text x="66" y="248" fill="#c0302a">app.go:9:35: Gomamochi cannot take this — `min` is Go 1.21's, and the interpreted run</text>
+    <text x="66" y="272" fill="#c0302a">does not know it. Write the comparison out (`if a &lt; b { … }`), or a small function of your own</text>
+    <text x="66" y="296" fill="#6f7590" xml:space="preserve">    func (c *Counter) clamp() { c.n = min(c.n, 10) }</text>
+    <text x="66" y="320" fill="#c0302a" xml:space="preserve">                                      ^</text>
+
+    <!-- row 4: check -> silence -->
+    <text x="66" y="432" xml:space="preserve"><tspan fill="#7e849c">$ </tspan><tspan fill="#1a63c4">gomamochi check</tspan><tspan fill="#4a5068"> app.go</tspan></text>
+
+    <!-- row 5: a headless run -> the screen, three times -->
+    <text x="66" y="542" xml:space="preserve"><tspan fill="#7e849c">$ </tspan><tspan fill="#4a5068">PIXIE_SCRIPT="click:+1,dump" </tspan><tspan fill="#1a63c4">gomamochi run</tspan><tspan fill="#4a5068"> app.go</tspan></text>
+    <text x="66" y="566">Column(spacing=12, padding=16)[Text(count: 0, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+    <text x="66" y="590">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+    <text x="66" y="614">Column(spacing=12, padding=16)[Text(count: 1, fontSize=34), Row(spacing=8)[Button(+1)]]</text>
+
+    <!-- row 6: gate -> GATE OK -->
+    <text x="66" y="666" xml:space="preserve"><tspan fill="#7e849c">$ </tspan><tspan fill="#9a5a1f">gomamochi gate</tspan><tspan fill="#4a5068"> app.go --script "click:+1,dump"</tspan></text>
+    <text x="66" y="690" fill="#15804a">GATE OK — 3 dump lines identical in both runs</text>
+
+    <!-- the next prompt -->
+    <text x="66" y="760" xml:space="preserve"><tspan fill="#7e849c">$ </tspan></text>
+  </g>
+  <rect x="82" y="748" width="8" height="15" fill="#3f4560" fill-opacity="0.7"/>
+
+  <!-- ===== the cost column: what each answer took, as a number and as a bar on one 2.2 s track ===== -->
+  <g font-size="15" fill="#5d6380">
+    <!-- row 2 -->
+    <text x="878" y="230" fill="#1a63c4"><tspan font-size="28" font-weight="700">0.6</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
+    <rect x="878" y="240" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="240" width="65" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="268">文面は直し方そのもので、</text>
+    <text x="878" y="288">直す場所に置かれている</text>
+
+    <!-- row 4 -->
+    <text x="878" y="438" fill="#1a63c4"><tspan font-size="28" font-weight="700">0.6</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
+    <rect x="878" y="448" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="448" width="65" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="476">何も出なければ、受け取れる。</text>
+    <text x="878" y="496">Go 自身の型検査も通っている</text>
+
+    <!-- row 5 -->
+    <text x="878" y="548" fill="#1a63c4"><tspan font-size="28" font-weight="700">1.0</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
+    <rect x="878" y="558" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="558" width="109" height="6" rx="3" fill="#1a63c4"/>
+    <text x="878" y="586">画面が文字で返る。</text>
+    <text x="878" y="606">ウィンドウもビルドもない</text>
+
+    <!-- row 6 -->
+    <text x="878" y="672" fill="#9a5a1f"><tspan font-size="28" font-weight="700">2.2</tspan><tspan font-size="20" font-weight="600"> 秒</tspan></text>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#e4e7ef"/>
+    <rect x="878" y="682" width="240" height="6" rx="3" fill="#9a5a1f"/>
+    <text x="878" y="710">これは go でビルドする。</text>
+    <text x="878" y="730">二つの実行を一つのスクリプトで</text>
+    <text x="878" y="750">動かし、1 バイトずつ</text>
+  </g>
+</svg>

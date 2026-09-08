@@ -1,0 +1,21 @@
+<!-- Gomamochi mark: two pieces of 胡麻餅 (mochi with black sesame kneaded through) in Yokan's flat isometric language. One material all the way through, so a piece is the same off-white on every face, and the seeds show on every face too, because they are in the dough rather than on it. Palette for dark grounds. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g stroke-linejoin="round">
+    <!-- the small piece: top, right side, front -->
+    <path d="M2 32 L10 24 L26 24 L18 32 Z" fill="#f7f1e6"/>
+    <path d="M18 32 L26 24 L26 40 L18 48 Z" fill="#c9bfb0"/>
+    <path d="M2 32 L18 32 L18 48 L2 48 Z" fill="#e6ddcf"/>
+    <!-- its sesame: on the top, the front, and the shaded side -->
+    <path d="M9 26h2v1h-2z M14 28h1v2h-1z M19 26h2v1h-2z M11 29h2v1h-2z M17 29h2v1h-2z" fill="#2b2421"/>
+    <path d="M4 35h2v1h-2z M9 38h1v2h-1z M13 34h2v2h-2z M6 43h2v1h-2z M12 44h1v2h-1z M15 40h2v1h-2z M10 41h1v1h-1z" fill="#2b2421"/>
+    <path d="M20 34h1v2h-1z M22 40h2v1h-2z M23 31h1v2h-1z M21 43h1v1h-1z" fill="#1e1917"/>
+    <!-- the large piece: top, right side, front -->
+    <path d="M28 32 L36 24 L62 24 L54 32 Z" fill="#f7f1e6"/>
+    <path d="M54 32 L62 24 L62 40 L54 48 Z" fill="#c9bfb0"/>
+    <path d="M28 32 L54 32 L54 48 L28 48 Z" fill="#e6ddcf"/>
+    <!-- its sesame -->
+    <path d="M35 26h2v1h-2z M41 28h1v2h-1z M47 26h2v1h-2z M53 29h2v1h-2z M56 26h1v2h-1z M44 30h2v1h-2z M38 30h1v1h-1z M50 28h1v1h-1z" fill="#2b2421"/>
+    <path d="M31 35h2v1h-2z M37 40h1v2h-1z M43 34h2v2h-2z M49 37h2v1h-2z M33 44h1v2h-1z M40 45h2v1h-2z M47 43h1v2h-1z M52 35h1v2h-1z M51 45h2v1h-2z M30 40h1v1h-1z M45 41h1v1h-1z M36 36h1v1h-1z" fill="#2b2421"/>
+    <path d="M56 36h1v2h-1z M58 31h2v1h-2z M57 41h2v1h-2z M60 35h1v2h-1z M56 44h1v1h-1z" fill="#1e1917"/>
+  </g>
+</svg>

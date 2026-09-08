@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+<defs>
+  <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.2" fill="#e9ecf4"/></pattern>
+  <radialGradient id="glow" cx="620" cy="345" r="330" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#eef2f9" stop-opacity="1"/>
+    <stop offset="1" stop-color="#fbfcfe" stop-opacity="0"/>
+  </radialGradient>
+  <marker id="mb" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#0a72b5"/></marker>
+  <marker id="mw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#5b8fb8"/></marker>
+  <marker id="ma" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#9d600a"/></marker>
+  <marker id="mg" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 Z" fill="#0b7a47"/></marker>
+</defs>
+<rect x="2" y="2" width="1196" height="716" rx="20" fill="#fbfcfe" stroke="#dcdfe9" stroke-width="2"/>
+<rect x="2" y="2" width="1196" height="716" rx="20" fill="url(#dots)"/>
+<circle cx="620" cy="345" r="330" fill="url(#glow)"/>
+<circle cx="620" cy="345" r="190" fill="none" stroke="#d3d9e6" stroke-width="1.2"/>
+<path d="M588.6,157.6 A190,190 0 0 0 611.7,534.8" fill="none" stroke="#0a72b5" stroke-width="3" stroke-linecap="round" marker-end="url(#mb)"/>
+<path d="M628.3,534.8 A190,190 0 0 0 651.4,157.6" fill="none" stroke="#0a72b5" stroke-width="3" stroke-linecap="round" marker-end="url(#mb)"/>
+<path d="M627,536 C710,543 782,535 882,506" fill="none" stroke="#9d600a" stroke-width="3" stroke-linecap="round" marker-end="url(#ma)"/>
+<line x1="902.6" y1="495.5" x2="1079.7" y2="370.6" stroke="#0b7a47" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)"/>
+<line x1="620" y1="183" x2="620" y2="305.0" stroke="#5b8fb8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#mw)"/>
+<circle cx="452.2" cy="255.8" r="7" fill="#ffffff" stroke="#0a72b5" stroke-width="2"/>
+<circle cx="452.2" cy="255.8" r="2.6" fill="#0a72b5"/>
+<circle cx="452.2" cy="434.2" r="7" fill="#ffffff" stroke="#0a72b5" stroke-width="2"/>
+<circle cx="452.2" cy="434.2" r="2.6" fill="#0a72b5"/>
+<circle cx="620" cy="535" r="4" fill="#ffffff" stroke="#0a72b5" stroke-width="1.6"/>
+<circle cx="892" cy="503" r="9" fill="#ffffff" stroke="#9d600a" stroke-width="2.4"/>
+<circle cx="892" cy="503" r="3.2" fill="#9d600a"/>
+<circle cx="1092" cy="362" r="18" fill="#0b7a47" fill-opacity="0.12"/>
+<circle cx="1092" cy="362" r="9" fill="#0b7a47"/>
+<circle cx="620" cy="155" r="26" fill="#ffffff" stroke="#0a72b5" stroke-width="2"/>
+<g fill="none" stroke="#1c2030" stroke-width="1.6" stroke-linecap="round">
+  <rect x="608" y="149" width="24" height="18" rx="6"/>
+  <circle cx="615" cy="158" r="1.9"/>
+  <circle cx="625" cy="158" r="1.9"/>
+  <line x1="620" y1="149" x2="620" y2="143"/>
+  <circle cx="620" cy="141.2" r="1.7"/>
+</g>
+<rect x="532.0" y="312.0" width="176" height="66" rx="8" fill="#edeff6" stroke="#b4bcd2" stroke-width="1.5"/>
+<text x="620" y="341" font-size="17" fill="#1c2030" text-anchor="middle" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.go</text>
+<text x="620" y="364" font-size="13" fill="#525970" text-anchor="middle">エージェントが書く</text>
+<text x="620" y="111" font-size="15" fill="#1c2030" text-anchor="middle" font-weight="600">エージェント</text>
+<text x="630" y="251.5" font-size="13" fill="#525970">書く</text>
+<text x="823.0" y="350.00000000000006" font-size="13" fill="#525970">読む</text>
+<text x="430.23995735680387" y="209.80040307068072" font-size="17" fill="#1c2030" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi check</text>
+<text x="430.23995735680387" y="245.80040307068072" font-size="30" fill="#0a72b5" text-anchor="end" font-weight="700">0.6 秒</text>
+<text x="430.23995735680387" y="269.8004030706807" font-size="14" fill="#525970" text-anchor="end">受け取れない書き方を、</text>
+<text x="430.23995735680387" y="288.8004030706807" font-size="14" fill="#525970" text-anchor="end">行と書き換え方とともに名指しする</text>
+<text x="430.23995735680387" y="310.8004030706807" font-size="14" fill="#0a72b5" text-anchor="end">何もビルドしない</text>
+<text x="430.23995735680387" y="368.1995969293193" font-size="13" fill="#525970" text-anchor="end">ウィンドウなしの実行</text>
+<text x="430.23995735680387" y="390.1995969293193" font-size="17" fill="#1c2030" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">PIXIE_SCRIPT="click:+1,dump"</text>
+<text x="430.23995735680387" y="412.1995969293193" font-size="17" fill="#1c2030" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi run</text>
+<text x="430.23995735680387" y="448.1995969293193" font-size="30" fill="#0a72b5" text-anchor="end" font-weight="700">1.0 秒</text>
+<text x="430.23995735680387" y="472.1995969293193" font-size="14" fill="#525970" text-anchor="end">画面を文字として印字する</text>
+<text x="430.23995735680387" y="494.1995969293193" font-size="14" fill="#0a72b5" text-anchor="end">ウィンドウは開かない</text>
+<text x="880" y="543" font-size="17" fill="#1c2030" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi gate</text>
+<text x="880" y="579" font-size="30" fill="#9d600a" font-weight="700">2.2 秒</text>
+<text x="880" y="603" font-size="14" fill="#525970">go でビルドし、両方を動かして</text>
+<text x="880" y="622" font-size="14" fill="#525970">1 バイトずつ比べる</text>
+<text x="880" y="646" font-size="13" fill="#2b3044" font-family="ui-monospace,'SF Mono',Menlo,monospace">GATE OK — 3 dump lines</text>
+<text x="880" y="664" font-size="13" fill="#2b3044" font-family="ui-monospace,'SF Mono',Menlo,monospace">identical in both runs</text>
+<text x="1178" y="308" font-size="15" fill="#0b7a47" text-anchor="end" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi build --release --app</text>
+<text x="1178" y="330" font-size="13" fill="#525970" text-anchor="end">22.2 MB、ダブルクリックで開く</text>
+<text x="44" y="692" font-size="14" fill="#525970"><tspan fill="#1c2030">速いほうの二つの答えは、どちらもプログラムが読める文字である。</tspan>直し方を名指しする断りと、画面そのもの。</text>
+</svg>

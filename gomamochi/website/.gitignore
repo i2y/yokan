@@ -1,0 +1,7 @@
+build/
+.venv/
+.cache/
+.serve/
+
+# build.sh copies the stylesheet into the Japanese tree; one file, not two.
+docs-ja/stylesheets/

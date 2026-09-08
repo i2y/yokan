@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'Hiragino Sans','Noto Sans JP',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6284"/>
+    </marker>
+    <marker id="arB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5da9e8"/>
+    </marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3ddc97"/>
+    </marker>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.2" cy="1.2" r="1.2" fill="#20243a"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="796" rx="20" fill="#14161f" stroke="#2a2e40" stroke-width="2"/>
+  <rect x="2" y="2" width="1196" height="796" rx="20" fill="url(#dots)"/>
+
+  <!-- ============ the one source file ============ -->
+  <rect x="340" y="30" width="520" height="142" rx="14" fill="#1e2232" stroke="#3a4160" stroke-width="1.6"/>
+  <text x="600" y="57" text-anchor="middle" font-size="21" font-weight="700" fill="#e8eaf2" font-family="ui-monospace,'SF Mono',Menlo,monospace">app.go</text>
+  <text x="600" y="78" text-anchor="middle" font-size="13" fill="#9aa0b5">a Go struct with a <tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="12.5" fill="#c9d3f5">View</tspan> method</text>
+  <text x="600" y="96" text-anchor="middle" font-size="12" fill="#9aa0b5">plus the elements that build the screen: <tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="11.5" fill="#c9d3f5">Text</tspan>, <tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="11.5" fill="#c9d3f5">Button</tspan>, <tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="11.5" fill="#c9d3f5">Column</tspan></text>
+  <rect x="380" y="107" width="300" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="380" y="120" width="410" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="380" y="133" width="240" height="7" rx="3.5" fill="#39415f"/>
+  <rect x="380" y="146" width="180" height="7" rx="3.5" fill="#c9772e"/>
+  <rect x="568" y="140" width="44" height="18" rx="5" fill="#251f12" stroke="#c99a4a" stroke-width="1.2"/>
+  <text x="590" y="153" text-anchor="middle" font-size="11" font-weight="700" fill="#f0be62" font-family="ui-monospace,'SF Mono',Menlo,monospace">View</text>
+  <text x="622" y="153" font-size="11" fill="#6f7590">← answers the screen</text>
+
+  <path d="M540 172 C 470 196, 390 202, 335 220" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M660 172 C 730 196, 810 202, 865 220" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+
+  <!-- lane captions -->
+  <rect x="198" y="196" width="254" height="16" fill="#14161f"/>
+  <text x="325" y="208" text-anchor="middle" font-size="13.5" fill="#5da9e8" font-weight="700">develop — gomamochi run app.go</text>
+  <rect x="680" y="196" width="390" height="16" fill="#14161f"/>
+  <text x="875" y="208" text-anchor="middle" font-size="13.5" fill="#e8b34a" font-weight="700">release — gomamochi build app.go --release --app</text>
+
+  <!-- ============ develop lane: the interpreter inside the command, and the edit loop ============ -->
+  <rect x="85" y="220" width="480" height="288" rx="14" fill="#1b2130" stroke="#2f5a86" stroke-width="1.6"/>
+
+  <rect x="120" y="244" width="410" height="70" rx="12" fill="#2f6fae" opacity="0.35" filter="url(#glow)"/>
+  <rect x="120" y="244" width="410" height="70" rx="12" fill="#16283c" stroke="#3f79b3" stroke-width="1.8"/>
+  <circle cx="289" cy="267" r="5" fill="#5da9e8"/>
+  <circle cx="303" cy="267" r="5" fill="#f5c542"/>
+  <text x="342" y="273" text-anchor="middle" font-size="17.5" font-weight="700" fill="#cfe4f7" font-family="ui-monospace,'SF Mono',Menlo,monospace">yaegi</text>
+  <text x="325" y="298" text-anchor="middle" font-size="11.5" fill="#9fc4e4">an interpreter inside the gomamochi command, reading your file</text>
+
+  <path d="M325 314 L325 346" fill="none" stroke="#3f79b3" stroke-width="1.8" marker-end="url(#arB)"/>
+
+  <!-- the loop -->
+  <path d="M 325 360 A 54 54 0 1 1 278 387" fill="none" stroke="#5da9e8" stroke-width="2.4" marker-end="url(#arB)"/>
+  <text x="325" y="419" text-anchor="middle" font-size="15" font-weight="700" fill="#e8eaf2">state kept</text>
+  <text x="338" y="345" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">save</text>
+  <text x="404" y="431" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">the window</text>
+  <text x="404" y="447" text-anchor="start" font-size="12.5" font-weight="600" fill="#bcd6ee">picks the edit up</text>
+  <text x="246" y="438" text-anchor="end" font-size="12.5" font-weight="600" fill="#bcd6ee">edit</text>
+
+  <text x="325" y="493" text-anchor="middle" font-size="13" fill="#9aa0b5">the app is Go here, read as it is — no build step, the fast loop</text>
+
+  <!-- ============ release lane: the Go compiler, then a binary with the engine beside it ============ -->
+  <rect x="635" y="220" width="480" height="288" rx="14" fill="#1b2130" stroke="#3a4160" stroke-width="1.6"/>
+
+  <rect x="675" y="238" width="400" height="48" rx="11" fill="#1e2232" stroke="#6b74a0" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <text x="875" y="262" text-anchor="middle" font-size="14.5" font-weight="600" fill="#c9d3f5" font-family="ui-monospace,'SF Mono',Menlo,monospace">go build</text>
+  <text x="875" y="278" text-anchor="middle" font-size="11.5" fill="#9aa0b5">the Go compiler's own, CGO_ENABLED=0 — the file unchanged</text>
+
+  <path d="M875 286 L875 314" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="889" y="305" text-anchor="start" font-size="12" fill="#9aa0b5" font-family="ui-monospace,'SF Mono',Menlo,monospace">gc</text>
+
+  <rect x="675" y="314" width="400" height="86" rx="12" fill="#2a8f63" opacity="0.28" filter="url(#glow)"/>
+  <rect x="675" y="314" width="400" height="86" rx="12" fill="#12291f" stroke="#2f7c58" stroke-width="1.8"/>
+  <text x="875" y="348" text-anchor="middle" font-size="17.5" font-weight="700" fill="#7fe0b2">native binary</text>
+  <text x="875" y="372" text-anchor="middle" font-size="11" fill="#a9c7b8">no cgo · 1.9 MB stripped · the engine's library beside it, 20.4 MB</text>
+
+  <path d="M875 400 L875 430" fill="none" stroke="#2f7c58" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arG)"/>
+
+  <rect x="675" y="430" width="400" height="44" rx="11" fill="#12291f" stroke="#2f7c58" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <circle cx="716" cy="452" r="4.5" fill="#3ddc97"/>
+  <text x="729" y="457" text-anchor="start" font-size="12.5" font-weight="700" fill="#7fe0b2" font-family="ui-monospace,'SF Mono',Menlo,monospace">.app</text>
+  <text x="773" y="449" text-anchor="start" font-size="11" fill="#a9c7b8"><tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="10.5">--app</tspan> puts the binary and the library in one bundle,</text>
+  <text x="773" y="465" text-anchor="start" font-size="11" fill="#a9c7b8">22.2 MB, double-clickable (an AppDir on Linux)</text>
+
+  <text x="875" y="493" text-anchor="middle" font-size="13" fill="#9aa0b5">opens on a machine with neither Go nor the toolchain</text>
+
+  <!-- ============ one engine; both runs cross the C face ============ -->
+  <path d="M325 508 L325 529" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M875 508 L875 529" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+
+  <rect x="85" y="540" width="1030" height="116" rx="13" fill="#1b2130" stroke="#465081" stroke-width="1.8"/>
+  <rect x="296" y="531" width="58" height="18" rx="9" fill="#14161f" stroke="#465081" stroke-width="1.4"/>
+  <text x="325" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C face</text>
+  <rect x="846" y="531" width="58" height="18" rx="9" fill="#14161f" stroke="#465081" stroke-width="1.4"/>
+  <text x="875" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C face</text>
+
+  <rect x="145" y="556" width="360" height="40" rx="9" fill="#1e2232" stroke="#465081" stroke-width="1.2"/>
+  <text x="325" y="573" text-anchor="middle" font-size="12.5" font-weight="600" fill="#c9d3f5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.dylib</text>
+  <text x="325" y="589" text-anchor="middle" font-size="11.5" fill="#9aa0b5">opened through <tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="11" fill="#c9d3f5">purego</tspan> — no cgo</text>
+
+  <rect x="695" y="556" width="360" height="40" rx="9" fill="#1e2232" stroke="#465081" stroke-width="1.2"/>
+  <text x="875" y="573" text-anchor="middle" font-size="12.5" font-weight="600" fill="#c9d3f5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.dylib</text>
+  <text x="875" y="589" text-anchor="middle" font-size="11" fill="#9aa0b5">the same library, beside the binary, opened the same way</text>
+
+  <text x="600" y="620" text-anchor="middle" font-size="16.5" font-weight="700" fill="#b9c6fa">one engine — pixie-kernel + gpui (Zed's renderer)</text>
+  <text x="600" y="641" text-anchor="middle" font-size="12.5" fill="#9aa0b5">elements, state, drawing — one Rust implementation under both runs; it never holds a Go value</text>
+
+  <!-- ============ the gate ============ -->
+  <path d="M325 656 L325 686" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <path d="M875 656 L875 686" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="311" y="673" text-anchor="end" font-size="11.5" fill="#8b90a5">the interpreted run's transcript</text>
+  <text x="889" y="673" text-anchor="start" font-size="11.5" fill="#8b90a5">the compiled run's transcript</text>
+
+  <rect x="85" y="690" width="1030" height="86" rx="13" fill="#251f12" stroke="#c9772e" stroke-width="1.8"/>
+  <text x="600" y="730" text-anchor="middle" font-size="18" font-weight="800" fill="#f0be62" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi gate</text>
+  <text x="600" y="757" text-anchor="middle" font-size="13" fill="#cdbfa0">drives both runs with one script and compares the two transcripts byte for byte</text>
+</svg>

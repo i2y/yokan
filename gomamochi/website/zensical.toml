@@ -1,0 +1,114 @@
+[project]
+site_name = "Gomamochi"
+site_url = "https://i2y.github.io/yokan/gomamochi/"
+site_description = "Desktop apps in Go on pixie's engine: `gomamochi run` interprets the file while you write it and a save keeps the app's values, `gomamochi build` compiles it with the Go compiler, and `gomamochi gate` compares the two runs byte for byte."
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
+
+# The repository, in the header. This language lives in one directory
+# of the Yokan repository, so the link goes there rather than to the
+# root: a reader who follows it lands on this language's own sources.
+repo_url = "https://github.com/i2y/yokan/tree/main/gomamochi"
+repo_name = "i2y/yokan/gomamochi"
+# No edit path: one cannot be appended to a directory URL, and the
+# edit action is not turned on.
+edit_uri = ""
+
+docs_dir = "docs"
+site_dir = "build"
+use_directory_urls = true
+
+# Site styling: the hero, and the frame around the app screenshots.
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { Home = "index.md" },
+  { Installation = "installation.md" },
+  { "Language tour" = [
+    { "The first app" = "tour.md" },
+    { "Views and control flow" = "tour-logic.md" },
+    { "The canvas and the keyboard" = "tour-canvas.md" },
+    { "Look, and the window" = "tour-ui.md" },
+    { "Go, data, and work" = "tour-lib.md" },
+    { "Verify and ship" = "tour-ship.md" },
+  ] },
+  { Elements = "elements.md" },
+  { "The two runs" = "two-runs.md" },
+  { "What Gomamochi refuses" = "refusals.md" },
+  { "Building with an agent" = "agents.md" },
+  { Demos = "demos.md" },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/yokan/gomamochi/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/yokan/gomamochi/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer  previous / next at the foot of every page, so the
+#                    tour reads in order without the sidebar
+# navigation.top     a back-to-top button on long pages
+# navigation.tracking  the address bar follows the section being read
+# content.code.copy  a copy button on every code block
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.png"
+
+# ---- Palette --------------------------------------------------------------
+
+# Gomamochi the confection: soft off-white mochi with black sesame
+# kneaded through. Black header keeps the dark app screenshots
+# seamless; the accent is the toasted-sesame orange, the same pair on
+# both schemes so the brand holds.
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "deep-orange"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "deep-orange"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+# ---- Markdown extensions ---------------------------------------------------
+
+# Unicode-preserving heading anchors (Japanese headings slug like
+# GitHub's), via pymdownx's slugifier.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"
