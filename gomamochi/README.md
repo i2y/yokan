@@ -118,4 +118,6 @@ through the C face. Files, the network, JSON and the clock are Go's
 own packages, the same code in both runs. Every demo the other
 languages have is here, forty-three of them with two games on a
 canvas, and each compiled run prints the dump the Ruby one prints for
-the same script wherever the text is the same. There is no tour yet.
+the same script wherever the text is the same. The language, in the order you meet it, is
+[TOUR.md](TOUR.md) / [TOUR.ja.md](TOUR.ja.md), and the same thing as a
+site under `website/` (`just gomamochi-site-serve`).
