@@ -5,6 +5,14 @@ site_description = "デスクトップアプリのための、静的に型付け
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
 
+# The repository, in the header. The three sites are one repository,
+# so they point at the same place; `edit_uri` then has to name this
+# site's own docs directory, because the default reads as if the site
+# were the root of it.
+repo_url = "https://github.com/i2y/yokan"
+repo_name = "i2y/yokan"
+edit_uri = "edit/main/website/docs-ja"
+
 docs_dir = "docs-ja"
 site_dir = "build/ja"
 use_directory_urls = true
@@ -44,6 +52,7 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
+icon.repo = "fontawesome/brands/github"
 # navigation.footer  previous / next at the foot of every page, so the
 #                    tour reads in order without the sidebar
 # navigation.top     a back-to-top button on long pages

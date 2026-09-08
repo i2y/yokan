@@ -5,6 +5,15 @@ site_description = "Ruby のデスクトップアプリを 1 本のネイティ�
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh &mdash; MIT OR Apache-2.0"
 
+# The repository, in the header. This language lives in one directory
+# of the Yokan repository, so the link goes there rather than to the
+# root: a reader who follows it lands on this language's own sources.
+repo_url = "https://github.com/i2y/yokan/tree/main/wakakusa"
+repo_name = "i2y/yokan/wakakusa"
+# No edit path: one cannot be appended to a directory URL, and the
+# edit action is not turned on.
+edit_uri = ""
+
 docs_dir = "docs-ja"
 site_dir = "build/ja"
 use_directory_urls = true
@@ -44,6 +53,7 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
+icon.repo = "fontawesome/brands/github"
 # navigation.footer  previous / next at the foot of every page, so the
 #                    tour reads in order without the sidebar
 # navigation.top     a back-to-top button on long pages
