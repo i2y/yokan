@@ -80,6 +80,9 @@ jobs:
           working-directory: crates/yokan
           rust-toolchain: ${{ steps.pin.outputs.channel }}
           args: --release --auditwheel skip --out dist-raw
+          # The action starts its own container and forwards nothing of
+          # its own accord, so the package list is handed in.
+          docker-options: -e DEPS
           before-script-linux: |
             dnf install -y dnf-plugins-core
             dnf config-manager --set-enabled crb
