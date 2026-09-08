@@ -33,6 +33,15 @@ if ! go vet . ./cmd/... ./internal/... ./tools/... ; then
 fi
 echo "OK   vet"
 
+# The command's own tests: the shapes a package takes on the platform
+# this machine is not, checked for their layout here.
+if ! go test ./cmd/... > /dev/null 2>&1; then
+  echo "FAIL tests"
+  go test ./cmd/...
+  exit 1
+fi
+echo "OK   tests"
+
 # Every refusal has a fixture and the message it must print.
 if ! ./tools/refuse_test.sh > /dev/null; then
   echo "FAIL refusals"
