@@ -212,7 +212,8 @@ its own duration, and nothing in the app has to know.
 edit up: the file is read again by a fresh interpreter, and the app the
 window is holding hands its values to the new one — every field with
 the same name and type keeps what it had, a field the new file adds
-starts at its zero value, and a field whose type changed starts over.
+starts at what `main` gives it, and a field whose type changed starts
+over.
 Timers and shortcuts the file declares are bound again to the new app.
 A file that does not compile leaves the window on what it had and says
 so in the terminal, and the next save that does compile takes.
