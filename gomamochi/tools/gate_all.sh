@@ -43,6 +43,14 @@ gate forms   ./bin/gomamochi gate demo/forms.go --script "click:Dark mode,slide:
 gate cards   ./bin/gomamochi gate demo/cards.go --script "click:+1,click:+10,dump"
 gate todo    ./bin/gomamochi gate demo/todo.go --script "input:eggs,submit,dump,click:done,dump"
 gate tasks   ./bin/gomamochi gate demo/tasks.go --script "click:start slow work,dump,click:start slow work,dump"
+gate calc    ./bin/gomamochi gate demo/calc.go --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate roster  ./bin/gomamochi gate demo/roster.go --script "select:member 7,dump,click:score,dump,click:score,dump"
+gate dashboard ./bin/gomamochi gate demo/dashboard.go --script "advance:1000,advance:1000,dump"
+# Frames, keys and a canvas: a script's `advance:` ticks the timer and
+# `keydown:` holds a key for the frames between it and `keyup:`.
+gate canvas  ./bin/gomamochi gate demo/canvas.go --script "advance:50,dump,keydown:left,advance:50,advance:50,dump,keyup:left,keydown:space,advance:50,keyup:space,dump"
+gate jump    ./bin/gomamochi gate demo/jump.go --script "advance:34,advance:34,dump,keydown:right,advance:34,advance:34,advance:34,dump,keyup:right,advance:34,dump"
+gate shooter ./bin/gomamochi gate demo/shooter.go --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

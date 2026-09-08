@@ -100,6 +100,7 @@ element is a row there and an arm in the engine, and nothing in Go.
 ## What is here now
 
 The door over the whole C face, the whole vocabulary, `Run`, `Task`,
-`Every`, the keyboard, and eight demos. Timers, the canvas, a window's
-reload with values kept, and the framework's own standard library are
-written but not yet driven by a demo.
+`Every`, the keyboard, sound, and fourteen demos, two of them games on
+a canvas. The framework's own standard library (files, a database,
+http, the clipboard, dialogs) is not yet reachable from Go, and there
+is no tour yet.

@@ -19,6 +19,8 @@ func init() {
 	Symbols["github.com/i2y/yokan/gomamochi/gomamochi"] = map[string]reflect.Value{
 		"App":           reflect.ValueOf((*gm.App)(nil)),
 		"_App":          reflect.ValueOf((*_gomamochi_App)(nil)),
+		"AudioPlay":     reflect.ValueOf(gm.AudioPlay),
+		"AudioStop":     reflect.ValueOf(gm.AudioStop),
 		"BarChart":      reflect.ValueOf(gm.BarChart),
 		"BarChartEl":    reflect.ValueOf((*gm.BarChartEl)(nil)),
 		"Button":        reflect.ValueOf(gm.Button),

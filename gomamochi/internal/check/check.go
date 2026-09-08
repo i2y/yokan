@@ -66,6 +66,16 @@ func (c *checker) file(f *ast.File) {
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
+			// The app handed to Run straight from a call. The interpreter
+			// hands a call's result over without the wrapper that makes an
+			// interpreted type satisfy a compiled interface, and Run then
+			// cannot take it.
+			if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "Run" && len(x.Args) > 0 {
+				if _, call := x.Args[0].(*ast.CallExpr); call {
+					c.refuse(x.Args[0].Pos(), "the app is handed to `Run` straight from a call, and the interpreted run "+
+						"cannot take it that way. Give it a name first: `app := newApp()`, then `Run(app, …)`")
+				}
+			}
 			// Go 1.21's builtins: gc knows them, the interpreter
 			// does not, and an app that used them would run one way
 			// and not the other.
