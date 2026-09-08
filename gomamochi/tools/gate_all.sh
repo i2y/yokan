@@ -27,7 +27,7 @@ echo "OK   vocabulary"
 # The package, the command, the door and the generator, as Go's own
 # checker reads them. The demos are not a package: each is its own
 # `main`.
-if ! go vet . ./cmd/... ./internal/... ./tools/... ; then
+if ! go vet . ./cmd/... ./internal/... ./tools/... ./website/... ; then
   echo "FAIL vet"
   exit 1
 fi
@@ -111,10 +111,25 @@ gate shared  ./bin/gomamochi gate demo/shared.go --script "click:lock,click:save
 
 # The tour teaches the vocabulary, so it has to hold to it: every
 # complete app in either language, through the same command.
-if go run ./tools/tourcheck TOUR.md TOUR.ja.md > /dev/null 2>&1; then
+if go run ./tools/tourcheck TOUR.md TOUR.ja.md \
+     website/docs/tour.md website/docs/tour-logic.md website/docs/tour-canvas.md \
+     website/docs/tour-ui.md website/docs/tour-lib.md website/docs/tour-ship.md \
+     website/docs-ja/tour.md website/docs-ja/tour-logic.md website/docs-ja/tour-canvas.md \
+     website/docs-ja/tour-ui.md website/docs-ja/tour-lib.md website/docs-ja/tour-ship.md \
+     > /dev/null 2>&1; then
   pass=$((pass + 1)); echo "OK   tour"
 else
   fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
+fi
+
+# The site quotes what lives elsewhere: the tour, the vocabulary table,
+# the list of demos, the refusals' own wording. Each has one source of
+# truth, and the checker runs every writer with --check.
+if go run ./website/tools/sitecheck > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   site"
+else
+  fail=$((fail + 1)); failed="$failed site"; echo "FAIL site"
+  go run ./website/tools/sitecheck 2>&1 | grep FAIL
 fi
 
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"

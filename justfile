@@ -214,6 +214,36 @@ gomamochi-gate app script='':
 gomamochi-sweep:
     ./gomamochi/tools/gate_all.sh
 
+# Gomamochi's site is its own zensical project under `gomamochi/website/`,
+# written for `i2y.github.io/yokan/gomamochi/` so it can move to its own
+# repository whole. Both languages, in the order build.sh enforces.
+#
+# Build the Gomamochi documentation site.
+gomamochi-site:
+    cd gomamochi/website && ./build.sh
+
+# The tour pages come from TOUR.md, the elements page from elements.toml,
+# the gallery from demo/ and the refusals from the fixtures; the checker
+# runs all four writers with --check and then reads what is left. The
+# writers are Go programs, run from the module root. The sweep runs the
+# checker, not the writers.
+#
+# Rewrite the Gomamochi site's generated pages, and check the rest.
+gomamochi-site-gen:
+    cd gomamochi && go run ./website/tools/tourpages && go run ./website/tools/elementspage \
+        && go run ./website/tools/demospage && go run ./website/tools/refusalspage
+    cd gomamochi && go run ./website/tools/sitecheck
+
+# The pages carry absolute links (site_url ends in /yokan/gomamochi/), so
+# the build has to sit under that path or every link 404s — hence the
+# nested docroot. Port 8004, so the other three sites can stay up.
+#
+# Build the Gomamochi documentation site and read it at localhost:8004/yokan/gomamochi/.
+gomamochi-site-serve: gomamochi-site
+    @mkdir -p gomamochi/website/.serve/yokan && ln -sfn ../../build gomamochi/website/.serve/yokan/gomamochi
+    @echo "http://localhost:8004/yokan/gomamochi/  ·  http://localhost:8004/yokan/gomamochi/ja/"
+    python3 -m http.server 8004 -d gomamochi/website/.serve
+
 # ---- documentation site ----------------------------------------------------
 
 # From the manifest, the translator's own tables, and a probe of every
