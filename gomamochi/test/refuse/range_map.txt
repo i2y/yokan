@@ -1,3 +1,3 @@
-test/refuse/range_map.go:9:20: Gomamochi cannot take this — `range` over a map walks it in a different order every run, and the two runs would draw different screens. Collect the keys, sort them, and range over those
+test/refuse/range_map.go:9:20: Gomamochi cannot take this — `range` over a map walks it in a different order every run, and a view must draw the same screen from the same state. Keep a sorted list of the keys on the app, made in a handler, and range over that
     	for name := range a.prices {
     	                  ^

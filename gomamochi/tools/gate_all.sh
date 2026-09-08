@@ -62,5 +62,43 @@ gate canvas  ./bin/gomamochi gate demo/canvas.go --script "advance:50,dump,keydo
 gate jump    ./bin/gomamochi gate demo/jump.go --script "advance:34,advance:34,dump,keydown:right,advance:34,advance:34,advance:34,dump,keyup:right,advance:34,dump"
 gate shooter ./bin/gomamochi gate demo/shooter.go --script "advance:34,advance:34,dump,keydown:enter,advance:34,advance:34,keyup:enter,advance:34,dump,keydown:space,advance:34,advance:34,keyup:space,advance:34,advance:34,dump"
 
+
+# The rest of the vocabulary and the app's shape, in the order the
+# other languages' sweeps drive them.
+gate control ./bin/gomamochi gate demo/control.go --script "click:pick 1,dump,click:hint,click:tab 2,dump"
+gate charts  ./bin/gomamochi gate demo/charts.go --script "click:next month,dump,click:next month"
+gate quantities ./bin/gomamochi gate demo/quantities.go --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
+gate table   ./bin/gomamochi gate demo/table.go --script "click:refresh,dump,click:refresh"
+gate mixer   ./bin/gomamochi gate demo/mixer.go --script "click:+1,click:mute,dump,input:live set,dump"
+gate trend   ./bin/gomamochi gate demo/trend.go --script "click:add point,dump,click:raise limit,dump"
+gate edges   ./bin/gomamochi gate demo/edges.go --script "click:oob,dump,click:grow,click:grow,click:partial,dump"
+gate points  ./bin/gomamochi gate demo/points.go --script "click:right,click:measure,dump,click:swap,dump"
+gate styled  ./bin/gomamochi gate demo/styled.go --script "click:+1,dump,click:flip,dump"
+gate panels  ./bin/gomamochi gate demo/panels.go --script "select:stack,dump,click:about,dump,click:close"
+gate reader  ./bin/gomamochi gate demo/reader.go --script "click:fetch,dump"
+gate csv_viewer ./bin/gomamochi gate demo/csv_viewer.go --script "input:momo,dump,input:zzz,dump"
+# The two that keep a database: each run starts from the same nothing.
+gate dbnotes ./bin/gomamochi gate demo/dbnotes.go --fresh demo/.gate/notes.db --script "click:setup,click:load,dump"
+# The ledger types a name with an apostrophe, which only a BOUND value survives.
+gate ledger  ./bin/gomamochi gate demo/ledger.go --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
+gate stdlib  ./bin/gomamochi gate demo/stdlib.go --script "click:measure,click:stats,click:sift,click:count,click:combine,click:stamp,click:parse,click:csv,click:words,click:set,dump,click:write,click:scan,dump"
+gate about   ./bin/gomamochi gate demo/about.go --script "click:copy link,dump,click:Website"
+# Sound: silent under a script, so what the two runs compare is the screen.
+gate sound   ./bin/gomamochi gate demo/sound.go --script "click:jump,dump,slide:0.3,click:blast,click:stop,dump"
+gate keys    ./bin/gomamochi gate demo/keys.go --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
+# The picker needs something on disk to choose and to drop.
+mkdir -p demo/.gate && echo "a file the picker can read" > demo/.gate/fs_probe.txt
+gate picker  ./bin/gomamochi gate demo/picker.go --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
+gate flow    ./bin/gomamochi gate demo/flow.go --script "click:step,click:tally,dump,click:bump3,click:find,dump"
+gate moods   ./bin/gomamochi gate demo/moods.go --script "click:flip,click:pick,click:describe,dump,click:track,click:clear,click:describe,dump,click:wipe,dump"
+gate calcgrid ./bin/gomamochi gate demo/calcgrid.go --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate links   ./bin/gomamochi gate demo/links.go --script "click:build,click:peek,dump,click:drop,click:peek,dump"
+gate files   ./bin/gomamochi gate demo/files.go --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
+gate lookup  ./bin/gomamochi gate demo/lookup.go --script "click:apple,dump,click:cherry,dump,click:miss,dump"
+gate dialog  ./bin/gomamochi gate demo/dialog.go --script "click:open dialog,dump,click:accept,dump"
+gate loading ./bin/gomamochi gate demo/loading.go --script "click:step,click:step,dump,click:busy"
+gate filter  ./bin/gomamochi gate demo/filter.go --script "select:crit,dump,select:all,dump"
+gate shared  ./bin/gomamochi gate demo/shared.go --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

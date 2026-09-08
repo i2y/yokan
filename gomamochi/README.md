@@ -111,7 +111,11 @@ element is a row there and an arm in the engine, and nothing in Go.
 ## What is here now
 
 The door over the whole C face, the whole vocabulary, `Run`, `Task`,
-`Every`, the keyboard, sound, and fourteen demos, two of them games on
-a canvas. The framework's own standard library (files, a database,
-http, the clipboard, dialogs) is not yet reachable from Go, and there
-is no tour yet.
+`Every`, the keyboard, and the framework's own standard library where
+the engine mediates it: a database, the clipboard, the platform's
+dialogs, sound and notifications, one implementation both runs reach
+through the C face. Files, the network, JSON and the clock are Go's
+own packages, the same code in both runs. Every demo the other
+languages have is here, forty-three of them with two games on a
+canvas, and each compiled run prints the dump the Ruby one prints for
+the same script wherever the text is the same. There is no tour yet.

@@ -298,7 +298,11 @@ func (c *checker) view(body *ast.BlockStmt, recv *ast.FieldList) {
 			}
 		case *ast.CallExpr:
 			if name, own := c.ownCall(x); own {
-				if what, impure := impureOwn[name]; impure {
+				what, impure := impureOwn[name]
+				if !impure {
+					what, impure = stdlibNames[name]
+				}
+				if impure {
 					c.refuse(x.Pos(), fmt.Sprintf("`%s` %s, and a view is built again from the same state whenever "+
 						"anything changes. Call it from a handler or a timer, and keep what it answers on the app", name, what))
 				}
@@ -395,6 +399,47 @@ func (c *checker) typed(f *ast.File, root string) error {
 	if len(goErrors) > 0 {
 		return fmt.Errorf("%s", strings.Join(goErrors, "\n"))
 	}
+	// A map ranged over in a view: the order changes from run to run,
+	// so the two runs would draw different screens. A handler may
+	// range over one — to collect its keys and sort them, say — and
+	// what it keeps on the app is then the same in both.
+	ast.Inspect(f, func(n ast.Node) bool {
+		var ft *ast.FuncType
+		var body *ast.BlockStmt
+		var recv *ast.FieldList
+		switch x := n.(type) {
+		case *ast.FuncDecl:
+			ft, body, recv = x.Type, x.Body, x.Recv
+		case *ast.FuncLit:
+			ft, body = x.Type, x.Body
+		default:
+			return true
+		}
+		if !c.isView(ft, recv) || body == nil {
+			return true
+		}
+		var walk func(m ast.Node) bool
+		walk = func(m ast.Node) bool {
+			switch y := m.(type) {
+			case *ast.FuncLit:
+				if c.isView(y.Type, nil) {
+					ast.Inspect(y.Body, walk)
+				}
+				return false
+			case *ast.RangeStmt:
+				if tt := info.TypeOf(y.X); tt != nil {
+					if _, isMap := tt.Underlying().(*types.Map); isMap {
+						c.refuse(y.X.Pos(), "`range` over a map walks it in a different order every run, and a view "+
+							"must draw the same screen from the same state. Keep a sorted list of the keys on the "+
+							"app, made in a handler, and range over that")
+					}
+				}
+			}
+			return true
+		}
+		ast.Inspect(body, walk)
+		return false
+	})
 	ast.Inspect(f, func(n ast.Node) bool {
 		r, ok := n.(*ast.RangeStmt)
 		if !ok {
@@ -405,9 +450,6 @@ func (c *checker) typed(f *ast.File, root string) error {
 			return true
 		}
 		switch u := t.Underlying().(type) {
-		case *types.Map:
-			c.refuse(r.X.Pos(), "`range` over a map walks it in a different order every run, and the two runs would "+
-				"draw different screens. Collect the keys, sort them, and range over those")
 		case *types.Basic:
 			if u.Info()&types.IsInteger != 0 {
 				if _, lit := r.X.(*ast.BasicLit); !lit {

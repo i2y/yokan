@@ -97,13 +97,3 @@ func KeyReleased(name string) bool { return door.KeyReleased(name) }
 // never takes it, so a script runs to its end.
 func Quit() { door.Quit() }
 
-// AudioPlay plays a WAV file and answers at once; nothing waits for the
-// end of it. `volume` is 1 for the file as it was recorded and 0.25 for
-// a quarter of it. A run under a script is silent, and a machine with
-// no audio device or a file that cannot be read plays nothing rather
-// than failing the app. Both runs go through the one library, so
-// neither is louder than the other and a gate needs no speakers.
-func AudioPlay(path string, volume float64) { door.AudioPlay(path, volume) }
-
-// AudioStop stops whatever is playing.
-func AudioStop() { door.AudioStop() }

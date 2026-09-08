@@ -336,3 +336,55 @@ func b2i(v bool) int32 {
 	}
 	return 0
 }
+
+// --- the framework's own standard library ----------------------------------------
+
+// The generic call the manifest's rows go through: the arguments are
+// pushed, the row is named by number, and the answer is read back — a
+// number from the call itself, text a cell at a time.
+func StdReset()           { ensure(); pixieStdReset() }
+func StdArgStr(v string)  { pixieStdArgStr(v) }
+func StdArgInt(v int64)   { pixieStdArgInt(v) }
+func StdArgNum(v float64) { pixieStdArgNum(v) }
+func StdArgList(vs []string) {
+	pixieStdArgListBegin()
+	for _, v := range vs {
+		pixieStdArgStr(v)
+	}
+	pixieStdArgListEnd()
+}
+func StdCall(id int32) int64 { return pixieStdCall(id) }
+func StdAnswerNum() float64  { return pixieStdAnswerNum() }
+
+// StdText is the one cell a text answer is.
+func StdText() string {
+	pixieStdPick(0, 0)
+	return Answer()
+}
+
+// StdList is a list answer: one row per element.
+func StdList() []string {
+	n := pixieStdRows()
+	out := make([]string, n)
+	for i := int64(0); i < n; i++ {
+		pixieStdPick(i, 0)
+		out[i] = Answer()
+	}
+	return out
+}
+
+// StdRows is a query's rows.
+func StdRows() [][]string {
+	n := pixieStdRows()
+	out := make([][]string, n)
+	for r := int64(0); r < n; r++ {
+		w := pixieStdCells(r)
+		row := make([]string, w)
+		for c := int64(0); c < w; c++ {
+			pixieStdPick(r, c)
+			row[c] = Answer()
+		}
+		out[r] = row
+	}
+	return out
+}
