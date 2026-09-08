@@ -341,10 +341,17 @@ run, so neither run is a version behind.
   target dir's; a compiled binary otherwise looks beside itself first.
 - `go run ./tools/gen` writes `elements.go` (one type per element, one
   method per keyword, the riders promoted from one generic `box`, the
-  canvas's drawing commands on `Painter`) and `internal/symbols`
-  (every exported name of the package, for yaegi) from
-  `crates/pixie-capi/elements.toml`; `--check` fails when either is
-  stale, and the sweep runs it. The symbols are read off the package's
+  canvas's drawing commands on `Painter`) from
+  `crates/pixie-capi/elements.toml`; `stdlib.go` (the framework's own
+  standard library as Go functions over the C face's numbered rows:
+  sqlite, the clipboard, the two dialogs, sound, notifications — files,
+  the network, JSON and the clock are Go's own, the same package in both
+  runs) and `internal/check/stdlib_names.go` (what a view may not call)
+  from `crates/yokan-stdlib/stdlib.toml`; and `internal/symbols` (every
+  exported name of the package, for yaegi) off the package's source.
+  `--check` fails when any is stale, and the sweep runs it. A query that
+  may fail (a table not yet made) is the `…Or` twin; the plain one stops
+  the app, as the library's own does. The symbols are read off the package's
   own source, so a new function in `gomamochi.go` reaches the
   interpreted run by regenerating. A new element is a row in the table,
   an arm in `materialize`, and nothing in Go. The design memo is
@@ -366,15 +373,16 @@ run, so neither run is a version behind.
   file in `rakugan/test/refuse/`. A change to `crates/rakugan-stdlib`
   also needs `cargo test -p rakugan-stdlib`; a change to
   `crates/yokan-stdlib/stdlib.toml` regenerates first and runs all
-  three sweeps, since Yokan reads the same file and the C face carries
-  the library Wakakusa's dylib now holds too. A change to the tour, the
+  four sweeps, since Yokan reads the same file, the C face carries
+  the library Wakakusa's dylib now holds too, and Gomamochi's rows are
+  generated from it. A change to the tour, the
   table, a demo or a refusal moves a site page too: run
   `just rakugan-site-gen`, which the sweep only checks.
 - Anything under `gomamochi/` → the touched demo's gate, then
   `gomamochi/tools/gate_all.sh`. A new refusal gets a file in
-  `gomamochi/test/refuse/` and its message beside it. A change to `elements.toml`
-  regenerates first (`go run ./tools/gen`); the sweep fails on a stale
-  table. A change to the door or the elements
+  `gomamochi/test/refuse/` and its message beside it. A change to `elements.toml` or
+  `stdlib.toml` regenerates first (`go run ./tools/gen`); the sweep
+  fails on a stale table. A change to the door or the elements
   is a change to both runs at once, so a gate proves less there than
   it does for a translated language: look at the dump.
 - Any `pixie-*` crate change → `cargo test --workspace` and the
