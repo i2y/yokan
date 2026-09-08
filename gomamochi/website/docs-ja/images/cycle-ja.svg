@@ -45,13 +45,13 @@
 <text x="430.23995735680387" y="209.80040307068072" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi check</text>
 <text x="430.23995735680387" y="245.80040307068072" font-size="30" fill="#5cc8ff" text-anchor="end" font-weight="700">0.6 秒</text>
 <text x="430.23995735680387" y="269.8004030706807" font-size="14" fill="#9aa0b5" text-anchor="end">受け取れない書き方を、</text>
-<text x="430.23995735680387" y="288.8004030706807" font-size="14" fill="#9aa0b5" text-anchor="end">行と書き換え方とともに名指しする</text>
+<text x="430.23995735680387" y="288.8004030706807" font-size="14" fill="#9aa0b5" text-anchor="end">行と書き換え方を添えて示す</text>
 <text x="430.23995735680387" y="310.8004030706807" font-size="14" fill="#5cc8ff" text-anchor="end">何もビルドしない</text>
 <text x="430.23995735680387" y="368.1995969293193" font-size="13" fill="#9aa0b5" text-anchor="end">ウィンドウなしの実行</text>
 <text x="430.23995735680387" y="390.1995969293193" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">PIXIE_SCRIPT="click:+1,dump"</text>
 <text x="430.23995735680387" y="412.1995969293193" font-size="17" fill="#e8eaf2" text-anchor="end" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi run</text>
 <text x="430.23995735680387" y="448.1995969293193" font-size="30" fill="#5cc8ff" text-anchor="end" font-weight="700">1.0 秒</text>
-<text x="430.23995735680387" y="472.1995969293193" font-size="14" fill="#9aa0b5" text-anchor="end">画面を文字として印字する</text>
+<text x="430.23995735680387" y="472.1995969293193" font-size="14" fill="#9aa0b5" text-anchor="end">画面を文字にして返す</text>
 <text x="430.23995735680387" y="494.1995969293193" font-size="14" fill="#5cc8ff" text-anchor="end">ウィンドウは開かない</text>
 <text x="880" y="543" font-size="17" fill="#e8eaf2" font-weight="600" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi gate</text>
 <text x="880" y="579" font-size="30" fill="#f2b04e" font-weight="700">2.2 秒</text>
@@ -61,5 +61,5 @@
 <text x="880" y="664" font-size="13" fill="#d5dbee" font-family="ui-monospace,'SF Mono',Menlo,monospace">identical in both runs</text>
 <text x="1178" y="308" font-size="15" fill="#3ddc97" text-anchor="end" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace">gomamochi build --release --app</text>
 <text x="1178" y="330" font-size="13" fill="#9aa0b5" text-anchor="end">22.2 MB、ダブルクリックで開く</text>
-<text x="44" y="692" font-size="14" fill="#9aa0b5"><tspan fill="#e8eaf2">速いほうの二つの答えは、どちらもプログラムが読める文字である。</tspan>直し方を名指しする断りと、画面そのもの。</text>
+<text x="44" y="692" font-size="14" fill="#9aa0b5"><tspan fill="#e8eaf2">速いほうの二つは、どちらもプログラムが読める文字を返す。</tspan>何を書けばよいかが書かれた断りと、文字になった画面。</text>
 </svg>

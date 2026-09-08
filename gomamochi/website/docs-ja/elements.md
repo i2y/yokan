@@ -3,24 +3,23 @@
 
 要素は 33 個、そのすべてが持つ共通のメソッドが 15 個あります。
 このページは `elements.toml` から生成しています。
-アプリが呼ぶ Go（`elements.go`。要素ごとの型と、キーワードごとのメソッド）も、解釈実行のインタプリタに見せる表も、エンジンの C API で両側が数える番号も、同じ表から `go run ./tools/gen` が書き出します。
+アプリが呼ぶ Go（`elements.go`、要素ごとの型とキーワードごとのメソッド）も、インタプリタに見せるパッケージの一覧も、エンジンの C API で両側が数える番号も、同じ表から `go run ./tools/gen` が書き出します。
 ここにないメソッドは、アプリには書けません。
-書いた場合は、Go 自身が型の誤りとして報告します。
-`gomamochi check` でも `go build` でも同じです。
+書いた場合は、Go 自身が型の誤りとして弾きます。
+`gomamochi check` でも `go build` でも変わりません。
 
 このページでの型の読み方です。
-型は Go のものをそのまま書きます。
-**string**、**float64**、**int**、**bool** はそのままの意味です。
-文字列や数のリストは可変長引数（`...string`、`...float64`）として書き、リストのリストは `[][]float64`、i 行目を作るクロージャは `func(int) Element` です。
+型は Go のものをそのまま書きます（**string**、**float64**、**int**、**bool**）。
+文字列や数のリストは可変長引数（`...string`、`...float64`）、リストのリストは `[][]float64`、i 行目を作るクロージャは `func(int) Element` です。
 **ハンドラ** は、要素がそのために用意したメソッドに渡すクロージャで、その出来事が運ぶものを受け取ります（`func()`、`func(string)`、`func(bool)`、`func(int)`、`func(float64)`）。
 詳しくは[ハンドラ](tour-logic.md#ハンドラ)を見てください。
 
 ## すべての要素が持つメソッド
 
 どの要素も、この 15 個を同じ名前と同じ意味で持ちます。
-30 個の要素にそれぞれメソッドを足すのではなく、要素の土台になる一つの箱に一度だけ書いてあります。
+30 個の要素それぞれに同じメソッドを足すのではなく、どの要素も土台にしている一つの箱に一度だけ書いてあります。
 同じ名前を要素自身が別の意味で持っている場合は、要素のものが優先されます。
-`Text` の `.Width` は文字列そのものの幅で、共通のメソッドはそれに隠れます。
+`Text` の `.Width` は文字列そのものの幅で、共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
 |---|---|---|
@@ -48,7 +47,7 @@ A run of text. `wrap` is "", "nowrap" or "ellipsis"; a background with padding a
 
 `Text(text string)` と書きます。
 
-大きさは自身の `.Width` で決めます。
+大きさは自分の `.Width` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -76,7 +75,7 @@ A button. The block runs when it is pressed.
 
 `Button(label string)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -197,7 +196,7 @@ A pane that scrolls when its children do not fit.
 要素を子に取ります。
 子は最後の引数として書きます。
 
-大きさは自身の `.Height` で決めます。
+大きさは自分の `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -278,7 +277,7 @@ A box a person ticks. The block receives the new state.
 
 `Checkbox(label string)` と書きます。
 
-自身の `label` が画面読み上げの読む名前なので、`.A11yLabel` はここでは受け取りません。
+画面読み上げが読むのは自分の `label` なので、`.A11yLabel` は受け取りません。
 呼ぶと、その理由を出してアプリが止まります。
 
 | メソッド | 型 | 既定値 |
@@ -292,7 +291,7 @@ A switch a person flips. The block receives the new state.
 
 `Switch(label string)` と書きます。
 
-自身の `label` が画面読み上げの読む名前なので、`.A11yLabel` はここでは受け取りません。
+画面読み上げが読むのは自分の `label` なので、`.A11yLabel` は受け取りません。
 呼ぶと、その理由を出してアプリが止まります。
 
 | メソッド | 型 | 既定値 |
@@ -370,7 +369,7 @@ Rows built on demand: the builder is called for the rows in view, not for all of
 
 `ListView(count int, row func(int) Element)` と書きます。
 
-大きさは自身の `.Height` で決めます。
+大きさは自分の `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -386,7 +385,7 @@ A table whose rows are built on demand, laid on tracks whose shares are `widths`
 
 `Table(columns []string, count int, row func(int) Element)` と書きます。
 
-大きさは自身の `.Height` で決めます。
+大きさは自分の `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -420,7 +419,7 @@ Bars. `min`/`max` both 0 take the range from the data; `axis` draws ticks and gr
 
 `BarChart(data []float64)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -441,7 +440,7 @@ A line. Same arguments as the bars, and `series` draws several lines.
 
 `LineChart(data []float64)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -462,10 +461,10 @@ A track filled to `value` (0 to 1); `indeterminate` sweeps instead, for work wit
 
 `Progress(value float64)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
-自身の `label` が画面読み上げの読む名前なので、`.A11yLabel` はここでは受け取りません。
+画面読み上げが読むのは自分の `label` なので、`.A11yLabel` は受け取りません。
 呼ぶと、その理由を出してアプリが止まります。
 
 | メソッド | 型 | 既定値 |
@@ -483,7 +482,7 @@ A picture from a file.
 
 `Image(source string)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -497,7 +496,7 @@ A drawing from an SVG file, painted at any size.
 
 `Svg(source string)` と書きます。
 
-大きさは自身の `.Width` / `.Height` で決めます。
+大きさは自分の `.Width` / `.Height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -511,7 +510,7 @@ A grid of virtual pixels, painted by the commands written in its block. A color 
 
 `Canvas(width int, height int)` と書きます。
 
-大きさは自身の `width` / `height` で決めます。
+大きさは自分の `width` / `height` で決めます。
 共通のメソッドは手を出しません。
 
 | メソッド | 型 | 既定値 |
@@ -556,7 +555,7 @@ A turning ring, for work with no known length.
 
 ## キャンバスの描画命令
 
-次の 10 個の命令は、`Canvas` の `.Paint` に渡すクロージャの中で、渡された `*Painter` のメソッドとして書きます。
+次の 10 個の命令は、`Canvas` の `.Paint` に渡すクロージャの中で、受け取った `*Painter` のメソッドとして書きます。
 これらは要素ではありません。
 上のメソッドをどれも持たず、押すこともできず、書かれたキャンバスの外では意味を持ちません。
 座標はすべて仮想的な画素の整数で、色はすべて番号です。
@@ -579,7 +578,7 @@ Go に省略できる引数はないので、表に既定値のある値もす�
 ## 要素を足すとき
 
 要素を足す作業は、`elements.toml` に 1 行足すことと、エンジンの `materialize` に分岐を 1 つ足すことです。
-`go run ./tools/gen` が、表から `elements.go`（要素ごとの型と、キーワードごとのメソッド）と `internal/symbols/symbols.go`（解釈実行のインタプリタに見せる表）を書き出します。
+`go run ./tools/gen` が、表から `elements.go`（要素ごとの型と、キーワードごとのメソッド）と `internal/symbols/symbols.go`（インタプリタに見せるパッケージの一覧）を書き出します。
 どちらかが表より古ければ、`tools/gate_all.sh` が落ちます。
 だから、ある要素が Go では 1 つの意味を持ち、描かれる側では別の意味を持つ、ということが起きません。
 このエンジンの上にあるほかの三つの言語も、同じ表を読んでいます。

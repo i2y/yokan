@@ -5,7 +5,8 @@ Gomamochi に翻訳器はないので、覚える二つ目の言語もありま�
 アプリは Go です。
 `gomamochi check` が断るのは、解釈実行がコンパイルした実行と同じには動かせない Go と、ビューが守る少数の規則です。
 アプリを読み、受け取れない書き方があれば、ファイルと行と桁、その行そのもの、そして代わりの書き方を示します。
-`go` がパスにあれば、コンパイラと同じようにファイルの型も検査し、Go 自身の誤りは Go 自身の言葉で返ります。
+`go` がパスにあれば、コンパイラと同じように型も検査します。
+そこで見つかった誤りは、Go 自身の言葉のまま出ます。
 `check` はビルドの前にもゲートの前にも走ります。
 何もビルドせず、ウィンドウも開かず、言うことがなければ何も出力しません。
 
@@ -32,8 +33,8 @@ test/refuse/no_main.go:1:1: Gomamochi cannot take this — there is no `main`. W
     ^
 ```
 
-呼び出しの結果をそのまま渡すと、インタプリタは、解釈側の型がコンパイル済みのインタフェースを満たすための包みを付けずに渡し、`Run` が受け取れません。
-変数に受けてから渡せば包みが付きます。
+解釈実行の型がパッケージの `App` インタフェースの代わりを務めるにはラッパーが要りますが、呼び出しの結果をそのまま渡すと、インタプリタはラッパーなしで渡してしまいます。
+いったん変数に受けてから渡せばラッパーが付きます。
 
 ```console
 test/refuse/run_from_call.go:11:19: Gomamochi cannot take this — the app is handed to `Run` straight from a call, and the interpreted run cannot take it that way. Give it a name first: `app := newApp()`, then `Run(app, …)`
@@ -41,10 +42,10 @@ test/refuse/run_from_call.go:11:19: Gomamochi cannot take this — the app is ha
                       ^
 ```
 
-## 解釈実行がコンパイルした実行と同じには動かせないもの
+## 解釈実行がコンパイルした実行と同じには動かせない書き方
 
-gc は `min` と `max` を知っていますが、Go 1.22 のインタプリタは知りません。
-アプリが片方の実行でしか動かないことになります。
+gc は `min` と `max` を知っていますが、Go 1.22 相当のインタプリタは知りません。
+そのままでは、片方の実行でしか動かないアプリになります。
 
 ```console
 test/refuse/min_max.go:9:32: Gomamochi cannot take this — `min` is Go 1.21's, and the interpreted run does not know it. Write the comparison out (`if a < b { … }`), or a small function of your own
@@ -52,7 +53,7 @@ test/refuse/min_max.go:9:32: Gomamochi cannot take this — `min` is Go 1.21's, 
                                    ^
 ```
 
-数への `range` は Go 1.22 の書き方で、インタプリタは別の答えを出すのではなく止まります。
+数に対する `range` は Go 1.22 の書き方で、インタプリタは別の答えを返すのではなくそこで止まります。
 だから走らせる前に断ります。
 
 ```console
@@ -61,8 +62,8 @@ test/refuse/range_number.go:10:17: Gomamochi cannot take this — `range` over a
     	               ^
 ```
 
-同じ書き方をリテラルではなく変数で書いたもので、型を見なければ分かりません。
-`go` がパスにあるときに断ります。
+同じ書き方を、リテラルではなく変数で書いたものです。
+型を検査しなければ見つからないので、`go` がパスにあるときに断ります。
 
 ```console
 test/refuse/range_count.go:9:17: Gomamochi cannot take this — `range` over a number is Go 1.22's, and the interpreted run stops on it. Write `for i := 0; i < n; i++`
@@ -70,7 +71,7 @@ test/refuse/range_count.go:9:17: Gomamochi cannot take this — `range` over a n
     	               ^
 ```
 
-関数への `range` は Go 1.23 の書き方で、インタプリタはこれにも止まります。
+関数に対する `range` は Go 1.23 の書き方で、インタプリタはこれにも止まります。
 
 ```console
 test/refuse/range_function.go:13:17: Gomamochi cannot take this — `range` over a function is Go 1.23's, and the interpreted run stops on it. Call the function and range over what it answers
@@ -78,8 +79,8 @@ test/refuse/range_function.go:13:17: Gomamochi cannot take this — `range` over
     	               ^
 ```
 
-`%T` が印字するのはアプリの型に対するインタプリタの呼び名で、Go の呼び名ではありません。
-二つの実行が違う文字を印字することになります。
+`%T` が出力するのは、アプリの型をインタプリタが呼ぶ名前で、Go の名前ではありません。
+二つの実行が違う文字列を出力することになります。
 
 ```console
 test/refuse/percent_t.go:11:57: Gomamochi cannot take this — `%T` names the app's own types differently in the interpreted run. Print the value (`%v`), or give the type a `String` method
@@ -87,7 +88,7 @@ test/refuse/percent_t.go:11:57: Gomamochi cannot take this — `%T` names the ap
                                                             ^
 ```
 
-`reflect` にも同じ違いが見えます。
+`reflect` からも同じ違いが見えます。
 インタプリタは、アプリ自身の型をコンパイルした実行とは別の名前で呼びます。
 
 ```console
@@ -96,7 +97,7 @@ test/refuse/import_reflect.go:4:2: Gomamochi cannot take this — `reflect`: the
     	^
 ```
 
-解釈実行は `unsafe` を受け取りません。
+解釈実行は `unsafe` を扱えません。
 
 ```console
 test/refuse/import_unsafe.go:4:2: Gomamochi cannot take this — `unsafe`: the interpreted run does not take it. Write the same thing in plain Go
@@ -104,7 +105,8 @@ test/refuse/import_unsafe.go:4:2: Gomamochi cannot take this — `unsafe`: the i
     	^
 ```
 
-解釈実行は C を呼べず、コンパイルした実行は cgo なしでビルドします。
+解釈実行は C を呼べません。
+コンパイルした実行も cgo なしでビルドします。
 
 ```console
 test/refuse/import_cgo.go:3:8: Gomamochi cannot take this — cgo: the interpreted run cannot call C, and the compiled run is built without it. Reach the engine through the package, and anything else through Go
@@ -129,8 +131,8 @@ test/refuse/import_module.go:4:2: Gomamochi cannot take this — `github.com/exa
     	^
 ```
 
-解釈実行では、クロージャに捕まえられたループ変数は反復ごとの写しになります。
-本体でその変数に代入すると、写しがそれを隠してしまいます。
+解釈実行では、クロージャが捕まえたループ変数は反復ごとのコピーになります。
+本体でその変数に代入しても、クロージャが見るのはコピーのほうです。
 
 ```console
 test/refuse/loop_variable_written.go:11:4: Gomamochi cannot take this — the loop's own variable is written inside its body and a closure captures it: the two runs would disagree about which iteration the closure sees. Copy it first (`j := i`) and let the closure use the copy
@@ -148,8 +150,8 @@ test/refuse/view_write.go:8:2: Gomamochi cannot take this — a view only reads.
     	^
 ```
 
-ビューは何かが変わるたびに組み立て直され、そのたびに処理が起動してしまいます。
-ハンドラから `Task` で一度だけ起動します。
+ビューは何かが変わるたびに組み立て直されるので、そのたびに処理が走り出してしまいます。
+ハンドラから `Task` で一度だけ始めます。
 
 ```console
 test/refuse/view_goroutine.go:8:2: Gomamochi cannot take this — a view starts a goroutine, and a view is built again from the same state whenever anything changes. Start the work from a handler with `Task`
@@ -157,8 +159,8 @@ test/refuse/view_goroutine.go:8:2: Gomamochi cannot take this — a view starts 
     	^
 ```
 
-時計は組み立てるたびに違う答えを返し、二つの実行が違う画面を描くことになります。
-タイマーで読んで、答えをアプリに持たせます。
+時計は組み立てるたびに違う値を返し、二つの実行が違う画面を描くことになります。
+タイマーで読んで、その値をアプリに持たせます。
 
 ```console
 test/refuse/view_clock.go:11:45: Gomamochi cannot take this — `time.Now` reads the clock, and a view may only read the app: it is built again from the same state whenever anything changes. Read the clock in a timer and keep the answer on the app
@@ -166,7 +168,7 @@ test/refuse/view_clock.go:11:45: Gomamochi cannot take this — `time.Now` reads
                                                 ^
 ```
 
-環境、ファイル、ストリーム、ネットワーク、乱数はハンドラで読み、その答えをアプリに持たせます。
+環境変数、ファイル、ストリーム、ネットワーク、乱数はハンドラで読み、読んだ値をアプリに持たせます。
 
 ```console
 test/refuse/view_environment.go:11:45: Gomamochi cannot take this — `os.Getenv` reads the environment or a file, and a view may only read the app: it is built again from the same state whenever anything changes. Read it in a handler and keep the answer on the app
@@ -174,7 +176,7 @@ test/refuse/view_environment.go:11:45: Gomamochi cannot take this — `os.Getenv
                                                 ^
 ```
 
-キーボードは装置で、タイマーから読みます。
+キーボードはデバイスで、読むのはタイマーからです。
 ビューからは読みません。
 
 ```console
@@ -183,8 +185,8 @@ test/refuse/view_keyboard.go:8:5: Gomamochi cannot take this — `KeyDown` reads
     	   ^
 ```
 
-map は走らせるたびに違う順序で歩き、二つの実行が違う画面を描くことになります。
-鍵を集めて並べ替えるために、ハンドラが map を走査することはできます。
+マップを `range` で回る順序は走らせるたびに変わり、二つの実行が違う画面を描くことになります。
+キーを集めて並べ替えるだけなら、ハンドラの中で回せます。
 
 ```console
 test/refuse/range_map.go:9:20: Gomamochi cannot take this — `range` over a map walks it in a different order every run, and a view must draw the same screen from the same state. Keep a sorted list of the keys on the app, made in a handler, and range over that
@@ -194,7 +196,7 @@ test/refuse/range_map.go:9:20: Gomamochi cannot take this — `range` over a map
 
 ## Go 自身の判定
 
-ここで言うことがなければ、Go 自身の型検査が、Go 自身の言葉で言います。
+Gomamochi の側に言うことがなければ、Go 自身の型検査が、Go 自身の言葉で誤りを伝えます。
 
 ```console
 test/refuse/undefined_name.go:7:45: undefined: label

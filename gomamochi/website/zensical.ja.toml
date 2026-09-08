@@ -29,7 +29,7 @@ nav = [
     { "ビューと制御構造" = "tour-logic.md" },
     { "キャンバスとキーボード" = "tour-canvas.md" },
     { "見た目とウィンドウ" = "tour-ui.md" },
-    { "Go とデータと仕事" = "tour-lib.md" },
+    { "Go とデータとタスク" = "tour-lib.md" },
     { "確かめて配る" = "tour-ship.md" },
   ] },
   { "要素" = "elements.md" },

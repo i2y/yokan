@@ -87,7 +87,7 @@
   <text x="773" y="449" text-anchor="start" font-size="11" fill="#a9c7b8"><tspan font-family="ui-monospace,'SF Mono',Menlo,monospace" font-size="10.5">--app</tspan> がバイナリとライブラリを一つのバンドルに。</text>
   <text x="773" y="465" text-anchor="start" font-size="11" fill="#a9c7b8">22.2 MB、ダブルクリックで開く（Linux では AppDir）</text>
 
-  <text x="875" y="493" text-anchor="middle" font-size="13" fill="#9aa0b5">Go もツールチェインもないマシンで開く</text>
+  <text x="875" y="493" text-anchor="middle" font-size="13" fill="#9aa0b5">Go もツールチェーンもないマシンで開く</text>
 
   <!-- ============ one engine; both runs cross the C face ============ -->
   <path d="M325 508 L325 529" fill="none" stroke="#5a6284" stroke-width="1.8" marker-end="url(#ar)"/>
@@ -95,9 +95,9 @@
 
   <rect x="85" y="540" width="1030" height="116" rx="13" fill="#1b2130" stroke="#465081" stroke-width="1.8"/>
   <rect x="296" y="531" width="58" height="18" rx="9" fill="#14161f" stroke="#465081" stroke-width="1.4"/>
-  <text x="325" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C 面</text>
+  <text x="325" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C API</text>
   <rect x="846" y="531" width="58" height="18" rx="9" fill="#14161f" stroke="#465081" stroke-width="1.4"/>
-  <text x="875" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C 面</text>
+  <text x="875" y="544" text-anchor="middle" font-size="11" font-weight="700" fill="#b9c6fa" letter-spacing="0.06em">C API</text>
 
   <rect x="145" y="556" width="360" height="40" rx="9" fill="#1e2232" stroke="#465081" stroke-width="1.2"/>
   <text x="325" y="573" text-anchor="middle" font-size="12.5" font-weight="600" fill="#c9d3f5" font-family="ui-monospace,'SF Mono',Menlo,monospace">libpixie_capi.dylib</text>

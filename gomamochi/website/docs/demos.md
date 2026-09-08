@@ -958,7 +958,7 @@ whole file.
     }
     ```
 
-#### quantities — the two fields that hold a number rather than text: enter commits, text that is not a number is dropped
+#### quantities — the two fields that hold a number rather than text: enter or leaving the field commits, and text that is not a number is dropped
 <img src="images/demos/quantities.png" width="360">
 
 ??? note "quantities.go"
@@ -1466,7 +1466,7 @@ whole file.
     }
     ```
 
-#### loading — the bar that fills, in its three forms, and the sweep for work with no known length
+#### loading — the bar that fills, in its three forms: with a caption, at a size the app chose, and sweeping for work with no known length
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.go"

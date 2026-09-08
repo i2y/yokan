@@ -59,32 +59,32 @@ var catalogue = []entry{
 		"`main` がなければ、動かすものも `Run` に渡すものもありません。"},
 	{"shape", "run_from_call",
 		"The interpreter hands a call's result over without the wrapper that lets an interpreted type satisfy a compiled interface, and `Run` then cannot take it; a value with a name gets the wrapper.",
-		"呼び出しの結果をそのまま渡すと、インタプリタは、解釈側の型がコンパイル済みのインタフェースを満たすための包みを付けずに渡し、`Run` が受け取れません。\n変数に受けてから渡せば包みが付きます。"},
+		"解釈実行の型がパッケージの `App` インタフェースの代わりを務めるにはラッパーが要りますが、呼び出しの結果をそのまま渡すと、インタプリタはラッパーなしで渡してしまいます。\nいったん変数に受けてから渡せばラッパーが付きます。"},
 
 	{"interp", "min_max",
 		"gc knows `min` and `max`; the interpreter, whose Go is 1.22's, does not, so the app would run one way and not the other.",
-		"gc は `min` と `max` を知っていますが、Go 1.22 のインタプリタは知りません。\nアプリが片方の実行でしか動かないことになります。"},
+		"gc は `min` と `max` を知っていますが、Go 1.22 相当のインタプリタは知りません。\nそのままでは、片方の実行でしか動かないアプリになります。"},
 	{"interp", "range_number",
 		"`range` over a number is Go 1.22's; the interpreter stops on it rather than answering something else, so it is refused before it runs.",
-		"数への `range` は Go 1.22 の書き方で、インタプリタは別の答えを出すのではなく止まります。\nだから走らせる前に断ります。"},
+		"数に対する `range` は Go 1.22 の書き方で、インタプリタは別の答えを返すのではなくそこで止まります。\nだから走らせる前に断ります。"},
 	{"interp", "range_count",
 		"The same shape with a variable rather than a literal, which only the type checker can see; it is refused when `go` is on the path.",
-		"同じ書き方をリテラルではなく変数で書いたもので、型を見なければ分かりません。\n`go` がパスにあるときに断ります。"},
+		"同じ書き方を、リテラルではなく変数で書いたものです。\n型を検査しなければ見つからないので、`go` がパスにあるときに断ります。"},
 	{"interp", "range_function",
 		"`range` over a function is Go 1.23's, and the interpreter stops on it too.",
-		"関数への `range` は Go 1.23 の書き方で、インタプリタはこれにも止まります。"},
+		"関数に対する `range` は Go 1.23 の書き方で、インタプリタはこれにも止まります。"},
 	{"interp", "percent_t",
 		"`%T` prints the interpreter's name for an app's type, not Go's, so the two runs would print different text.",
-		"`%T` が印字するのはアプリの型に対するインタプリタの呼び名で、Go の呼び名ではありません。\n二つの実行が違う文字を印字することになります。"},
+		"`%T` が出力するのは、アプリの型をインタプリタが呼ぶ名前で、Go の名前ではありません。\n二つの実行が違う文字列を出力することになります。"},
 	{"interp", "import_reflect",
 		"`reflect` sees the same difference: the interpreter names the app's own types differently from the compiled run.",
-		"`reflect` にも同じ違いが見えます。\nインタプリタは、アプリ自身の型をコンパイルした実行とは別の名前で呼びます。"},
+		"`reflect` からも同じ違いが見えます。\nインタプリタは、アプリ自身の型をコンパイルした実行とは別の名前で呼びます。"},
 	{"interp", "import_unsafe",
 		"The interpreted run does not take `unsafe`.",
-		"解釈実行は `unsafe` を受け取りません。"},
+		"解釈実行は `unsafe` を扱えません。"},
 	{"interp", "import_cgo",
 		"The interpreted run cannot call C, and the compiled run is built without cgo.",
-		"解釈実行は C を呼べず、コンパイルした実行は cgo なしでビルドします。"},
+		"解釈実行は C を呼べません。\nコンパイルした実行も cgo なしでビルドします。"},
 	{"interp", "import_embed",
 		"The interpreted run reads the file as source, and has nothing to embed.",
 		"解釈実行はファイルをソースとして読むので、埋め込むものがありません。"},
@@ -93,30 +93,30 @@ var catalogue = []entry{
 		"解釈実行は、標準ライブラリの外のモジュールをまだ読めません。\nアプリが import できるのは標準ライブラリとこのパッケージです。"},
 	{"interp", "loop_variable_written",
 		"The interpreted run gets a per-iteration copy of a captured loop variable; a body that writes the variable would be writing something the copy hides.",
-		"解釈実行では、クロージャに捕まえられたループ変数は反復ごとの写しになります。\n本体でその変数に代入すると、写しがそれを隠してしまいます。"},
+		"解釈実行では、クロージャが捕まえたループ変数は反復ごとのコピーになります。\n本体でその変数に代入しても、クロージャが見るのはコピーのほうです。"},
 
 	{"views", "view_write",
 		"Building a screen twice has to build the same screen, so building it only reads.",
 		"同じ画面を二度組み立てたら同じ画面になる必要があるので、組み立てるときは読むだけです。"},
 	{"views", "view_goroutine",
 		"A view is built again whenever anything changes, and each build would start the work again; a handler starts it once, with `Task`.",
-		"ビューは何かが変わるたびに組み立て直され、そのたびに処理が起動してしまいます。\nハンドラから `Task` で一度だけ起動します。"},
+		"ビューは何かが変わるたびに組み立て直されるので、そのたびに処理が走り出してしまいます。\nハンドラから `Task` で一度だけ始めます。"},
 	{"views", "view_clock",
 		"The clock answers differently from one build to the next, and the two runs would draw different screens; a timer reads it and keeps the answer on the app.",
-		"時計は組み立てるたびに違う答えを返し、二つの実行が違う画面を描くことになります。\nタイマーで読んで、答えをアプリに持たせます。"},
+		"時計は組み立てるたびに違う値を返し、二つの実行が違う画面を描くことになります。\nタイマーで読んで、その値をアプリに持たせます。"},
 	{"views", "view_environment",
 		"The environment, a file, a stream, the network and a random number are read in a handler, and what they answered is kept on the app.",
-		"環境、ファイル、ストリーム、ネットワーク、乱数はハンドラで読み、その答えをアプリに持たせます。"},
+		"環境変数、ファイル、ストリーム、ネットワーク、乱数はハンドラで読み、読んだ値をアプリに持たせます。"},
 	{"views", "view_keyboard",
 		"The keyboard is a device, read from a timer and never from a view.",
-		"キーボードは装置で、タイマーから読みます。\nビューからは読みません。"},
+		"キーボードはデバイスで、読むのはタイマーからです。\nビューからは読みません。"},
 	{"views", "range_map",
 		"A map walks in a different order every run, and both runs would draw different screens; a handler may range over one to collect and sort its keys.",
-		"map は走らせるたびに違う順序で歩き、二つの実行が違う画面を描くことになります。\n鍵を集めて並べ替えるために、ハンドラが map を走査することはできます。"},
+		"マップを `range` で回る順序は走らせるたびに変わり、二つの実行が違う画面を描くことになります。\nキーを集めて並べ替えるだけなら、ハンドラの中で回せます。"},
 
 	{"go", "undefined_name",
 		"When nothing here has anything to say, Go's own type checker speaks, in Go's own words.",
-		"ここで言うことがなければ、Go 自身の型検査が、Go 自身の言葉で言います。"},
+		"Gomamochi の側に言うことがなければ、Go 自身の型検査が、Go 自身の言葉で誤りを伝えます。"},
 }
 
 type words struct {
@@ -155,7 +155,8 @@ var WORDS = map[string]words{
 			"アプリは Go です。\n" +
 			"`gomamochi check` が断るのは、解釈実行がコンパイルした実行と同じには動かせない Go と、ビューが守る少数の規則です。\n" +
 			"アプリを読み、受け取れない書き方があれば、ファイルと行と桁、その行そのもの、そして代わりの書き方を示します。\n" +
-			"`go` がパスにあれば、コンパイラと同じようにファイルの型も検査し、Go 自身の誤りは Go 自身の言葉で返ります。\n" +
+			"`go` がパスにあれば、コンパイラと同じように型も検査します。\n" +
+			"そこで見つかった誤りは、Go 自身の言葉のまま出ます。\n" +
 			"`check` はビルドの前にもゲートの前にも走ります。\n" +
 			"何もビルドせず、ウィンドウも開かず、言うことがなければ何も出力しません。\n" +
 			"\n" +
@@ -164,7 +165,7 @@ var WORDS = map[string]words{
 			"このページも、その同じファイルから引いています。\n",
 		groups: map[string]string{
 			"shape":  "アプリの形",
-			"interp": "解釈実行がコンパイルした実行と同じには動かせないもの",
+			"interp": "解釈実行がコンパイルした実行と同じには動かせない書き方",
 			"views":  "ビュー",
 			"go":     "Go 自身の判定",
 		},

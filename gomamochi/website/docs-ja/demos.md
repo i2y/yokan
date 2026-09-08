@@ -16,7 +16,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
 
 ## まずはここから
 
-#### counter — 基本形。アプリは構造体で、状態はそのフィールド、ハンドラはフィールドを閉じ込めたクロージャ
+#### counter — 基本形。アプリは構造体で、状態はそのフィールド、ハンドラはフィールドがそのまま見えるクロージャ
 <img src="images/demos/counter.png" width="360">
 
 ??? note "counter.go"
@@ -59,7 +59,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### prefixed — 同じカウンタを、パッケージに名前を付けて import した形で。呼び出しはすべて `gm.` から始まり、アプリは自分の型にどんな名前でも使える
+#### prefixed — 同じカウンタを、パッケージに名前を付けて import した書き方で。呼び出しはすべて `gm.` で始まり、アプリ自身の型にはどんな名前を付けてもよい
 <img src="images/demos/prefixed.png" width="360">
 
 ??? note "prefixed.go"
@@ -102,7 +102,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### control — ビューの中はただの Go。`if`、ループ、画面の一部を返すメソッド。要素のスライスを、ほかの Go と同じ書き方で組み立てる
+#### control — ビューの中はただの Go。`if`、ループ、画面の一部を返すメソッド。要素のスライスは、普通の Go と同じ書き方で組み立てる
 <img src="images/demos/control.png" width="360">
 
 ??? note "control.go"
@@ -230,7 +230,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### calc — 電卓。途中の値ひとつと待っている演算ひとつを持ち、見た目は各キーに同じ属性を付ける関数にまとめる
+#### calc — 電卓。途中の値ひとつと待っている演算ひとつを持ち、見た目は、どのキーにも同じメソッドを並べる関数にまとめる
 <img src="images/demos/calc.png" width="360">
 
 ??? note "calc.go"
@@ -608,7 +608,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### lookup — アプリが持つ map。既定値つきの読み出し、鍵があるかどうかの確認、ウィンドウを開けたままの追加。ビューの中で map を走査することはない
+#### lookup — アプリが持つマップ。既定値つきの読み出し、キーがあるかどうかの確認、ウィンドウを開けたままの追加。ビューの中でマップを走査することはない
 <img src="images/demos/lookup.png" width="360">
 
 ??? note "lookup.go"
@@ -714,7 +714,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### moods — いくつかの名前のうちの一つである値（定数）と、何もないかもしれない値（nil になりうるポインタ）
+#### moods — 決まった名前のどれか一つになる値（定数）と、何も入っていないかもしれない値（nil になりうるポインタ）
 <img src="images/demos/moods.png" width="360">
 
 ??? note "moods.go"
@@ -814,7 +814,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### links — 互いを指し合うオブジェクト。Go のごみ集めは循環をそのまま扱うので、親への参照は普通のポインタでよい
+#### links — 互いを指し合うオブジェクト。Go のガベージコレクタは循環参照も回収するので、親を指すフィールドも普通のポインタでよい
 <img src="images/demos/links.png" width="360">
 
 ??? note "links.go"
@@ -958,7 +958,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### quantities — 文字ではなく数を持つ 2 つの入力欄。enter で確定し、数でない文字は捨てられる
+#### quantities — 文字ではなく数を持つ 2 つの入力欄。enter か、欄を離れることで確定し、数でない文字は捨てられる
 <img src="images/demos/quantities.png" width="360">
 
 ??? note "quantities.go"
@@ -1108,7 +1108,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### styled — 見た目をひとところに。同じ属性をどのボタンにも付ける関数と、パネルを丸ごと切り替える `Theme`
+#### styled — 見た目をひとところに。どのボタンにも同じメソッドを並べる関数と、パネルを丸ごと切り替える `Theme`
 <img src="images/demos/styled.png" width="360">
 
 ??? note "styled.go"
@@ -1466,7 +1466,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### loading — 満ちていくバーの 3 つの形と、終わりの見えない処理のために行き来する表示
+#### loading — 満ちていくバーの 3 つの形。見出しつき、アプリが決めた大きさ、そして終わりの見えない処理のために行き来する表示
 <img src="images/demos/loading.png" width="360">
 
 ??? note "loading.go"
@@ -2972,7 +2972,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### files — Go 自身の `os` でファイルを扱う。Gomamochi のものは何もなく、両方の実行が同じに答えることはゲートが言う
+#### files — Go 自身の `os` でファイルを扱う。Gomamochi 固有のものは使わず、両方の実行が一致することはゲートが確かめる
 <img src="images/demos/files.png" width="360">
 
 ??? note "files.go"
@@ -3079,7 +3079,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### reader — アプリ自身が立てたサーバからページを取ってくる。取得はウィンドウのスレッドの外で行い、両方の実行が同じバイト列を読む
+#### reader — ウィンドウのスレッドの外で、アプリ自身が立てたサーバからページを取ってくる。サーバが自前なので、両方の実行が同じバイト列を読む
 <img src="images/demos/reader.png" width="360">
 
 ??? note "reader.go"
@@ -3199,7 +3199,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### dbnotes — エンジン越しに触るデータベース。実装は一つで両方の実行が呼び、値は文に埋め込まず、束縛して渡す
+#### dbnotes — エンジン越しに触るデータベース。実装は一つで、両方の実行が同じものを呼ぶ。値は文に埋め込まず、束縛して渡す
 <img src="images/demos/dbnotes.png" width="360">
 
 ??? note "dbnotes.go"
@@ -3361,7 +3361,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### edges — 端の話。終わりを越えた添字はどちらの実行でもプログラムを止めるので、アプリは先に長さを確かめる。マシンの語長を超えた数は `math/big` で、これも両方が同じパッケージ
+#### edges — 端の話。終わりを越えた添字はどちらの実行でもプログラムを止めるので、アプリは先に長さを確かめる。64 ビットに収まらない数は `math/big` で、これも両方の実行が同じパッケージを呼ぶ
 <img src="images/demos/edges.png" width="360">
 
 ??? note "edges.go"
@@ -3831,7 +3831,7 @@ $ ./tools/gate_all.sh                    # すべてのデモをまとめてゲ�
     }
     ```
 
-#### tasks — 時間のかかる処理を、ウィンドウのスレッドの外の goroutine で。答えは二つ目のクロージャで受け取る
+#### tasks — 時間のかかる処理を、専用の goroutine でウィンドウのスレッドの外へ。答えは二つ目のクロージャで受け取る
 <img src="images/demos/tasks.png" width="360">
 
 ??? note "tasks.go"
