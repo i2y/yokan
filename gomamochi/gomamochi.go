@@ -96,4 +96,3 @@ func KeyReleased(name string) bool { return door.KeyReleased(name) }
 // Quit closes the window on the engine's next frame. A headless run
 // never takes it, so a script runs to its end.
 func Quit() { door.Quit() }
-
