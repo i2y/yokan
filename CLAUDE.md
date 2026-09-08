@@ -319,7 +319,10 @@ run, so neither run is a version behind.
   `internal/check` rewrites the file it reads: every loop variable a
   closure captures gets a per-iteration copy on the same line, because
   yaegi keeps the pre-1.22 rule; and `check` refuses what yaegi cannot
-  run (`min`/`max`, `range` over a number) by name. A panic inside a
+  run (`min`/`max`, `range` over a number, the app handed to `Run`
+  straight from a call) by name. An undefined package-level name comes
+  back from yaegi as "constant definition loop": read it as
+  "undefined". A panic inside a
   callback is said and stops the process — it cannot unwind through
   the engine's frames.
 - `PIXIE_CAPI` points both runs at a library other than the shared
