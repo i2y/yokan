@@ -512,4 +512,4 @@ An element is a row in `elements.toml` and an arm in the engine's
 `materialize`. `tools/gen.pl` writes the Perl subs and the table as Perl
 data from it, and the sweep fails when either is behind the table, so an
 element cannot come to mean one thing in Perl and another where it is
-drawn. The same table is read by the other two languages on this engine.
+drawn. The same table is read by the other three languages on this engine.

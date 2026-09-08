@@ -74,7 +74,7 @@ table: every element, every keyword it takes, its type and its default.
 `tools/gen.pl` writes the Perl subs an app calls and the table as Perl
 data from it, and the sweep fails when either is behind the table. An
 element cannot come to mean one thing in Perl and another where it is
-drawn. The other two languages on this engine read the same table.
+drawn. The other three languages on this engine read the same table.
 
 ## Where the two are not the same
 

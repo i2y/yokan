@@ -100,7 +100,7 @@ An element is a row in `elements.toml` and an arm in the engine's
 `materialize`. `tools/gen.pl` writes the Perl subs and the table as Perl
 data from it, and the sweep fails when either is behind the table, so an
 element cannot come to mean one thing in Perl and another where it is
-drawn. The same table is read by the other two languages on this engine.
+drawn. The same table is read by the other three languages on this engine.
 MD
     },
     ja => {
@@ -157,7 +157,7 @@ MD
 `tools/gen.pl` が、表から Perl のサブルーチンと、表そのものを写した Perl のデータを書き出します。
 どちらかが表より古ければ、`tools/gate_all.sh` が落ちます。
 だから、ある要素が Perl では 1 つの意味を持ち、描かれる側では別の意味を持つ、ということが起きません。
-このエンジンの上にあるほかの二つの言語も、同じ表を読んでいます。
+このエンジンの上にあるほかの三つの言語も、同じ表を読んでいます。
 MD
     },
 );

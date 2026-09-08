@@ -11,7 +11,7 @@ Yokan（羊羹）は、静的に型付けされた Python のサブセットを�
 開発中はアプリ全体が本物の CPython で動き、リリースするときに同じソースが機械語の実行ファイルになります。
 その二つが同じに動くかどうかは、`yokan gate` で確かめられます。
 
-同じエンジンの上に、言語がもう二つあります。
+同じエンジンの上に、言語がもう三つあります。
 **[Wakakusa](https://i2y.github.io/yokan/wakakusa/ja/)**（Ruby、`wakakusa/`）、**[Rakugan](https://i2y.github.io/yokan/rakugan/ja/)**（Perl、`rakugan/`）、**[Gomamochi](https://i2y.github.io/yokan/gomamochi/ja/)**（Go、`gomamochi/`）で、どれにも自分のツアーとデモとゲートがあります。
 
 まず見た目から。

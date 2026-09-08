@@ -205,7 +205,7 @@ the end.
     Thirty-three elements, fifteen shared keywords and ten drawing
     commands, written once in `elements.toml`. The Perl an app calls and
     the numbers the engine counts with are generated from it, so an
-    element cannot mean two things — and the other two languages on this
+    element cannot mean two things — and the other three languages on this
     engine read the same table.
 
 -   :material-brush-variant: __A canvas, and the keyboard__
@@ -251,6 +251,6 @@ the end.
 
 ---
 
-_The name is 落雁 — rakugan, a pressed dry confection. Like Yokan and
-Wakakusa, the two languages it shares an engine with, it is named after
-a Japanese sweet._
+_The name is 落雁 — rakugan, a pressed dry confection. Like Yokan,
+Wakakusa and Gomamochi, the three languages it shares an engine with, it
+is named after a Japanese sweet._
