@@ -342,7 +342,19 @@ func b2i(v bool) int32 {
 // The generic call the manifest's rows go through: the arguments are
 // pushed, the row is named by number, and the answer is read back — a
 // number from the call itself, text a cell at a time.
-func StdReset()           { ensure(); pixieStdReset() }
+// Std runs one such call on one thread from the first piece pushed to
+// the answer read. The face keeps the pieces in that thread's own
+// state, and a goroutine is free to move between threads unless told
+// not to — so any goroutine may call the library, a Task's or the
+// app's own, and two of them at once keep out of each other's way.
+func Std(call func()) {
+	ensure()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	call()
+}
+
+func StdReset()           { pixieStdReset() }
 func StdArgStr(v string)  { pixieStdArgStr(v) }
 func StdArgInt(v int64)   { pixieStdArgInt(v) }
 func StdArgNum(v float64) { pixieStdArgNum(v) }

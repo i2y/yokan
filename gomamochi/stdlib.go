@@ -11,146 +11,194 @@ package gomamochi
 import "github.com/i2y/yokan/gomamochi/internal/door"
 
 // OpenDialog is `fs.open_dialog` in the manifest.
-func OpenDialog(title string) string {
-	door.StdReset()
-	door.StdArgStr(title)
-	door.StdCall(10)
-	return door.StdText()
+func OpenDialog(title string) (out string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(title)
+		door.StdCall(10)
+		out = door.StdText()
+	})
+	return
 }
 
 // SaveDialog is `fs.save_dialog` in the manifest.
-func SaveDialog(name string) string {
-	door.StdReset()
-	door.StdArgStr(name)
-	door.StdCall(11)
-	return door.StdText()
+func SaveDialog(name string) (out string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(name)
+		door.StdCall(11)
+		out = door.StdText()
+	})
+	return
 }
 
 // SqliteExec is `sqlite.exec` in the manifest.
-func SqliteExec(path string, sql string, params ...string) int {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		return int(door.StdCall(17))
-	}
-	return int(door.StdCall(12))
+func SqliteExec(path string, sql string, params ...string) (out int) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			out = int(door.StdCall(17))
+			return
+		}
+		out = int(door.StdCall(12))
+	})
+	return
 }
 
 // SqliteQueryText is `sqlite.query_text` in the manifest.
-func SqliteQueryText(path string, sql string, params ...string) []string {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		door.StdCall(18)
-		return door.StdList()
-	}
-	door.StdCall(13)
-	return door.StdList()
+func SqliteQueryText(path string, sql string, params ...string) (out []string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			door.StdCall(18)
+			out = door.StdList()
+			return
+		}
+		door.StdCall(13)
+		out = door.StdList()
+	})
+	return
 }
 
 // SqliteQueryInt is `sqlite.query_int` in the manifest.
-func SqliteQueryInt(path string, sql string, params ...string) int {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		return int(door.StdCall(19))
-	}
-	return int(door.StdCall(14))
+func SqliteQueryInt(path string, sql string, params ...string) (out int) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			out = int(door.StdCall(19))
+			return
+		}
+		out = int(door.StdCall(14))
+	})
+	return
 }
 
 // SqliteQueryIntOr is `sqlite.query_int_or` in the manifest.
-func SqliteQueryIntOr(path string, sql string, fallback int, params ...string) int {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	door.StdArgInt(int64(fallback))
-	if len(params) > 0 {
-		door.StdArgList(params)
-		return int(door.StdCall(20))
-	}
-	return int(door.StdCall(15))
+func SqliteQueryIntOr(path string, sql string, fallback int, params ...string) (out int) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		door.StdArgInt(int64(fallback))
+		if len(params) > 0 {
+			door.StdArgList(params)
+			out = int(door.StdCall(20))
+			return
+		}
+		out = int(door.StdCall(15))
+	})
+	return
 }
 
 // SqliteQueryTextOr is `sqlite.query_text_or` in the manifest.
-func SqliteQueryTextOr(path string, sql string, params ...string) []string {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		door.StdCall(21)
-		return door.StdList()
-	}
-	door.StdCall(16)
-	return door.StdList()
+func SqliteQueryTextOr(path string, sql string, params ...string) (out []string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			door.StdCall(21)
+			out = door.StdList()
+			return
+		}
+		door.StdCall(16)
+		out = door.StdList()
+	})
+	return
 }
 
 // SqliteQueryRows is `sqlite.query_rows` in the manifest.
-func SqliteQueryRows(path string, sql string, params ...string) [][]string {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		door.StdCall(23)
-		return door.StdRows()
-	}
-	door.StdCall(22)
-	return door.StdRows()
+func SqliteQueryRows(path string, sql string, params ...string) (out [][]string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			door.StdCall(23)
+			out = door.StdRows()
+			return
+		}
+		door.StdCall(22)
+		out = door.StdRows()
+	})
+	return
 }
 
 // SqliteQueryRowsOr is `sqlite.query_rows_or` in the manifest.
-func SqliteQueryRowsOr(path string, sql string, params ...string) [][]string {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgStr(sql)
-	if len(params) > 0 {
-		door.StdArgList(params)
-		door.StdCall(25)
-		return door.StdRows()
-	}
-	door.StdCall(24)
-	return door.StdRows()
+func SqliteQueryRowsOr(path string, sql string, params ...string) (out [][]string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgStr(sql)
+		if len(params) > 0 {
+			door.StdArgList(params)
+			door.StdCall(25)
+			out = door.StdRows()
+			return
+		}
+		door.StdCall(24)
+		out = door.StdRows()
+	})
+	return
 }
 
 // ClipboardSetText is `clipboard.set_text` in the manifest.
-func ClipboardSetText(text string) int {
-	door.StdReset()
-	door.StdArgStr(text)
-	return int(door.StdCall(26))
+func ClipboardSetText(text string) (out int) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(text)
+		out = int(door.StdCall(26))
+	})
+	return
 }
 
 // ClipboardGetText is `clipboard.get_text` in the manifest.
-func ClipboardGetText() string {
-	door.StdReset()
-	door.StdCall(27)
-	return door.StdText()
+func ClipboardGetText() (out string) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdCall(27)
+		out = door.StdText()
+	})
+	return
 }
 
 // AudioPlay is `audio.play` in the manifest.
-func AudioPlay(path string, volume float64) int {
-	door.StdReset()
-	door.StdArgStr(path)
-	door.StdArgNum(volume)
-	return int(door.StdCall(32))
+func AudioPlay(path string, volume float64) (out int) {
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(path)
+		door.StdArgNum(volume)
+		out = int(door.StdCall(32))
+	})
+	return
 }
 
 // AudioStop is `audio.stop` in the manifest.
-func AudioStop() int {
-	door.StdReset()
-	return int(door.StdCall(33))
+func AudioStop() (out int) {
+	door.Std(func() {
+		door.StdReset()
+		out = int(door.StdCall(33))
+	})
+	return
 }
 
 // NotifySend is `notify.send` in the manifest.
 func NotifySend(title string, body string) {
-	door.StdReset()
-	door.StdArgStr(title)
-	door.StdArgStr(body)
-	door.StdCall(34)
+	door.Std(func() {
+		door.StdReset()
+		door.StdArgStr(title)
+		door.StdArgStr(body)
+		door.StdCall(34)
+	})
 }

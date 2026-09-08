@@ -351,7 +351,11 @@ run, so neither run is a version behind.
   exported name of the package, for yaegi) off the package's source.
   `--check` fails when any is stale, and the sweep runs it. A query that
   may fail (a table not yet made) is the `…Or` twin; the plain one stops
-  the app, as the library's own does. The symbols are read off the package's
+  the app, as the library's own does. Each call runs on one thread from
+  the first argument pushed to the answer read (`door.Std`), because the
+  face keeps those pieces in thread-local state and a goroutine may move
+  between threads — so the library may be called from any goroutine, a
+  `Task`'s or the app's own, and nothing in the app has to know. The symbols are read off the package's
   own source, so a new function in `gomamochi.go` reaches the
   interpreted run by regenerating. A new element is a row in the table,
   an arm in `materialize`, and nothing in Go. The design memo is

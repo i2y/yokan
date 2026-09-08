@@ -251,12 +251,6 @@ func Task(work func() any, done func(any)) {
 	dones[id] = done
 	taskMu.Unlock()
 	go func() {
-		// The work keeps one thread: what it asks the engine for (a
-		// dialog, a query) is pushed a piece at a time into that
-		// thread's own state, and a goroutine that moved between
-		// pieces would leave them on two.
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
 		v := work()
 		taskMu.Lock()
 		answers[id] = v

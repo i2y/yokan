@@ -844,22 +844,23 @@ func stdPush(p stdParam) string {
 	return ""
 }
 
+// The lines that make the call and keep its answer in `out`.
 func stdAnswer(ret string) string {
 	switch ret {
 	case "Int":
-		return "\treturn int(door.StdCall(%d))\n"
+		return "\t\tout = int(door.StdCall(%d))\n"
 	case "Bool":
-		return "\treturn door.StdCall(%d) != 0\n"
+		return "\t\tout = door.StdCall(%d) != 0\n"
 	case "Float":
-		return "\tdoor.StdCall(%d)\n\treturn door.StdAnswerNum()\n"
+		return "\t\tdoor.StdCall(%d)\n\t\tout = door.StdAnswerNum()\n"
 	case "String":
-		return "\tdoor.StdCall(%d)\n\treturn door.StdText()\n"
+		return "\t\tdoor.StdCall(%d)\n\t\tout = door.StdText()\n"
 	case "List<String>":
-		return "\tdoor.StdCall(%d)\n\treturn door.StdList()\n"
+		return "\t\tdoor.StdCall(%d)\n\t\tout = door.StdList()\n"
 	case "List<List<String>>":
-		return "\tdoor.StdCall(%d)\n\treturn door.StdRows()\n"
+		return "\t\tdoor.StdCall(%d)\n\t\tout = door.StdRows()\n"
 	case "":
-		return "\tdoor.StdCall(%d)\n"
+		return "\t\tdoor.StdCall(%d)\n"
 	}
 	fail("no answer for " + ret)
 	return ""
@@ -914,20 +915,27 @@ func genStdlib(rows []stdRow) ([]byte, map[string]string) {
 		}
 		ret := stdGoType(r.ret)
 		if ret != "" {
-			ret = " " + ret
+			ret = " (out " + ret + ")"
 		}
+		// The whole call — the arguments, the row, the answer — runs on
+		// one thread inside door.Std: the face keeps the pieces in that
+		// thread's own state.
 		fmt.Fprintf(&b, "// %s is `%s.%s` in the manifest.\n", name, r.module, r.py)
-		fmt.Fprintf(&b, "func %s(%s)%s {\n\tdoor.StdReset()\n", name, strings.Join(params, ", "), ret)
+		fmt.Fprintf(&b, "func %s(%s)%s {\n\tdoor.Std(func() {\n\t\tdoor.StdReset()\n", name, strings.Join(params, ", "), ret)
 		for _, p := range r.params {
-			b.WriteString(stdPush(p))
+			b.WriteString("\t" + stdPush(p))
 		}
 		if with != nil {
 			last := lower(with.params[len(r.params)].name)
-			fmt.Fprintf(&b, "\tif len(%s) > 0 {\n\t\tdoor.StdArgList(%s)\n", last, last)
-			b.WriteString(strings.ReplaceAll(fmt.Sprintf(stdAnswer(r.ret), with.id), "\t", "\t\t"))
-			b.WriteString("\t}\n")
+			fmt.Fprintf(&b, "\t\tif len(%s) > 0 {\n\t\t\tdoor.StdArgList(%s)\n", last, last)
+			b.WriteString(strings.ReplaceAll(fmt.Sprintf(stdAnswer(r.ret), with.id), "\t\t", "\t\t\t"))
+			b.WriteString("\t\t\treturn\n\t\t}\n")
 		}
 		b.WriteString(fmt.Sprintf(stdAnswer(r.ret), r.id))
+		b.WriteString("\t})\n")
+		if ret != "" {
+			b.WriteString("\treturn\n")
+		}
 		b.WriteString("}\n\n")
 	}
 	return mustFormat(b.String()), names
