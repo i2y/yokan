@@ -9,10 +9,12 @@ name: release
 # comes from `just publish` there; this workflow is the other half.
 #
 # PyPI refuses a wheel tagged `linux_x86_64`, so the build happens inside
-# a manylinux container and auditwheel repairs what comes out — it
-# carries every library the policy does not already let the host
-# provide. That carried list is what breaks a wheel on a machine other
-# than the one that built it, so the build prints it.
+# a manylinux container and the result is repaired into a manylinux tag.
+# What that repair carries is decided by `HOST_LIBS` in yokan_gate.py —
+# the same table the AppDir packer reads — so the wheel a developer runs
+# and the package their users open take their system libraries from the
+# same place. maturin's own repair has no way to be told that table, so
+# the build skips it and auditwheel is run with the table's sonames.
 #
 # The image is manylinux_2_34 (AlmaLinux 9) rather than an older one
 # because the engine needs libxkbcommon 1.x, which the 2_28 image
@@ -29,6 +31,18 @@ on:
 
 permissions:
   contents: write
+
+env:
+  # The libraries the build links against, named once for both
+  # containers: the one that compiles and the one that repairs. This is
+  # the installation page's Fedora list, minus the two that are only
+  # needed to open a window (the Vulkan loader and a driver) and the
+  # Python headers, which only an app with `@py` escapes links against.
+  DEPS: >-
+    alsa-lib-devel fontconfig-devel freetype-devel
+    libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel
+    wayland-devel
+  IMAGE_PREFIX: quay.io/pypa/manylinux_2_34_
 
 jobs:
   wheels:
@@ -65,18 +79,41 @@ jobs:
           manylinux: "2_34"
           working-directory: crates/yokan
           rust-toolchain: ${{ steps.pin.outputs.channel }}
-          args: --release --out dist
-          # The container is AlmaLinux 9. This is the list the
-          # installation page names for Fedora, minus the two that are
-          # only needed to open a window (the Vulkan loader and a driver)
-          # and the Python headers, which only an app with `@py` escapes
-          # links against.
+          args: --release --auditwheel skip --out dist-raw
           before-script-linux: |
             dnf install -y dnf-plugins-core
             dnf config-manager --set-enabled crb
-            dnf install -y alsa-lib-devel fontconfig-devel freetype-devel \
-              libxkbcommon-devel libxkbcommon-x11-devel libxcb-devel \
-              wayland-devel
+            dnf install -y $DEPS
+
+      # The repair, with the AppDir's table. A library on it stays a
+      # plain soname the host answers; anything else is copied in and
+      # renamed, which is what makes the wheel installable on a machine
+      # that has no such library at all.
+      - name: Repair it with the table the AppDir reads
+        run: |
+          set -euo pipefail
+          excludes=$(python3 - <<'PY'
+          import pathlib, re
+          src = pathlib.Path("crates/yokan/yokan_gate.py").read_text()
+          names = []
+          for name in ("CORE_LIBS", "HOST_LIBS"):
+              m = re.search(name + r' = (?:CORE_LIBS \| )?frozenset\("""(.*?)"""', src, re.S)
+              assert m, f"{name} not found in yokan_gate.py"
+              names += m.group(1).split()
+          print(" ".join(f"--exclude {n}" for n in sorted(set(names))))
+          PY
+          )
+          echo "the host answers for: $(echo "$excludes" | wc -w | tr -d ' ') entries"
+          docker run --rm -v "$PWD:/io" -w /io/crates/yokan \
+            -e DEPS -e EXCLUDES="$excludes" \
+            -e PLAT="manylinux_2_34_${{ matrix.target }}" \
+            "${IMAGE_PREFIX}${{ matrix.target }}" \
+            bash -euo pipefail -c '
+              dnf install -y dnf-plugins-core > /dev/null
+              dnf config-manager --set-enabled crb
+              dnf install -y $DEPS > /dev/null
+              auditwheel repair --plat "$PLAT" $EXCLUDES -w dist dist-raw/*.whl
+            '
 
       - name: Say what the wheel carries
         run: python3 -m zipfile -l crates/yokan/dist/*.whl
@@ -90,6 +127,10 @@ jobs:
   # artifact rather than the checkout. It is one recipe, so the two
   # cannot drift; `uv` fetches the Python it wants. On x86_64 this is
   # also the first time the project has been RUN on that architecture.
+  #
+  # It now proves a second thing: the wheel leaves its system libraries
+  # to the machine, so an import here is the evidence that an ordinary
+  # Linux machine has them.
   smoke:
     name: smoke (${{ matrix.target }})
     needs: wheels
@@ -120,9 +161,48 @@ jobs:
           cp wheels/*.whl ~/.cache/pixie/target/wheels/
           uvx --from rust-just just smoke
 
+  # Two wheels built from one recipe should differ in nothing but their
+  # architecture. They have not: one linked the system font stack and
+  # the other built its own copy in, which means text was drawn by
+  # different code on the two machines and nothing said so. This is the
+  # thing that says so.
+  compare:
+    name: the two wheels agree
+    needs: wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: wheels
+
+      - name: Compare what each links against and carries
+        run: |
+          set -euo pipefail
+          for arch in x86_64 aarch64; do
+            rm -rf "u-$arch"; mkdir "u-$arch"
+            unzip -q wheels/*manylinux*"$arch".whl -d "u-$arch"
+            readelf -d "u-$arch"/yokan/yokan.abi3.so \
+              | sed -n 's/.*NEEDED.*\[\(.*\)\].*/\1/p' \
+              | sed 's/-[0-9a-f]\{8\}\.so/.so/' | sort > "needs-$arch"
+            ( ls "u-$arch"/yokan.libs 2>/dev/null || true ) \
+              | sed 's/-[0-9a-f]\{8\}\.so/.so/' | sort > "carries-$arch"
+          done
+          echo "== links against =="; cat needs-x86_64
+          echo "== carries =="; cat carries-x86_64
+          if ! diff -u needs-x86_64 needs-aarch64 || ! diff -u carries-x86_64 carries-aarch64; then
+            echo
+            echo "The two wheels are not the same package on two architectures."
+            echo "One of them resolved a library the other built in; find out which,"
+            echo "before a user finds out by seeing different text."
+            exit 1
+          fi
+          echo "the two wheels agree"
+
   attach:
     name: attach to the release
-    needs: smoke
+    needs: [smoke, compare]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

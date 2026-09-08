@@ -12372,29 +12372,53 @@ def make_app_bundle(app_py: str, tr, binary: str, payload_dir: str | None = None
 
 # ---- Linux packaging: the AppDir and the AppImage --------------------
 
-# The libraries an AppDir must NOT carry. Every target system provides
-# these, and a bundled copy meeting the host's is how an AppImage
-# breaks on a machine that is not the one that built it — the graphics
-# stack in particular has to be the host's or it does not talk to the
-# host's driver. This is the AppImage project's own excludelist
-# (pkg2appimage), reduced to sonames; `libfontconfig`, `libfreetype`,
-# `libasound` and `libharfbuzz` are on it, which is exactly the set a
-# first guess would have bundled.
-APPIMAGE_EXCLUDE = frozenset("""
-    ld-linux-x86-64.so.2 ld-linux.so.2 libBrokenLocale.so.1
-    libEGL.so.1 libGL.so.1 libGLX.so.0 libGLdispatch.so.0
-    libICE.so.6 libOpenGL.so.0 libSM.so.6 libX11-xcb.so.1
-    libX11.so.6 libanl.so.1 libasound.so.2 libc.so.6 libcidn.so.1
-    libcom_err.so.2 libdl.so.2 libdrm.so.2 libexpat.so.1
-    libfontconfig.so.1 libfreetype.so.6 libfribidi.so.0 libgbm.so.1
-    libgcc_s.so.1 libglapi.so.0 libgmp.so.10 libgpg-error.so.0
-    libharfbuzz.so.0 libjack.so.0 libm.so.6 libmvec.so.1
+# The C runtime and the loader that started the process. A carried copy
+# of one of these does not wait for a different machine to break the
+# app; it breaks it on the machine that built it. No flag turns them
+# back on.
+CORE_LIBS = frozenset("""
+    ld-linux-aarch64.so.1 ld-linux-x86-64.so.2 ld-linux.so.2
+    libBrokenLocale.so.1 libanl.so.1 libc.so.6 libcidn.so.1
+    libcom_err.so.2 libdl.so.2 libgcc_s.so.1 libm.so.6 libmvec.so.1
     libnss_compat.so.2 libnss_dns.so.2 libnss_files.so.2
     libnss_hesiod.so.2 libnss_nis.so.2 libnss_nisplus.so.2
-    libpipewire-0.3.so.0 libpthread.so.0 libresolv.so.2 librt.so.1
-    libstdc++.so.6 libthread_db.so.1 libusb-1.0.so.0 libutil.so.1
-    libuuid.so.1 libwayland-client.so.0 libxcb-dri2.so.0 libxcb-
-    dri3.so.0 libxcb.so.1 libz.so.1
+    libpthread.so.0 libresolv.so.2 librt.so.1 libstdc++.so.6
+    libthread_db.so.1 libutil.so.1
+""".split())
+
+# What a Linux machine provides for itself, and a package therefore
+# does not carry. Every target system has these, and a carried copy
+# meeting the host's is how a package breaks on a machine that is not
+# the one that built it — the graphics stack in particular has to be
+# the host's or it does not talk to the host's driver. This is the
+# AppImage project's own excludelist (pkg2appimage), reduced to
+# sonames; `libfontconfig`, `libfreetype`, `libasound` and
+# `libharfbuzz` are on it, which is exactly the set a first guess would
+# have bundled.
+#
+# The two xkbcommon lines are not the AppImage project's: they are
+# here because that library reads the host's own data (the Compose
+# files under /usr/share/X11/locale and xkeyboard-config), and a
+# library older than the data it parses says so on every launch. The
+# wheel read a 2020 copy against a 2026 Compose file and printed five
+# `unrecognized keysym` errors before the window appeared. A library
+# and the data it reads have to come from the same machine.
+#
+# Both Linux packages read this table: the AppDir here, and the wheel
+# the release workflow repairs.
+HOST_LIBS = CORE_LIBS | frozenset("""
+    libEGL.so.1 libGL.so.1 libGLX.so.0 libGLdispatch.so.0
+    libICE.so.6 libOpenGL.so.0 libSM.so.6 libX11-xcb.so.1
+    libX11.so.6 libasound.so.2 libdrm.so.2 libexpat.so.1
+    libfontconfig.so.1 libfreetype.so.6 libfribidi.so.0 libgbm.so.1
+    libglapi.so.0 libgmp.so.10 libgpg-error.so.0
+    libharfbuzz.so.0 libjack.so.0
+    libpipewire-0.3.so.0
+    libusb-1.0.so.0
+    libuuid.so.1 libwayland-client.so.0
+    libxcb-dri2.so.0 libxcb-dri3.so.0 libxcb.so.1
+    libxkbcommon-x11.so.0 libxkbcommon.so.0
+    libz.so.1
 """.split())
 
 
@@ -12406,10 +12430,16 @@ def appimage_arch() -> str:
     return {"arm64": "aarch64", "amd64": "x86_64"}.get(m, m)
 
 
-def bundled_libs(binary: str) -> list[str]:
+def bundled_libs(binary: str, carry_all: bool = False) -> list[str]:
     """The shared libraries the AppDir carries: what the binary
-    resolves, less the excludelist. `ldd` rather than a static read,
-    because what the loader actually picks is the answer that matters."""
+    resolves, less the table above. `ldd` rather than a static read,
+    because what the loader actually picks is the answer that matters.
+
+    `carry_all` is `--carry-libs`: the app is going to a machine that
+    may not have the desktop's libraries, so everything but the C
+    runtime rides along, and the skew that costs is the author's to
+    accept."""
+    leave = CORE_LIBS if carry_all else HOST_LIBS
     r = subprocess.run(["ldd", binary], capture_output=True, text=True)
     out = set()
     for line in r.stdout.splitlines():
@@ -12417,7 +12447,7 @@ def bundled_libs(binary: str) -> list[str]:
         if not sep:
             continue
         path = rest.split(" (")[0].strip()
-        if path and os.path.exists(path) and soname.strip() not in APPIMAGE_EXCLUDE:
+        if path and os.path.exists(path) and soname.strip() not in leave:
             out.add(path)
     return sorted(out)
 
@@ -12444,7 +12474,8 @@ def write_icon(path: str, rgb: int = 0x89B4FA) -> None:
         f.write(chunk(b"IEND", b""))
 
 
-def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None) -> str:
+def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None,
+                carry_libs: bool = False) -> str:
     """`--app` on Linux: the AppDir, which is both a runnable directory
     and the thing appimagetool packs. `AppRun` puts the carried
     libraries ahead of the host's for this process only, so nothing is
@@ -12471,7 +12502,7 @@ def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None) ->
         shutil.copy2(binary, os.path.join(root, "usr", "bin", exe_rel))
     exe = os.path.join(root, "usr", "bin", exe_rel)
     os.chmod(exe, 0o755)
-    for lib in bundled_libs(exe):
+    for lib in bundled_libs(exe, carry_all=carry_libs):
         shutil.copy2(lib, os.path.join(root, "usr", "lib", os.path.basename(lib)))
 
     icon = os.path.join(root, f"{stem}.png")
@@ -12778,6 +12809,8 @@ def main():
                     help="build only: the platform's application directory in <app>/dist/ — a macOS .app, or a Linux AppDir")
     ap.add_argument("--appimage", action="store_true",
                     help="build only (Linux): pack that AppDir into one distributable .AppImage")
+    ap.add_argument("--carry-libs", action="store_true",
+                    help="build only (Linux): carry the system libraries too, for a target machine that may not have them")
     ap.add_argument("--bundle", action="store_true",
                     help="ship a python-build-standalone runtime next to the binary (@ui.py apps)")
     ap.add_argument("--frames", default=None,
@@ -12876,10 +12909,16 @@ def main():
     elif args.appimage:
         sys.exit("--appimage builds a Linux AppImage, and this is macOS — "
                  f"`yokan build {here} --app` wraps it as a .app instead")
+    elif args.carry_libs:
+        sys.exit("--carry-libs decides what a Linux package carries, and this is macOS — "
+                 f"`yokan build {here} --app` writes the .app, which carries none of the system's")
     if args.onefile:
         args.bundle = True
     if args.bundle and not tr.escapes:
         sys.exit("--bundle / --onefile only apply to apps with @py escapes (none here — the plain binary is already self-contained)")
+    if args.carry_libs and not (args.app_bundle or args.appimage):
+        sys.exit(f"--carry-libs says what a package carries — `yokan build {here} --appimage --carry-libs`, "
+                 "or --app for the directory")
 
     if args.mode == "build":
         # Ship only: translate, compile, package. No tier comparison —
@@ -12908,14 +12947,19 @@ def main():
                 print(f"built: {approot}")
                 print("  double-clickable; the executable inside replays PIXIE_SCRIPT like any build")
                 return
-            appdir = make_appdir(args.app, tr, binary, payload_dir=payload)
+            appdir = make_appdir(args.app, tr, binary, payload_dir=payload,
+                                 carry_libs=args.carry_libs)
+            carried = len(os.listdir(os.path.join(appdir, "usr", "lib")))
+            how = (f"carrying {carried} libraries, the C runtime aside"
+                   if args.carry_libs
+                   else f"carrying {carried}; the host provides the rest")
             if not args.appimage:
                 print(f"built: {appdir}")
-                print("  run the AppRun inside it; --appimage packs it into one file")
+                print(f"  run the AppRun inside it; --appimage packs it into one file ({how})")
                 return
             out = make_appimage(appdir)
             print(f"built: {out} ({describe_artifact(out)})")
-            print("  one file, carrying the libraries the host is not expected to have")
+            print(f"  one file, {how}")
             return
         print(f"built: {binary} ({describe_artifact(binary)})")
         print("  not gate-checked — `gate` with a script proves the two runs agree")
