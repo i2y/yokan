@@ -60,6 +60,11 @@ func main() {
 }
 ```
 
+The dot import is a matter of taste, not a rule: import the package
+under a name and every call reads `gm.Text(…)`, `gm.Run(…)` instead,
+and the app may then use any name it likes for its own types, `App`
+included. Both runs take either form, and so does `check`.
+
 Go has no keyword arguments, so an element's keywords are methods on
 it, and a chain reads like the keyword list would: `Text("…").Size(34)`,
 `Column(…).Spacing(12).Padding(16)`. A handler's type follows what the

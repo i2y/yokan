@@ -44,6 +44,8 @@ echo "OK   refusals"
 # Scripted gates, with the same steps the other languages' sweeps drive
 # their copies of each demo with.
 gate counter ./bin/gomamochi gate demo/counter.go --script "click:+1,dump,input:Momo\, again"
+# The same screen written the other way: the package under a name.
+gate prefixed ./bin/gomamochi gate demo/prefixed.go --script "click:+1,dump,input:Momo\, again"
 gate badges  ./bin/gomamochi gate demo/badges.go --script "click:flip,dump,click:flip"
 gate labels  ./bin/gomamochi gate demo/labels.go --script "dump,click:save,dump"
 gate layout  ./bin/gomamochi gate demo/layout.go --script "click:ping"
