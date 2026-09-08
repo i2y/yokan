@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# The Gomamochi command is a Go program. This builds it once into the
+# cache (go's own cache makes an unchanged build a tenth of a second)
+# and runs it, telling it where the module is.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+bin="${GOMAMOCHI_HOME:-$HOME/.cache/gomamochi}/bin/gomamochi"
+mkdir -p "$(dirname "$bin")"
+(cd "$root" && CGO_ENABLED=0 go build -o "$bin" ./cmd/gomamochi)
+GOMAMOCHI_ROOT="$root" exec "$bin" "$@"
