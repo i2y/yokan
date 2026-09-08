@@ -312,7 +312,11 @@ run, so neither run is a version behind.
   `main`), so `go vet ./...` is not what the sweep runs.
 - `go.mod` is `github.com/i2y/yokan/gomamochi`; an app imports it with a
   dot import (`import . "github.com/i2y/yokan/gomamochi"`) so the
-  elements read as they do in the other languages. The package's public
+  elements read as they do in the other languages, or under a name
+  (`gm.Text(…)`), which frees the app's own names; the checker reads
+  both, and `demo/prefixed.go` keeps the second form under the sweep.
+  Under the dot import an app cannot declare a name the package
+  exports (`App`, `Element`, `Text`…): Go says so itself. The package's public
   API stays free of generic functions: yaegi cannot see a compiled
   generic function, which is why `Task` takes and answers `any`.
 - The interpreted run is yaegi v0.16.1, pinned, whose Go is 1.22's.
