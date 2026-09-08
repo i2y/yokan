@@ -37,8 +37,9 @@ User-facing docs: `README.md` / `README.ja.md` (landing),
 on purpose), `website/` (the zensical site — the tour is split into
 six pages there), `docs/PIXIE.md` (the substrate, user-facing).
 Wakakusa has the same pair of its own (`wakakusa/TOUR*.md` and
-`wakakusa/website/`), and so does Rakugan (`rakugan/TOUR*.md` and
-`rakugan/website/`).
+`wakakusa/website/`), and so do Rakugan (`rakugan/TOUR*.md` and
+`rakugan/website/`) and Gomamochi (`gomamochi/TOUR*.md` and
+`gomamochi/website/`).
 `skills/yokan/SKILL.md` is the agent guide, at the repository root
 because that is where skill installers look for it; it is written
 for an agent about to write an app, and follows the tour.
@@ -304,8 +305,16 @@ run, so neither run is a version behind.
 - `check` (the refusals alone), `run` (a window; a save re-reads the
   file, and the app's values carry over into the new code), `build` (the
   native binary, `CGO_ENABLED=0`; `--release` strips; the engine's
-  library rides beside it, as a link into the shared target dir here).
-  There is no `translate`: the compiled run is gc's own.
+  library rides beside it, as a link into the shared target dir here;
+  `--app` copies both into a macOS bundle under `demo/dist/` or, on
+  Linux, an AppDir that `--appimage` packs and `--carry-libs` fills
+  with the desktop's libraries — the Linux shapes are written after
+  Yokan's and not yet run there). There is no `translate`: the compiled
+  run is gc's own.
+- `TOUR.md` / `TOUR.ja.md` are the tour, peers; `go run ./tools/tourcheck
+  TOUR.md TOUR.ja.md` pulls every complete example out of them and puts
+  it through the same command a demo goes through, and the sweep runs
+  it.
 - `./tools/gate_all.sh` — the sweep: `go vet` on the package, the
   command and the door, then every demo. Run it before merging anything
   under `gomamochi/`. The demos are not a package (each is its own

@@ -15,8 +15,9 @@ Whether the two behave the same is something you can check, with
 
 Two more languages live in this repository, on the same engine:
 **[Wakakusa](https://i2y.github.io/yokan/wakakusa/)** (Ruby,
-`wakakusa/`) and **[Rakugan](https://i2y.github.io/yokan/rakugan/)**
-(Perl, `rakugan/`). Each has a tour, demos and a gate of its own.
+`wakakusa/`), **[Rakugan](https://i2y.github.io/yokan/rakugan/)**
+(Perl, `rakugan/`) and **[Gomamochi](https://i2y.github.io/yokan/gomamochi/)**
+(Go, `gomamochi/`). Each has a tour, demos and a gate of its own.
 
 First, what it looks like: OpsBoard, a bundled dashboard demo —
 charts, a virtualized list, theme switching — written entirely in

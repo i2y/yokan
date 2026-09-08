@@ -12,7 +12,7 @@ Yokan（羊羹）は、静的に型付けされた Python のサブセットを�
 その二つが同じに動くかどうかは、`yokan gate` で確かめられます。
 
 同じエンジンの上に、言語がもう二つあります。
-**[Wakakusa](https://i2y.github.io/yokan/wakakusa/ja/)**（Ruby、`wakakusa/`）と **[Rakugan](https://i2y.github.io/yokan/rakugan/ja/)**（Perl、`rakugan/`）で、どちらにも自分のツアーとデモとゲートがあります。
+**[Wakakusa](https://i2y.github.io/yokan/wakakusa/ja/)**（Ruby、`wakakusa/`）、**[Rakugan](https://i2y.github.io/yokan/rakugan/ja/)**（Perl、`rakugan/`）、**[Gomamochi](https://i2y.github.io/yokan/gomamochi/ja/)**（Go、`gomamochi/`）で、どれにも自分のツアーとデモとゲートがあります。
 
 まず見た目から。
 付属デモのダッシュボード OpsBoard の画面です。

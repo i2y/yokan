@@ -100,5 +100,13 @@ gate loading ./bin/gomamochi gate demo/loading.go --script "click:step,click:ste
 gate filter  ./bin/gomamochi gate demo/filter.go --script "select:crit,dump,select:all,dump"
 gate shared  ./bin/gomamochi gate demo/shared.go --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 
+# The tour teaches the vocabulary, so it has to hold to it: every
+# complete app in either language, through the same command.
+if go run ./tools/tourcheck TOUR.md > /dev/null 2>&1; then
+  pass=$((pass + 1)); echo "OK   tour"
+else
+  fail=$((fail + 1)); failed="$failed tour"; echo "FAIL tour"
+fi
+
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]
