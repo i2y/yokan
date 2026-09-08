@@ -87,9 +87,19 @@ The command is a Go program: `bin/gomamochi` builds it into
 the engine, which it builds with cargo into the shared target dir
 before every run.
 
+## Where the vocabulary comes from
+
+Every element, its keywords, their types and defaults, and what a
+handler receives are one table, `crates/pixie-capi/elements.toml`,
+which the engine and the other languages read too. `go run ./tools/gen`
+writes `elements.go` (one type per element, one method per keyword, the
+canvas's drawing commands) and the interpreter's view of the package
+from it; the sweep fails when either is behind the table. Adding an
+element is a row there and an arm in the engine, and nothing in Go.
+
 ## What is here now
 
-The door over the whole C face, six elements (`Text`, `Button`,
-`TextField`, `Column`, `Row`, `ListView`), `Run`, `Task`, `Every`, the
-keyboard, and three demos. The rest of the vocabulary comes from the
-engine's table, generated, as the next step.
+The door over the whole C face, the whole vocabulary, `Run`, `Task`,
+`Every`, the keyboard, and eight demos. Timers, the canvas, a window's
+reload with values kept, and the framework's own standard library are
+written but not yet driven by a demo.
