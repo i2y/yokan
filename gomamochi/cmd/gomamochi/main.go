@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing/fstest"
 
@@ -38,10 +39,16 @@ const usage = `usage: gomamochi <command> <app.go> [--script "step,step"] [--fre
 
   check      what the app writes that Gomamochi cannot take
   run        run it interpreted, in a window; a save reloads the file
-  build      build the native binary [--release]
+  build      build the native binary [--release] [--app] [--appimage] [--carry-libs]
   gate       run it both ways headless and compare the two runs
 
 --release drops the symbol table.
+--app wraps the binary and the engine's library as an application: a
+macOS bundle under dist/, double-clickable, with <stem>.icns or
+<stem>.png beside the app as its icon; on Linux an AppDir under dist/,
+which --appimage packs into one file. --carry-libs makes a Linux
+package carry the desktop libraries the engine links as well, for a
+machine that may not have them.
 --fresh deletes a path before EACH run, so an app that keeps a file or
 a database starts both runs from the same nothing. Repeatable.
 `
@@ -250,9 +257,12 @@ func sizeOf(path string) string {
 // --- the commands -----------------------------------------------------------------
 
 type options struct {
-	script  string
-	fresh   []string
-	release bool
+	script    string
+	fresh     []string
+	release   bool
+	app       bool
+	appimage  bool
+	carryLibs bool
 }
 
 func cmdCheck(app string, _ options) {
@@ -293,6 +303,19 @@ func cmdBuild(app string, o options) {
 	}
 	bin := build(app, o.release)
 	fmt.Printf("built: %s (%s)\n", rel(bin), sizeOf(bin))
+	if o.app {
+		if runtime.GOOS == "darwin" {
+			root := appBundle(app, bin)
+			fmt.Printf("bundle: %s (%s)\n", rel(root), dirSize(root))
+		} else {
+			root := appDir(app, bin, o.carryLibs)
+			fmt.Printf("appdir: %s (%s)\n", rel(root), dirSize(root))
+			if o.appimage {
+				img := appImage(root)
+				fmt.Printf("appimage: %s (%s)\n", rel(img), sizeOf(img))
+			}
+		}
+	}
 	fmt.Println("  not gate-checked — `gate` with a script proves the two runs agree")
 }
 
@@ -382,6 +405,12 @@ func main() {
 			o.fresh, rest = append(o.fresh, rest[0]), rest[1:]
 		case arg == "--release":
 			o.release = true
+		case arg == "--app":
+			o.app = true
+		case arg == "--appimage":
+			o.app, o.appimage = true, true
+		case arg == "--carry-libs":
+			o.carryLibs = true
 		case strings.HasPrefix(arg, "--"):
 			die("unknown option `" + arg + "`\n\n" + usage)
 		default:
@@ -403,8 +432,14 @@ func main() {
 	if len(o.fresh) > 0 && mode != "gate" {
 		die("--fresh belongs to gate: it is there so the two runs start alike")
 	}
-	if o.release && mode != "build" {
-		die("--release belongs to build: it is how an app ships")
+	if (o.release || o.app || o.carryLibs) && mode != "build" {
+		die("--release, --app, --appimage and --carry-libs belong to build: they are how an app ships")
+	}
+	if o.appimage && runtime.GOOS != "linux" {
+		die("--appimage packs a Linux AppDir, and this is not Linux — `--app` writes the macOS bundle here")
+	}
+	if o.carryLibs && runtime.GOOS != "linux" {
+		die("--carry-libs is a Linux package's flag: a macOS bundle carries the engine and links the system's own frameworks")
 	}
 	locate(app)
 	run(app, o)
