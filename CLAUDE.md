@@ -67,7 +67,11 @@ the same change.
   against the system one (yokan-stdlib bundles its own). Packaging
   follows the platform: `--app` writes a `.app` or an AppDir,
   `--appimage` packs the AppDir, and `--bundle` / `--onefile` stay
-  macOS's — see the ledger entries for why.
+  macOS's — see the ledger entries for why. What a Linux package
+  leaves to the host is `HOST_LIBS` in `yokan_gate.py`, read both by
+  the AppDir packer and by the release workflow that repairs the
+  wheel, so the two agree; `--carry-libs` carries them anyway, for a
+  target machine that may not have them.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast.

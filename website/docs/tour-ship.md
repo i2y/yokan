@@ -152,9 +152,12 @@ On Linux the shapes are Linux's. `--app` writes `dist/<Title>.AppDir`
 — the binary, an `AppRun`, a `.desktop` entry, an icon, and the
 libraries a host is not expected to have — and `--appimage` packs that
 into `dist/<Title>-<arch>.AppImage`, the one file this platform hands
-someone else. Which libraries ride along is the AppImage project's own
-excludelist: a bundled `libfontconfig` or `libasound` meeting the
-host's is how an AppImage breaks elsewhere, so those stay out.
+someone else. Which libraries ride along is one table, and the wheel you
+develop against reads the same one: a carried `libfontconfig` or
+`libxkbcommon` meeting the host's own fonts or keyboard data is how a
+Linux package breaks elsewhere, so those stay out and the machine
+answers for them. `--carry-libs` turns that around for a target that
+may not have them, and everything but the C runtime rides along.
 `--bundle` and `--onefile` are Apple's way of carrying CPython, so
 they name themselves and stop here.
 
