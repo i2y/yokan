@@ -13,7 +13,7 @@
 # is written against.
 set -eu
 
-SPINEL_PIN=b80f630
+SPINEL_PIN=b64b120
 SPINEL_REPO=https://github.com/matz/spinel
 
 # How many jobs to build with. `sysctl -n hw.ncpu` is macOS's answer and
