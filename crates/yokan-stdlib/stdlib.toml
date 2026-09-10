@@ -30,14 +30,14 @@ module = "fs"
 layer = "yokan"
 rows = [
   { py = "read_text", fn = "readText", params = "path: String", ret = "String", rust = "fs_read_text", flags = "try" },
-  { py = "write_text", fn = "writeText", params = "path: String, text: String", ret = "Int", rust = "fs_write_text" },
+  { py = "write_text", fn = "writeText", params = "path: String, text: String", ret = "Int", rust = "fs_write_text", flags = "try" },
   { py = "exists", fn = "exists", params = "path: String", ret = "Bool", rust = "fs_exists" },
   { py = "read_text_or", fn = "readTextOr", params = "path: String, default: String", ret = "String", rust = "fs_read_text_or" },
-  { py = "list_dir", fn = "listDir", params = "path: String", ret = "List<String>", rust = "fs_list_dir" },
-  { py = "append_text", fn = "appendText", params = "path: String, text: String", ret = "Int", rust = "fs_append_text" },
-  { py = "remove", fn = "remove", params = "path: String", ret = "Int", rust = "fs_remove" },
-  { py = "make_dir", fn = "makeDir", params = "path: String", ret = "Int", rust = "fs_make_dir" },
-  { py = "app_dir", fn = "appDir", params = "name: String", ret = "String", rust = "fs_app_dir" },
+  { py = "list_dir", fn = "listDir", params = "path: String", ret = "List<String>", rust = "fs_list_dir", flags = "try" },
+  { py = "append_text", fn = "appendText", params = "path: String, text: String", ret = "Int", rust = "fs_append_text", flags = "try" },
+  { py = "remove", fn = "remove", params = "path: String", ret = "Int", rust = "fs_remove", flags = "try" },
+  { py = "make_dir", fn = "makeDir", params = "path: String", ret = "Int", rust = "fs_make_dir", flags = "try" },
+  { py = "app_dir", fn = "appDir", params = "name: String", ret = "String", rust = "fs_app_dir", flags = "try" },
   { py = "open_dialog", fn = "openDialog", params = "title: String", ret = "String", rust = "fs_open_dialog" },
   { py = "save_dialog", fn = "saveDialog", params = "name: String", ret = "String", rust = "fs_save_dialog" },
 ]
@@ -47,18 +47,18 @@ class = "Sqlite"
 module = "sqlite"
 layer = "yokan"
 rows = [
-  { py = "exec", fn = "exec", params = "path: String, sql: String", ret = "Int", rust = "sqlite_exec" },
-  { py = "query_text", fn = "queryText", params = "path: String, sql: String", ret = "List<String>", rust = "sqlite_query_text" },
+  { py = "exec", fn = "exec", params = "path: String, sql: String", ret = "Int", rust = "sqlite_exec", flags = "try" },
+  { py = "query_text", fn = "queryText", params = "path: String, sql: String", ret = "List<String>", rust = "sqlite_query_text", flags = "try" },
   { py = "query_int", fn = "queryInt", params = "path: String, sql: String", ret = "Int", rust = "sqlite_query_int", flags = "try" },
   { py = "query_int_or", fn = "queryIntOr", params = "path: String, sql: String, default: Int", ret = "Int", rust = "sqlite_query_int_or" },
   { py = "query_text_or", fn = "queryTextOr", params = "path: String, sql: String", ret = "List<String>", rust = "sqlite_query_text_or" },
-  { py = "exec", fn = "execWith", params = "path: String, sql: String, params: List<String>", ret = "Int", rust = "sqlite_exec_with" },
-  { py = "query_text", fn = "queryTextWith", params = "path: String, sql: String, params: List<String>", ret = "List<String>", rust = "sqlite_query_text_with" },
+  { py = "exec", fn = "execWith", params = "path: String, sql: String, params: List<String>", ret = "Int", rust = "sqlite_exec_with", flags = "try" },
+  { py = "query_text", fn = "queryTextWith", params = "path: String, sql: String, params: List<String>", ret = "List<String>", rust = "sqlite_query_text_with", flags = "try" },
   { py = "query_int", fn = "queryIntWith", params = "path: String, sql: String, params: List<String>", ret = "Int", rust = "sqlite_query_int_with", flags = "try" },
   { py = "query_int_or", fn = "queryIntOrWith", params = "path: String, sql: String, default: Int, params: List<String>", ret = "Int", rust = "sqlite_query_int_or_with" },
   { py = "query_text_or", fn = "queryTextOrWith", params = "path: String, sql: String, params: List<String>", ret = "List<String>", rust = "sqlite_query_text_or_with" },
-  { py = "query_rows", fn = "queryRows", params = "path: String, sql: String", ret = "List<List<String>>", rust = "sqlite_query_rows_all" },
-  { py = "query_rows", fn = "queryRowsWith", params = "path: String, sql: String, params: List<String>", ret = "List<List<String>>", rust = "sqlite_query_rows" },
+  { py = "query_rows", fn = "queryRows", params = "path: String, sql: String", ret = "List<List<String>>", rust = "sqlite_query_rows_all", flags = "try" },
+  { py = "query_rows", fn = "queryRowsWith", params = "path: String, sql: String, params: List<String>", ret = "List<List<String>>", rust = "sqlite_query_rows", flags = "try" },
   { py = "query_rows_or", fn = "queryRowsOr", params = "path: String, sql: String", ret = "List<List<String>>", rust = "sqlite_query_rows_or_all" },
   { py = "query_rows_or", fn = "queryRowsOrWith", params = "path: String, sql: String, params: List<String>", ret = "List<List<String>>", rust = "sqlite_query_rows_or" },
 ]
@@ -115,9 +115,9 @@ rows = [
   { py = "get_text", fn = "getText", params = "url: String", ret = "String", rust = "http_get_text", flags = "try" },
   { py = "get_text_or", fn = "getTextOr", params = "url: String, default: String", ret = "String", rust = "http_get_text_or" },
   { py = "get_text", fn = "getTextTimeout", params = "url: String, timeoutMs: Int", ret = "String", rust = "http_get_text_timeout", flags = "try" },
-  { py = "get_text_with", fn = "getTextWith", params = "url: String, headers: Map<String, String>", ret = "String", rust = "http_get_text_with" },
+  { py = "get_text_with", fn = "getTextWith", params = "url: String, headers: Map<String, String>", ret = "String", rust = "http_get_text_with", flags = "try" },
   { py = "post_text", fn = "postText", params = "url: String, body: String", ret = "String", rust = "http_post_text", flags = "try" },
-  { py = "post_text", fn = "postTextAs", params = "url: String, body: String, contentType: String", ret = "String", rust = "http_post_text_as" },
+  { py = "post_text", fn = "postTextAs", params = "url: String, body: String, contentType: String", ret = "String", rust = "http_post_text_as", flags = "try" },
   { py = "post_text_or", fn = "postTextOr", params = "url: String, body: String, default: String", ret = "String", rust = "http_post_text_or" },
   { py = "status", fn = "status", params = "url: String", ret = "Int", rust = "http_status" },
 ]
@@ -206,12 +206,12 @@ class = "Jsondoc"
 module = "jsondoc"
 layer = "yokan"
 rows = [
-  { py = "get_text", fn = "getText", params = "src: String, path: String", ret = "String", rust = "json_get_text", flags = "pure" },
-  { py = "get_int", fn = "getInt", params = "src: String, path: String", ret = "Int", rust = "json_get_int", flags = "pure" },
-  { py = "get_float", fn = "getFloat", params = "src: String, path: String", ret = "Float", rust = "json_get_float", flags = "pure" },
-  { py = "get_bool", fn = "getBool", params = "src: String, path: String", ret = "Bool", rust = "json_get_bool", flags = "pure" },
-  { py = "length", fn = "length", params = "src: String, path: String", ret = "Int", rust = "json_length", flags = "pure" },
-  { py = "has", fn = "has", params = "src: String, path: String", ret = "Bool", rust = "json_has", flags = "pure" },
+  { py = "get_text", fn = "getText", params = "src: String, path: String", ret = "String", rust = "json_get_text", flags = "pure try" },
+  { py = "get_int", fn = "getInt", params = "src: String, path: String", ret = "Int", rust = "json_get_int", flags = "pure try" },
+  { py = "get_float", fn = "getFloat", params = "src: String, path: String", ret = "Float", rust = "json_get_float", flags = "pure try" },
+  { py = "get_bool", fn = "getBool", params = "src: String, path: String", ret = "Bool", rust = "json_get_bool", flags = "pure try" },
+  { py = "length", fn = "length", params = "src: String, path: String", ret = "Int", rust = "json_length", flags = "pure try" },
+  { py = "has", fn = "has", params = "src: String, path: String", ret = "Bool", rust = "json_has", flags = "pure try" },
 ]
 
 # Python's `json.dumps`. The pieces compose — a value renders
@@ -325,9 +325,9 @@ class = "Clock"
 module = "clock"
 layer = "yokan"
 rows = [
-  { py = "format_ms", fn = "formatMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_ms" },
-  { py = "format_local_ms", fn = "formatLocalMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_local_ms" },
-  { py = "local_offset_minutes", fn = "localOffsetMinutes", params = "ms: Int", ret = "Int", rust = "clock_local_offset_minutes" },
+  { py = "format_ms", fn = "formatMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_ms", flags = "try" },
+  { py = "format_local_ms", fn = "formatLocalMs", params = "ms: Int, fmt: String", ret = "String", rust = "clock_format_local_ms", flags = "try" },
+  { py = "local_offset_minutes", fn = "localOffsetMinutes", params = "ms: Int", ret = "Int", rust = "clock_local_offset_minutes", flags = "try" },
 ]
 
 # `string`, which is nine constants and nothing else that

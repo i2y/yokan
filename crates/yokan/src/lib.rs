@@ -2578,8 +2578,8 @@ fn py_fs_read_text(py: Python<'_>, path: &str) -> PyResult<String> {
 
 #[pyfunction]
 #[pyo3(name = "write_text")]
-fn py_fs_write_text(py: Python<'_>, path: &str, text: &str) -> i64 {
-    py.detach(|| yokan_stdlib::fs_write_text(path, text))
+fn py_fs_write_text(py: Python<'_>, path: &str, text: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_write_text_result(path, text)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -2592,11 +2592,12 @@ fn py_fs_exists(py: Python<'_>, path: &str) -> bool {
 /// instead of inside it, so text a user typed can never become SQL.
 #[pyfunction]
 #[pyo3(name = "exec", signature = (path, sql, params = None))]
-fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str, params: Option<Vec<String>>) -> i64 {
+fn py_sqlite_exec(py: Python<'_>, path: &str, sql: &str, params: Option<Vec<String>>) -> PyResult<i64> {
     py.detach(|| match params {
-        Some(p) => yokan_stdlib::sqlite_exec_with(path, sql, p),
-        None => yokan_stdlib::sqlite_exec(path, sql),
+        Some(p) => yokan_stdlib::sqlite_exec_with_result(path, sql, p),
+        None => yokan_stdlib::sqlite_exec_result(path, sql),
     })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -2606,11 +2607,12 @@ fn py_sqlite_query_text(
     path: &str,
     sql: &str,
     params: Option<Vec<String>>,
-) -> Vec<String> {
+) -> PyResult<Vec<String>> {
     py.detach(|| match params {
-        Some(p) => yokan_stdlib::sqlite_query_text_with(path, sql, p),
-        None => yokan_stdlib::sqlite_query_text(path, sql),
+        Some(p) => yokan_stdlib::sqlite_query_text_with_result(path, sql, p),
+        None => yokan_stdlib::sqlite_query_text_result(path, sql),
     })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 /// The total form: no table, no rows — no raise.
@@ -2633,8 +2635,9 @@ fn py_sqlite_query_rows(
     path: &str,
     sql: &str,
     params: Option<Vec<String>>,
-) -> Vec<Vec<String>> {
-    py.detach(|| yokan_stdlib::sqlite_query_rows(path, sql, params.unwrap_or_default()))
+) -> PyResult<Vec<Vec<String>>> {
+    py.detach(|| yokan_stdlib::sqlite_query_rows_result(path, sql, params.unwrap_or_default()))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -2653,8 +2656,8 @@ fn py_http_get_text_with(
     py: Python<'_>,
     url: &str,
     headers: std::collections::HashMap<String, String>,
-) -> String {
-    py.detach(|| yokan_stdlib::http_get_text_with(url, headers))
+) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::http_get_text_with_result(url, headers)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -2664,11 +2667,12 @@ fn py_http_post_text(
     url: &str,
     body: &str,
     content_type: Option<&str>,
-) -> String {
+) -> PyResult<String> {
     py.detach(|| match content_type {
-        Some(ct) => yokan_stdlib::http_post_text_as(url, body, ct),
-        None => yokan_stdlib::http_post_text(url, body),
+        Some(ct) => yokan_stdlib::http_post_text_as_result(url, body, ct),
+        None => yokan_stdlib::http_post_text_result(url, body),
     })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -2691,28 +2695,28 @@ fn py_http_status(py: Python<'_>, url: &str) -> i64 {
 // the same answers.
 
 #[pyfunction] #[pyo3(name = "get_text")]
-fn py_json_get_text(py: Python<'_>, src: &str, path: &str) -> String {
-    py.detach(|| yokan_stdlib::json_get_text(src, path))
+fn py_json_get_text(py: Python<'_>, src: &str, path: &str) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::json_get_text_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "get_int")]
-fn py_json_get_int(py: Python<'_>, src: &str, path: &str) -> i64 {
-    py.detach(|| yokan_stdlib::json_get_int(src, path))
+fn py_json_get_int(py: Python<'_>, src: &str, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::json_get_int_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "get_float")]
-fn py_json_get_float(py: Python<'_>, src: &str, path: &str) -> f64 {
-    py.detach(|| yokan_stdlib::json_get_float(src, path))
+fn py_json_get_float(py: Python<'_>, src: &str, path: &str) -> PyResult<f64> {
+    py.detach(|| yokan_stdlib::json_get_float_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "get_bool")]
-fn py_json_get_bool(py: Python<'_>, src: &str, path: &str) -> bool {
-    py.detach(|| yokan_stdlib::json_get_bool(src, path))
+fn py_json_get_bool(py: Python<'_>, src: &str, path: &str) -> PyResult<bool> {
+    py.detach(|| yokan_stdlib::json_get_bool_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "length")]
-fn py_json_length(py: Python<'_>, src: &str, path: &str) -> i64 {
-    py.detach(|| yokan_stdlib::json_length(src, path))
+fn py_json_length(py: Python<'_>, src: &str, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::json_length_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "has")]
-fn py_json_has(py: Python<'_>, src: &str, path: &str) -> bool {
-    py.detach(|| yokan_stdlib::json_has(src, path))
+fn py_json_has(py: Python<'_>, src: &str, path: &str) -> PyResult<bool> {
+    py.detach(|| yokan_stdlib::json_has_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "to_int")]
@@ -2783,8 +2787,8 @@ fn py_sqlite_query_text_or(
 
 
 #[pyfunction] #[pyo3(name = "format_ms")]
-fn py_clock_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
-    py.detach(|| yokan_stdlib::clock_format_ms(ms, fmt))
+fn py_clock_format_ms(py: Python<'_>, ms: i64, fmt: &str) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::clock_format_ms_result(ms, fmt)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 #[pyfunction] #[pyo3(name = "log")]
 fn py_log(py: Python<'_>, msg: &str) -> i64 {
@@ -2797,13 +2801,13 @@ fn py_quit() -> i64 {
 }
 
 #[pyfunction] #[pyo3(name = "format_local_ms")]
-fn py_clock_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> String {
-    py.detach(|| yokan_stdlib::clock_format_local_ms(ms, fmt))
+fn py_clock_format_local_ms(py: Python<'_>, ms: i64, fmt: &str) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::clock_format_local_ms_result(ms, fmt)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "local_offset_minutes")]
-fn py_clock_local_offset_minutes(py: Python<'_>, ms: i64) -> i64 {
-    py.detach(|| yokan_stdlib::clock_local_offset_minutes(ms))
+fn py_clock_local_offset_minutes(py: Python<'_>, ms: i64) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::clock_local_offset_minutes_result(ms)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "set_text")]
@@ -2847,23 +2851,23 @@ fn py_keys_released(key: &str) -> bool {
 }
 
 #[pyfunction] #[pyo3(name = "list_dir")]
-fn py_fs_list_dir(py: Python<'_>, path: &str) -> Vec<String> {
-    py.detach(|| yokan_stdlib::fs_list_dir(path))
+fn py_fs_list_dir(py: Python<'_>, path: &str) -> PyResult<Vec<String>> {
+    py.detach(|| yokan_stdlib::fs_list_dir_result(path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "append_text")]
-fn py_fs_append_text(py: Python<'_>, path: &str, text: &str) -> i64 {
-    py.detach(|| yokan_stdlib::fs_append_text(path, text))
+fn py_fs_append_text(py: Python<'_>, path: &str, text: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_append_text_result(path, text)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "remove")]
-fn py_fs_remove(py: Python<'_>, path: &str) -> i64 {
-    py.detach(|| yokan_stdlib::fs_remove(path))
+fn py_fs_remove(py: Python<'_>, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_remove_result(path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction] #[pyo3(name = "make_dir")]
-fn py_fs_make_dir(py: Python<'_>, path: &str) -> i64 {
-    py.detach(|| yokan_stdlib::fs_make_dir(path))
+fn py_fs_make_dir(py: Python<'_>, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_make_dir_result(path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 /// Both doors release Python while they wait: a dialog is a person's
@@ -2879,8 +2883,8 @@ fn py_fs_save_dialog(py: Python<'_>, name: &str) -> String {
 }
 
 #[pyfunction] #[pyo3(name = "app_dir")]
-fn py_fs_app_dir(py: Python<'_>, name: &str) -> String {
-    py.detach(|| yokan_stdlib::fs_app_dir(name))
+fn py_fs_app_dir(py: Python<'_>, name: &str) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::fs_app_dir_result(name)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 /// `json.dumps(v)` — the door reads the value's type at run time, the

@@ -8707,7 +8707,10 @@ class Translator:
             pre = []
             okline = None
             if kind == "local":
-                ret_pix = {"getText": "String", "readText": "String", "queryInt": "Int"}.get(spec[1], "String")
+                # The twin answers what the plain spelling answers; the
+                # manifest says what that is, so the local starts from
+                # that type's default.
+                ret_pix = self.STDLIB_RET[mod_fn]
                 pre = [f"var {target} = {self._zero_of(ret_pix)}"]
                 self.handler_locals.add(target)
                 self.typed_locals[target] = ret_pix

@@ -10,6 +10,7 @@ The order to reach for things is fixed.
    `fs.read_text_or(p, "")`, `http.get_text_or(url, "")`, `sqlite.query_int_or(p, sql, 0)`.
 2. **Use try/except**. The form for when the reason matters, written exactly as in Python:
    multiple statements in the body, per-exception except clauses, tuples (`except (ValueError, KeyError) as e:`), `else`, `finally`.
+   Every standard-library call that can fail — a write, a query, a read by JSON path, a clock format — raises here, so a `try` around any of them receives the reason.
    Exceptions raised by `@py` escape functions are caught here too, and `e`'s message is exactly what Python produces.
 3. **Do nothing**. An uncaught failure aborts its statement and the app lives on.
    It does not crash.

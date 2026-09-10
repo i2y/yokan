@@ -21,15 +21,25 @@ pub fn fs_read_text(path: &str) -> String {
     }
 }
 
-pub fn fs_write_text(path: &str, text: &str) -> i64 {
+/// The fallible twin of the write, for a `try` that catches it. The
+/// parent directories are made on the way, as the plain form makes
+/// them; what cannot be written comes back as the message the plain
+/// form would have stopped with.
+pub fn fs_write_text_result(path: &str, text: &str) -> std::io::Result<i64> {
     if let Some(dir) = std::path::Path::new(path).parent() {
         if !dir.as_os_str().is_empty() {
             let _ = std::fs::create_dir_all(dir);
         }
     }
-    match std::fs::write(path, text) {
-        Ok(()) => text.len() as i64,
-        Err(e) => panic!("fs.write_text {path}: {e}"),
+    std::fs::write(path, text)
+        .map(|()| text.len() as i64)
+        .map_err(|e| std::io::Error::other(format!("fs.write_text {path}: {e}")))
+}
+
+pub fn fs_write_text(path: &str, text: &str) -> i64 {
+    match fs_write_text_result(path, text) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -39,46 +49,27 @@ pub fn fs_exists(path: &str) -> bool {
 
 // ---- sqlite ---------------------------------------------------------
 
+pub fn sqlite_exec_result(path: &str, sql: &str) -> std::io::Result<i64> {
+    sqlite_exec_with_result(path, sql, Vec::new())
+}
+
 pub fn sqlite_exec(path: &str, sql: &str) -> i64 {
-    let conn = match rusqlite::Connection::open(path) {
-        Ok(c) => c,
-        Err(e) => panic!("sqlite.exec open {path}: {e}"),
-    };
-    match conn.execute(sql, []) {
-        Ok(n) => n as i64,
-        Err(e) => panic!("sqlite.exec {path}: {e}"),
+    match sqlite_exec_result(path, sql) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
 /// Column 0 of every row, rendered as text — the deterministic v1
 /// read surface (shape your row with SQL, order with ORDER BY).
+pub fn sqlite_query_text_result(path: &str, sql: &str) -> std::io::Result<Vec<String>> {
+    sqlite_query_text_with_result(path, sql, Vec::new())
+}
+
 pub fn sqlite_query_text(path: &str, sql: &str) -> Vec<String> {
-    let conn = match rusqlite::Connection::open(path) {
-        Ok(c) => c,
-        Err(e) => panic!("sqlite.query_text open {path}: {e}"),
-    };
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => panic!("sqlite.query_text {path}: {e}"),
-    };
-    let rows = stmt.query_map([], |row| {
-        Ok(match row.get::<_, rusqlite::types::Value>(0) {
-            Ok(rusqlite::types::Value::Integer(i)) => i.to_string(),
-            Ok(rusqlite::types::Value::Real(f)) => f.to_string(),
-            Ok(rusqlite::types::Value::Text(s)) => s,
-            Ok(rusqlite::types::Value::Null) => String::new(),
-            Ok(rusqlite::types::Value::Blob(_)) => "<blob>".to_string(),
-            Err(e) => panic!("sqlite.query_text column 0: {e}"),
-        })
-    });
-    match rows {
-        Ok(it) => it
-            .map(|r| match r {
-                Ok(s) => s,
-                Err(e) => panic!("sqlite.query_text row: {e}"),
-            })
-            .collect(),
-        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    match sqlite_query_text_result(path, sql) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -734,71 +725,106 @@ fn float_to_int(what: &str, v: f64) -> i64 {
 // mistyped node PANICS with the path — contained as one failing
 // statement in both tiers.
 
-fn json_at(src: &str, path: &str) -> serde_json::Value {
-    let mut v: serde_json::Value = match serde_json::from_str(src) {
-        Ok(v) => v,
-        Err(e) => panic!("json: invalid document: {e}"),
-    };
+fn json_err(msg: String) -> std::io::Error {
+    std::io::Error::other(msg)
+}
+
+/// The value at a dotted path, or why there is none: the document
+/// does not parse, an index is past the end, a key is missing, or a
+/// segment indexes into something that is neither a list nor a map.
+fn json_at_result(src: &str, path: &str) -> std::io::Result<serde_json::Value> {
+    let mut v: serde_json::Value = serde_json::from_str(src)
+        .map_err(|e| json_err(format!("json: invalid document: {e}")))?;
     if path.is_empty() {
-        return v;
+        return Ok(v);
     }
     for seg in path.split('.') {
         v = match (&v, seg.parse::<usize>()) {
             (serde_json::Value::Array(xs), Ok(i)) => match xs.get(i) {
                 Some(x) => x.clone(),
-                None => panic!("json: index `{seg}` out of range in `{path}`"),
+                None => return Err(json_err(format!("json: index `{seg}` out of range in `{path}`"))),
             },
             (serde_json::Value::Object(m), _) => match m.get(seg) {
                 Some(x) => x.clone(),
-                None => panic!("json: no key `{seg}` in `{path}`"),
+                None => return Err(json_err(format!("json: no key `{seg}` in `{path}`"))),
             },
-            _ => panic!("json: `{seg}` does not index into `{path}`"),
+            _ => return Err(json_err(format!("json: `{seg}` does not index into `{path}`"))),
         };
     }
-    v
+    Ok(v)
+}
+
+pub fn json_get_text_result(src: &str, path: &str) -> std::io::Result<String> {
+    match json_at_result(src, path)? {
+        serde_json::Value::String(s) => Ok(s),
+        other => Err(json_err(format!("json: `{path}` is not a string (got {other})"))),
+    }
 }
 
 pub fn json_get_text(src: &str, path: &str) -> String {
-    match json_at(src, path) {
-        serde_json::Value::String(s) => s,
-        other => panic!("json: `{path}` is not a string (got {other})"),
+    match json_get_text_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
+}
+
+pub fn json_get_int_result(src: &str, path: &str) -> std::io::Result<i64> {
+    json_at_result(src, path)?
+        .as_i64()
+        .ok_or_else(|| json_err(format!("json: `{path}` is not an integer")))
 }
 
 pub fn json_get_int(src: &str, path: &str) -> i64 {
-    match json_at(src, path).as_i64() {
-        Some(n) => n,
-        None => panic!("json: `{path}` is not an integer"),
+    match json_get_int_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
+}
+
+pub fn json_get_float_result(src: &str, path: &str) -> std::io::Result<f64> {
+    json_at_result(src, path)?
+        .as_f64()
+        .ok_or_else(|| json_err(format!("json: `{path}` is not a number")))
 }
 
 pub fn json_get_float(src: &str, path: &str) -> f64 {
-    match json_at(src, path).as_f64() {
-        Some(f) => f,
-        None => panic!("json: `{path}` is not a number"),
+    match json_get_float_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
+pub fn json_get_bool_result(src: &str, path: &str) -> std::io::Result<bool> {
+    json_at_result(src, path)?
+        .as_bool()
+        .ok_or_else(|| json_err(format!("json: `{path}` is not a bool")))
+}
+
 pub fn json_get_bool(src: &str, path: &str) -> bool {
-    match json_at(src, path).as_bool() {
-        Some(b) => b,
-        None => panic!("json: `{path}` is not a bool"),
+    match json_get_bool_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+pub fn json_length_result(src: &str, path: &str) -> std::io::Result<i64> {
+    match json_at_result(src, path)? {
+        serde_json::Value::Array(xs) => Ok(xs.len() as i64),
+        serde_json::Value::Object(m) => Ok(m.len() as i64),
+        _ => Err(json_err(format!("json: `{path}` has no length"))),
     }
 }
 
 pub fn json_length(src: &str, path: &str) -> i64 {
-    match json_at(src, path) {
-        serde_json::Value::Array(xs) => xs.len() as i64,
-        serde_json::Value::Object(m) => m.len() as i64,
-        _ => panic!("json: `{path}` has no length"),
+    match json_length_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
-pub fn json_has(src: &str, path: &str) -> bool {
-    let mut v: serde_json::Value = match serde_json::from_str(src) {
-        Ok(v) => v,
-        Err(e) => panic!("json: invalid document: {e}"),
-    };
+pub fn json_has_result(src: &str, path: &str) -> std::io::Result<bool> {
+    let mut v: serde_json::Value = serde_json::from_str(src)
+        .map_err(|e| json_err(format!("json: invalid document: {e}")))?;
     for seg in path.split('.') {
         let next = match (&v, seg.parse::<usize>()) {
             (serde_json::Value::Array(xs), Ok(i)) => xs.get(i).cloned(),
@@ -807,10 +833,17 @@ pub fn json_has(src: &str, path: &str) -> bool {
         };
         match next {
             Some(x) => v = x,
-            None => return false,
+            None => return Ok(false),
         }
     }
-    true
+    Ok(true)
+}
+
+pub fn json_has(src: &str, path: &str) -> bool {
+    match json_has_result(src, path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
 }
 
 // ---- time -----------------------------------------------------------
@@ -871,10 +904,17 @@ pub fn time_sleep(secs: f64) {
 
 /// UTC strftime of a millisecond timestamp — deterministic for a
 /// fixed input, which is what a gate script feeds it.
-pub fn clock_format_ms(ms: i64, fmt: &str) -> String {
+pub fn clock_format_ms_result(ms: i64, fmt: &str) -> std::io::Result<String> {
     match chrono::DateTime::from_timestamp_millis(ms) {
-        Some(dt) => dt.format(fmt).to_string(),
-        None => panic!("clock: `{ms}` is out of range"),
+        Some(dt) => Ok(dt.format(fmt).to_string()),
+        None => Err(std::io::Error::other(format!("clock: `{ms}` is out of range"))),
+    }
+}
+
+pub fn clock_format_ms(ms: i64, fmt: &str) -> String {
+    match clock_format_ms_result(ms, fmt) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -3377,11 +3417,13 @@ pub fn py_abort(msg: &str) -> i64 {
 // stores the number — the same thing Python's sqlite3 does with a str
 // parameter.
 
-fn open_db(path: &str, who: &str) -> rusqlite::Connection {
-    match rusqlite::Connection::open(path) {
-        Ok(c) => c,
-        Err(e) => panic!("sqlite.{who} open {path}: {e}"),
-    }
+fn open_db_result(path: &str, who: &str) -> std::io::Result<rusqlite::Connection> {
+    rusqlite::Connection::open(path)
+        .map_err(|e| std::io::Error::other(format!("sqlite.{who} open {path}: {e}")))
+}
+
+fn sqlite_err(who: &str, path: &str, e: rusqlite::Error) -> std::io::Error {
+    std::io::Error::other(format!("sqlite.{who} {path}: {e}"))
 }
 
 fn cell_text(v: rusqlite::types::Value) -> String {
@@ -3394,42 +3436,47 @@ fn cell_text(v: rusqlite::types::Value) -> String {
     }
 }
 
-pub fn sqlite_exec_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
-    let conn = open_db(path, "exec");
+pub fn sqlite_exec_with_result(path: &str, sql: &str, params: Vec<String>) -> std::io::Result<i64> {
+    let conn = open_db_result(path, "exec")?;
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
-    match conn.execute(sql, bound.as_slice()) {
-        Ok(n) => n as i64,
-        Err(e) => panic!("sqlite.exec {path}: {e}"),
+    conn.execute(sql, bound.as_slice())
+        .map(|n| n as i64)
+        .map_err(|e| sqlite_err("exec", path, e))
+}
+
+pub fn sqlite_exec_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
+    match sqlite_exec_with_result(path, sql, params) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
-pub fn sqlite_query_text_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
-    let conn = open_db(path, "query_text");
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => panic!("sqlite.query_text {path}: {e}"),
-    };
+pub fn sqlite_query_text_with_result(
+    path: &str,
+    sql: &str,
+    params: Vec<String>,
+) -> std::io::Result<Vec<String>> {
+    let conn = open_db_result(path, "query_text")?;
+    let mut stmt = conn.prepare(sql).map_err(|e| sqlite_err("query_text", path, e))?;
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
-    let rows = stmt.query_map(bound.as_slice(), |row| {
-        Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?))
-    });
-    match rows {
-        Ok(it) => it
-            .map(|r| match r {
-                Ok(s) => s,
-                Err(e) => panic!("sqlite.query_text row: {e}"),
-            })
-            .collect(),
-        Err(e) => panic!("sqlite.query_text {path}: {e}"),
+    let rows = stmt
+        .query_map(bound.as_slice(), |row| Ok(cell_text(row.get::<_, rusqlite::types::Value>(0)?)))
+        .map_err(|e| sqlite_err("query_text", path, e))?;
+    rows.map(|r| r.map_err(|e| std::io::Error::other(format!("sqlite.query_text row: {e}"))))
+        .collect()
+}
+
+pub fn sqlite_query_text_with(path: &str, sql: &str, params: Vec<String>) -> Vec<String> {
+    match sqlite_query_text_with_result(path, sql, params) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
 pub fn sqlite_query_int_with(path: &str, sql: &str, params: Vec<String>) -> i64 {
-    let conn = open_db(path, "query_int");
-    let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
-    match conn.query_row(sql, bound.as_slice(), |row| row.get::<_, i64>(0)) {
+    match sqlite_query_int_with_result(path, sql, params) {
         Ok(v) => v,
-        Err(e) => panic!("sqlite.query_int {path}: {e}"),
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -3474,6 +3521,10 @@ pub fn sqlite_query_rows_or_all(path: &str, sql: &str) -> Vec<Vec<String>> {
 }
 
 /// Whole rows, unbound — the two-argument spelling.
+pub fn sqlite_query_rows_all_result(path: &str, sql: &str) -> std::io::Result<Vec<Vec<String>>> {
+    sqlite_query_rows_result(path, sql, Vec::new())
+}
+
 pub fn sqlite_query_rows_all(path: &str, sql: &str) -> Vec<Vec<String>> {
     sqlite_query_rows(path, sql, Vec::new())
 }
@@ -3505,29 +3556,32 @@ pub fn sqlite_query_text_or_with(path: &str, sql: &str, params: Vec<String>) -> 
 
 /// Every column of every row, as text — the multi-column read. A row
 /// is a `list[str]`, so a result is a `list[list[str]]`.
-pub fn sqlite_query_rows(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
-    let conn = open_db(path, "query_rows");
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
-    };
+pub fn sqlite_query_rows_result(
+    path: &str,
+    sql: &str,
+    params: Vec<String>,
+) -> std::io::Result<Vec<Vec<String>>> {
+    let conn = open_db_result(path, "query_rows")?;
+    let mut stmt = conn.prepare(sql).map_err(|e| sqlite_err("query_rows", path, e))?;
     let n = stmt.column_count();
     let bound: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
-    let rows = stmt.query_map(bound.as_slice(), |row| {
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
-        }
-        Ok(out)
-    });
-    match rows {
-        Ok(it) => it
-            .map(|r| match r {
-                Ok(v) => v,
-                Err(e) => panic!("sqlite.query_rows row: {e}"),
-            })
-            .collect(),
-        Err(e) => panic!("sqlite.query_rows {path}: {e}"),
+    let rows = stmt
+        .query_map(bound.as_slice(), |row| {
+            let mut out = Vec::with_capacity(n);
+            for i in 0..n {
+                out.push(cell_text(row.get::<_, rusqlite::types::Value>(i)?));
+            }
+            Ok(out)
+        })
+        .map_err(|e| sqlite_err("query_rows", path, e))?;
+    rows.map(|r| r.map_err(|e| std::io::Error::other(format!("sqlite.query_rows row: {e}"))))
+        .collect()
+}
+
+pub fn sqlite_query_rows(path: &str, sql: &str, params: Vec<String>) -> Vec<Vec<String>> {
+    match sqlite_query_rows_result(path, sql, params) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -3560,7 +3614,10 @@ pub fn http_get_text_timeout(url: &str, timeout_ms: i64) -> String {
 
 /// GET with headers. The map is sorted before it is applied, so the
 /// request a script replays is the request the first run made.
-pub fn http_get_text_with(url: &str, headers: std::collections::HashMap<String, String>) -> String {
+pub fn http_get_text_with_result(
+    url: &str,
+    headers: std::collections::HashMap<String, String>,
+) -> std::io::Result<String> {
     let mut req = ureq::get(url);
     let mut keys: Vec<&String> = headers.keys().collect();
     keys.sort();
@@ -3568,11 +3625,17 @@ pub fn http_get_text_with(url: &str, headers: std::collections::HashMap<String, 
         req = req.set(k, &headers[k]);
     }
     match req.call() {
-        Ok(resp) => match resp.into_string() {
-            Ok(s) => s,
-            Err(e) => panic!("http.get_text_with {url}: {e}"),
-        },
-        Err(e) => panic!("http.get_text_with {url}: {e}"),
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| std::io::Error::other(format!("http.get_text_with {url}: {e}"))),
+        Err(e) => Err(std::io::Error::other(format!("http.get_text_with {url}: {e}"))),
+    }
+}
+
+pub fn http_get_text_with(url: &str, headers: std::collections::HashMap<String, String>) -> String {
+    match http_get_text_with_result(url, headers) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -3625,48 +3688,72 @@ pub fn http_status(url: &str) -> i64 {
 
 /// The names in a directory, sorted — a directory has no order of its
 /// own, and a screen built from one has to be reproducible.
-pub fn fs_list_dir(path: &str) -> Vec<String> {
-    let rd = match std::fs::read_dir(path) {
-        Ok(rd) => rd,
-        Err(e) => panic!("fs.list_dir {path}: {e}"),
-    };
+pub fn fs_list_dir_result(path: &str) -> std::io::Result<Vec<String>> {
+    let rd = std::fs::read_dir(path)
+        .map_err(|e| std::io::Error::other(format!("fs.list_dir {path}: {e}")))?;
     let mut out: Vec<String> = rd
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     out.sort();
-    out
+    Ok(out)
 }
 
-pub fn fs_append_text(path: &str, text: &str) -> i64 {
+pub fn fs_list_dir(path: &str) -> Vec<String> {
+    match fs_list_dir_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+pub fn fs_append_text_result(path: &str, text: &str) -> std::io::Result<i64> {
     use std::io::Write;
     if let Some(dir) = std::path::Path::new(path).parent() {
         if !dir.as_os_str().is_empty() {
             let _ = std::fs::create_dir_all(dir);
         }
     }
-    let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
-        Ok(f) => f,
-        Err(e) => panic!("fs.append_text {path}: {e}"),
-    };
-    match f.write_all(text.as_bytes()) {
-        Ok(()) => text.len() as i64,
-        Err(e) => panic!("fs.append_text {path}: {e}"),
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| std::io::Error::other(format!("fs.append_text {path}: {e}")))?;
+    f.write_all(text.as_bytes())
+        .map(|()| text.len() as i64)
+        .map_err(|e| std::io::Error::other(format!("fs.append_text {path}: {e}")))
+}
+
+pub fn fs_append_text(path: &str, text: &str) -> i64 {
+    match fs_append_text_result(path, text) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
 /// Remove a file. Missing is a failure, as it is in Python.
+pub fn fs_remove_result(path: &str) -> std::io::Result<i64> {
+    std::fs::remove_file(path)
+        .map(|()| 0)
+        .map_err(|e| std::io::Error::other(format!("fs.remove {path}: {e}")))
+}
+
 pub fn fs_remove(path: &str) -> i64 {
-    match std::fs::remove_file(path) {
-        Ok(()) => 0,
-        Err(e) => panic!("fs.remove {path}: {e}"),
+    match fs_remove_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
+pub fn fs_make_dir_result(path: &str) -> std::io::Result<i64> {
+    std::fs::create_dir_all(path)
+        .map(|()| 0)
+        .map_err(|e| std::io::Error::other(format!("fs.make_dir {path}: {e}")))
+}
+
 pub fn fs_make_dir(path: &str) -> i64 {
-    match std::fs::create_dir_all(path) {
-        Ok(()) => 0,
-        Err(e) => panic!("fs.make_dir {path}: {e}"),
+    match fs_make_dir_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
@@ -3676,7 +3763,7 @@ pub fn fs_make_dir(path: &str) -> i64 {
 /// elsewhere — each platform's own answer to the same question. One
 /// implementation, so both runs of an app land in one directory and
 /// the gate compares an app against itself, not against a path.
-pub fn fs_app_dir(name: &str) -> String {
+pub fn fs_app_dir_result(name: &str) -> std::io::Result<String> {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let base = if cfg!(target_os = "macos") {
         std::path::Path::new(&home)
@@ -3689,10 +3776,16 @@ pub fn fs_app_dir(name: &str) -> String {
         }
     };
     let dir = base.join(name);
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        panic!("fs.app_dir {name}: {e}");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| std::io::Error::other(format!("fs.app_dir {name}: {e}")))?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+pub fn fs_app_dir(name: &str) -> String {
+    match fs_app_dir_result(name) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
-    dir.to_string_lossy().into_owned()
 }
 
 // ---- json: writing ---------------------------------------------------
@@ -3810,19 +3903,33 @@ pub fn json_bools(xs: Vec<bool>) -> Vec<String> {
 /// runs read the same zone database and print the same string; a
 /// verification script that wants a fixed answer uses `format_ms`,
 /// which is UTC.
-pub fn clock_format_local_ms(ms: i64, fmt: &str) -> String {
+pub fn clock_format_local_ms_result(ms: i64, fmt: &str) -> std::io::Result<String> {
     match chrono::DateTime::from_timestamp_millis(ms) {
-        Some(dt) => dt.with_timezone(&chrono::Local).format(fmt).to_string(),
-        None => panic!("clock: `{ms}` is out of range"),
+        Some(dt) => Ok(dt.with_timezone(&chrono::Local).format(fmt).to_string()),
+        None => Err(std::io::Error::other(format!("clock: `{ms}` is out of range"))),
+    }
+}
+
+pub fn clock_format_local_ms(ms: i64, fmt: &str) -> String {
+    match clock_format_local_ms_result(ms, fmt) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 
 /// The machine's offset from UTC, in minutes, at that instant.
-pub fn clock_local_offset_minutes(ms: i64) -> i64 {
+pub fn clock_local_offset_minutes_result(ms: i64) -> std::io::Result<i64> {
     use chrono::Offset;
     match chrono::DateTime::from_timestamp_millis(ms) {
-        Some(dt) => (dt.with_timezone(&chrono::Local).offset().fix().local_minus_utc() / 60) as i64,
-        None => panic!("clock: `{ms}` is out of range"),
+        Some(dt) => Ok((dt.with_timezone(&chrono::Local).offset().fix().local_minus_utc() / 60) as i64),
+        None => Err(std::io::Error::other(format!("clock: `{ms}` is out of range"))),
+    }
+}
+
+pub fn clock_local_offset_minutes(ms: i64) -> i64 {
+    match clock_local_offset_minutes_result(ms) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
     }
 }
 

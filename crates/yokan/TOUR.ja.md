@@ -1046,6 +1046,7 @@ run(view, title="OpsBoard", width=1100, height=820, on_start=boot)
 2. **try/except を使う**。
    失敗の理由が要るときはこの形で、Python の書き方がそのまま使えます。
    書けるのは、本体の複数の文、例外の種類ごとの except 節、タプル指定（`except (ValueError, KeyError) as e:`）、`else`、`finally` です。
+   失敗しうる標準ライブラリの呼び出し（書き込み、問い合わせ、JSON の経路による読み取り、時刻の整形）は、どれもここで捕まえられます。
    `@py` のエスケープ関数が投げた例外も、ここで捕まえられます。
    `e` のメッセージも、Python が出すものそのままです。
 3. **何もしない**。

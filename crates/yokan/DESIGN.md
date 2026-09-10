@@ -2451,3 +2451,41 @@ names the five it needs. That list is not a guess. The smoke run
 installs exactly it on a plain runner, which is how the missing one was
 found in the first place — as an ImportError, on the run right after
 the wheel stopped carrying it.
+
+## Every call that can fail has a form a try can take (2026-09-11)
+
+The manifest marked six rows `try`: the reads whose failure an app
+plainly wants to catch. Every other row that could fail panicked, and a
+panic is not an exception. Under CPython it arrives as pyo3's
+`PanicException`, which derives from `BaseException`, so `except
+Exception` around `fs.write_text` caught nothing in either run — the
+handler stopped in both and the gate stayed green — while a bare
+`except:` caught it under CPython and not in the binary: a red gate on
+a file `check` had passed without a word. Rakugan had met the same rows
+and refused them inside a `try` by name, which was honest, and left the
+Perl `try` four calls it could catch.
+
+Every row that can fail now has a `_result` twin, the manifest says so,
+and the plain form is the twin with the panic on the outside: one
+message string serves the panic, the RuntimeError the interpreted run
+raises and the `err(e)` the compiled `case` receives, so `f"{e}"` reads
+the same twice. Twenty-three rows moved — the writes and directory
+calls of `fs`, `sqlite.exec` and the text and row queries, the reads by
+JSON path, the clock formats, and the two `http` spellings without a
+twin — and the interpreted wrapper of the two-argument `http.post_text`,
+which was marked but still panicked, raises with the rest. The local a
+`try` pre-binds takes its type from the manifest rather than from a
+table of three. The C face did not change: its checked call already
+handed a failure back to any door, and the twins are what the binding
+door reads.
+
+The other two languages follow from the same file. Rakugan's refusal
+inside a `try` has nothing left to refuse, and a `my` declared inside a
+`try` from a call that can fail is declared before the `case` the try
+opens, with its type's own start, because a name declared inside an arm
+is gone by the next statement. Gomamochi's door read the plain face
+call, so a failing row ended the process from inside a C function, with
+a Rust abort and a register dump; it now reads the checked call and
+raises the failure as a Go panic carrying the library's message. The
+handler's guard says it on one line and stops the app, as before, and a
+`recover` in the app receives it, which nothing could before.

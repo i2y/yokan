@@ -5,32 +5,44 @@ class Fs {
   static fn readText(path: String) String @rust("yokan_stdlib::fs_read_text")
   static fn tryReadText(path: String) !String @rust("yokan_stdlib::fs_read_text_result")
   static fn writeText(path: String, text: String) Int @rust("yokan_stdlib::fs_write_text")
+  static fn tryWriteText(path: String, text: String) !Int @rust("yokan_stdlib::fs_write_text_result")
   static fn exists(path: String) Bool @rust("yokan_stdlib::fs_exists")
   static fn readTextOr(path: String, default: String) String @rust("yokan_stdlib::fs_read_text_or")
   static fn listDir(path: String) List<String> @rust("yokan_stdlib::fs_list_dir")
+  static fn tryListDir(path: String) !List<String> @rust("yokan_stdlib::fs_list_dir_result")
   static fn appendText(path: String, text: String) Int @rust("yokan_stdlib::fs_append_text")
+  static fn tryAppendText(path: String, text: String) !Int @rust("yokan_stdlib::fs_append_text_result")
   static fn remove(path: String) Int @rust("yokan_stdlib::fs_remove")
+  static fn tryRemove(path: String) !Int @rust("yokan_stdlib::fs_remove_result")
   static fn makeDir(path: String) Int @rust("yokan_stdlib::fs_make_dir")
+  static fn tryMakeDir(path: String) !Int @rust("yokan_stdlib::fs_make_dir_result")
   static fn appDir(name: String) String @rust("yokan_stdlib::fs_app_dir")
+  static fn tryAppDir(name: String) !String @rust("yokan_stdlib::fs_app_dir_result")
   static fn openDialog(title: String) String @rust("yokan_stdlib::fs_open_dialog")
   static fn saveDialog(name: String) String @rust("yokan_stdlib::fs_save_dialog")
 }
 
 class Sqlite {
   static fn exec(path: String, sql: String) Int @rust("yokan_stdlib::sqlite_exec")
+  static fn tryExec(path: String, sql: String) !Int @rust("yokan_stdlib::sqlite_exec_result")
   static fn queryText(path: String, sql: String) List<String> @rust("yokan_stdlib::sqlite_query_text")
+  static fn tryQueryText(path: String, sql: String) !List<String> @rust("yokan_stdlib::sqlite_query_text_result")
   static fn queryInt(path: String, sql: String) Int @rust("yokan_stdlib::sqlite_query_int")
   static fn tryQueryInt(path: String, sql: String) !Int @rust("yokan_stdlib::sqlite_query_int_result")
   static fn queryIntOr(path: String, sql: String, default: Int) Int @rust("yokan_stdlib::sqlite_query_int_or")
   static fn queryTextOr(path: String, sql: String) List<String> @rust("yokan_stdlib::sqlite_query_text_or")
   static fn execWith(path: String, sql: String, params: List<String>) Int @rust("yokan_stdlib::sqlite_exec_with")
+  static fn tryExecWith(path: String, sql: String, params: List<String>) !Int @rust("yokan_stdlib::sqlite_exec_with_result")
   static fn queryTextWith(path: String, sql: String, params: List<String>) List<String> @rust("yokan_stdlib::sqlite_query_text_with")
+  static fn tryQueryTextWith(path: String, sql: String, params: List<String>) !List<String> @rust("yokan_stdlib::sqlite_query_text_with_result")
   static fn queryIntWith(path: String, sql: String, params: List<String>) Int @rust("yokan_stdlib::sqlite_query_int_with")
   static fn tryQueryIntWith(path: String, sql: String, params: List<String>) !Int @rust("yokan_stdlib::sqlite_query_int_with_result")
   static fn queryIntOrWith(path: String, sql: String, default: Int, params: List<String>) Int @rust("yokan_stdlib::sqlite_query_int_or_with")
   static fn queryTextOrWith(path: String, sql: String, params: List<String>) List<String> @rust("yokan_stdlib::sqlite_query_text_or_with")
   static fn queryRows(path: String, sql: String) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_all")
+  static fn tryQueryRows(path: String, sql: String) !List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_all_result")
   static fn queryRowsWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows")
+  static fn tryQueryRowsWith(path: String, sql: String, params: List<String>) !List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_result")
   static fn queryRowsOr(path: String, sql: String) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or_all")
   static fn queryRowsOrWith(path: String, sql: String, params: List<String>) List<List<String>> @rust("yokan_stdlib::sqlite_query_rows_or")
 }
@@ -63,9 +75,11 @@ class Http {
   static fn getTextTimeout(url: String, timeoutMs: Int) String @rust("yokan_stdlib::http_get_text_timeout")
   static fn tryGetTextTimeout(url: String, timeoutMs: Int) !String @rust("yokan_stdlib::http_get_text_timeout_result")
   static fn getTextWith(url: String, headers: Map<String, String>) String @rust("stdmap:yokan_stdlib::http_get_text_with")
+  static fn tryGetTextWith(url: String, headers: Map<String, String>) !String @rust("stdmap:yokan_stdlib::http_get_text_with_result")
   static fn postText(url: String, body: String) String @rust("yokan_stdlib::http_post_text")
   static fn tryPostText(url: String, body: String) !String @rust("yokan_stdlib::http_post_text_result")
   static fn postTextAs(url: String, body: String, contentType: String) String @rust("yokan_stdlib::http_post_text_as")
+  static fn tryPostTextAs(url: String, body: String, contentType: String) !String @rust("yokan_stdlib::http_post_text_as_result")
   static fn postTextOr(url: String, body: String, default: String) String @rust("yokan_stdlib::http_post_text_or")
   static fn status(url: String) Int @rust("yokan_stdlib::http_status")
 }
@@ -134,11 +148,17 @@ class Math {
 
 class Jsondoc {
   static fn getText(src: String, path: String) String @rust("yokan_stdlib::json_get_text")
+  static fn tryGetText(src: String, path: String) !String @rust("yokan_stdlib::json_get_text_result")
   static fn getInt(src: String, path: String) Int @rust("yokan_stdlib::json_get_int")
+  static fn tryGetInt(src: String, path: String) !Int @rust("yokan_stdlib::json_get_int_result")
   static fn getFloat(src: String, path: String) Float @rust("yokan_stdlib::json_get_float")
+  static fn tryGetFloat(src: String, path: String) !Float @rust("yokan_stdlib::json_get_float_result")
   static fn getBool(src: String, path: String) Bool @rust("yokan_stdlib::json_get_bool")
+  static fn tryGetBool(src: String, path: String) !Bool @rust("yokan_stdlib::json_get_bool_result")
   static fn length(src: String, path: String) Int @rust("yokan_stdlib::json_length")
+  static fn tryLength(src: String, path: String) !Int @rust("yokan_stdlib::json_length_result")
   static fn has(src: String, path: String) Bool @rust("yokan_stdlib::json_has")
+  static fn tryHas(src: String, path: String) !Bool @rust("yokan_stdlib::json_has_result")
 }
 
 class Json {
@@ -203,8 +223,11 @@ class Time {
 
 class Clock {
   static fn formatMs(ms: Int, fmt: String) String @rust("yokan_stdlib::clock_format_ms")
+  static fn tryFormatMs(ms: Int, fmt: String) !String @rust("yokan_stdlib::clock_format_ms_result")
   static fn formatLocalMs(ms: Int, fmt: String) String @rust("yokan_stdlib::clock_format_local_ms")
+  static fn tryFormatLocalMs(ms: Int, fmt: String) !String @rust("yokan_stdlib::clock_format_local_ms_result")
   static fn localOffsetMinutes(ms: Int) Int @rust("yokan_stdlib::clock_local_offset_minutes")
+  static fn tryLocalOffsetMinutes(ms: Int) !Int @rust("yokan_stdlib::clock_local_offset_minutes_result")
 }
 
 class PyString {
