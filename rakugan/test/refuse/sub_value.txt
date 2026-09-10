@@ -1,0 +1,3 @@
+test/refuse/sub_value.pl:9:17: Rakugan cannot take this — a sub written here has no shape in the compiled run; write a method of the app and call it
+            my $f = sub { 1 };
+                    ^

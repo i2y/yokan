@@ -1,0 +1,3 @@
+test/refuse/module_call.pl:11:14: Rakugan cannot take this — `My::Counter::next` comes from a module of your own, and a module does not reach the compiled run yet: an app is one file, and the modules the translator knows are List::Util's and POSIX's
+            $n = My::Counter::next();
+                 ^

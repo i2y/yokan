@@ -1,0 +1,3 @@
+test/refuse/list_match.pl:9:9: Rakugan cannot take this — a match that names what it caught is written as the match, then the names: `if ($s =~ /(\d+)-(\d+)/) { my $a = $1; my $b = $2; ... }`
+            if (my ($p, $q) = "3-4" =~ /(\d+)-(\d+)/) { $n = 1 }
+            ^

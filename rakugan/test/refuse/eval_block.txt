@@ -1,0 +1,3 @@
+test/refuse/eval_block.pl:9:9: Rakugan cannot take this — `eval { ... }` catches a failure; write it as perl 5.40 does: `try { ... } catch ($e) { ... }`
+            eval { $n = 1 };
+            ^

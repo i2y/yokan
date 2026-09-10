@@ -1,0 +1,3 @@
+test/refuse/match_in_loop.pl:10:9: Rakugan cannot take this — a match in a condition is asked once; to walk every match, take them all first: `my @found = ($s =~ /(\d)/g);` and loop over `@found`
+            while ($t =~ /(\d)/g) { $n += 1 }
+            ^

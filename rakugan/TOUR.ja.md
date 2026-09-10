@@ -738,7 +738,8 @@ run($app, title => "keys");
 ## Perl 自身の標準ライブラリ
 
 名前が Perl のものであるかぎり、仕様を決めるのは perl です。
-`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`rand`、`srand`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`shuffle`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+`length`、`substr`（四引数の形も）、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`chomp`、`chop`、`ord`、`chr`、`hex`、`oct`、`trim`、`tr///`、`abs`、`int`、`sqrt`、`sin`、`cos`、`atan2`、`exp`、`log`、`**`、`x`、`time`、`sort`（`sort { lc($a) cmp lc($b) }` のように両側に鍵を書く形も）、`grep`、`map`、`splice`、値としての `shift` と `pop`、スライス（`@xs[1 .. 3]`）、`scalar`、`exists`、`defined`、`keys`、`values`、`rand`、`srand`、`List::Util` の `sum`、`sum0`、`max`、`min`、`maxstr`、`minstr`、`first`、`any`、`all`、`none`、`reduce`、`uniq`、`shuffle`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+ヒアドキュメント（`<<~EOT`）、文字列の中の `\U…\E` と `\u`、`until`、`do { … } while`、リストから作るリスト（`(@a, @b)`、`push @xs, @ys`）も同じです。
 
 乱数も perl 自身のものです。
 5.20 以降の perl はどのプラットフォームでも同じ生成器を持つので、`srand(42)` のあとは二つの実行が同じ `rand` を引き、同じ `shuffle` を配り、ゲートはそれもほかと同じように比べます。
@@ -1051,6 +1052,11 @@ key, so say what to answer when it does not: `$prices{$k} // 0`
   標準エラーに出す `warn` は受け取ります。
 - 文字列の `eval`、`goto`、`local`、`wantarray`、`each`、`tie`、`bless`、`ref`、`AUTOLOAD`。
 - `finally`、ループや失敗しうるメソッドを囲む `try`、そして `try` の中にある、catch が受け取れる形のないライブラリ呼び出し。
+- 書き下していない数を指数にした整数の冪（`2 ** $n`）。
+  perl は負の指数に小数を答え、コンパイルした実行はどちらになるかを知っていなければなりません。
+  `2.0 ** $n` と書けば小数です。
+- ラベルつきのループ、`state`、値としての `sub`、自分のモジュール、`eval { … }`（`try` と `catch` を書きます）、`while` で一致を一つずつ歩く形（先に全部取ります：`my @found = ($s =~ /(\d)/g)`）、捕まえたものを自分の `my` で名づける一致。
+  どれも代わりの書き方を添えて断り、翻訳器が知らない Perl の関数は Perl 自身のものだと言い、代わりがあればそれも言います。
 - 同じブロックで `die` の後ろに続く行（perl はそこに届きません）と、同じハンドラで `task` の後ろに続く行（perl はすぐに届き、コンパイルした実行は処理が終わってから届きます）。
 - サブルーチンでないハンドラと、呼ばれ方に引数の数が合わないハンドラ。
 - 要素の知らないキーワードと、型の合わないキーワード。
@@ -1084,6 +1090,15 @@ perl 5.40 もツールチェインも入っていないマシンで、そのま�
 - 末尾を越えたリストの読み。
   perl は `undef` を答えて先へ進み、コンパイルした実行はハンドラを止めます。
   `$xs[$i] // $d` と書けば代わりに答えるものを言えますが、`check` はまだそれを求めません。
+  末尾を越えたスライスは、perl が `undef` で埋めるところで端に揃えます。
+- 空のリストの `sum`、`max`、`min`、`maxstr`、`minstr` は、perl が `undef` を答えるところで `0` や `""` を答えます。
+  `sum0` はどちらでも同じです。
+- 64 bit を超える `**`、`hex`、`oct` は、perl が小数のある数に育てるところでハンドラを止めます。
+  和の縁と同じ縁です。
+  また、整数どうしの `**` を perl は、底が 2 の冪であるか答えが 64 bit を超えるときには小数のある数として計算し、1e15 以上では表示が変わります（`2 ** 50` は perl では `1.12589990684262e+15`）。
+  ここでは整数のままです。
+- `fc`、`/c` つきの `tr///`、`sprintf` の `%*d`、そして `for my ($i, $x) (indexed @xs)`。
+  最後のものは翻訳器が読むのに使うパーサがまだ知りません（`for my $i (0 .. $#xs)` が同じことを読みます）。
 - リファレンスは、次のものだけです。
   要素に渡すリストとハッシュ、それに自分で書いたクラスです。
   ハンドラ以外のコードリファレンス、リファレンスへのリファレンス、`ref` はありません。

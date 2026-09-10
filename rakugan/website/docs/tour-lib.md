@@ -5,13 +5,20 @@ Perl's own library, the framework's, what to do when a call fails, and work that
 
 ## Perl's own standard library
 
-Where the name is Perl's, perl is the specification. `length`, `substr`,
-`index`, `rindex`, `uc`, `lc`, `ucfirst`, `lcfirst`, `reverse`, `join`,
-`split`, `sprintf`, `abs`, `int`, `sqrt`, `sort`, `grep`, `map`,
+Where the name is Perl's, perl is the specification. `length`, `substr`
+(the four-argument form too), `index`, `rindex`, `uc`, `lc`, `ucfirst`,
+`lcfirst`, `reverse`, `join`, `split`, `sprintf`, `chomp`, `chop`,
+`ord`, `chr`, `hex`, `oct`, `trim`, `tr///`, `abs`, `int`, `sqrt`,
+`sin`, `cos`, `atan2`, `exp`, `log`, `**`, `x`, `time`, `sort`
+(with a key on each side too: `sort { lc($a) cmp lc($b) }`), `grep`,
+`map`, `splice`, `shift` and `pop` as values, a slice (`@xs[1 .. 3]`),
 `scalar`, `exists`, `defined`, `keys`, `values`, `rand`, `srand`,
-`List::Util`'s `sum`, `max`, `min`, `first`, `uniq` and `shuffle`, and
+`List::Util`'s `sum`, `sum0`, `max`, `min`, `maxstr`, `minstr`,
+`first`, `any`, `all`, `none`, `reduce`, `uniq` and `shuffle`, and
 `POSIX`'s `floor`, `ceil`, `fmod` and `strftime` are the language's
-own, not Rakugan's.
+own, not Rakugan's. So are a heredoc (`<<~EOT`), `\U…\E` and `\u` in
+a string, `until`, `do { … } while`, and a list built from lists
+(`(@a, @b)`, `push @xs, @ys`).
 
 Random numbers are perl's own too. Since 5.20 perl carries one
 generator on every platform, so after `srand(42)` both runs draw the

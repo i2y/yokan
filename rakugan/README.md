@@ -183,10 +183,14 @@ What an app can write:
   redefined under the object it already has.
 
 - **Perl's own functions.** `length` `substr` `index` `uc` `lc`
-  `ucfirst` `reverse` `join` `split` `abs` `sqrt` `sprintf` `rand`
-  `srand`, POSIX's `floor` `ceil` `fmod` `strftime`, List::Util's `sum`
-  `max` `min` `uniq` `first` `shuffle`, and regular expressions — `=~`,
-  `s///`, `split /…/`, `$1` and `$+{name}`. Where the name is Perl's,
+  `ucfirst` `reverse` `join` `split` `sprintf` `chomp` `ord` `chr`
+  `hex` `oct` `trim` `tr///` `abs` `int` `sqrt` `sin` `cos` `atan2`
+  `exp` `log` `**` `x` `time` `rand` `srand` `splice` `shift` `pop`,
+  a slice, a heredoc, `\U…\E`, `until`, `do { } while`, `sort` by a
+  key, POSIX's `floor` `ceil` `fmod` `strftime`, List::Util's `sum`
+  `sum0` `max` `min` `maxstr` `minstr` `uniq` `first` `any` `all` `none`
+  `reduce` `shuffle`, and regular expressions — `=~`, `s///`,
+  `split /…/`, `$1` and `$+{name}`. Where the name is Perl's,
   perl's output is the specification: every one of them is held to a
   table of rows that perl itself printed, and the sweep fails when a
   table is not what perl says now. The random numbers are perl's own
@@ -207,7 +211,7 @@ What an app can write:
   or `<stem>.icns` beside the app as its icon. The bundle opens on a
   machine with neither perl 5.40 nor the toolchain.
 
-What it refuses, it refuses by name. Thirty-one of those refusals have
+What it refuses, it refuses by name. Fifty-two of those refusals have
 a file in `test/refuse/` that triggers them and the message they must
 print word for word, and the sweep checks them before it gates
 anything: an unsorted walk of a hash, `say` and `print`, a string

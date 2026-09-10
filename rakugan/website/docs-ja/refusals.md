@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も出力しません。
 
-下の 43 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
+下の 52 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
 `tools/gate_all.sh` がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -382,5 +382,82 @@ test/refuse/rand_unseeded.pl:7:26: Rakugan cannot take this — `rand` in an app
 ```console
 test/refuse/srand_bare.pl:8:9: Rakugan cannot take this — `srand` with nothing picks a seed of its own, a different one in each run; write the seed: `srand(42)`
             srand();
+            ^
+```
+
+perl は負の指数に小数を、そうでなければ整数を答えますが、型はどちらか一方です。
+
+```console
+test/refuse/pow_variable.pl:9:16: Rakugan cannot take this — a whole number to a power that is not written out may come out a fraction, and the compiled run has to know; write `2.0 ** $n` for a fraction, or `int(2.0 ** $n)`
+            $n = 2 ** $n;
+                   ^
+```
+
+翻訳器にまだ双子のない Perl の関数は、Perl 自身のものだと言います。
+代わりがあれば、それも言います。
+
+```console
+test/refuse/sleep_builtin.pl:9:9: Rakugan cannot take this — `sleep` is Perl's own, and not in the translator yet; a handler that waits freezes the window; `task(sub { ... }, on_done => ...)` does the waiting elsewhere
+            sleep(1);
+            ^
+```
+
+配るアプリは一つのファイルで、自分のモジュールはそれと一緒に翻訳されなければなりません。
+
+```console
+test/refuse/module_call.pl:11:14: Rakugan cannot take this — `My::Counter::next` comes from a module of your own, and a module does not reach the compiled run yet: an app is one file, and the modules the translator knows are List::Util's and POSIX's
+            $n = My::Counter::next();
+                 ^
+```
+
+`eval { … }` は `try` と `catch` の古い綴りで、方言は新しいほうを受け取ります。
+
+```console
+test/refuse/eval_block.pl:9:9: Rakugan cannot take this — `eval { ... }` catches a failure; write it as perl 5.40 does: `try { ... } catch ($e) { ... }`
+            eval { $n = 1 };
+            ^
+```
+
+変数に持ったサブルーチンはクロージャで、コンパイルした実行にその形はありません。
+アプリのメソッドを呼びます。
+
+```console
+test/refuse/sub_value.pl:9:17: Rakugan cannot take this — a sub written here has no shape in the compiled run; write a method of the app and call it
+            my $f = sub { 1 };
+                    ^
+```
+
+ラベルつきのループへの飛び越しは、コンパイルした実行に形がありません。
+内側のループが立てるフラグで同じことができます。
+
+```console
+test/refuse/label_loop.pl:9:9: Rakugan cannot take this — a loop with a label, and `next LABEL` / `last LABEL`, are not carried yet; a flag the inner loop sets and the outer loop reads does the same
+            OUTER: for my $i (1 .. 3) {
+            ^
+```
+
+`state` 変数はメソッドが自分のために持つフィールドで、アプリにはそのためのフィールドがあります。
+
+```console
+test/refuse/state_var.pl:9:9: Rakugan cannot take this — `state` is Perl's own, and not in the translator yet; a field of the app holds what a `state` variable would
+            state $calls = 0;
+            ^
+```
+
+一歩ずつ歩く一致は、どこまで来たかを perl 自身が覚えています。
+先に全部取っても同じ並びです。
+
+```console
+test/refuse/match_in_loop.pl:10:9: Rakugan cannot take this — a match in a condition is asked once; to walk every match, take them all first: `my @found = ($s =~ /(\d)/g);` and loop over `@found`
+            while ($t =~ /(\d)/g) { $n += 1 }
+            ^
+```
+
+名前は、一致したと分かってから `` と `` から取ります。
+それは `if` の中です。
+
+```console
+test/refuse/list_match.pl:9:9: Rakugan cannot take this — a match that names what it caught is written as the match, then the names: `if ($s =~ /(\d+)-(\d+)/) { my $a = $1; my $b = $2; ... }`
+            if (my ($p, $q) = "3-4" =~ /(\d+)-(\d+)/) { $n = 1 }
             ^
 ```

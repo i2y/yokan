@@ -27,8 +27,9 @@
 use v5.36;
 use utf8;
 use open qw(:std :encoding(UTF-8));
-use List::Util qw(sum max min uniq shuffle);
+use List::Util qw(sum max min uniq shuffle maxstr minstr);
 use POSIX qw(floor ceil fmod strftime);
+use builtin qw(trim);
 use Encode qw(encode);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
@@ -78,12 +79,17 @@ sub strings {
         row('lcfirst', [tag_str($s)], tag_str(lcfirst $s));
         row('reverse_str', [tag_str($s)], tag_str(scalar reverse $s));
     }
-    for my $c (['hello', 0], ['hello', 1], ['hello', 5], ['hello', -2], ['日本語', 1]) {
-        row('substr_from', [tag_str($c->[0]), tag_int($c->[1])], tag_str(substr $c->[0], $c->[1]));
+    # An offset that counts past the start clamps to it; one past the end
+    # answers undef, which the twin writes as "" (perl warns there).
+    for my $c (['hello', 0], ['hello', 1], ['hello', 5], ['hello', -2], ['日本語', 1], ['hello', -10], ['hello', 6]) {
+        no warnings 'substr';
+        row('substr_from', [tag_str($c->[0]), tag_int($c->[1])], tag_str(substr($c->[0], $c->[1]) // ''));
     }
-    for my $c (['hello', 1, 3], ['hello', 1, -1], ['hello', 0, 0], ['hello', -3, 2], ['日本語', 0, 2]) {
+    for my $c (['hello', 1, 3], ['hello', 1, -1], ['hello', 0, 0], ['hello', -3, 2], ['日本語', 0, 2],
+               ['hello', -10, 7], ['hello', -10, -1], ['hello', -10, 2], ['hello', 2, -10], ['hello', 6, 1]) {
+        no warnings 'substr';
         row('substr_len', [tag_str($c->[0]), tag_int($c->[1]), tag_int($c->[2])],
-            tag_str(substr $c->[0], $c->[1], $c->[2]));
+            tag_str(substr($c->[0], $c->[1], $c->[2]) // ''));
     }
     for my $c (['hello', 'l'], ['hello', 'z'], ['hello', ''], ['日本語', '本'], ['banana', 'na']) {
         row('index_of', [tag_str($c->[0]), tag_str($c->[1])], tag_int(index $c->[0], $c->[1]));
@@ -108,7 +114,87 @@ sub strings {
     for my $s ('  the quick  brown fox  ', '', 'one', "a\tb\nc") {
         row('split_words', [tag_str($s)], tag_list(map { tag_str($_) } split ' ', $s));
     }
+    {
+        # A negative repeat count warns and does nothing, and chr of a
+        # negative number warns and answers U+FFFD; both are what the
+        # twin is asked for.
+        no warnings;
+        for my $c (['ab', 3], ['ab', 0], ['ab', -1], ['日本', 2], ['', 3], ['ß', 1]) {
+            row('repeat_str', [tag_str($c->[0]), tag_int($c->[1])], tag_str($c->[0] x $c->[1]));
+        }
+        for my $n (65, 0, 223, 255, 26085, 0x1F600, -1) {
+            row('chr_of', [tag_int($n)], tag_str(chr $n));
+        }
+    }
+    for my $s ('', 'a', '日本', 'ß', "\n", '😀') {
+        row('ord_of', [tag_str($s)], tag_int(ord $s));
+    }
+    for my $s ("a\n", "a\n\n", "a\r\n", '', 'abc', "\n", "日本\n", "a\r") {
+        my $t = $s;
+        chomp $t;
+        row('chomp_str', [tag_str($s)], tag_str($t));
+    }
+    for my $s ('日本', '', "a\n", 'abc', "\r\n", 'ß') {
+        my $t = $s;
+        chop $t;
+        row('chop_str', [tag_str($s)], tag_str($t));
+    }
+    for my $c ([',', [1, 2, 3]], ['-', [-1, 0, 9223372036854775807, -9223372036854775808]], [',', []], [', ', [5]]) {
+        row('join_int', [tag_str($c->[0]), tag_list(map { tag_int($_) } @{ $c->[1] })],
+            tag_str(join $c->[0], @{ $c->[1] }));
+    }
+    for my $c ([', ', [0.1, 1e21, -0.0, 1 / 3]], [' ', [2.0, 1e15, 1e16, 0.1 + 0.2]], ['', [1.5]], [',', []]) {
+        row('join_num', [tag_str($c->[0]), tag_list(map { tag_float($_) } @{ $c->[1] })],
+            tag_str(join $c->[0], @{ $c->[1] }));
+    }
+    # The four-argument substr, as the string after. perl's rules for a
+    # negative offset or length have corners, and these are them; the
+    # cases that die are held in the crate's own tests.
+    for my $c (['hello', 1, 3, 'X'], ['hello', 0, 0, 'X'], ['hello', 5, 0, 'X'], ['hello', 5, 3, 'X'],
+               ['hello', -2, 1, 'X'], ['hello', -2, -1, 'X'], ['hello', 1, -1, 'X'], ['hello', 2, 10, 'X'],
+               ['hello', -10, 7, 'X'], ['hello', -10, -1, 'X'], ['hello', 2, -10, 'X'], ['hello', -3, -4, 'X'],
+               ['hello', 0, 5, ''], ['abc', -5, 5, 'X'], ['abc', -5, 2, 'X'], ['abc', -5, 3, 'X'],
+               ['abc', -4, -1, 'X'], ['abc', -4, -3, 'X'], ['abc', 3, -1, 'X'], ['', 0, 0, 'X'],
+               ['', -1, 1, 'X'], ['', 0, -1, 'X'], ['日本語', 1, 1, 'ß'], ['abc', 0, 0, 'ßß']) {
+        my ($s, $off, $len, $repl) = @$c;
+        my $t = $s;
+        substr($t, $off, $len, $repl);
+        row('substr_replace', [tag_str($s), tag_int($off), tag_int($len), tag_str($repl)], tag_str($t));
+    }
+    for my $s ("\x{3000}x\x{3000}", "\x{85}x\x{85}", "\t x \n", '', '   ', 'x', "\x{a0}\x{2028}x\x{200b}y\x{feff}",
+               "\x{180e}x\x{180e}", "\x0bx\x0c", ' 日本 ', "\x1cx\x1f") {
+        row('trim_str', [tag_str($s)], tag_str(trim $s));
+    }
+    # tr///, as a value. FROM and TO are the text between the delimiters,
+    # as the translator hands them over: ranges and escapes still in.
+    for my $c (['hello', 'a-y', 'b-z', ''], ['hello', 'lo', '0', ''], ['hello', 'lo', '0', 'd'],
+               ['hello', 'l', '', ''], ['hello', 'l', '', 'd'], ['hello', 'a-z', '', 's'],
+               ['aabbccdd', 'a-c', 'x', 's'], ['aabbaa', 'ab', 'xy', 's'], ['aXXbb', 'ab', 'x', 's'],
+               ['a-b', '\\-', '_', ''], ['a-b', 'a-', '_', ''], ["a\nb\tc", '\\n\\t', '  ', ''],
+               ["a\\b", '\\\\', '\\/', ''], ['a/b', '\\/', '-', ''], ['日本語', '日', '月', ''], ['hello', 'lhz', 'xy', ''],
+               ['aabb', 'aa', 'xy', ''], ['hello', 'olleh', '12345', ''], ['aXXaXXa', 'aX', 'b', 'ds'],
+               ['aXXa', 'X', 'a', 'ds'], ['xaXXaXXaz', 'X', '', 'ds'], ['aQa', 'a', 'b', 's'],
+               ['abc', 'abc', 'xyzw', ''], ['日日本', '日', '-', 's'], ['abc', 'a-c', '日-本', ''],
+               ['ab-', 'a\\-b', 'xyz', ''], ['abc', 'a-c', '\\n\\t\\\\', ''], ['HeLLo World', 'A-Z', 'a-z', ''],
+               ['hello', 'a-z', 'A-C', 'd'], ['', 'a-z', 'A-Z', ''], ['hello', 'a-c', '', 'd']) {
+        my ($s, $from, $to, $flags) = @$c;
+        row('tr_str', [tag_str($s), tag_str($from), tag_str($to), tag_str($flags)],
+            tag_str(perl_tr($s, "tr/$from/$to/${flags}r")));
+    }
+    for my $c (['hello', 'lo'], ['hello', 'a-z'], ['aaa', 'a'], ['日本', 'a-z'], ['', 'a'], ["a\nb\n", '\\n'],
+               ['a-b-c', '\\-']) {
+        row('tr_count', [tag_str($c->[0]), tag_str($c->[1])], tag_int(perl_tr($c->[0], "tr/$c->[1]//")));
+    }
     return join('', map { "$_\n" } @rows);
+}
+
+# One tr///, run by perl itself on a copy of the string, the way perl_re
+# below runs a match.
+sub perl_tr {
+    my ($s, $code) = @_;
+    my $out = eval "no warnings; my \$t = \$_[0]; \$t =~ $code";
+    die "perl could not run `$code`: $@" if $@;
+    return $out;
 }
 
 sub numbers {
@@ -158,6 +244,54 @@ sub numbers {
     }
     row('bool_text', [tag_bool(1)], tag_str(!!1 . ''));
     row('bool_text', [tag_bool(0)], tag_str(!!0 . ''));
+    # `**` on two whole numbers. perl computes in floating point whenever
+    # the base is a power of two or the answer might not fit 64 bits, and
+    # keeps the answer as a fraction — `2 ** 50` prints as
+    # 1.12589990684262e+15. The twin answers a whole number, so the rows
+    # are the ones perl prints as digits, and a case that is not is a
+    # mistake in this list rather than a row.
+    for my $c ([2, 10], [-2, 3], [0, 0], [7, 0], [-3, 3], [3, 20], [10, 15], [10, 16], [7, 21], [-7, 21],
+               [2, 49], [-1, 7], [1, 200], [0, 5]) {
+        my $r = $c->[0] ** $c->[1];
+        die "pow_int: perl writes $c->[0] ** $c->[1] as $r, which is not digits\n" unless $r =~ /\A-?\d+\z/;
+        row('pow_int', [tag_int($c->[0]), tag_int($c->[1])], tag_int($r));
+    }
+    # `**` with a fraction on either side is C's pow, so an ulp is allowed;
+    # Inf and NaN are what perl answers for 0 ** -1 and (-8) ** (1/3).
+    for my $c ([0.0, -1.0], [-8.0, 1 / 3], [2.0, 0.5], [2.5, 2.0], [-2.0, -1.0], [-2.0, 2.0], [10.0, -2.0],
+               [0.0, 0.0], [1e300, 2.0]) {
+        row('pow_num', [tag_float($c->[0]), tag_float($c->[1])], tag_float($c->[0] ** $c->[1]), 1);
+    }
+    {
+        # hex and oct warn at the first character that is not a digit and
+        # answer what they have, and that answer is what the twin is for.
+        # hex skips no leading space; oct does. An underscore is skipped
+        # when a digit follows it.
+        no warnings;
+        for my $s ('ff', '0xff', '0Xff', 'xff', 'FF', '', '1_000', '1__0', '1_', '_1', 'ffg', '0b101', ' ff',
+                   '-ff', '0x', '7fffffffffffffff', 'ffÿ', '0') {
+            row('hex_of', [tag_str($s)], tag_int(hex $s));
+        }
+        for my $s ('755', '0755', '00755', '0x1f', '0X1F', 'x1f', '0b101', 'b101', '0o17', 'o17', '', '789',
+                   ' 755', "\t0x1f", '-7', '7_7', '0_7', '0b', '1_000_000', '777777777777777777777', '12 3',
+                   '0 12', '0o0o7', '8') {
+            row('oct_of', [tag_str($s)], tag_int(oct $s));
+        }
+    }
+    # The libm functions: the platform decides the last bit, so an ulp.
+    for my $v (0.0, 1.0, -2.5, 1e10, 3.141592653589793) {
+        row('sin_of', [tag_float($v)], tag_float(sin $v), 1);
+        row('cos_of', [tag_float($v)], tag_float(cos $v), 1);
+    }
+    for my $v (0.0, 1.0, -1.0, 710.0, -1000.0, 0.5) {
+        row('exp_of', [tag_float($v)], tag_float(exp $v), 1);
+    }
+    for my $c ([0.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [0.0, -1.0], [-0.0, -1.0], [1.0, 1.0], [0.0, -0.0]) {
+        row('atan2_of', [tag_float($c->[0]), tag_float($c->[1])], tag_float(atan2($c->[0], $c->[1])), 1);
+    }
+    for my $v (1.0, 10.0, 0.5, 2.718281828459045, 1e-320, 1e300) {
+        row('log_of', [tag_float($v)], tag_float(log $v), 1);
+    }
     return join('', map { "$_\n" } @rows);
 }
 
@@ -176,6 +310,54 @@ sub list_util {
     }
     for my $xs ([qw(a b a c)], [qw(x)], [qw(ivy momo ivy ada)]) {
         row('uniq_str', [tag_list(map { tag_str($_) } @$xs)], tag_list(map { tag_str($_) } uniq @$xs));
+    }
+    for my $xs ([qw(apple pear fig)], ['日本', 'z', 'ß'], ['10', '9'], ['B', 'a'], ['x'], ['', 'a'], ['b', 'a', 'b']) {
+        row('max_str', [tag_list(map { tag_str($_) } @$xs)], tag_str(maxstr @$xs));
+        row('min_str', [tag_list(map { tag_str($_) } @$xs)], tag_str(minstr @$xs));
+    }
+    {
+        # A negative repeat count warns and does nothing, and a splice
+        # offset past the end warns and appends; both are what the twin
+        # is asked for. The splices that die are held in the crate's own
+        # tests.
+        no warnings;
+        for my $c ([[1, 2], 2], [[1, 2], 0], [[1, 2], -1], [[], 3], [[7], 3]) {
+            row('repeat_int', [tag_list(map { tag_int($_) } @{ $c->[0] }), tag_int($c->[1])],
+                tag_list(map { tag_int($_) } (@{ $c->[0] }) x $c->[1]));
+        }
+        for my $c ([[0.5, 1.5], 2], [[0.1], 0], [[0.1], 3]) {
+            row('repeat_num', [tag_list(map { tag_float($_) } @{ $c->[0] }), tag_int($c->[1])],
+                tag_list(map { tag_float($_) } (@{ $c->[0] }) x $c->[1]));
+        }
+        for my $c ([['a', 'b'], 2], [['日本'], 3], [['a'], 0], [[], 2]) {
+            row('repeat_strs', [tag_list(map { tag_str($_) } @{ $c->[0] }), tag_int($c->[1])],
+                tag_list(map { tag_str($_) } (@{ $c->[0] }) x $c->[1]));
+        }
+        for my $c ([[1, 2, 3, 4, 5], 1, 2, []], [[1, 2, 3, 4, 5], -2, 1, [9]], [[1, 2, 3, 4, 5], 1, -1, [7, 8]],
+                   [[1, 2, 3, 4, 5], 10, 0, [6]], [[1, 2, 3], 0, 0, [0]], [[1, 2, 3], 3, 0, [4]],
+                   [[1, 2, 3], 1, 10, []], [[1, 2, 3], -1, -1, [9]], [[1, 2, 3], 2, -5, [9]], [[], 0, 0, [1]],
+                   [[], 0, 1, []], [[1, 2, 3], -3, 3, []], [[1, 2, 3], 1, 0, [8, 9]], [[1, 2, 3], -1, 5, [9]],
+                   [[], 2, 0, [1]], [[1, 2, 3], 0, -3, [9]], [[1, 2, 3], 5, -1, [9]]) {
+            my ($xs, $off, $len, $repl) = @$c;
+            my @t = @$xs;
+            splice @t, $off, $len, @$repl;
+            row('splice_int', [tag_list(map { tag_int($_) } @$xs), tag_int($off), tag_int($len),
+                               tag_list(map { tag_int($_) } @$repl)], tag_list(map { tag_int($_) } @t));
+        }
+        for my $c ([[0.5, 1.5, 2.5], 1, 1, [9.5]], [[0.5, 1.5], -1, 1, []], [[0.5], 5, 0, [1.5, 2.5]]) {
+            my ($xs, $off, $len, $repl) = @$c;
+            my @t = @$xs;
+            splice @t, $off, $len, @$repl;
+            row('splice_num', [tag_list(map { tag_float($_) } @$xs), tag_int($off), tag_int($len),
+                               tag_list(map { tag_float($_) } @$repl)], tag_list(map { tag_float($_) } @t));
+        }
+        for my $c ([[qw(a b c)], 1, 1, ['日本']], [[qw(a b c)], -1, 0, ['x', 'y']], [['ß'], 0, 1, []]) {
+            my ($xs, $off, $len, $repl) = @$c;
+            my @t = @$xs;
+            splice @t, $off, $len, @$repl;
+            row('splice_strs', [tag_list(map { tag_str($_) } @$xs), tag_int($off), tag_int($len),
+                                tag_list(map { tag_str($_) } @$repl)], tag_list(map { tag_str($_) } @t));
+        }
     }
     return join('', map { "$_\n" } @rows);
 }

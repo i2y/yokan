@@ -1,0 +1,3 @@
+test/refuse/label_loop.pl:9:9: Rakugan cannot take this — a loop with a label, and `next LABEL` / `last LABEL`, are not carried yet; a flag the inner loop sets and the outer loop reads does the same
+            OUTER: for my $i (1 .. 3) {
+            ^

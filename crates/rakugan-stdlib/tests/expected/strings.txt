@@ -52,11 +52,18 @@ substr_from s:hello i:1 -> s:ello
 substr_from s:hello i:5 -> s:
 substr_from s:hello i:-2 -> s:lo
 substr_from s:%e6%97%a5%e6%9c%ac%e8%aa%9e i:1 -> s:%e6%9c%ac%e8%aa%9e
+substr_from s:hello i:-10 -> s:hello
+substr_from s:hello i:6 -> s:
 substr_len s:hello i:1 i:3 -> s:ell
 substr_len s:hello i:1 i:-1 -> s:ell
 substr_len s:hello i:0 i:0 -> s:
 substr_len s:hello i:-3 i:2 -> s:ll
 substr_len s:%e6%97%a5%e6%9c%ac%e8%aa%9e i:0 i:2 -> s:%e6%97%a5%e6%9c%ac
+substr_len s:hello i:-10 i:7 -> s:he
+substr_len s:hello i:-10 i:-1 -> s:hell
+substr_len s:hello i:-10 i:2 -> s:
+substr_len s:hello i:2 i:-10 -> s:
+substr_len s:hello i:6 i:1 -> s:
 index_of s:hello s:l -> i:2
 rindex_of s:hello s:l -> i:3
 index_of s:hello s:z -> i:-1
@@ -89,3 +96,117 @@ split_words s:%20%20the%20quick%20%20brown%20fox%20%20 -> [s:the,s:quick,s:brown
 split_words s: -> []
 split_words s:one -> [s:one]
 split_words s:a%09b%0ac -> [s:a,s:b,s:c]
+repeat_str s:ab i:3 -> s:ababab
+repeat_str s:ab i:0 -> s:
+repeat_str s:ab i:-1 -> s:
+repeat_str s:%e6%97%a5%e6%9c%ac i:2 -> s:%e6%97%a5%e6%9c%ac%e6%97%a5%e6%9c%ac
+repeat_str s: i:3 -> s:
+repeat_str s:%c3%9f i:1 -> s:%c3%9f
+chr_of i:65 -> s:A
+chr_of i:0 -> s:%00
+chr_of i:223 -> s:%c3%9f
+chr_of i:255 -> s:%c3%bf
+chr_of i:26085 -> s:%e6%97%a5
+chr_of i:128512 -> s:%f0%9f%98%80
+chr_of i:-1 -> s:%ef%bf%bd
+ord_of s: -> i:0
+ord_of s:a -> i:97
+ord_of s:%e6%97%a5%e6%9c%ac -> i:26085
+ord_of s:%c3%9f -> i:223
+ord_of s:%0a -> i:10
+ord_of s:%f0%9f%98%80 -> i:128512
+chomp_str s:a%0a -> s:a
+chomp_str s:a%0a%0a -> s:a%0a
+chomp_str s:a%0d%0a -> s:a%0d
+chomp_str s: -> s:
+chomp_str s:abc -> s:abc
+chomp_str s:%0a -> s:
+chomp_str s:%e6%97%a5%e6%9c%ac%0a -> s:%e6%97%a5%e6%9c%ac
+chomp_str s:a%0d -> s:a%0d
+chop_str s:%e6%97%a5%e6%9c%ac -> s:%e6%97%a5
+chop_str s: -> s:
+chop_str s:a%0a -> s:a
+chop_str s:abc -> s:ab
+chop_str s:%0d%0a -> s:%0d
+chop_str s:%c3%9f -> s:
+join_int s:%2c [i:1,i:2,i:3] -> s:1%2c2%2c3
+join_int s:- [i:-1,i:0,i:9223372036854775807,i:-9223372036854775808] -> s:-1-0-9223372036854775807--9223372036854775808
+join_int s:%2c [] -> s:
+join_int s:%2c%20 [i:5] -> s:5
+join_num s:%2c%20 [f:3fb999999999999a,f:444b1ae4d6e2ef50,f:8000000000000000,f:3fd5555555555555] -> s:0.1%2c%201e+21%2c%200%2c%200.333333333333333
+join_num s:%20 [f:4000000000000000,f:430c6bf526340000,f:4341c37937e08000,f:3fd3333333333334] -> s:2%201e+15%201e+16%200.3
+join_num s: [f:3ff8000000000000] -> s:1.5
+join_num s:%2c [] -> s:
+substr_replace s:hello i:1 i:3 s:X -> s:hXo
+substr_replace s:hello i:0 i:0 s:X -> s:Xhello
+substr_replace s:hello i:5 i:0 s:X -> s:helloX
+substr_replace s:hello i:5 i:3 s:X -> s:helloX
+substr_replace s:hello i:-2 i:1 s:X -> s:helXo
+substr_replace s:hello i:-2 i:-1 s:X -> s:helXo
+substr_replace s:hello i:1 i:-1 s:X -> s:hXo
+substr_replace s:hello i:2 i:10 s:X -> s:heX
+substr_replace s:hello i:-10 i:7 s:X -> s:Xllo
+substr_replace s:hello i:-10 i:-1 s:X -> s:Xo
+substr_replace s:hello i:2 i:-10 s:X -> s:heXllo
+substr_replace s:hello i:-3 i:-4 s:X -> s:heXllo
+substr_replace s:hello i:0 i:5 s: -> s:
+substr_replace s:abc i:-5 i:5 s:X -> s:X
+substr_replace s:abc i:-5 i:2 s:X -> s:Xabc
+substr_replace s:abc i:-5 i:3 s:X -> s:Xbc
+substr_replace s:abc i:-4 i:-1 s:X -> s:Xc
+substr_replace s:abc i:-4 i:-3 s:X -> s:Xabc
+substr_replace s:abc i:3 i:-1 s:X -> s:abcX
+substr_replace s: i:0 i:0 s:X -> s:X
+substr_replace s: i:-1 i:1 s:X -> s:X
+substr_replace s: i:0 i:-1 s:X -> s:X
+substr_replace s:%e6%97%a5%e6%9c%ac%e8%aa%9e i:1 i:1 s:%c3%9f -> s:%e6%97%a5%c3%9f%e8%aa%9e
+substr_replace s:abc i:0 i:0 s:%c3%9f%c3%9f -> s:%c3%9f%c3%9fabc
+trim_str s:%e3%80%80x%e3%80%80 -> s:x
+trim_str s:%c2%85x%c2%85 -> s:x
+trim_str s:%09%20x%20%0a -> s:x
+trim_str s: -> s:
+trim_str s:%20%20%20 -> s:
+trim_str s:x -> s:x
+trim_str s:%c2%a0%e2%80%a8x%e2%80%8by%ef%bb%bf -> s:x%e2%80%8by%ef%bb%bf
+trim_str s:%e1%a0%8ex%e1%a0%8e -> s:%e1%a0%8ex%e1%a0%8e
+trim_str s:%0bx%0c -> s:x
+trim_str s:%20%e6%97%a5%e6%9c%ac%20 -> s:%e6%97%a5%e6%9c%ac
+trim_str s:%1cx%1f -> s:%1cx%1f
+tr_str s:hello s:a-y s:b-z s: -> s:ifmmp
+tr_str s:hello s:lo s:0 s: -> s:he000
+tr_str s:hello s:lo s:0 s:d -> s:he00
+tr_str s:hello s:l s: s: -> s:hello
+tr_str s:hello s:l s: s:d -> s:heo
+tr_str s:hello s:a-z s: s:s -> s:helo
+tr_str s:aabbccdd s:a-c s:x s:s -> s:xdd
+tr_str s:aabbaa s:ab s:xy s:s -> s:xyx
+tr_str s:aXXbb s:ab s:x s:s -> s:xXXx
+tr_str s:a-b s:%5c- s:_ s: -> s:a_b
+tr_str s:a-b s:a- s:_ s: -> s:__b
+tr_str s:a%0ab%09c s:%5cn%5ct s:%20%20 s: -> s:a%20b%20c
+tr_str s:a%5cb s:%5c%5c s:%5c/ s: -> s:a/b
+tr_str s:a/b s:%5c/ s:- s: -> s:a-b
+tr_str s:%e6%97%a5%e6%9c%ac%e8%aa%9e s:%e6%97%a5 s:%e6%9c%88 s: -> s:%e6%9c%88%e6%9c%ac%e8%aa%9e
+tr_str s:hello s:lhz s:xy s: -> s:yexxo
+tr_str s:aabb s:aa s:xy s: -> s:xxbb
+tr_str s:hello s:olleh s:12345 s: -> s:54221
+tr_str s:aXXaXXa s:aX s:b s:ds -> s:b
+tr_str s:aXXa s:X s:a s:ds -> s:aaa
+tr_str s:xaXXaXXaz s:X s: s:ds -> s:xaaaz
+tr_str s:aQa s:a s:b s:s -> s:bQb
+tr_str s:abc s:abc s:xyzw s: -> s:xyz
+tr_str s:%e6%97%a5%e6%97%a5%e6%9c%ac s:%e6%97%a5 s:- s:s -> s:-%e6%9c%ac
+tr_str s:abc s:a-c s:%e6%97%a5-%e6%9c%ac s: -> s:%e6%97%a5%e6%97%a6%e6%97%a7
+tr_str s:ab- s:a%5c-b s:xyz s: -> s:xzy
+tr_str s:abc s:a-c s:%5cn%5ct%5c%5c s: -> s:%0a%09%5c
+tr_str s:HeLLo%20World s:A-Z s:a-z s: -> s:hello%20world
+tr_str s:hello s:a-z s:A-C s:d -> s:
+tr_str s: s:a-z s:A-Z s: -> s:
+tr_str s:hello s:a-c s: s:d -> s:hello
+tr_count s:hello s:lo -> i:3
+tr_count s:hello s:a-z -> i:5
+tr_count s:aaa s:a -> i:3
+tr_count s:%e6%97%a5%e6%9c%ac s:a-z -> i:0
+tr_count s: s:a -> i:0
+tr_count s:a%0ab%0a s:%5cn -> i:2
+tr_count s:a-b-c s:%5c- -> i:2

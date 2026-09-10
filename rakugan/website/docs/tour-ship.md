@@ -82,6 +82,15 @@ What it refuses, and what to write instead:
   `ref`, `AUTOLOAD`.
 - `finally`, a `try` around a loop or around a method that can fail, and
   a library call inside a `try` with no form the catch could receive.
+- A whole number to a power that is not written out (`2 ** $n`): perl
+  answers a fraction for a negative power, and the compiled run has to
+  know which; `2.0 ** $n` says a fraction.
+- A loop with a label, `state`, a `sub` as a value, a module of your
+  own, `eval { … }` (write `try` / `catch`), a match walked in a `while`
+  (take them all first, `my @found = ($s =~ /(\d)/g)`), and a match that
+  names what it caught in its own `my`. Each is refused with the shape
+  to write instead, and a Perl function the translator does not know
+  is said to be Perl's own, with what to write where there is something.
 - A line after `die` in the same block (perl never reaches it) and a
   line after `task` in the same handler (perl reaches it at once, the
   compiled run when the work is done).
@@ -122,7 +131,19 @@ bundle is the whole program: it opens on a machine with neither perl
   at run time is not seen by `check`, and the gate is what catches it.
 - A list read past its end. perl answers `undef` and carries on; the
   compiled run stops the handler. `$xs[$i] // $d` says what to answer
-  instead, and `check` does not yet ask for it.
+  instead, and `check` does not yet ask for it. A slice past the end
+  clamps where perl would pad with `undef`.
+- `sum`, `max`, `min`, `maxstr` and `minstr` of an empty list answer
+  `0` or `""` where perl answers `undef`; `sum0` is the same in both.
+- `**`, `hex` and `oct` past 64 bits stop the handler where perl grows
+  the number into one with a fraction, the same edge as a sum's. And
+  `**` on two whole numbers is worked out by perl as a fraction number
+  when the base is a power of two or the answer would pass 64 bits,
+  which prints differently from 1e15 up (`2 ** 50` is
+  `1.12589990684262e+15` there); here it stays a whole number.
+- `fc`, `tr///` with `/c`, `sprintf`'s `%*d`, and `for my ($i, $x)
+  (indexed @xs)`, which the parser the translator reads with does not
+  know yet (`for my $i (0 .. $#xs)` reads the same).
 - No references except the ones named here: a list or a hash passed to
   an element, and a class of your own. No code references beyond
   handlers, no references to references, no `ref`.

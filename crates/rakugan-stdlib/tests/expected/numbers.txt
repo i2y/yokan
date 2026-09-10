@@ -61,10 +61,10 @@ div_num f:c01c000000000000 f:4000000000000000 -> f:c00c000000000000
 div_num f:3ff0000000000000 f:4008000000000000 -> f:3fd5555555555555
 div_num f:3fb999999999999a f:3fd3333333333333 -> f:3fd5555555555556
 div_num f:7e37e43c8800759c f:3ddb7cdfd9d7bdbb -> f:7ff0000000000000
-die_text s:boom s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:boom%20at%20tools/gen_expected.pl%20line%20145.%0a
+die_text s:boom s:%20at%20tools/gen_expected.pl%20line%20231.%0a -> s:boom%20at%20tools/gen_expected.pl%20line%20231.%0a
 die_text s:boom%0a s:%20at%20nowhere.pl%20line%201.%0a -> s:boom%0a
-die_text s:two%20words s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:two%20words%20at%20tools/gen_expected.pl%20line%20145.%0a
-die_text s: s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:Died%20at%20tools/gen_expected.pl%20line%20145.%0a
+die_text s:two%20words s:%20at%20tools/gen_expected.pl%20line%20231.%0a -> s:two%20words%20at%20tools/gen_expected.pl%20line%20231.%0a
+die_text s: s:%20at%20tools/gen_expected.pl%20line%20231.%0a -> s:Died%20at%20tools/gen_expected.pl%20line%20231.%0a
 num_of s:10 -> f:4024000000000000
 num_of s:3abc -> f:4008000000000000
 num_of s:abc -> f:0000000000000000
@@ -78,3 +78,97 @@ num_of s:.5 -> f:3fe0000000000000
 num_of s:0x10 -> f:0000000000000000
 bool_text b:1 -> s:1
 bool_text b:0 -> s:
+pow_int i:2 i:10 -> i:1024
+pow_int i:-2 i:3 -> i:-8
+pow_int i:0 i:0 -> i:1
+pow_int i:7 i:0 -> i:1
+pow_int i:-3 i:3 -> i:-27
+pow_int i:3 i:20 -> i:3486784401
+pow_int i:10 i:15 -> i:1000000000000000
+pow_int i:10 i:16 -> i:10000000000000000
+pow_int i:7 i:21 -> i:558545864083284007
+pow_int i:-7 i:21 -> i:-558545864083284007
+pow_int i:2 i:49 -> i:562949953421312
+pow_int i:-1 i:7 -> i:-1
+pow_int i:1 i:200 -> i:1
+pow_int i:0 i:5 -> i:0
+pow_num f:0000000000000000 f:bff0000000000000 ~> f:7ff0000000000000
+pow_num f:c020000000000000 f:3fd5555555555555 ~> f:7ff8000000000000
+pow_num f:4000000000000000 f:3fe0000000000000 ~> f:3ff6a09e667f3bcd
+pow_num f:4004000000000000 f:4000000000000000 ~> f:4019000000000000
+pow_num f:c000000000000000 f:bff0000000000000 ~> f:bfe0000000000000
+pow_num f:c000000000000000 f:4000000000000000 ~> f:4010000000000000
+pow_num f:4024000000000000 f:c000000000000000 ~> f:3f847ae147ae147b
+pow_num f:0000000000000000 f:0000000000000000 ~> f:3ff0000000000000
+pow_num f:7e37e43c8800759c f:4000000000000000 ~> f:7ff0000000000000
+hex_of s:ff -> i:255
+hex_of s:0xff -> i:255
+hex_of s:0Xff -> i:255
+hex_of s:xff -> i:255
+hex_of s:FF -> i:255
+hex_of s: -> i:0
+hex_of s:1_000 -> i:4096
+hex_of s:1__0 -> i:1
+hex_of s:1_ -> i:1
+hex_of s:_1 -> i:1
+hex_of s:ffg -> i:255
+hex_of s:0b101 -> i:45313
+hex_of s:%20ff -> i:0
+hex_of s:-ff -> i:0
+hex_of s:0x -> i:0
+hex_of s:7fffffffffffffff -> i:9223372036854775807
+hex_of s:ff%c3%bf -> i:255
+hex_of s:0 -> i:0
+oct_of s:755 -> i:493
+oct_of s:0755 -> i:493
+oct_of s:00755 -> i:493
+oct_of s:0x1f -> i:31
+oct_of s:0X1F -> i:31
+oct_of s:x1f -> i:31
+oct_of s:0b101 -> i:5
+oct_of s:b101 -> i:5
+oct_of s:0o17 -> i:15
+oct_of s:o17 -> i:15
+oct_of s: -> i:0
+oct_of s:789 -> i:7
+oct_of s:%20755 -> i:493
+oct_of s:%090x1f -> i:31
+oct_of s:-7 -> i:0
+oct_of s:7_7 -> i:63
+oct_of s:0_7 -> i:7
+oct_of s:0b -> i:0
+oct_of s:1_000_000 -> i:262144
+oct_of s:777777777777777777777 -> i:9223372036854775807
+oct_of s:12%203 -> i:10
+oct_of s:0%2012 -> i:0
+oct_of s:0o0o7 -> i:0
+oct_of s:8 -> i:0
+sin_of f:0000000000000000 ~> f:0000000000000000
+cos_of f:0000000000000000 ~> f:3ff0000000000000
+sin_of f:3ff0000000000000 ~> f:3feaed548f090cee
+cos_of f:3ff0000000000000 ~> f:3fe14a280fb5068c
+sin_of f:c004000000000000 ~> f:bfe326af0dcfcab0
+cos_of f:c004000000000000 ~> f:bfe9a2f7ef858b7d
+sin_of f:4202a05f20000000 ~> f:bfdf334c7896a4e3
+cos_of f:4202a05f20000000 ~> f:3febf098901c931a
+sin_of f:400921fb54442d18 ~> f:3ca1a62633145c07
+cos_of f:400921fb54442d18 ~> f:bff0000000000000
+exp_of f:0000000000000000 ~> f:3ff0000000000000
+exp_of f:3ff0000000000000 ~> f:4005bf0a8b145769
+exp_of f:bff0000000000000 ~> f:3fd78b56362cef38
+exp_of f:4086300000000000 ~> f:7ff0000000000000
+exp_of f:c08f400000000000 ~> f:0000000000000000
+exp_of f:3fe0000000000000 ~> f:3ffa61298e1e069c
+atan2_of f:0000000000000000 f:0000000000000000 ~> f:0000000000000000
+atan2_of f:3ff0000000000000 f:0000000000000000 ~> f:3ff921fb54442d18
+atan2_of f:bff0000000000000 f:bff0000000000000 ~> f:c002d97c7f3321d2
+atan2_of f:0000000000000000 f:bff0000000000000 ~> f:400921fb54442d18
+atan2_of f:8000000000000000 f:bff0000000000000 ~> f:c00921fb54442d18
+atan2_of f:3ff0000000000000 f:3ff0000000000000 ~> f:3fe921fb54442d18
+atan2_of f:0000000000000000 f:8000000000000000 ~> f:400921fb54442d18
+log_of f:3ff0000000000000 ~> f:0000000000000000
+log_of f:4024000000000000 ~> f:40026bb1bbb55516
+log_of f:3fe0000000000000 ~> f:bfe62e42fefa39ef
+log_of f:4005bf0a8b145769 ~> f:3ff0000000000000
+log_of f:00000000000007e8 ~> f:c087069e3078e52d
+log_of f:7e37e43c8800759c ~> f:4085963447f87fb5

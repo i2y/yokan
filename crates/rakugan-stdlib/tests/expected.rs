@@ -176,6 +176,17 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "join" => V::S(join(&a[0].s(), a[1].ss())),
         "split_on" => V::L(split_on(&a[0].s(), &a[1].s()).into_iter().map(V::S).collect()),
         "split_words" => V::L(split_words(&a[0].s()).into_iter().map(V::S).collect()),
+        "repeat_str" => V::S(repeat_str(&a[0].s(), a[1].i())),
+        "ord_of" => V::I(ord_of(&a[0].s())),
+        "chr_of" => V::S(chr_of(a[0].i())),
+        "chomp_str" => V::S(chomp_str(&a[0].s())),
+        "chop_str" => V::S(chop_str(&a[0].s())),
+        "join_int" => V::S(join_int(&a[0].s(), a[1].is())),
+        "join_num" => V::S(join_num(&a[0].s(), a[1].fs())),
+        "substr_replace" => V::S(substr_replace(&a[0].s(), a[1].i(), a[2].i(), &a[3].s())),
+        "trim_str" => V::S(trim_str(&a[0].s())),
+        "tr_str" => V::S(tr_str(&a[0].s(), &a[1].s(), &a[2].s(), &a[3].s())),
+        "tr_count" => V::I(tr_count(&a[0].s(), &a[1].s())),
         // numbers
         "abs_num" => V::F(abs_num(a[0].f())),
         "abs_int" => V::I(abs_int(a[0].i())),
@@ -207,6 +218,15 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "num_of" => V::F(num_of(&a[0].s())),
         "num_text" => V::S(num_text(a[0].f())),
         "bool_text" => V::S(bool_text(a[0].b())),
+        "pow_int" => V::I(pow_int(a[0].i(), a[1].i())),
+        "pow_num" => V::F(pow_num(a[0].f(), a[1].f())),
+        "hex_of" => V::I(hex_of(&a[0].s())),
+        "oct_of" => V::I(oct_of(&a[0].s())),
+        "sin_of" => V::F(sin_of(a[0].f())),
+        "cos_of" => V::F(cos_of(a[0].f())),
+        "exp_of" => V::F(exp_of(a[0].f())),
+        "atan2_of" => V::F(atan2_of(a[0].f(), a[1].f())),
+        "log_of" => V::F(log_of(a[0].f())),
         // List::Util
         "sum_int" => V::I(sum_int(a[0].is())),
         "sum_num" => V::F(sum_num(a[0].fs())),
@@ -216,6 +236,21 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "min_num" => V::F(min_num(a[0].fs())),
         "uniq_int" => V::L(uniq_int(a[0].is()).into_iter().map(V::I).collect()),
         "uniq_str" => V::L(uniq_str(a[0].ss()).into_iter().map(V::S).collect()),
+        "max_str" => V::S(max_str(a[0].ss())),
+        "min_str" => V::S(min_str(a[0].ss())),
+        // lists
+        "repeat_int" => V::L(repeat_int(a[0].is(), a[1].i()).into_iter().map(V::I).collect()),
+        "repeat_num" => V::L(repeat_num(a[0].fs(), a[1].i()).into_iter().map(V::F).collect()),
+        "repeat_strs" => V::L(repeat_strs(a[0].ss(), a[1].i()).into_iter().map(V::S).collect()),
+        "splice_int" => {
+            V::L(splice_int(a[0].is(), a[1].i(), a[2].i(), a[3].is()).into_iter().map(V::I).collect())
+        }
+        "splice_num" => {
+            V::L(splice_num(a[0].fs(), a[1].i(), a[2].i(), a[3].fs()).into_iter().map(V::F).collect())
+        }
+        "splice_strs" => {
+            V::L(splice_strs(a[0].ss(), a[1].i(), a[2].i(), a[3].ss()).into_iter().map(V::S).collect())
+        }
         // sprintf
         "fmt_num" => V::S(fmt_num(&a[0].s(), a[1].f())),
         "fmt_int" => V::S(fmt_int(&a[0].s(), a[1].i())),

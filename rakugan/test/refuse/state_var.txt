@@ -1,0 +1,3 @@
+test/refuse/state_var.pl:9:9: Rakugan cannot take this — `state` is Perl's own, and not in the translator yet; a field of the app holds what a `state` variable would
+            state $calls = 0;
+            ^

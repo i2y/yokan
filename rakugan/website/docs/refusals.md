@@ -8,7 +8,7 @@ the file first, so a shape perl rejects never reaches the translator.
 `check` runs before every build and every gate, needs no compiler and no
 window, and prints nothing at all when there is nothing to say.
 
-Each of the 43 below has a file under `test/refuse/` that triggers it and
+Each of the 52 below has a file under `test/refuse/` that triggers it and
 the message it must print, word for word. The sweep runs them, so a
 refusal cannot quietly change its wording, and this page is quoted from
 those same files.
@@ -362,5 +362,77 @@ The same reason: `srand()` with nothing picks a seed of its own.
 ```console
 test/refuse/srand_bare.pl:8:9: Rakugan cannot take this — `srand` with nothing picks a seed of its own, a different one in each run; write the seed: `srand(42)`
             srand();
+            ^
+```
+
+perl answers a fraction for a negative power and a whole number otherwise, and a type is one or the other.
+
+```console
+test/refuse/pow_variable.pl:9:16: Rakugan cannot take this — a whole number to a power that is not written out may come out a fraction, and the compiled run has to know; write `2.0 ** $n` for a fraction, or `int(2.0 ** $n)`
+            $n = 2 ** $n;
+                   ^
+```
+
+A Perl function the translator has no twin for yet is said to be Perl's own, with what to write instead where there is something.
+
+```console
+test/refuse/sleep_builtin.pl:9:9: Rakugan cannot take this — `sleep` is Perl's own, and not in the translator yet; a handler that waits freezes the window; `task(sub { ... }, on_done => ...)` does the waiting elsewhere
+            sleep(1);
+            ^
+```
+
+A shipped app is one file; a module of your own would have to be translated with it.
+
+```console
+test/refuse/module_call.pl:11:14: Rakugan cannot take this — `My::Counter::next` comes from a module of your own, and a module does not reach the compiled run yet: an app is one file, and the modules the translator knows are List::Util's and POSIX's
+            $n = My::Counter::next();
+                 ^
+```
+
+`eval { … }` is the older spelling of `try` / `catch`, which the dialect takes.
+
+```console
+test/refuse/eval_block.pl:9:9: Rakugan cannot take this — `eval { ... }` catches a failure; write it as perl 5.40 does: `try { ... } catch ($e) { ... }`
+            eval { $n = 1 };
+            ^
+```
+
+A sub held in a variable is a closure, and the compiled run has no shape for one; a method of the app is what it calls.
+
+```console
+test/refuse/sub_value.pl:9:17: Rakugan cannot take this — a sub written here has no shape in the compiled run; write a method of the app and call it
+            my $f = sub { 1 };
+                    ^
+```
+
+A jump to a labeled loop has no shape in the compiled run; a flag the inner loop sets does the same.
+
+```console
+test/refuse/label_loop.pl:9:9: Rakugan cannot take this — a loop with a label, and `next LABEL` / `last LABEL`, are not carried yet; a flag the inner loop sets and the outer loop reads does the same
+            OUTER: for my $i (1 .. 3) {
+            ^
+```
+
+A `state` variable is a field the method keeps for itself, and the app has fields for that.
+
+```console
+test/refuse/state_var.pl:9:9: Rakugan cannot take this — `state` is Perl's own, and not in the translator yet; a field of the app holds what a `state` variable would
+            state $calls = 0;
+            ^
+```
+
+A match walked one step at a time keeps its place in perl's own bookkeeping; taking every match first is the same list.
+
+```console
+test/refuse/match_in_loop.pl:10:9: Rakugan cannot take this — a match in a condition is asked once; to walk every match, take them all first: `my @found = ($s =~ /(\d)/g);` and loop over `@found`
+            while ($t =~ /(\d)/g) { $n += 1 }
+            ^
+```
+
+The names come from `$1` and `$2` once the match is known to have happened, which is inside the `if`.
+
+```console
+test/refuse/list_match.pl:9:9: Rakugan cannot take this — a match that names what it caught is written as the match, then the names: `if ($s =~ /(\d+)-(\d+)/) { my $a = $1; my $b = $2; ... }`
+            if (my ($p, $q) = "3-4" =~ /(\d+)-(\d+)/) { $n = 1 }
             ^
 ```

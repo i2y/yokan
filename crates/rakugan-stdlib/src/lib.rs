@@ -334,9 +334,12 @@ pub fn length_of(s: &str) -> i64 {
 /// offset past the end answers nothing.
 pub fn substr_from(s: &str, off: i64) -> String {
     let cs: Vec<char> = s.chars().collect();
-    let start = start_of(off, cs.len());
-    match start {
-        Some(i) => cs[i..].iter().collect(),
+    // Perl's own offset rules (`substr_span`), with the length running
+    // to the end: an offset that counts past the start clamps to it,
+    // and one past the end answers undef, written here as "".
+    // "Through the end of the string": a length no string reaches.
+    match substr_span(cs.len(), off, i64::MAX / 4) {
+        Some((start, n)) => cs[start..start + n].iter().collect(),
         None => String::new(),
     }
 }
@@ -345,21 +348,10 @@ pub fn substr_from(s: &str, off: i64) -> String {
 /// characters off the end.
 pub fn substr_len(s: &str, off: i64, len: i64) -> String {
     let cs: Vec<char> = s.chars().collect();
-    let Some(start) = start_of(off, cs.len()) else {
-        return String::new();
-    };
-    let end = if len < 0 {
-        let e = cs.len() as i64 + len;
-        if e < start as i64 { start } else { e as usize }
-    } else {
-        (start + len as usize).min(cs.len())
-    };
-    cs[start..end].iter().collect()
-}
-
-fn start_of(off: i64, n: usize) -> Option<usize> {
-    let i = if off < 0 { n as i64 + off } else { off };
-    if i < 0 || i > n as i64 { None } else { Some(i as usize) }
+    match substr_span(cs.len(), off, len) {
+        Some((start, n)) => cs[start..start + n].iter().collect(),
+        None => String::new(),
+    }
 }
 
 /// `index($s, $sub)` — where it starts, or -1.
@@ -756,6 +748,443 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
+// ---------------------------------------------------------------------------
+// More of perl's own: repetition, `**`, `ord` and `chr`, `hex` and `oct`,
+// `chomp` and `chop`, the four-argument `substr`, `splice`, the libm
+// functions, `builtin::trim`, `tr///` and List::Util's `maxstr`/`minstr`.
+// The same rule: each is held to rows perl printed.
+
+/// `$s x $n`. A count of zero or less answers nothing (perl warns on a
+/// negative one, and answers the same).
+pub fn repeat_str(s: &str, n: i64) -> String {
+    if n <= 0 {
+        return String::new();
+    }
+    s.repeat(n as usize)
+}
+
+/// `(LIST) x $n` over whole numbers.
+pub fn repeat_int(xs: Vec<i64>, n: i64) -> Vec<i64> {
+    repeat_list(xs, n)
+}
+
+/// `(LIST) x $n` over numbers with a fraction.
+pub fn repeat_num(xs: Vec<f64>, n: i64) -> Vec<f64> {
+    repeat_list(xs, n)
+}
+
+/// `(LIST) x $n` over strings.
+pub fn repeat_strs(xs: Vec<String>, n: i64) -> Vec<String> {
+    repeat_list(xs, n)
+}
+
+fn repeat_list<T: Clone>(xs: Vec<T>, n: i64) -> Vec<T> {
+    if n <= 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(xs.len() * n as usize);
+    for _ in 0..n {
+        out.extend(xs.iter().cloned());
+    }
+    out
+}
+
+/// `$a ** $b` on two whole numbers, `b` not negative (the translator
+/// refuses a negative one). Exact while the answer fits 64 bits, and a
+/// stop when it does not.
+///
+/// perl is looser than that in both directions, and this is where the
+/// two part. Past 64 bits it grows into a fraction where this stops.
+/// And it answers a fraction well before that: whenever the base is a
+/// power of two, or the bits of the base times the exponent pass 64,
+/// perl computes in floating point and keeps the result as one, so
+/// `2 ** 50` prints `1.12589990684262e+15` there and `1125899906842624`
+/// here, and `3 ** 39` is exact here and rounded there. Below 1e15 the
+/// two print the same digits, and the table holds only rows perl
+/// prints as digits.
+pub fn pow_int(a: i64, b: i64) -> i64 {
+    if b < 0 {
+        panic!("a negative exponent on two whole numbers is not in the dialect");
+    }
+    match a {
+        0 => return if b == 0 { 1 } else { 0 },
+        1 => return 1,
+        -1 => return if b % 2 == 0 { 1 } else { -1 },
+        _ => {}
+    }
+    // Anything else to the 64th or more is past 64 bits already.
+    u32::try_from(b)
+        .ok()
+        .filter(|e| *e < 64)
+        .and_then(|e| a.checked_pow(e))
+        .unwrap_or_else(|| panic!("Integer overflow in **"))
+}
+
+/// `$a ** $b` with a fraction on either side: C's `pow`, which is what
+/// perl calls. `0 ** -1` is Inf and `(-8) ** (1/3)` is NaN in both.
+pub fn pow_num(a: f64, b: f64) -> f64 {
+    a.powf(b)
+}
+
+/// `ord($s)`: the first character's code point, and 0 for nothing.
+pub fn ord_of(s: &str) -> i64 {
+    s.chars().next().map_or(0, |c| c as i64)
+}
+
+/// `chr($n)`. perl answers U+FFFD for a negative number and warns. A
+/// surrogate, or a number past U+10FFFF, it puts into a string that is
+/// not valid text — nothing a `String` can hold — so those answer U+FFFD
+/// here too; the table has no row there.
+pub fn chr_of(n: i64) -> String {
+    u32::try_from(n)
+        .ok()
+        .and_then(char::from_u32)
+        .unwrap_or('\u{FFFD}')
+        .to_string()
+}
+
+/// `hex($s)`: an optional `x` or `0x` (either case), then hex digits,
+/// stopping at the first character that is not one — perl warns there
+/// and answers what it has, so `hex("ffg")` is 255 and `hex(" ff")` is
+/// 0, since `hex` skips no space. An underscore is skipped when a digit
+/// follows it, even a leading one: `hex("1_000")` is 4096, `hex("1__0")`
+/// is 1. Anything perl cannot hold in one byte, anywhere in the string,
+/// is fatal in perl 5.44 ("Wide character in hex") and here. Past 63
+/// bits perl answers a UV, then a fraction; this stops.
+pub fn hex_of(s: &str) -> i64 {
+    let b = latin1_bytes(s, "hex");
+    let digits = match b.first().map(u8::to_ascii_lowercase) {
+        Some(b'x') => &b[1..],
+        Some(b'0') if b.get(1).is_some_and(|c| c.eq_ignore_ascii_case(&b'x')) => &b[2..],
+        _ => &b[..],
+    };
+    grok(digits, 16, "hex")
+}
+
+/// `oct($s)`: leading space skipped (unlike `hex`), one leading `0`
+/// dropped, then `x`, `b` or `o` (either case) names the base and
+/// anything else is octal. So `oct("0x1f")`, `oct("x1f")`, `oct("0b101")`,
+/// `oct("0o17")` and `oct("0755")` all read as written, and `oct("789")`
+/// is 7 with a warning in perl. The same underscore and overflow rules
+/// as `hex`.
+pub fn oct_of(s: &str) -> i64 {
+    let b = latin1_bytes(s, "oct");
+    let mut i = 0;
+    while i < b.len() && matches!(b[i], b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r') {
+        i += 1;
+    }
+    let mut t = &b[i..];
+    if t.first() == Some(&b'0') {
+        t = &t[1..];
+    }
+    match t.first().map(u8::to_ascii_lowercase) {
+        Some(b'x') => grok(&t[1..], 16, "oct"),
+        Some(b'b') => grok(&t[1..], 2, "oct"),
+        Some(b'o') => grok(&t[1..], 8, "oct"),
+        _ => grok(t, 8, "oct"),
+    }
+}
+
+/// perl reads `hex` and `oct` off bytes, and a character it cannot
+/// hold in one is fatal: "Wide character in hex".
+fn latin1_bytes(s: &str, what: &str) -> Vec<u8> {
+    s.chars()
+        .map(|c| u8::try_from(c as u32).unwrap_or_else(|_| panic!("Wide character in {what}")))
+        .collect()
+}
+
+/// perl's `grok_hex`, `grok_oct` and `grok_bin` after the prefix: the
+/// digits of `base`, an underscore skipped when a digit follows it, and
+/// a stop at anything else.
+fn grok(b: &[u8], base: u32, what: &str) -> i64 {
+    let digit = |c: u8| (c as char).to_digit(base);
+    let mut acc: i64 = 0;
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'_' {
+            if b.get(i + 1).is_some_and(|c| digit(*c).is_some()) {
+                i += 1;
+                continue;
+            }
+            break;
+        }
+        let Some(d) = digit(b[i]) else { break };
+        acc = acc
+            .checked_mul(base as i64)
+            .and_then(|a| a.checked_add(d as i64))
+            .unwrap_or_else(|| panic!("Integer overflow in {what}"));
+        i += 1;
+    }
+    acc
+}
+
+/// `chomp`: one trailing newline off, and only a newline — perl's `$/`
+/// is "\n" and the dialect does not change it, so "\r\n" keeps its "\r".
+pub fn chomp_str(s: &str) -> String {
+    s.strip_suffix('\n').unwrap_or(s).to_string()
+}
+
+/// `chop`: the last character off, whatever it is.
+pub fn chop_str(s: &str) -> String {
+    let mut out = s.to_string();
+    out.pop();
+    out
+}
+
+/// `join($sep, @ns)` over whole numbers.
+pub fn join_int(sep: &str, xs: Vec<i64>) -> String {
+    xs.iter().map(i64::to_string).collect::<Vec<_>>().join(sep)
+}
+
+/// `join($sep, @xs)` over numbers with a fraction, each written as perl
+/// writes a number — `%.15g`, so `1e15` joins as `1e+15`.
+pub fn join_num(sep: &str, xs: Vec<f64>) -> String {
+    xs.iter().map(|v| num_text(*v)).collect::<Vec<_>>().join(sep)
+}
+
+/// `substr($s, $off, $len, $repl)`, the four-argument form, answering
+/// the string after; the translator writes it back. Offsets count
+/// characters. A negative offset counts from the end and a negative
+/// length leaves that many at the end, as in the other forms; where
+/// those answer undef for an offset outside the string, this one dies,
+/// as perl does.
+pub fn substr_replace(s: &str, off: i64, len: i64, repl: &str) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let Some((start, n)) = substr_span(cs.len(), off, len) else {
+        panic!("substr outside of string");
+    };
+    let mut out: String = cs[..start].iter().collect();
+    out.push_str(repl);
+    out.extend(&cs[start + n..]);
+    out
+}
+
+/// perl's `translate_substr_offsets`: where a substr starts and how far
+/// it runs, or nothing when it is outside the string. An offset past the
+/// end is outside. A negative offset counts from the end; one that counts
+/// past the start is clamped to it — unless the length, counted from
+/// that offset, also ends before the start, which is outside too. A
+/// length of zero or more runs from the offset and is capped at the end;
+/// a negative one stops that many before the end, and never before the
+/// offset.
+fn substr_span(curlen: usize, off: i64, len: i64) -> Option<(usize, usize)> {
+    let n = curlen as i64;
+    let mut pos1 = off;
+    if off < 0 && curlen > 0 {
+        pos1 += n;
+    }
+    if pos1 > n {
+        return None;
+    }
+    let pos2 = if len < 0 {
+        n + len
+    } else if pos1 < 0 {
+        pos1 + len
+    } else if len > n - pos1 {
+        n
+    } else {
+        pos1 + len
+    };
+    let (pos1, pos2) = if pos2 < 0 {
+        if pos1 < 0 {
+            return None;
+        }
+        (pos1, 0)
+    } else {
+        (pos1.max(0), pos2)
+    };
+    let pos2 = pos2.max(pos1).min(n);
+    Some((pos1 as usize, (pos2 - pos1) as usize))
+}
+
+/// `splice(@xs, $off, $len, LIST)` over whole numbers, answering the
+/// list after; the translator writes it back. A negative offset counts
+/// from the end, and one that counts past the start dies with perl's
+/// words; a negative length leaves that many at the end; an offset past
+/// the end appends (perl warns there).
+pub fn splice_int(xs: Vec<i64>, off: i64, len: i64, repl: Vec<i64>) -> Vec<i64> {
+    splice_list(xs, off, len, repl)
+}
+
+/// `splice` over numbers with a fraction.
+pub fn splice_num(xs: Vec<f64>, off: i64, len: i64, repl: Vec<f64>) -> Vec<f64> {
+    splice_list(xs, off, len, repl)
+}
+
+/// `splice` over strings.
+pub fn splice_strs(xs: Vec<String>, off: i64, len: i64, repl: Vec<String>) -> Vec<String> {
+    splice_list(xs, off, len, repl)
+}
+
+/// `pp_splice`'s arithmetic, in its order: the negative length is
+/// resolved against the offset as given, and the offset is clamped to
+/// the end after that.
+fn splice_list<T>(mut xs: Vec<T>, off: i64, len: i64, repl: Vec<T>) -> Vec<T> {
+    let n = xs.len() as i64;
+    let mut offset = off;
+    if offset < 0 {
+        offset += n;
+    }
+    if offset < 0 {
+        panic!("Modification of non-creatable array value attempted, subscript {off}");
+    }
+    let mut length = len;
+    if length < 0 {
+        length = (length + n - offset).max(0);
+    }
+    offset = offset.min(n);
+    length = length.min(n - offset);
+    let start = offset as usize;
+    xs.splice(start..start + length as usize, repl);
+    xs
+}
+
+/// `time`: seconds since the epoch.
+pub fn time_now() -> i64 {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs() as i64,
+        Err(e) => -(e.duration().as_secs() as i64),
+    }
+}
+
+/// `sin`, `cos`, `exp` and `atan2`: the platform's libm, which is what
+/// perl calls too. Their rows allow one ulp, since two libms may round
+/// the last bit differently.
+pub fn sin_of(v: f64) -> f64 {
+    v.sin()
+}
+
+pub fn cos_of(v: f64) -> f64 {
+    v.cos()
+}
+
+pub fn exp_of(v: f64) -> f64 {
+    v.exp()
+}
+
+pub fn atan2_of(y: f64, x: f64) -> f64 {
+    y.atan2(x)
+}
+
+/// `log($x)`. perl stops at zero and below, and says so — writing the
+/// number with `%g` rather than as a string, which is why a negative
+/// zero reads `-0` in the message where `"$x"` would read `0`.
+pub fn log_of(v: f64) -> f64 {
+    if v <= 0.0 {
+        let text = if v == 0.0 && v.is_sign_negative() { "-0".to_string() } else { num_text(v) };
+        panic!("Can't take log of {text}");
+    }
+    v.ln()
+}
+
+/// `builtin::trim`: whitespace off both ends, by Unicode's White_Space
+/// — which is perl's `\s` and Rust's `char::is_whitespace`, the same
+/// twenty-five characters: U+3000 and U+0085 go, U+200B and U+FEFF stay.
+pub fn trim_str(s: &str) -> String {
+    s.trim().to_string()
+}
+
+/// `tr/FROM/TO/FLAGS` as a value (`/r`): each character of FROM becomes
+/// its partner in TO. Ranges (`a-z`) and the escapes `\n`, `\t`, `\\`
+/// and `\-` are read in both, and a character's first place in FROM is
+/// the one that counts. A TO shorter than FROM repeats its last
+/// character — or, with the `d` flag, deletes what has no partner — and
+/// an empty TO is FROM itself. The `s` flag squeezes a run of characters
+/// that came out the same into one; a deleted character does not break
+/// the run and an untouched one does, as perl's own loop has it. The `c`
+/// flag is not taken.
+pub fn tr_str(s: &str, from: &str, to: &str, flags: &str) -> String {
+    let delete = flags.contains('d');
+    let squeeze = flags.contains('s');
+    let from = tr_chars(from);
+    let mut to = tr_chars(to);
+    if to.is_empty() && !delete {
+        to = from.clone();
+    }
+    // What each character of FROM becomes: its partner, the last
+    // partner repeated, or nothing at all.
+    let mut map: std::collections::HashMap<char, Option<char>> = std::collections::HashMap::new();
+    for (i, &c) in from.iter().enumerate() {
+        map.entry(c).or_insert_with(|| {
+            to.get(i).copied().or_else(|| if delete { None } else { to.last().copied() })
+        });
+    }
+    let mut out = String::new();
+    let mut previous: Option<char> = None;
+    for c in s.chars() {
+        match map.get(&c) {
+            None => {
+                out.push(c);
+                previous = None;
+            }
+            Some(None) => {}
+            Some(Some(t)) => {
+                if !(squeeze && previous == Some(*t)) {
+                    out.push(*t);
+                    previous = Some(*t);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `$s =~ tr/FROM//` where the count is wanted: how many characters of
+/// `s` are in FROM.
+pub fn tr_count(s: &str, from: &str) -> i64 {
+    let set = tr_chars(from);
+    s.chars().filter(|c| set.contains(c)).count() as i64
+}
+
+/// One side of a `tr///`, expanded: escapes first, then ranges. A `-`
+/// written with a backslash, or standing first or last, is a character
+/// rather than a range.
+fn tr_chars(spec: &str) -> Vec<char> {
+    let mut items: Vec<(char, bool)> = Vec::new();
+    let mut cs = spec.chars();
+    while let Some(c) = cs.next() {
+        if c != '\\' {
+            items.push((c, false));
+            continue;
+        }
+        match cs.next() {
+            Some('n') => items.push(('\n', true)),
+            Some('t') => items.push(('\t', true)),
+            Some(other) => items.push((other, true)),
+            None => items.push(('\\', true)),
+        }
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < items.len() {
+        let (c, _) = items[i];
+        if i + 2 < items.len() && items[i + 1] == ('-', false) {
+            let (end, _) = items[i + 2];
+            if end < c {
+                panic!("Invalid range \"{c}-{end}\" in transliteration operator");
+            }
+            out.extend(c..=end);
+            i += 3;
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// `List::Util::maxstr`: the greatest by string comparison, which is
+/// code point order. perl answers undef for an empty list, and this
+/// dialect has no undef; nothing is answered instead, and the table has
+/// no row there.
+pub fn max_str(xs: Vec<String>) -> String {
+    xs.into_iter().max().unwrap_or_default()
+}
+
+/// `List::Util::minstr`.
+pub fn min_str(xs: Vec<String>) -> String {
+    xs.into_iter().min().unwrap_or_default()
+}
 
 // ---------------------------------------------------------------------------
 // Regular expressions.
@@ -1086,6 +1515,66 @@ mod failing {
         assert_eq!(try_div_int(7, 2, at), Ok(3.5));
         assert_eq!(try_mod_int(-7, 3, at), Ok(2));
         assert_eq!(die_text("boom\n", at), "boom\n");
+    }
+
+    #[test]
+    #[should_panic(expected = "Can't take log of 0")]
+    fn log_of_zero_dies_with_perls_words() {
+        log_of(0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Can't take log of -0")]
+    fn log_of_negative_zero_writes_the_sign_as_perl_does() {
+        log_of(-0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "substr outside of string")]
+    fn a_replacement_past_the_end_dies() {
+        substr_replace("hello", 6, 0, "X");
+    }
+
+    #[test]
+    #[should_panic(expected = "substr outside of string")]
+    fn a_replacement_that_ends_before_the_start_dies() {
+        substr_replace("hello", -10, 2, "X");
+    }
+
+    #[test]
+    #[should_panic(expected = "Integer overflow in **")]
+    fn a_power_past_64_bits_stops() {
+        pow_int(2, 63);
+    }
+
+    #[test]
+    #[should_panic(expected = "Integer overflow in hex")]
+    fn a_hex_number_past_63_bits_stops() {
+        hex_of("ffffffffffffffff");
+    }
+
+    #[test]
+    #[should_panic(expected = "Integer overflow in oct")]
+    fn an_octal_number_past_63_bits_stops() {
+        oct_of("2000000000000000000000");
+    }
+
+    #[test]
+    #[should_panic(expected = "Wide character in hex")]
+    fn hex_of_a_wide_character_dies_as_perl_does() {
+        hex_of("ff日");
+    }
+
+    #[test]
+    #[should_panic(expected = "Modification of non-creatable array value attempted, subscript -4")]
+    fn a_splice_before_the_start_dies_with_perls_words() {
+        splice_int(vec![1, 2, 3], -4, 1, vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid range \"z-a\" in transliteration operator")]
+    fn a_backwards_range_in_tr_is_refused() {
+        tr_str("abc", "z-a", "x", "");
     }
 
     #[test]

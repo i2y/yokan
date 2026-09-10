@@ -27,3 +27,52 @@ min_num [f:3ff8000000000000,f:c004000000000000,f:3fe0000000000000] -> f:c0040000
 uniq_str [s:a,s:b,s:a,s:c] -> [s:a,s:b,s:c]
 uniq_str [s:x] -> [s:x]
 uniq_str [s:ivy,s:momo,s:ivy,s:ada] -> [s:ivy,s:momo,s:ada]
+max_str [s:apple,s:pear,s:fig] -> s:pear
+min_str [s:apple,s:pear,s:fig] -> s:apple
+max_str [s:%e6%97%a5%e6%9c%ac,s:z,s:%c3%9f] -> s:%e6%97%a5%e6%9c%ac
+min_str [s:%e6%97%a5%e6%9c%ac,s:z,s:%c3%9f] -> s:z
+max_str [s:10,s:9] -> s:9
+min_str [s:10,s:9] -> s:10
+max_str [s:B,s:a] -> s:a
+min_str [s:B,s:a] -> s:B
+max_str [s:x] -> s:x
+min_str [s:x] -> s:x
+max_str [s:,s:a] -> s:a
+min_str [s:,s:a] -> s:
+max_str [s:b,s:a,s:b] -> s:b
+min_str [s:b,s:a,s:b] -> s:a
+repeat_int [i:1,i:2] i:2 -> [i:1,i:2,i:1,i:2]
+repeat_int [i:1,i:2] i:0 -> []
+repeat_int [i:1,i:2] i:-1 -> []
+repeat_int [] i:3 -> []
+repeat_int [i:7] i:3 -> [i:7,i:7,i:7]
+repeat_num [f:3fe0000000000000,f:3ff8000000000000] i:2 -> [f:3fe0000000000000,f:3ff8000000000000,f:3fe0000000000000,f:3ff8000000000000]
+repeat_num [f:3fb999999999999a] i:0 -> []
+repeat_num [f:3fb999999999999a] i:3 -> [f:3fb999999999999a,f:3fb999999999999a,f:3fb999999999999a]
+repeat_strs [s:a,s:b] i:2 -> [s:a,s:b,s:a,s:b]
+repeat_strs [s:%e6%97%a5%e6%9c%ac] i:3 -> [s:%e6%97%a5%e6%9c%ac,s:%e6%97%a5%e6%9c%ac,s:%e6%97%a5%e6%9c%ac]
+repeat_strs [s:a] i:0 -> []
+repeat_strs [] i:2 -> []
+splice_int [i:1,i:2,i:3,i:4,i:5] i:1 i:2 [] -> [i:1,i:4,i:5]
+splice_int [i:1,i:2,i:3,i:4,i:5] i:-2 i:1 [i:9] -> [i:1,i:2,i:3,i:9,i:5]
+splice_int [i:1,i:2,i:3,i:4,i:5] i:1 i:-1 [i:7,i:8] -> [i:1,i:7,i:8,i:5]
+splice_int [i:1,i:2,i:3,i:4,i:5] i:10 i:0 [i:6] -> [i:1,i:2,i:3,i:4,i:5,i:6]
+splice_int [i:1,i:2,i:3] i:0 i:0 [i:0] -> [i:0,i:1,i:2,i:3]
+splice_int [i:1,i:2,i:3] i:3 i:0 [i:4] -> [i:1,i:2,i:3,i:4]
+splice_int [i:1,i:2,i:3] i:1 i:10 [] -> [i:1]
+splice_int [i:1,i:2,i:3] i:-1 i:-1 [i:9] -> [i:1,i:2,i:9,i:3]
+splice_int [i:1,i:2,i:3] i:2 i:-5 [i:9] -> [i:1,i:2,i:9,i:3]
+splice_int [] i:0 i:0 [i:1] -> [i:1]
+splice_int [] i:0 i:1 [] -> []
+splice_int [i:1,i:2,i:3] i:-3 i:3 [] -> []
+splice_int [i:1,i:2,i:3] i:1 i:0 [i:8,i:9] -> [i:1,i:8,i:9,i:2,i:3]
+splice_int [i:1,i:2,i:3] i:-1 i:5 [i:9] -> [i:1,i:2,i:9]
+splice_int [] i:2 i:0 [i:1] -> [i:1]
+splice_int [i:1,i:2,i:3] i:0 i:-3 [i:9] -> [i:9,i:1,i:2,i:3]
+splice_int [i:1,i:2,i:3] i:5 i:-1 [i:9] -> [i:1,i:2,i:3,i:9]
+splice_num [f:3fe0000000000000,f:3ff8000000000000,f:4004000000000000] i:1 i:1 [f:4023000000000000] -> [f:3fe0000000000000,f:4023000000000000,f:4004000000000000]
+splice_num [f:3fe0000000000000,f:3ff8000000000000] i:-1 i:1 [] -> [f:3fe0000000000000]
+splice_num [f:3fe0000000000000] i:5 i:0 [f:3ff8000000000000,f:4004000000000000] -> [f:3fe0000000000000,f:3ff8000000000000,f:4004000000000000]
+splice_strs [s:a,s:b,s:c] i:1 i:1 [s:%e6%97%a5%e6%9c%ac] -> [s:a,s:%e6%97%a5%e6%9c%ac,s:c]
+splice_strs [s:a,s:b,s:c] i:-1 i:0 [s:x,s:y] -> [s:a,s:b,s:x,s:y,s:c]
+splice_strs [s:%c3%9f] i:0 i:1 [] -> []

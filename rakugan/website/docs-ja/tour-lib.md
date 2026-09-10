@@ -6,7 +6,8 @@ Perl 自身のライブラリ、フレームワークのライブラリ、失敗
 ## Perl 自身の標準ライブラリ
 
 名前が Perl のものであるかぎり、仕様を決めるのは perl です。
-`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`rand`、`srand`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`shuffle`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+`length`、`substr`（四引数の形も）、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`chomp`、`chop`、`ord`、`chr`、`hex`、`oct`、`trim`、`tr///`、`abs`、`int`、`sqrt`、`sin`、`cos`、`atan2`、`exp`、`log`、`**`、`x`、`time`、`sort`（`sort { lc($a) cmp lc($b) }` のように両側に鍵を書く形も）、`grep`、`map`、`splice`、値としての `shift` と `pop`、スライス（`@xs[1 .. 3]`）、`scalar`、`exists`、`defined`、`keys`、`values`、`rand`、`srand`、`List::Util` の `sum`、`sum0`、`max`、`min`、`maxstr`、`minstr`、`first`、`any`、`all`、`none`、`reduce`、`uniq`、`shuffle`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+ヒアドキュメント（`<<~EOT`）、文字列の中の `\U…\E` と `\u`、`until`、`do { … } while`、リストから作るリスト（`(@a, @b)`、`push @xs, @ys`）も同じです。
 
 乱数も perl 自身のものです。
 5.20 以降の perl はどのプラットフォームでも同じ生成器を持つので、`srand(42)` のあとは二つの実行が同じ `rand` を引き、同じ `shuffle` を配り、ゲートはそれもほかと同じように比べます。
