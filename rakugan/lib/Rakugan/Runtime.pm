@@ -183,10 +183,15 @@ sub task ($work, %opt) {
     die "task takes `on_done => sub (\$v) { ... }`\n" unless ref $done eq 'CODE';
     require threads;
     my $id = Rakugan::Door::task();
-    my $thr = threads->create(sub {
-        my $answer = $work->();
+    # The work may die. The engine still has to hear that it ended, and
+    # the failure travels back with the answer's slot, so the window's
+    # thread is the one that says so — once, the way the compiled run
+    # says it once.
+    my $thr = threads->create({ context => 'list' }, sub {
+        my $answer = eval { $work->() };
+        my $err = $@;
         Rakugan::Door::task_done($id);
-        return $answer;
+        return $err ? (0, $err) : (1, $answer);
     });
     $jobs[$id] = { thread => $thr, done => $done };
     return $id;
@@ -195,7 +200,14 @@ sub task ($work, %opt) {
 sub _on_task ($id) {
     my $job = $jobs[$id] or return;
     $jobs[$id] = undef;
-    $job->{done}->($job->{thread}->join);
+    my ($ok, $v) = $job->{thread}->join;
+    # The work died: say so, and the handler for its answer does not run,
+    # which is what the compiled run does when its work fails.
+    unless ($ok) {
+        print STDERR "rakugan: $v";
+        return;
+    }
+    $job->{done}->($v);
     return;
 }
 

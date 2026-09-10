@@ -1,0 +1,3 @@
+test/refuse/try_method.pl:12:22: Rakugan cannot take this — `halve` can fail — it divides, takes a root, writes `die` or calls the library — and a `try` here does not reach into it yet; put the `try` inside `halve`, around the line that can fail
+            try { $self->halve } catch ($e) { $note = $e }
+                         ^

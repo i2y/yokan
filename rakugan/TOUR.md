@@ -39,6 +39,7 @@ rename in the vocabulary breaks this page before a reader meets it.
 - [The window](#the-window)
 - [Perl's own standard library](#perls-own-standard-library)
 - [The framework's standard library](#the-frameworks-standard-library)
+- [When something fails](#when-something-fails)
 - [Timers and work off the window's thread](#timers-and-work-off-the-windows-thread)
 - [While you are writing it](#while-you-are-writing-it)
 - [Headless runs and the gate](#headless-runs-and-the-gate)
@@ -715,6 +716,81 @@ runs read the one file the same way:
 Write `?` in the statement and put the values beside it: text a person
 typed can never become part of the statement that way.
 
+## When something fails
+
+A call that can fail has two forms, and the `_or` twin is the one to
+reach for first: `fs_read_text_or($path, "")` folds the failure into a
+default and asks nothing more. When the reason matters, catch it.
+`try` / `catch` is perl's own, written as perl 5.40 writes it, and `$e`
+holds what perl would hand it: the message, then the file and the line
+of the statement that failed.
+
+<!-- script: click:read,dump,click:halve,dump -->
+```perl
+use Rakugan;
+
+class Notes {
+    use Rakugan;
+    field $body  = "(none)";
+    field $share = 0.0;
+    field $count = 0;
+    field $note  = "-";
+
+    method read {
+        try {
+            $body = fs_read_text("demo/.gate/absent.txt");
+            $note = "read";
+        } catch ($e) {
+            $note = "no file: $e";
+        }
+    }
+
+    method halve {
+        try {
+            $share = 100 / $count;
+        } catch ($e) {
+            $note = $e;
+        }
+    }
+
+    method view {
+        return column(
+            text("body: $body"),
+            text("share: $share"),
+            text("note: $note"),
+            row(
+                button("read",  on_click => sub { $self->read }),
+                button("halve", on_click => sub { $self->halve }),
+                spacing => 6,
+            ),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Notes->new, title => "failing");
+```
+
+Uncaught, a failure stops the handler. The lines before it have taken
+effect, the lines after it do not run, the app stays up, and the
+message goes to standard error, in both runs. `die "…"` fails on
+purpose; `warn "…"` writes to standard error and carries on. Each adds
+` at FILE line N.` unless the text ends its own line, as perl does, and
+the compiled run names the same file and line.
+
+Perl's own failures are in the same arrangement: a division by zero, a
+`%` by zero and the root of a negative number die with perl's words in
+both runs, and a `try` around them catches them. Of the framework's
+calls, `fs_read_text`, `http_get_text`, `http_post_text` and
+`sqlite_query_int` can be caught; the other calls that can fail are
+refused inside a `try` by name, and their `_or` twins are the way to
+write them there. Three shapes a `try` does not reach yet: a loop (put
+the `try` inside the loop, around the line that can fail), a method
+that can fail (put the `try` inside the method), and `finally`, because
+the compiled run stops the handler at the failure and has no place that
+runs after it either way.
+
 ## Timers and work off the window's thread
 
 Work you want repeated goes to `every`, declared before `run`:
@@ -856,6 +932,11 @@ What it refuses, and what to write instead:
   standard output. `warn` goes to standard error and is taken.
 - A string `eval`, `goto`, `local`, `wantarray`, `each`, `tie`, `bless`,
   `ref`, `AUTOLOAD`.
+- `finally`, a `try` around a loop or around a method that can fail, and
+  a library call inside a `try` with no form the catch could receive.
+- A line after `die` in the same block (perl never reaches it) and a
+  line after `task` in the same handler (perl reaches it at once, the
+  compiled run when the work is done).
 - A handler that is not a sub, or takes a parameter it is not called
   with.
 - An unknown keyword on an element, or one given the wrong type — the
@@ -885,6 +966,13 @@ bundle is the whole program: it opens on a machine with neither perl
   [What Rakugan refuses](#what-rakugan-refuses) is what it leaves out.
   Every entry there is a shape the translator cannot yet carry to the
   compiled run, not a judgement about Perl.
+- A whole number that passes 64 bits while the app runs. perl grows it
+  into a number with a fraction; the compiled run stops the handler
+  there. A literal that comes to that is refused; a sum that reaches it
+  at run time is not seen by `check`, and the gate is what catches it.
+- A list read past its end. perl answers `undef` and carries on; the
+  compiled run stops the handler. `$xs[$i] // $d` says what to answer
+  instead, and `check` does not yet ask for it.
 - No references except the ones named here: a list or a hash passed to
   an element, and a class of your own. No code references beyond
   handlers, no references to references, no `ref`.

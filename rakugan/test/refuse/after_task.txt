@@ -1,0 +1,3 @@
+test/refuse/after_task.pl:10:9: Rakugan cannot take this — `task` is the last thing a handler does: the compiled run reaches these lines when the work is done, and perl reaches them at once; write them before the `task`
+            $status = "working";
+            ^

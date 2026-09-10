@@ -135,6 +135,19 @@ sub numbers {
         row('mod_int', [tag_int($c->[0]), tag_int($c->[1])], tag_int($c->[0] % $c->[1]));
         row('div_int', [tag_int($c->[0]), tag_int($c->[1])], tag_float($c->[0] / $c->[1]));
     }
+    for my $c ([7.5, 2.5], [-7.0, 2.0], [1.0, 3.0], [0.1, 0.3], [1e300, 1e-10]) {
+        row('div_num', [tag_float($c->[0]), tag_float($c->[1])], tag_float($c->[0] / $c->[1]));
+    }
+    # What `die` hands a `catch`: the place is appended unless the text
+    # ends its own line. perl names its own place here, so the row hands
+    # the twin the suffix perl used and asks for the same text back.
+    for my $m ('boom', "boom\n", 'two words', '') {
+        eval { die $m };
+        my $got = $@;
+        my $said = length $m ? $m : 'Died';
+        my $at = $m =~ /\n\z/ ? " at nowhere.pl line 1.\n" : substr($got, length $said);
+        row('die_text', [tag_str($m), tag_str($at)], tag_str($got));
+    }
     {
         # perl warns when it reads a number off something that is not
         # one, and answering that is exactly what the twin is for.

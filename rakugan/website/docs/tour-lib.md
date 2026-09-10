@@ -1,7 +1,7 @@
 <!-- Written by website/tools/tour_pages.pl from the tour. Edit the tour. -->
 # Perl, data, and work
 
-Perl's own library, the framework's, and work that must not freeze the window.
+Perl's own library, the framework's, what to do when a call fails, and work that must not freeze the window.
 
 ## Perl's own standard library
 
@@ -100,6 +100,82 @@ runs read the one file the same way:
 
 Write `?` in the statement and put the values beside it: text a person
 typed can never become part of the statement that way.
+
+
+## When something fails
+
+A call that can fail has two forms, and the `_or` twin is the one to
+reach for first: `fs_read_text_or($path, "")` folds the failure into a
+default and asks nothing more. When the reason matters, catch it.
+`try` / `catch` is perl's own, written as perl 5.40 writes it, and `$e`
+holds what perl would hand it: the message, then the file and the line
+of the statement that failed.
+
+<!-- script: click:read,dump,click:halve,dump -->
+```perl
+use Rakugan;
+
+class Notes {
+    use Rakugan;
+    field $body  = "(none)";
+    field $share = 0.0;
+    field $count = 0;
+    field $note  = "-";
+
+    method read {
+        try {
+            $body = fs_read_text("demo/.gate/absent.txt");
+            $note = "read";
+        } catch ($e) {
+            $note = "no file: $e";
+        }
+    }
+
+    method halve {
+        try {
+            $share = 100 / $count;
+        } catch ($e) {
+            $note = $e;
+        }
+    }
+
+    method view {
+        return column(
+            text("body: $body"),
+            text("share: $share"),
+            text("note: $note"),
+            row(
+                button("read",  on_click => sub { $self->read }),
+                button("halve", on_click => sub { $self->halve }),
+                spacing => 6,
+            ),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Notes->new, title => "failing");
+```
+
+Uncaught, a failure stops the handler. The lines before it have taken
+effect, the lines after it do not run, the app stays up, and the
+message goes to standard error, in both runs. `die "…"` fails on
+purpose; `warn "…"` writes to standard error and carries on. Each adds
+` at FILE line N.` unless the text ends its own line, as perl does, and
+the compiled run names the same file and line.
+
+Perl's own failures are in the same arrangement: a division by zero, a
+`%` by zero and the root of a negative number die with perl's words in
+both runs, and a `try` around them catches them. Of the framework's
+calls, `fs_read_text`, `http_get_text`, `http_post_text` and
+`sqlite_query_int` can be caught; the other calls that can fail are
+refused inside a `try` by name, and their `_or` twins are the way to
+write them there. Three shapes a `try` does not reach yet: a loop (put
+the `try` inside the loop, around the line that can fail), a method
+that can fail (put the `try` inside the method), and `finally`, because
+the compiled run stops the handler at the failure and has no place that
+runs after it either way.
 
 
 ## Timers and work off the window's thread

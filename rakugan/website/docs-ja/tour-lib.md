@@ -1,7 +1,7 @@
 <!-- Written by website/tools/tour_pages.pl from the tour. Edit the tour. -->
 # Perl とデータとタスク
 
-Perl 自身のライブラリ、フレームワークのライブラリ、ウィンドウを固めない処理の出し方。
+Perl 自身のライブラリ、フレームワークのライブラリ、失敗したときの書き方、ウィンドウを固めない処理の出し方。
 
 ## Perl 自身の標準ライブラリ
 
@@ -95,6 +95,77 @@ run(Stats->new, title => "stats");
 
 文には `?` を書き、値は別の引数として渡します。
 そうすれば、人が打った文字が文の一部になることはありません。
+
+
+## 失敗したとき
+
+失敗しうる呼び出しには二つの形があり、先に手に取るのは `_or` の形です。
+`fs_read_text_or($path, "")` は失敗を既定値に畳み込み、それ以上は何も求めません。
+理由が要るときは捕まえます。
+`try` と `catch` は perl 5.40 が書くとおりの perl 自身のもので、`$e` には perl が渡すものがそのまま入ります。
+文面と、失敗した文のファイル名と行番号です。
+
+<!-- script: click:read,dump,click:halve,dump -->
+```perl
+use Rakugan;
+
+class Notes {
+    use Rakugan;
+    field $body  = "(none)";
+    field $share = 0.0;
+    field $count = 0;
+    field $note  = "-";
+
+    method read {
+        try {
+            $body = fs_read_text("demo/.gate/absent.txt");
+            $note = "read";
+        } catch ($e) {
+            $note = "no file: $e";
+        }
+    }
+
+    method halve {
+        try {
+            $share = 100 / $count;
+        } catch ($e) {
+            $note = $e;
+        }
+    }
+
+    method view {
+        return column(
+            text("body: $body"),
+            text("share: $share"),
+            text("note: $note"),
+            row(
+                button("read",  on_click => sub { $self->read }),
+                button("halve", on_click => sub { $self->halve }),
+                spacing => 6,
+            ),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Notes->new, title => "failing");
+```
+
+捕まえなかった失敗は、そのハンドラを止めます。
+手前の行は効いたまま、後ろの行は走らず、アプリは開いたままで、文面は標準エラーに出ます。
+これは二つの実行で同じです。
+`die "…"` はわざと失敗させる書き方で、`warn "…"` は標準エラーに書いてそのまま進みます。
+どちらも perl と同じく、文面が改行で終わっていなければ ` at FILE line N.` を付け足します。
+コンパイルした実行も、同じファイル名と行番号を言います。
+
+Perl 自身の失敗も同じ扱いです。
+ゼロでの割り算、ゼロでの `%`、負の数の平方根は、二つの実行で perl の文面のとおりに die し、`try` で囲めば捕まります。
+フレームワークの呼び出しのうち捕まえられるのは `fs_read_text`、`http_get_text`、`http_post_text`、`sqlite_query_int` です。
+それ以外の失敗しうる呼び出しは `try` の中では名前を挙げて断られるので、そこでは `_or` の形を書きます。
+`try` がまだ届かない書き方が三つあります。
+ループ（`try` をループの中に入れ、失敗しうる行を囲みます）、失敗しうるメソッド（`try` をメソッドの中に入れます）、そして `finally` です。
+コンパイルした実行は失敗した文でハンドラを止めるだけで、どちらの道でも必ず動く場所を持たないからです。
 
 
 ## タイマーと、ウィンドウの外でする処理

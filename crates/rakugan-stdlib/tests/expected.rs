@@ -185,6 +185,8 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "fmod_of" => V::F(fmod_of(a[0].f(), a[1].f())),
         "mod_int" => V::I(mod_int(a[0].i(), a[1].i())),
         "div_int" => V::F(div_int(a[0].i(), a[1].i())),
+        "div_num" => V::F(div_num(a[0].f(), a[1].f())),
+        "die_text" => V::S(die_text(&a[0].s(), &a[1].s())),
         "int_of" => V::I(int_of(a[0].f())),
         "num_of" => V::F(num_of(&a[0].s())),
         "num_text" => V::S(num_text(a[0].f())),

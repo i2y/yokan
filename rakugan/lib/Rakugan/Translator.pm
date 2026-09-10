@@ -40,6 +40,8 @@ use strict;
 use warnings;
 use utf8;
 use PPI;
+use File::Spec;
+use Math::BigInt;
 use Rakugan::Vocab;
 use Rakugan::Manifest;
 
@@ -83,6 +85,15 @@ my %NOT_TAKEN = (
     ref     => '`ref` asks what something is while the app runs; in the compiled run every value '
              . 'already has one type, and the translator knows it',
 );
+# The framework's functions that cannot fail: the `_or` twins, and the
+# rest that answer a default or a yes-or-no. Anything else inside a
+# `try` is either the `!T` form the manifest marks or refused by name,
+# because a failure the compiled run cannot hand to the catch would be
+# caught in one run and not the other.
+my %CANNOT_FAIL = map { $_ => 1 } qw(fs_exists fs_app_dir clipboard_set_text clipboard_get_text
+                                     keys_down keys_pressed keys_released audio_play audio_stop
+                                     notify_send strings_to_int strings_to_float http_status);
+sub cannot_fail { my ($name) = @_; return $CANNOT_FAIL{$name} || $name =~ /_or\z/ }
 my %ELEMENT = %Rakugan::Vocab::ELEMENT;
 my %RIDER = %Rakugan::Vocab::RIDER;
 my @RIDERS = @Rakugan::Vocab::RIDERS;
@@ -108,6 +119,7 @@ my $uses_pl;                # the twins of Perl's own functions were called
 my $uses_std;               # the framework's own standard library was called
 our $re_at;                 # the token a piece of Perl inside a string came from
 my $tmp;                    # a counter for the names this file makes up
+my $where;                  # the app's path as perl names it in a message: absolute, because that is how the command starts perl
 
 # The one entry point: the .pix text and the window, or a refusal thrown
 # as a string that already says everything.
@@ -118,6 +130,7 @@ sub translate {
      @lifted, @values, %value) = ();
     $app_class = undef;
     ($app_var, $uses_pl, $uses_std, $tmp) = (undef, 0, 0, 0);
+    $where = File::Spec->rel2abs($path);
     open my $fh, '<:encoding(UTF-8)', $path or die "$path: $!\n";
     my $src = do { local $/; <$fh> };
     close $fh;
@@ -208,6 +221,14 @@ class Pl {
   static fn reSplit(pat: String, mods: String, s: String) List<String> @rust("rakugan_stdlib::re_split")
   static fn reAll(pat: String, mods: String, s: String) List<String> @rust("rakugan_stdlib::re_all")
   static fn reCount(pat: String, mods: String, s: String) Int @rust("rakugan_stdlib::re_count")
+  static fn divNum(a: Float, b: Float) Float @rust("rakugan_stdlib::div_num")
+  static fn dieText(text: String, at: String) String @rust("rakugan_stdlib::die_text")
+  static fn warnAt(text: String, at: String) Int @rust("rakugan_stdlib::warn_at")
+  static fn dieAt(text: String, at: String) Int @rust("rakugan_stdlib::die_at")
+  static fn tryDivInt(a: Int, b: Int, at: String) !Float @rust("rakugan_stdlib::try_div_int")
+  static fn tryDivNum(a: Float, b: Float, at: String) !Float @rust("rakugan_stdlib::try_div_num")
+  static fn tryModInt(a: Int, b: Int, at: String) !Int @rust("rakugan_stdlib::try_mod_int")
+  static fn trySqrt(v: Float, at: String) !Float @rust("rakugan_stdlib::try_sqrt")
 }
 RPI
 }
@@ -818,7 +839,7 @@ sub ternary_cut {
 sub conditional {
     my ($toks, $q, $c, $env) = @_;
     my $lift = { by => {}, order => [] };
-    my $lenv = { %$env, lift => $lift };
+    my $lenv = { %$env, lift => $lift, no_try => '`?:`' };
     my $cond = parse_expr([@{$toks}[0 .. $q - 1]], { %$lenv, at => $toks->[$q] });
     refuse($toks->[$q], "a `?` asks a bool (got $cond->{ty}); Perl's truthiness of a number or a string "
                       . 'is not in the translator')
@@ -914,18 +935,32 @@ sub binop {
         refuse($node, "`%` needs whole numbers on both sides (got $l->{ty} and $r->{ty})")
             unless $l->{ty} eq 'Int' && $r->{ty} eq 'Int';
         $uses_pl = 1;
-        return { ty => 'Int', pix => "Pl.modInt($l->{pix}, $r->{pix})" };
+        return fallible($env, $node, 'Int', "Pl.modInt($l->{pix}, $r->{pix})",
+                        "Pl.tryModInt($l->{pix}, $r->{pix}, " . at_pix($env, $node) . ')');
     }
     if ($o eq '/') {
         refuse($node, "`/` needs numbers on both sides (got $l->{ty} and $r->{ty})") unless num_ty($l->{ty}) && num_ty($r->{ty});
-        # Perl's `/` answers a Num even for two whole numbers.
-        if ($l->{ty} eq 'Int' && $r->{ty} eq 'Int') {
-            $uses_pl = 1;
-            return { ty => 'Float', pix => "Pl.divInt($l->{pix}, $r->{pix})" };
-        }
-        return { ty => 'Float', pix => group($l->{pix}) . ' / ' . group($r->{pix}) };
+        $uses_pl = 1;
+        # Perl's `/` answers a Num even for two whole numbers, and dies on
+        # a zero divisor whatever the numbers are; a raw division would
+        # answer Inf, so both go through a twin.
+        my $fn = $l->{ty} eq 'Int' && $r->{ty} eq 'Int' ? 'DivInt' : 'DivNum';
+        return fallible($env, $node, 'Float', 'Pl.' . lcfirst($fn) . "($l->{pix}, $r->{pix})",
+                        "Pl.try$fn($l->{pix}, $r->{pix}, " . at_pix($env, $node) . ')');
     }
     if ($o =~ /\A(?:\+|-|\*)\z/) {
+        # Two whole numbers written out are worked out here, because the
+        # compiled run's own compiler refuses to build an overflow it can
+        # see — and that is the dialect's refusal to make, by name.
+        if ($l->{pix} =~ /\A-?\d+\z/ && $r->{pix} =~ /\A-?\d+\z/) {
+            my ($a, $b) = (Math::BigInt->new($l->{pix}), Math::BigInt->new($r->{pix}));
+            my $c = $o eq '+' ? $a + $b : $o eq '-' ? $a - $b : $a * $b;
+            refuse($node, "this comes to $c, and a whole number here holds 64 bits — perl would grow it into "
+                        . 'a number with a fraction, which the compiled run cannot follow; write it with a '
+                        . '`.0` to mean that number')
+                if $c > Math::BigInt->new('9223372036854775807') || $c < Math::BigInt->new('-9223372036854775808');
+            return { ty => 'Int', pix => "$c" };
+        }
         # `0 + $s` is how Perl says "this string as a number", and it is
         # the only place the two mix: perl reads as much of a number off
         # the front as it can, and the twin reads it the same way.
@@ -1312,6 +1347,9 @@ sub method_call {
     refuse($word, "`$name` touches the app's state, and building a view only reads; "
                 . 'give it what it needs as parameters, or read a field')
         if $m->{stateful} && $env->{ctx} eq 'view';
+    refuse($word, "`$name` can fail — it divides, takes a root, writes `die` or calls the library — and a "
+                . "`try` here does not reach into it yet; put the `try` inside `$name`, around the line that can fail")
+        if $env->{try} && $m->{may_fail};
     my @vals = call_args($word, $args, $m, $env);
     refuse($word, "`$name` does not say what it answers; write `:Sig("
                 . join(', ', map { $_->[1] } @{ $m->{params} }) . " => Str)`")
@@ -1454,6 +1492,9 @@ sub word_expr {
         refuse($w, "`$name` takes a $u->[0] (got $v->{ty})")
             unless $v->{ty} eq $u->[0] || ($u->[0] eq 'Float' && $v->{ty} eq 'Int');
         $uses_pl = 1;
+        # perl dies on the root of a negative number.
+        return fallible($env, $w, 'Float', "Pl.sqrtOf($v->{pix})", "Pl.trySqrt($v->{pix}, " . at_pix($env, $w) . ')')
+            if $name eq 'sqrt';
         return { ty => $u->[1], pix => "Pl.$u->[2]($v->{pix})" };
     }
     if ($name eq 'abs') {
@@ -1569,7 +1610,7 @@ sub pipeline_rhs {
     # What the block's own expression needs said first belongs INSIDE
     # the loop: it reads the row.
     my @first;
-    my $inner = { %$env, pre => \@first,
+    my $inner = { %$env, pre => \@first, in_loop => 1,
                   vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
     my $out = '__lc' . ++$tmp;
     my @body = strip_semicolon(sig($st[0]));
@@ -1605,7 +1646,7 @@ sub first_of {
     refuse($block, '`first` takes one expression in its block') unless @st == 1;
     my $it = '__it' . ++$tmp;
     my @first;
-    my $inner = { %$env, pre => \@first,
+    my $inner = { %$env, pre => \@first, in_loop => 1,
                   vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => $it, fixed => 1 } } };
     my $out = '__f' . ++$tmp;
     my $cond = cond_of([strip_semicolon(sig($st[0]))], $inner, $block);
@@ -1656,7 +1697,18 @@ sub framework_call {
     # Inside work the app started, a call that waits is handed to the
     # engine's own pool rather than held on the window's thread.
     my $wait = $env->{awaiting} ? 'await ' : '';
-    return { ty => $ty, pix => "$wait$row->{class}.$row->{fn}(" . join(', ', @vals) . ')' };
+    my $args = join(', ', @vals);
+    if ($env->{try}) {
+        # The `!T` twin the manifest marks, matched on the spot; a row
+        # that can fail without one has nothing the catch could receive.
+        return fallible($env, $w, $ty, "$wait$row->{class}.$row->{fn}($args)",
+                        "$wait$row->{class}.try" . ucfirst($row->{fn}) . "($args)", at_pix($env, $w))
+            if $row->{try};
+        refuse($w, "`$name` can fail, and the library has no form of it a `try` can take yet; call it "
+                 . 'before the `try`, or write its `_or` twin')
+            unless cannot_fail($name);
+    }
+    return { ty => $ty, pix => "$wait$row->{class}.$row->{fn}($args)" };
 }
 
 # What a named unary operator was given: `uc $s` and `uc($s)` both.
@@ -2382,34 +2434,215 @@ sub parse_handler {
     return "App.$id(" . join(', ', @args) . ')';
 }
 
+# --- what can fail ----------------------------------------------------------
+# Where the statement is, the way perl says it: ` at FILE line N.`, on a
+# line of its own. perl was started on the absolute path, so that is
+# the path both runs name.
+sub at_pix {
+    my ($env, $node) = @_;
+    return '"' . pix_text($node, " at $where line " . ($env->{line} // 0) . ".\n") . '"';
+}
+
+# A call that can fail: outside a `try` it is the plain form, which
+# stops the handler in both runs; inside one it is the `!T` form,
+# matched on the spot, so the catch runs where perl's would. The `case`
+# opens before the statement and closes after it, and what follows the
+# statement is wrapped by `stmt_list`. `$append` is the place to add to
+# the message when the twin does not carry it already.
+sub fallible {
+    my ($env, $node, $ty, $plain, $try, $append) = @_;
+    my $fr = $env->{try} or return { ty => $ty, pix => $plain };
+    refuse($node, 'a `try` does not reach into a loop yet; put the `try` inside the loop, around the line that can fail')
+        if $env->{in_loop};
+    refuse($node, "a `try` does not reach into $env->{no_try} yet; write the `if` out") if $env->{no_try};
+    $fr->{points}++;
+    my $v = '__t' . ++$tmp;
+    my $e = '__e' . $tmp;
+    push @{ $env->{pre} }, "case $try {", "  when ok($v) {";
+    unshift @{ $env->{post} }, '  }', "  when err($e) {", "    $fr->{ok} = false",
+        "    var $fr->{evar} : String = $e" . (defined $append ? " + $append" : ''),
+        (map { "    $_" } $fr->{catch}->()), '  }', '}';
+    return { ty => $ty, pix => $v };
+}
+
+# What `die` or `warn` says: the pieces after the word, joined, each a
+# string or something perl prints as one.
+sub message_pix {
+    my ($toks, $env, $w, $bare) = @_;
+    my @t = @$toks;
+    return '"' . pix_text($w, $bare) . '"' unless @t;
+    my @pieces;
+    if (@t == 1 && $t[0]->isa('PPI::Structure::List')) {
+        my @a = split_args($t[0]);
+        refuse($w, '`' . $w->content . '` takes what to say, in order') if grep { defined $_->{key} } @a;
+        @pieces = map { $_->{toks} } @a;
+    } else {
+        my @cur;
+        for my $t (@t) {
+            if (is_op($t, ',')) { push @pieces, [@cur]; @cur = () } else { push @cur, $t }
+        }
+        push @pieces, [@cur] if @cur;
+    }
+    my @pix;
+    for my $p (@pieces) {
+        next unless @$p;
+        my $v = parse_expr($p, { %$env, at => $p->[0] });
+        push @pix, $v->{ty} eq 'String' ? $v->{pix} : hole($p->[0], $v, $env);
+    }
+    refuse($w, '`' . $w->content . '` says something: `' . $w->content . ' "…"`') unless @pix;
+    return @pix == 1 ? $pix[0] : join(' + ', map { group($_) } @pix);
+}
+
+# `warn "…";` — the text to standard error in both runs, with the place
+# appended the way perl appends it.
+sub warn_stmt {
+    my ($toks, $env) = @_;
+    my ($w, @rest) = @$toks;
+    refuse($w, '`warn` writes to standard error, and building a view only reads; warn from the handler that set the value')
+        if $env->{ctx} eq 'view';
+    my $msg = message_pix(\@rest, $env, $w, "Warning: something's wrong");
+    $uses_pl = 1;
+    return 'var __warn' . ++$tmp . " : Int = Pl.warnAt($msg, " . at_pix($env, $w) . ')';
+}
+
+# `die "…";` — the handler stops here in both runs, and each says so on
+# standard error. Inside a `try` the catch runs instead, with `$e` the
+# text perl would give it.
+sub die_stmt {
+    my ($toks, $env) = @_;
+    my ($w, @rest) = @$toks;
+    refuse($w, '`die` stops a handler, and building a view only reads; what a view shows was made good in the handler that set it')
+        if $env->{ctx} eq 'view';
+    my $msg = message_pix(\@rest, $env, $w, 'Died');
+    my $at = at_pix($env, $w);
+    $uses_pl = 1;
+    $env->{dead} = 1 unless $env->{conditional};
+    if (my $fr = $env->{try}) {
+        refuse($w, 'a `try` does not reach into a loop yet; put the `try` inside the loop, around the line that can fail')
+            if $env->{in_loop};
+        $fr->{points}++;
+        return ("$fr->{ok} = false", "var $fr->{evar} : String = Pl.dieText($msg, $at)", $fr->{catch}->());
+    }
+    return 'var __die' . ++$tmp . " : Int = Pl.dieAt($msg, $at)";
+}
+
+# `try { … } catch ($e) { … }`. The body runs until something fails;
+# then the catch runs with the message, and the lines after the failure
+# do not. Both runs do this; the compiled one has no unwinding, so each
+# thing that can fail is matched where it stands (`fallible`) and the
+# lines after it are wrapped in the flag the catch clears (`stmt_list`).
+sub try_stmt {
+    my ($st, $toks, $env) = @_;
+    my @t = @$toks;
+    my $w = $t[0];
+    refuse($w, '`try` belongs in a handler or a method; building a view only reads') if $env->{ctx} eq 'view';
+    my ($body, $cw, $clist, $cblock) = @t[1 .. 4];
+    refuse($w, '`try` takes a block, then `catch ($e)` and its block')
+        unless $body && $body->isa('PPI::Structure::Block') && is_word($cw, 'catch')
+            && $clist && $clist->isa('PPI::Structure::List') && $cblock && $cblock->isa('PPI::Structure::Block');
+    my @cv = map { sig($_) } $clist->schildren;
+    refuse($clist, '`catch` names what it caught: `catch ($e)`') unless @cv == 1 && is_sym($cv[0], '$');
+    my $evar = substr $cv[0]->content, 1;
+    refuse($cv[0], "`\$$evar` is already in scope here") if $env->{vars}{$evar};
+    refuse($cv[0], "`\$$evar` is a field of $class_name; a name declared here would hide it") if exists $field{$evar};
+    refuse($t[5], '`finally` runs after either path, and the compiled run has no unwinding to hang it on; '
+                . 'write the line after the `try`')
+        if is_word($t[5], 'finally');
+    my $ok = '__ok' . ++$tmp;
+    my $frame = { ok => $ok, evar => $evar, points => 0 };
+    # The catch runs outside the try: a failure inside it is the
+    # enclosing code's to catch, or nobody's.
+    $frame->{catch} = sub {
+        my $cenv = scope($env);
+        $cenv->{vars}{$evar} = { ty => 'String', pix => $evar, fixed => 1 };
+        return stmts($cblock, $cenv);
+    };
+    my $tenv = scope($env);
+    ($tenv->{try}, $tenv->{in_loop}) = ($frame, 0);
+    my @lines = ("var $ok = true", stmts($body, $tenv));
+    return (@lines, rest_stmts($st, $cblock, $env));
+}
+
+# PPI does not know `try`, so the statements after a `try` up to the
+# next `;` arrive inside its statement. They are read again on their
+# own, padded to where they stand in the file so a refusal still names
+# the right line and column.
+sub rest_stmts {
+    my ($st, $last, $env) = @_;
+    my @kids = $st->children;
+    my ($idx) = grep { $kids[$_] == $last } 0 .. $#kids;
+    my @rest = @kids[$idx + 1 .. $#kids];
+    shift @rest while @rest && !$rest[0]->significant;
+    my @sig = grep { $_->significant } @rest;
+    return () unless @sig;
+    return () if @sig == 1 && $sig[0]->isa('PPI::Token::Structure') && $sig[0]->content eq ';';
+    my $first = $rest[0];
+    my $text = ("\n" x ($first->line_number - 1)) . (' ' x ($first->column_number - 1))
+             . join('', map { $_->content } @rest);
+    my $doc = PPI::Document->new(\$text) or refuse($first, 'this does not read as Perl');
+    return stmts($doc, $env);
+}
+
 # --- statements -----------------------------------------------------------
 # The lines of a handler, a method or a loop's body.
 sub stmts {
     my ($block, $env) = @_;
+    my @st = grep { !$_->isa('PPI::Statement::Null') } $block->schildren;
+    my ($saved_dead, $saved_task) = ($env->{dead}, $env->{after_task});
+    ($env->{dead}, $env->{after_task}) = (0, 0);
+    my @out = stmt_list(\@st, $env);
+    ($env->{dead}, $env->{after_task}) = ($saved_dead, $saved_task);
+    return @out;
+}
+
+sub stmt_list {
+    my ($sts, $env) = @_;
     my @out;
-    for my $st ($block->schildren) {
-        next if $st->isa('PPI::Statement::Null');
+    for my $i (0 .. $#$sts) {
+        my $st = $sts->[$i];
+        refuse((sig($st))[0], 'nothing after `die` runs; drop these lines, or put the `die` under an `if`')
+            if $env->{dead};
+        refuse((sig($st))[0], '`task` is the last thing a handler does: the compiled run reaches these lines '
+                            . 'when the work is done, and perl reaches them at once; write them before the `task`')
+            if $env->{after_task};
+        my $fr = $env->{try};
+        my $before = $fr ? $fr->{points} : 0;
         push @out, stmt($st, $env);
+        # Something in that statement could have failed, and if it did
+        # the catch has run: what follows runs only when it did not.
+        if ($fr && $fr->{points} > $before && $i < $#$sts) {
+            push @out, "if $fr->{ok} {", (map { "  $_" } stmt_list([@{$sts}[$i + 1 .. $#$sts]], $env)), '}';
+            last;
+        }
     }
     return @out;
 }
 
+# The lines a statement needs before it (an index made good, a `case`
+# opened on something that can fail) and after it (that `case` closed).
 sub with_pre {
     my ($env, $code) = @_;
-    my $saved = $env->{pre};
-    $env->{pre} = [];
+    my ($saved, $saved_post) = ($env->{pre}, $env->{post});
+    ($env->{pre}, $env->{post}) = ([], []);
     my @out = $code->();
     my @pre = @{ $env->{pre} };
-    $env->{pre} = $saved;
-    return (@pre, @out);
+    my @post = @{ $env->{post} };
+    ($env->{pre}, $env->{post}) = ($saved, $saved_post);
+    return (@pre, @out, @post);
 }
 
 sub stmt {
     my ($st, $env) = @_;
-    return with_pre($env, sub {
+    # perl names a failure by the line its statement starts on, and the
+    # compiled run says the same line.
+    my $saved_line = $env->{line};
+    my ($first) = sig($st);
+    $env->{line} = $first->line_number if $first;
+    my @out = with_pre($env, sub {
         return compound($st, $env) if $st->isa('PPI::Statement::Compound');
         my @t = strip_semicolon(sig($st));
         refuse($st, 'an empty statement') unless @t;
+        return try_stmt($st, \@t, $env) if is_word($t[0], 'try');
         # a trailing `if` / `unless` / `while` / `for`
         for my $i (1 .. $#t) {
             next unless is_word($t[$i]) && $t[$i]->content =~ /\A(?:if|unless|while|for|foreach)\z/;
@@ -2418,20 +2651,28 @@ sub stmt {
             my @tail = @t[$i + 1 .. $#t];
             if ($kw eq 'for' || $kw eq 'foreach') {
                 my $over = list_source(\@tail, $env, $t[$i]);
-                my $inner = { %$env, vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => '__it' } } };
+                my $inner = { %$env, in_loop => 1,
+                              vars => { %{ $env->{vars} }, '_' => { ty => $over->{ty}, pix => '__it' } } };
                 my @body = stmt_run(\@head, $inner, $st);
                 return ("for __it in $over->{over} {", (map { "  $_" } @body), '}');
             }
             my %caught;
-            my $cond = cond_of(\@tail, $env, $t[$i], \%caught);
+            my $loop = $kw eq 'while';
+            my $cond = cond_of(\@tail, $loop ? { %$env, in_loop => 1 } : $env, $t[$i], \%caught);
             $cond = "!($cond)" if $kw eq 'unless';
-            my $guarded = %caught && $kw ne 'unless' ? { %$env, capture => \%caught } : $env;
+            # What stands before the condition runs only sometimes, so a
+            # `die` there does not make the lines after it dead.
+            my $guarded = { %$env, conditional => 1, ($loop ? (in_loop => 1) : ()) };
+            $guarded->{capture} = \%caught if %caught && $kw ne 'unless';
             my @body = stmt_run(\@head, $guarded, $st);
-            return ("$kw $cond {", (map { "  $_" } @body), '}') if $kw eq 'while';
+            $env->{async} = 1 if $guarded->{async};
+            return ("$kw $cond {", (map { "  $_" } @body), '}') if $loop;
             return ("if $cond {", (map { "  $_" } @body), '}');
         }
         return stmt_run(\@t, $env, $st);
     });
+    $env->{line} = $saved_line;
+    return @out;
 }
 
 # The statement a run of tokens is, with the lines any index guard needs
@@ -2453,6 +2694,8 @@ sub simple_stmt {
     if (is_word($head, 'pop') || is_word($head, 'shift'))    { return shrink(\@t, $env) }
     if (is_word($head, 'delete')) { return drop(\@t, $env) }
     if (is_word($head, 'task'))   { return task_stmt(\@t, $env) }
+    if (is_word($head, 'warn'))   { return warn_stmt(\@t, $env) }
+    if (is_word($head, 'die'))    { return die_stmt(\@t, $env) }
     if (is_sym($head, '$') && ($head->content eq '$self' || (defined $app_var && $head->content eq "\$$app_var"))) {
         my $i = 0;
         my $v = symbol_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
@@ -2661,8 +2904,8 @@ sub assign {
         return "$target = $d->{pix}";
     }
     if ($o eq '%') {
-        $uses_pl = 1;
-        return "$target = Pl.modInt($target, $v->{pix})";
+        my $d = binop($op, '%', { ty => $tty, pix => $target }, $v, $env);
+        return "$target = $d->{pix}";
     }
     return "$target = $target $o " . group($v->{pix});
 }
@@ -2756,8 +2999,8 @@ sub loop {
     if (is_word($t[0], 'while')) {
         refuse($t[0], '`while` takes its condition in parentheses and a block')
             unless $t[1] && $t[1]->isa('PPI::Structure::Condition') && $t[2] && $t[2]->isa('PPI::Structure::Block');
-        my $c = cond_of([$t[1]], $env, $t[0]);
-        return ("while $c {", (map { "  $_" } stmts($t[2], scope($env))), '}');
+        my $c = cond_of([$t[1]], { %$env, in_loop => 1 }, $t[0]);
+        return ("while $c {", (map { "  $_" } stmts($t[2], { %{ scope($env) }, in_loop => 1 })), '}');
     }
     refuse($t[0], 'a loop is `for my $x (@items) { ... }` or `for my $i (0 .. $n) { ... }`')
         unless is_word($t[1], 'my') && is_sym($t[2], '$') && $t[3] && $t[3]->isa('PPI::Structure::List')
@@ -2766,6 +3009,7 @@ sub loop {
     my $over = list_source([$t[3]], $env, $t[0]);
     my $inner = scope($env);
     $inner->{vars}{$name} = { ty => $over->{ty}, pix => $name, fixed => 1 };
+    $inner->{in_loop} = 1;
     $inner->{nonneg} = { %{ $env->{nonneg} // {} }, $name => 1 } if $over->{counted};
     return ("for $name in $over->{over} {",
             (map { "  $_" } stmts($t[4], $inner)), '}');
@@ -2809,6 +3053,7 @@ sub task_stmt {
     push @lines, "var $name : $ans->{ty} = $ans->{pix}";
     push @lines, stmts($dblock, $denv);
     $env->{async} = 1;
+    $env->{after_task} = 1;
     return @lines;
 }
 
@@ -3242,6 +3487,13 @@ sub classify {
         $m->{paints} = grep {
             $OP{ $_->content } && !is_op($_->sprevious_sibling, '->')
         } @{ $m->{block}->find('PPI::Token::Word') || [] };
+        # What could stop the method: a division, a root, a `die`, or a
+        # call into the library with no `_or`. A `try` cannot reach into
+        # a method, so a caller inside one is told.
+        $m->{may_fail} = grep({ $_->content =~ m{\A[/%]=?\z} } @{ $m->{block}->find('PPI::Token::Operator') || [] })
+            || grep({ my $n = $_->content;
+                      $n eq 'die' || $n eq 'sqrt' || ($Rakugan::Manifest::NAMES{$n} && !cannot_fail($n)) }
+                    @{ $m->{block}->find('PPI::Token::Word') || [] });
     }
     my $changed = 1;
     while ($changed) {
@@ -3249,6 +3501,8 @@ sub classify {
         for my $m (@methods) {
             my $st = $m->{own_fields} || grep { $method{$_} && $method{$_}{stateful} } @{ $m->{calls} };
             if ($st && !$m->{stateful}) { $m->{stateful} = 1; $changed = 1 }
+            my $mf = grep { $method{$_} && $method{$_}{may_fail} } @{ $m->{calls} };
+            if ($mf && !$m->{may_fail}) { $m->{may_fail} = 1; $changed = 1 }
             my $el = grep {
                 is_word($_) && ($ELEMENT{ $_->content } || ($method{ $_->content } && $method{ $_->content }{element}))
             } @{ $m->{answers} };

@@ -1,0 +1,3 @@
+test/refuse/try_finally.pl:9:50: Rakugan cannot take this — `finally` runs after either path, and the compiled run has no unwinding to hang it on; write the line after the `try`
+            try { $n = 1 } catch ($e) { $note = $e } finally { $n = 2 }
+                                                     ^

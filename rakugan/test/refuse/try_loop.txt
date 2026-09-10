@@ -1,0 +1,3 @@
+test/refuse/try_loop.pl:12:44: Rakugan cannot take this — a `try` does not reach into a loop yet; put the `try` inside the loop, around the line that can fail
+                for my $x (@xs) { $total += $x / $n }
+                                               ^

@@ -1,0 +1,3 @@
+test/refuse/literal_overflow.pl:8:34: Rakugan cannot take this — this comes to 18446744073709551616, and a whole number here holds 64 bits — perl would grow it into a number with a fraction, which the compiled run cannot follow; write it with a `.0` to mean that number
+            $n = 4611686018427387904 * 4;
+                                     ^

@@ -56,6 +56,15 @@ mod_int i:-7 i:-3 -> i:-1
 div_int i:-7 i:-3 -> f:4002aaaaaaaaaaab
 mod_int i:10 i:5 -> i:0
 div_int i:10 i:5 -> f:4000000000000000
+div_num f:401e000000000000 f:4004000000000000 -> f:4008000000000000
+div_num f:c01c000000000000 f:4000000000000000 -> f:c00c000000000000
+div_num f:3ff0000000000000 f:4008000000000000 -> f:3fd5555555555555
+div_num f:3fb999999999999a f:3fd3333333333333 -> f:3fd5555555555556
+div_num f:7e37e43c8800759c f:3ddb7cdfd9d7bdbb -> f:7ff0000000000000
+die_text s:boom s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:boom%20at%20tools/gen_expected.pl%20line%20145.%0a
+die_text s:boom%0a s:%20at%20nowhere.pl%20line%201.%0a -> s:boom%0a
+die_text s:two%20words s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:two%20words%20at%20tools/gen_expected.pl%20line%20145.%0a
+die_text s: s:%20at%20tools/gen_expected.pl%20line%20145.%0a -> s:Died%20at%20tools/gen_expected.pl%20line%20145.%0a
 num_of s:10 -> f:4024000000000000
 num_of s:3abc -> f:4008000000000000
 num_of s:abc -> f:0000000000000000

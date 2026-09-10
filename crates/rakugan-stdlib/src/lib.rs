@@ -30,6 +30,72 @@ pub fn div_int(a: i64, b: i64) -> f64 {
     a as f64 / b as f64
 }
 
+/// `$a / $b` with a fraction on either side. Perl dies on a zero
+/// divisor whatever the numbers are; a raw division would answer Inf.
+pub fn div_num(a: f64, b: f64) -> f64 {
+    if b == 0.0 {
+        panic!("Illegal division by zero");
+    }
+    a / b
+}
+
+/// What perl says when a message does not end its own line: the
+/// statement's place is appended. `die "boom"` is `boom at FILE line
+/// N.\n`, `die "boom\n"` is `boom\n`. The translator writes the place.
+pub fn die_text(text: &str, at: &str) -> String {
+    // A `die` with nothing to say says "Died".
+    let text = if text.is_empty() { "Died" } else { text };
+    if text.ends_with('\n') {
+        text.to_string()
+    } else {
+        format!("{text}{at}")
+    }
+}
+
+/// `warn`: the text to standard error, the way perl writes it. Answers
+/// 0 so the statement has something to hold.
+pub fn warn_at(text: &str, at: &str) -> i64 {
+    eprint!("{}", die_text(text, at));
+    0
+}
+
+/// `die`: the handler stops here. The engine contains the panic the
+/// way perl's door contains the die, and each prints the message.
+pub fn die_at(text: &str, at: &str) -> i64 {
+    panic!("{}", die_text(text, at))
+}
+
+/// The failures above as `!T`, for a `try` to catch. Each answers the
+/// text perl's `$e` holds, place included; the translator writes the
+/// place, so the twin only has to know perl's words.
+pub fn try_div_int(a: i64, b: i64, at: &str) -> Result<f64, String> {
+    if b == 0 {
+        return Err(format!("Illegal division by zero{at}"));
+    }
+    Ok(a as f64 / b as f64)
+}
+
+pub fn try_div_num(a: f64, b: f64, at: &str) -> Result<f64, String> {
+    if b == 0.0 {
+        return Err(format!("Illegal division by zero{at}"));
+    }
+    Ok(a / b)
+}
+
+pub fn try_mod_int(a: i64, b: i64, at: &str) -> Result<i64, String> {
+    if b == 0 {
+        return Err(format!("Illegal modulus zero{at}"));
+    }
+    Ok(mod_int(a, b))
+}
+
+pub fn try_sqrt(v: f64, at: &str) -> Result<f64, String> {
+    if v < 0.0 {
+        return Err(format!("Can't take sqrt of {}{at}", num_text(v)));
+    }
+    Ok(v.sqrt())
+}
+
 /// `0 + $s`. Perl reads as much of a number off the front of a string
 /// as it can and answers 0 when there is none: `"3abc" + 1` is 4 and
 /// `"abc" + 1` is 1. Leading space is skipped; what follows the number
@@ -924,4 +990,35 @@ pub fn re_all(pat: &str, flags: &str, s: &str) -> Vec<String> {
 /// way perl counts them.
 pub fn re_count(pat: &str, flags: &str, s: &str) -> i64 {
     re_all(pat, flags, s).len() as i64
+}
+
+#[cfg(test)]
+mod failing {
+    //! What stops a handler, and what a `try` is handed instead. The
+    //! tables cannot hold a die, so these hold the words.
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "Illegal division by zero")]
+    fn a_zero_divisor_dies_with_perls_words() {
+        div_num(1.5, 0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "boom at x.pl line 3.")]
+    fn die_names_the_place_unless_the_text_ends_its_line() {
+        die_at("boom", " at x.pl line 3.\n");
+    }
+
+    #[test]
+    fn the_try_forms_carry_the_place() {
+        let at = " at x.pl line 3.\n";
+        assert_eq!(try_div_int(1, 0, at), Err("Illegal division by zero at x.pl line 3.\n".to_string()));
+        assert_eq!(try_div_num(1.0, 0.0, at), Err("Illegal division by zero at x.pl line 3.\n".to_string()));
+        assert_eq!(try_mod_int(7, 0, at), Err("Illegal modulus zero at x.pl line 3.\n".to_string()));
+        assert_eq!(try_sqrt(-2.5, at), Err("Can't take sqrt of -2.5 at x.pl line 3.\n".to_string()));
+        assert_eq!(try_div_int(7, 2, at), Ok(3.5));
+        assert_eq!(try_mod_int(-7, 3, at), Ok(2));
+        assert_eq!(die_text("boom\n", at), "boom\n");
+    }
 }

@@ -8,7 +8,7 @@ the file first, so a shape perl rejects never reaches the translator.
 `check` runs before every build and every gate, needs no compiler and no
 window, and prints nothing at all when there is nothing to say.
 
-Each of the 24 below has a file under `test/refuse/` that triggers it and
+Each of the 31 below has a file under `test/refuse/` that triggers it and
 the message it must print, word for word. The sweep runs them, so a
 refusal cannot quietly change its wording, and this page is quoted from
 those same files.
@@ -121,6 +121,14 @@ test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds 
                 ^
 ```
 
+perl would grow the number into one with a fraction; 64 bits is the edge the dialect holds, and two written numbers are worked out before anything is built.
+
+```console
+test/refuse/literal_overflow.pl:8:34: Rakugan cannot take this — this comes to 18446744073709551616, and a whole number here holds 64 bits — perl would grow it into a number with a fraction, which the compiled run cannot follow; write it with a `.0` to mean that number
+            $n = 4611686018427387904 * 4;
+                                     ^
+```
+
 ## Views and handlers
 
 Building a screen twice has to build the same screen, so building it only reads.
@@ -211,4 +219,52 @@ Outside that `if` it would be whatever the last successful match anywhere had le
 test/refuse/capture_unguarded.pl:10:16: Rakugan cannot take this — what a pattern caught is read where the match is known to have happened: inside the `if` that made it
             $got = $1;
                    ^
+```
+
+The compiled run stops the handler at the failure, so nothing of it runs after that on either path.
+
+```console
+test/refuse/try_finally.pl:9:50: Rakugan cannot take this — `finally` runs after either path, and the compiled run has no unwinding to hang it on; write the line after the `try`
+            try { $n = 1 } catch ($e) { $note = $e } finally { $n = 2 }
+                                                     ^
+```
+
+Inside a loop the catch would run once per failure and the loop would go on; a `try` inside the loop says what happens then.
+
+```console
+test/refuse/try_loop.pl:12:44: Rakugan cannot take this — a `try` does not reach into a loop yet; put the `try` inside the loop, around the line that can fail
+                for my $x (@xs) { $total += $x / $n }
+                                               ^
+```
+
+A method is compiled once, and a `try` outside it cannot reach in; inside it, the line that can fail is right there.
+
+```console
+test/refuse/try_method.pl:12:22: Rakugan cannot take this — `halve` can fail — it divides, takes a root, writes `die` or calls the library — and a `try` here does not reach into it yet; put the `try` inside `halve`, around the line that can fail
+            try { $self->halve } catch ($e) { $note = $e }
+                         ^
+```
+
+A failure the compiled run cannot hand to the catch would be caught in one run and not in the other.
+
+```console
+test/refuse/try_plain_library.pl:8:15: Rakugan cannot take this — `fs_write_text` can fail, and the library has no form of it a `try` can take yet; call it before the `try`, or write its `_or` twin
+            try { fs_write_text("/nonexistent/dir/x.txt", "a") } catch ($e) { $note = $e }
+                  ^
+```
+
+perl never runs those lines, so the compiled run must not either; the refusal spares reading code that does nothing.
+
+```console
+test/refuse/after_die.pl:9:9: Rakugan cannot take this — nothing after `die` runs; drop these lines, or put the `die` under an `if`
+            $n = 1;
+            ^
+```
+
+perl runs those lines at once and the compiled run when the work is done; before the `task`, both run them at once.
+
+```console
+test/refuse/after_task.pl:10:9: Rakugan cannot take this — `task` is the last thing a handler does: the compiled run reaches these lines when the work is done, and perl reaches them at once; write them before the `task`
+            $status = "working";
+            ^
 ```

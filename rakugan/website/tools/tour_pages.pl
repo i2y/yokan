@@ -61,10 +61,10 @@ my @PAGES = (
     {
         file => 'tour-lib.md',
         en   => ['Perl, data, and work',
-                 "Perl's own library, the framework's, and work that must not freeze the window."],
+                 "Perl's own library, the framework's, what to do when a call fails, and work that must not freeze the window."],
         ja   => ['Perl とデータとタスク',
-                 'Perl 自身のライブラリ、フレームワークのライブラリ、ウィンドウを固めない処理の出し方。'],
-        take => ["Perl's own standard library", "The framework's standard library",
+                 'Perl 自身のライブラリ、フレームワークのライブラリ、失敗したときの書き方、ウィンドウを固めない処理の出し方。'],
+        take => ["Perl's own standard library", "The framework's standard library", 'When something fails',
                  "Timers and work off the window's thread", 'While you are writing it'],
     },
     {

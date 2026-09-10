@@ -73,6 +73,11 @@ What it refuses, and what to write instead:
   standard output. `warn` goes to standard error and is taken.
 - A string `eval`, `goto`, `local`, `wantarray`, `each`, `tie`, `bless`,
   `ref`, `AUTOLOAD`.
+- `finally`, a `try` around a loop or around a method that can fail, and
+  a library call inside a `try` with no form the catch could receive.
+- A line after `die` in the same block (perl never reaches it) and a
+  line after `task` in the same handler (perl reaches it at once, the
+  compiled run when the work is done).
 - A handler that is not a sub, or takes a parameter it is not called
   with.
 - An unknown keyword on an element, or one given the wrong type — the
@@ -104,6 +109,13 @@ bundle is the whole program: it opens on a machine with neither perl
   [What Rakugan refuses](#what-rakugan-refuses) is what it leaves out.
   Every entry there is a shape the translator cannot yet carry to the
   compiled run, not a judgement about Perl.
+- A whole number that passes 64 bits while the app runs. perl grows it
+  into a number with a fraction; the compiled run stops the handler
+  there. A literal that comes to that is refused; a sum that reaches it
+  at run time is not seen by `check`, and the gate is what catches it.
+- A list read past its end. perl answers `undef` and carries on; the
+  compiled run stops the handler. `$xs[$i] // $d` says what to answer
+  instead, and `check` does not yet ask for it.
 - No references except the ones named here: a list or a hash passed to
   an element, and a class of your own. No code references beyond
   handlers, no references to references, no `ref`.

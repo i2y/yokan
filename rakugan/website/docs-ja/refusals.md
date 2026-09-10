@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も出力しません。
 
-下の 24 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
+下の 31 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
 `tools/gate_all.sh` がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -123,6 +123,15 @@ test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds 
                 ^
 ```
 
+perl はその数を小数のある数に育てますが、方言が持つのは 64 bit までです。
+書き下した二つの数はビルドの前に計算し、そこで断ります。
+
+```console
+test/refuse/literal_overflow.pl:8:34: Rakugan cannot take this — this comes to 18446744073709551616, and a whole number here holds 64 bits — perl would grow it into a number with a fraction, which the compiled run cannot follow; write it with a `.0` to mean that number
+            $n = 4611686018427387904 * 4;
+                                     ^
+```
+
 ## ビューとハンドラ
 
 同じ画面を二度組み立てたら同じ画面になる必要があるので、組み立てるときは読むだけです。
@@ -216,4 +225,56 @@ test/refuse/substitute_eval.pl:8:18: Rakugan cannot take this — a replacement 
 test/refuse/capture_unguarded.pl:10:16: Rakugan cannot take this — what a pattern caught is read where the match is known to have happened: inside the `if` that made it
             $got = $1;
                    ^
+```
+
+コンパイルした実行は失敗した文でハンドラを止めるので、どちらの道でも必ず動く場所がありません。
+
+```console
+test/refuse/try_finally.pl:9:50: Rakugan cannot take this — `finally` runs after either path, and the compiled run has no unwinding to hang it on; write the line after the `try`
+            try { $n = 1 } catch ($e) { $note = $e } finally { $n = 2 }
+                                                     ^
+```
+
+ループの中では失敗ごとに catch が走り、ループは続くことになります。
+ループの中に `try` を置けば、そのあと何をするかを言えます。
+
+```console
+test/refuse/try_loop.pl:12:44: Rakugan cannot take this — a `try` does not reach into a loop yet; put the `try` inside the loop, around the line that can fail
+                for my $x (@xs) { $total += $x / $n }
+                                               ^
+```
+
+メソッドは一度だけコンパイルされ、外の `try` はその中まで届きません。
+中に置けば、失敗しうる行はすぐそこにあります。
+
+```console
+test/refuse/try_method.pl:12:22: Rakugan cannot take this — `halve` can fail — it divides, takes a root, writes `die` or calls the library — and a `try` here does not reach into it yet; put the `try` inside `halve`, around the line that can fail
+            try { $self->halve } catch ($e) { $note = $e }
+                         ^
+```
+
+コンパイルした実行が catch に渡せない失敗は、片方の実行だけで捕まることになります。
+
+```console
+test/refuse/try_plain_library.pl:8:15: Rakugan cannot take this — `fs_write_text` can fail, and the library has no form of it a `try` can take yet; call it before the `try`, or write its `_or` twin
+            try { fs_write_text("/nonexistent/dir/x.txt", "a") } catch ($e) { $note = $e }
+                  ^
+```
+
+perl はその行を走らせないので、コンパイルした実行も走らせてはなりません。
+動かないコードを読ませないために断ります。
+
+```console
+test/refuse/after_die.pl:9:9: Rakugan cannot take this — nothing after `die` runs; drop these lines, or put the `die` under an `if`
+            $n = 1;
+            ^
+```
+
+perl はその行をすぐに走らせ、コンパイルした実行は処理が終わってから走らせます。
+`task` の前に置けば、どちらもすぐに走らせます。
+
+```console
+test/refuse/after_task.pl:10:9: Rakugan cannot take this — `task` is the last thing a handler does: the compiled run reaches these lines when the work is done, and perl reaches them at once; write them before the `task`
+            $status = "working";
+            ^
 ```
