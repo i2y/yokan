@@ -68,6 +68,8 @@ extern void    pixie_std_arg_num(double v);
 extern void    pixie_std_arg_list_begin(void);
 extern void    pixie_std_arg_list_end(void);
 extern int64_t pixie_std_call(int32_t id);
+extern int64_t pixie_std_call_checked(int32_t id);
+extern int32_t pixie_std_failed(void);
 extern int64_t pixie_std_rows(void);
 extern int64_t pixie_std_cells(int64_t row);
 extern void    pixie_std_pick(int64_t row, int64_t col);
@@ -399,6 +401,20 @@ IV
 std_call(IV id)
   CODE:
     RETVAL = (IV)pixie_std_call((int32_t)id);
+  OUTPUT:
+    RETVAL
+
+IV
+std_call_checked(IV id)
+  CODE:
+    RETVAL = (IV)pixie_std_call_checked((int32_t)id);
+  OUTPUT:
+    RETVAL
+
+IV
+std_failed()
+  CODE:
+    RETVAL = (IV)pixie_std_failed();
   OUTPUT:
     RETVAL
 

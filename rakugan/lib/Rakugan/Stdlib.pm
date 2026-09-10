@@ -31,7 +31,15 @@ sub call ($row, @args) {
             Rakugan::Door::std_arg_list_end();
         }
     }
-    my $n = Rakugan::Door::std_call($row->{id});
+    my $n = Rakugan::Door::std_call_checked($row->{id});
+    # The library said no. The compiled run stops the handler there and
+    # its `try` can catch it; this run dies, which does both, and the
+    # message names the statement the app wrote rather than this one —
+    # so `$e` reads the same in both runs.
+    if (Rakugan::Door::std_failed()) {
+        my (undef, $file, $line) = caller(2);
+        die cell(0, 0) . " at $file line $line.\n";
+    }
     return $n                                 if $row->{ret} eq 'int';
     return $n != 0 ? true : false             if $row->{ret} eq 'bool';
     return Rakugan::Door::std_answer_num()    if $row->{ret} eq 'num';

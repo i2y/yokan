@@ -3717,6 +3717,11 @@ thread_local! {
     /// below prints nothing for them and stays loud for everything
     /// else, which is what `contain`'s own note promises.
     static QUIET_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Set by `contain_quiet`: the panic about to unwind is being
+    /// caught by a caller that will say so in its own words — a door
+    /// whose language has a `die` of its own — so the hook says nothing
+    /// at all, not even the one line.
+    static SILENT_PANIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Set by an embedder that cannot catch the refusal itself, so the
@@ -3755,8 +3760,11 @@ fn install_panic_hook() {
         }
         let default = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            // Consume the flag: the unwind is leaving, and the next
+            // Consume the flags: the unwind is leaving, and the next
             // panic on this thread is loud again unless it says so.
+            if SILENT_PANIC.with(|q| q.replace(false)) {
+                return;
+            }
             if QUIET_PANIC.with(|q| q.replace(false)) {
                 if SPEAK_REFUSALS.load(std::sync::atomic::Ordering::Relaxed) {
                     let what = info
@@ -3813,6 +3821,24 @@ pub fn contain_view(f: impl FnOnce() -> Element) -> Element {
 /// statement failed, earlier effects kept, the app keeps running".
 /// Panics outside a handler, a task or a view stay loud on purpose:
 /// they indicate compiler bugs, not app-reachable states.
+/// Run library code so a panic inside it comes back as its message,
+/// with nothing printed: the caller is a door whose language has a
+/// `die` of its own, and it raises the message in that language's
+/// words, at the line the app wrote. `contain` prints its one line;
+/// this leaves the saying to the caller, which is the only difference.
+pub fn contain_quiet<R>(f: impl FnOnce() -> R) -> Result<R, String> {
+    install_panic_hook();
+    let prev = SILENT_PANIC.with(|q| q.replace(true));
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    SILENT_PANIC.with(|q| q.set(prev));
+    caught.map_err(|e| {
+        e.downcast_ref::<&str>()
+            .map(|s| (*s).to_string())
+            .or_else(|| e.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "panic".to_string())
+    })
+}
+
 pub fn contain<R>(what: &str, f: impl FnOnce() -> R) -> Option<R> {
     install_panic_hook();
     let prev = QUIET_PANIC.with(|q| q.replace(true));

@@ -88,6 +88,7 @@ for my $g (@GROUPS) {
             sig    => $r->{params} // '',
             names  => [map { (split /:\s*/, $_, 2)[0] } @params],
             pure   => (($r->{flags} // '') =~ /\bpure\b/) ? 1 : 0,
+            try    => (($r->{flags} // '') =~ /\btry\b/) ? 1 : 0,
         };
     }
 }
@@ -110,7 +111,8 @@ sub gen_rust {
 //! The convention is generic, the way the element builder's is: the
 //! caller pushes the arguments, names the row by number, and reads the
 //! answer back. Adding a function to the manifest therefore adds an arm
-//! here and nothing to the ABI.
+//! here and nothing to the ABI. The one thing the ABI does say about a
+//! row is how its failure comes back: see the two `pixie_std_call`s.
 
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, c_char};
@@ -130,6 +132,9 @@ thread_local! {
     /// rows themselves for a query.
     static ROWS: RefCell<Vec<Vec<String>>> = const { RefCell::new(Vec::new()) };
     static NUM: Cell<f64> = const { Cell::new(0.0) };
+    /// Whether the last checked call failed. Its message is the
+    /// answer text, so the door reads it the way it reads any string.
+    static FAILED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// # Safety
@@ -270,10 +275,40 @@ fn num_answer(v: f64) -> i64 {
 }
 
 /// One row of the manifest, by the number the generator gave it.
+///
+/// A row that fails panics, and a panic cannot leave a C function: the
+/// process ends. That is the library's own rule — the plain form stops
+/// the app, the `_or` twin answers a default — and a door whose
+/// language has no way to catch it keeps this entry.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixie_std_call(id: i32) -> i64 {
     let args = ARGS.with(|a| a.take());
     call(id, &args)
+}
+
+/// The same row, for a door whose language has a `die` of its own. A
+/// failure comes back instead of ending the process: `pixie_std_failed`
+/// says so, the message is the answer text, and the door raises it in
+/// its own words at the line the app wrote — which is what lets a
+/// `try` in that language catch what the compiled run's `try` catches.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_std_call_checked(id: i32) -> i64 {
+    let args = ARGS.with(|a| a.take());
+    FAILED.with(|f| f.set(false));
+    match pixie_kernel::contain_quiet(|| call(id, &args)) {
+        Ok(v) => v,
+        Err(msg) => {
+            ROWS.with(|r| *r.borrow_mut() = vec![vec![msg]]);
+            FAILED.with(|f| f.set(true));
+            0
+        }
+    }
+}
+
+/// Whether the last `pixie_std_call_checked` failed.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixie_std_failed() -> i32 {
+    FAILED.with(|f| f.get()) as i32
 }
 
 HEAD
@@ -328,6 +363,7 @@ HEAD
                  'sig => ' . q_str($r->{sig}),
                  'kinds => [' . join(', ', map { q_str($_) } @{ $r->{kinds} }) . ']');
         push @f, 'pure => 1' if $r->{pure};
+        push @f, 'try => 1' if $r->{try};
         $out .= "    { " . join(', ', @f) . " },\n";
     }
     $out .= ");\n\n";
@@ -377,7 +413,15 @@ sub call ($row, @args) {
             Rakugan::Door::std_arg_list_end();
         }
     }
-    my $n = Rakugan::Door::std_call($row->{id});
+    my $n = Rakugan::Door::std_call_checked($row->{id});
+    # The library said no. The compiled run stops the handler there and
+    # its `try` can catch it; this run dies, which does both, and the
+    # message names the statement the app wrote rather than this one —
+    # so `$e` reads the same in both runs.
+    if (Rakugan::Door::std_failed()) {
+        my (undef, $file, $line) = caller(2);
+        die cell(0, 0) . " at $file line $line.\n";
+    }
     return $n                                 if $row->{ret} eq 'int';
     return $n != 0 ? true : false             if $row->{ret} eq 'bool';
     return Rakugan::Door::std_answer_num()    if $row->{ret} eq 'num';
