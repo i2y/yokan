@@ -87,8 +87,9 @@ demo/counter.pl:16:35: Rakugan cannot take this — `text` has no `weight =>`; i
 
 ## Setup
 
-macOS on Apple silicon is the only port today; the engine draws through
-the platform's own GPU stack.
+macOS on Apple silicon, or Linux. The engine draws through the
+platform's own GPU stack: Metal on one, Vulkan on the other, and what a
+Linux machine has to provide is listed on the site's installation page.
 
 - **A perl of 5.40 or newer for the app**, because that is where `class`
   is a feature you can rely on. `just rakugan-perl` fetches and builds
@@ -200,7 +201,7 @@ What an app can write:
   or `<stem>.icns` beside the app as its icon. The bundle opens on a
   machine with neither perl 5.40 nor the toolchain.
 
-What it refuses, it refuses by name. Twenty-four of those refusals have
+What it refuses, it refuses by name. Thirty-one of those refusals have
 a file in `test/refuse/` that triggers them and the message they must
 print word for word, and the sweep checks them before it gates
 anything: an unsorted walk of a hash, `say` and `print`, a string
@@ -228,8 +229,9 @@ Measured here, on macOS/arm64, with the shared build directory warm.
 `TOUR.md` and `TOUR.ja.md` are the language in the order you meet it,
 and `tools/tour_check.pl` puts every complete example on them through
 the same command a demo goes through, so the page cannot drift from the
-vocabulary. `website/` is Rakugan's own zensical site, written for
-`i2y.github.io/rakugan/` so it can move to its own repository whole:
+vocabulary. `website/` is Rakugan's own zensical site, served under
+`i2y.github.io/yokan/rakugan/` and written so it can move to its own
+repository whole:
 `just rakugan-site`, `just rakugan-site-serve` on :8003. Four of its
 pages are generated — the tour from `TOUR.md`, the elements from the
 table, the gallery from `demo/`, the refusals from the fixtures — and
