@@ -114,7 +114,7 @@ run(Stats->new, title => "stats");
 `try` と `catch` は perl 5.40 が書くとおりの perl 自身のもので、`$e` には perl が渡すものがそのまま入ります。
 文面と、失敗した文のファイル名と行番号です。
 
-<!-- script: click:read,dump,click:halve,dump -->
+<!-- script: click:read,dump,click:halve,dump,click:save,dump -->
 ```perl
 use Rakugan;
 
@@ -142,6 +142,15 @@ class Notes {
         }
     }
 
+    method save {
+        try {
+            fs_write_text("/nonexistent/dir/notes.txt", $body);
+            $note = "saved";
+        } catch ($e) {
+            $note = "not saved: $e";
+        }
+    }
+
     method view {
         return column(
             text("body: $body"),
@@ -150,6 +159,7 @@ class Notes {
             row(
                 button("read",  on_click => sub { $self->read }),
                 button("halve", on_click => sub { $self->halve }),
+                button("save",  on_click => sub { $self->save }),
                 spacing => 6,
             ),
             spacing => 8,
@@ -170,8 +180,9 @@ run(Notes->new, title => "failing");
 
 Perl 自身の失敗も同じ扱いです。
 ゼロでの割り算、ゼロでの `%`、負の数の平方根は、二つの実行で perl の文面のとおりに die し、`try` で囲めば捕まります。
-フレームワークの呼び出しのうち捕まえられるのは `fs_read_text`、`http_get_text`、`http_post_text`、`sqlite_query_int` です。
-それ以外の失敗しうる呼び出しは `try` の中では名前を挙げて断られるので、そこでは `_or` の形を書きます。
+フレームワークの呼び出しも、失敗しうるものはすべて捕まえられます。
+書き込み、問い合わせ、JSON の経路による読み取り、時刻の整形のどれにも、`try` が受け取れる形がライブラリにあるからです。
+理由が要らないところでは、`_or` の形が短い書き方のままです。
 `try` がまだ届かない書き方が三つあります。
 ループ（`try` をループの中に入れ、失敗しうる行を囲みます）、失敗しうるメソッド（`try` をメソッドの中に入れます）、そして `finally` です。
 コンパイルした実行は失敗した文でハンドラを止めるだけで、どちらの道でも必ず動く場所を持たないからです。

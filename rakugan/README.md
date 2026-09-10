@@ -211,7 +211,7 @@ What an app can write:
   or `<stem>.icns` beside the app as its icon. The bundle opens on a
   machine with neither perl 5.40 nor the toolchain.
 
-What it refuses, it refuses by name. Fifty-two of those refusals have
+What it refuses, it refuses by name. Fifty-one of those refusals have
 a file in `test/refuse/` that triggers them and the message they must
 print word for word, and the sweep checks them before it gates
 anything: an unsorted walk of a hash, `say` and `print`, a string

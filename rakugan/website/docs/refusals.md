@@ -8,7 +8,7 @@ the file first, so a shape perl rejects never reaches the translator.
 `check` runs before every build and every gate, needs no compiler and no
 window, and prints nothing at all when there is nothing to say.
 
-Each of the 52 below has a file under `test/refuse/` that triggers it and
+Each of the 51 below has a file under `test/refuse/` that triggers it and
 the message it must print, word for word. The sweep runs them, so a
 refusal cannot quietly change its wording, and this page is quoted from
 those same files.
@@ -323,14 +323,6 @@ A method is compiled once, and a `try` outside it cannot reach in; inside it, th
 test/refuse/try_method.pl:12:22: Rakugan cannot take this — `halve` can fail — it divides, takes a root, writes `die` or calls the library — and a `try` here does not reach into it yet; put the `try` inside `halve`, around the line that can fail
             try { $self->halve } catch ($e) { $note = $e }
                          ^
-```
-
-A failure the compiled run cannot hand to the catch would be caught in one run and not in the other.
-
-```console
-test/refuse/try_plain_library.pl:8:15: Rakugan cannot take this — `fs_write_text` can fail, and the library has no form of it a `try` can take yet; call it before the `try`, or write its `_or` twin
-            try { fs_write_text("/nonexistent/dir/x.txt", "a") } catch ($e) { $note = $e }
-                  ^
 ```
 
 perl never runs those lines, so the compiled run must not either; the refusal spares reading code that does nothing.

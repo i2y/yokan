@@ -75,7 +75,7 @@ key, so say what to answer when it does not: `$prices{$k} // 0`
   コンパイルしたアプリが書くのは画面で、標準出力ではありません。
   標準エラーに出す `warn` は受け取ります。
 - 文字列の `eval`、`goto`、`local`、`wantarray`、`each`、`tie`、`bless`、`ref`、`AUTOLOAD`。
-- `finally`、ループや失敗しうるメソッドを囲む `try`、そして `try` の中にある、catch が受け取れる形のないライブラリ呼び出し。
+- `finally`、そしてループや失敗しうるメソッドを囲む `try`。
 - 書き下していない数を指数にした整数の冪（`2 ** $n`）。
   perl は負の指数に小数を答え、コンパイルした実行はどちらになるかを知っていなければなりません。
   `2.0 ** $n` と書けば小数です。

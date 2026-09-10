@@ -879,7 +879,7 @@ default and asks nothing more. When the reason matters, catch it.
 holds what perl would hand it: the message, then the file and the line
 of the statement that failed.
 
-<!-- script: click:read,dump,click:halve,dump -->
+<!-- script: click:read,dump,click:halve,dump,click:save,dump -->
 ```perl
 use Rakugan;
 
@@ -907,6 +907,15 @@ class Notes {
         }
     }
 
+    method save {
+        try {
+            fs_write_text("/nonexistent/dir/notes.txt", $body);
+            $note = "saved";
+        } catch ($e) {
+            $note = "not saved: $e";
+        }
+    }
+
     method view {
         return column(
             text("body: $body"),
@@ -915,6 +924,7 @@ class Notes {
             row(
                 button("read",  on_click => sub { $self->read }),
                 button("halve", on_click => sub { $self->halve }),
+                button("save",  on_click => sub { $self->save }),
                 spacing => 6,
             ),
             spacing => 8,
@@ -935,11 +945,11 @@ the compiled run names the same file and line.
 
 Perl's own failures are in the same arrangement: a division by zero, a
 `%` by zero and the root of a negative number die with perl's words in
-both runs, and a `try` around them catches them. Of the framework's
-calls, `fs_read_text`, `http_get_text`, `http_post_text` and
-`sqlite_query_int` can be caught; the other calls that can fail are
-refused inside a `try` by name, and their `_or` twins are the way to
-write them there. Three shapes a `try` does not reach yet: a loop (put
+both runs, and a `try` around them catches them. So does every call of
+the framework's that can fail — a write, a query, a read by JSON path,
+a clock format — because the library has a form of each that a `try`
+can take; the `_or` twins stay the shorter spelling when the reason
+does not matter. Three shapes a `try` does not reach yet: a loop (put
 the `try` inside the loop, around the line that can fail), a method
 that can fail (put the `try` inside the method), and `finally`, because
 the compiled run stops the handler at the failure and has no place that
@@ -1093,8 +1103,7 @@ What it refuses, and what to write instead:
   standard output. `warn` goes to standard error and is taken.
 - A string `eval`, `goto`, `local`, `wantarray`, `each`, `tie`, `bless`,
   `ref`, `AUTOLOAD`.
-- `finally`, a `try` around a loop or around a method that can fail, and
-  a library call inside a `try` with no form the catch could receive.
+- `finally`, and a `try` around a loop or around a method that can fail.
 - A whole number to a power that is not written out (`2 ** $n`): perl
   answers a fraction for a negative power, and the compiled run has to
   know which; `2.0 ** $n` says a fraction.

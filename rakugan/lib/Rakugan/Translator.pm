@@ -99,7 +99,7 @@ my %NOT_TAKEN = (
 # `try` is either the `!T` form the manifest marks or refused by name,
 # because a failure the compiled run cannot hand to the catch would be
 # caught in one run and not the other.
-my %CANNOT_FAIL = map { $_ => 1 } qw(fs_exists fs_app_dir clipboard_set_text clipboard_get_text
+my %CANNOT_FAIL = map { $_ => 1 } qw(fs_exists clipboard_set_text clipboard_get_text
                                      keys_down keys_pressed keys_released audio_play audio_stop
                                      notify_send strings_to_int strings_to_float http_status);
 sub cannot_fail { my ($name) = @_; return $CANNOT_FAIL{$name} || $name =~ /_or\z/ }
@@ -3801,7 +3801,26 @@ sub declare {
         ($ty, $pix) = ($v->{ty}, $v->{pix});
     }
     $env->{vars}{$name} = { ty => $ty, pix => $name };
+    # The value came through a `case` the `try` opened, and a name
+    # declared inside its arm is gone by the next statement: the name
+    # is declared before the `case` with its type's own start, and set
+    # inside.
+    if ($env->{try} && @{ $env->{pre} }) {
+        unshift @{ $env->{pre} }, "var $name : $ty = " . start_of($ty, $sym);
+        return "$name = $pix";
+    }
     return "var $name : $ty = $pix";
+}
+
+# What a name of this type holds before the statement that gives it a
+# value has run.
+sub start_of {
+    my ($ty, $at) = @_;
+    return '[]' if $ty =~ /\AList</;
+    return '{}' if $ty =~ /\AMap</;
+    return 'nil' if $ty =~ /\?\z/;
+    return zero_of($ty, $at) if $ty =~ /\A(?:Int|Float|String|Bool)\z/;
+    refuse($at, "a `my` inside a `try` is declared before the call that can fail, and a $ty has no value to start from; assign to a field instead");
 }
 
 sub ret {

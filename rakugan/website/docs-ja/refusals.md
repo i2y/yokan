@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も出力しません。
 
-下の 52 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
+下の 51 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
 `tools/gate_all.sh` がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -339,14 +339,6 @@ test/refuse/try_loop.pl:12:44: Rakugan cannot take this — a `try` does not rea
 test/refuse/try_method.pl:12:22: Rakugan cannot take this — `halve` can fail — it divides, takes a root, writes `die` or calls the library — and a `try` here does not reach into it yet; put the `try` inside `halve`, around the line that can fail
             try { $self->halve } catch ($e) { $note = $e }
                          ^
-```
-
-コンパイルした実行が catch に渡せない失敗は、片方の実行だけで捕まることになります。
-
-```console
-test/refuse/try_plain_library.pl:8:15: Rakugan cannot take this — `fs_write_text` can fail, and the library has no form of it a `try` can take yet; call it before the `try`, or write its `_or` twin
-            try { fs_write_text("/nonexistent/dir/x.txt", "a") } catch ($e) { $note = $e }
-                  ^
 ```
 
 perl はその行を走らせないので、コンパイルした実行も走らせてはなりません。

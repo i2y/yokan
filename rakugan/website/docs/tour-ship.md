@@ -80,8 +80,7 @@ What it refuses, and what to write instead:
   standard output. `warn` goes to standard error and is taken.
 - A string `eval`, `goto`, `local`, `wantarray`, `each`, `tie`, `bless`,
   `ref`, `AUTOLOAD`.
-- `finally`, a `try` around a loop or around a method that can fail, and
-  a library call inside a `try` with no form the catch could receive.
+- `finally`, and a `try` around a loop or around a method that can fail.
 - A whole number to a power that is not written out (`2 ** $n`): perl
   answers a fraction for a negative power, and the compiled run has to
   know which; `2.0 ** $n` says a fraction.
