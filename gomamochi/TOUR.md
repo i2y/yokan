@@ -931,7 +931,9 @@ func main() {
 
 A query that may run before its table exists — the first load of a
 ledger does — is the `…Or` twin, which answers nothing; the plain one
-stops the app, as the library's own would.
+panics, as the library's own would, with the library's message as the
+panic's value: a `recover` in the handler receives it, and without one
+the app stops there.
 
 ## Timers and work off the window's thread
 

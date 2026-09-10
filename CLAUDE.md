@@ -370,8 +370,9 @@ run, so neither run is a version behind.
   from `crates/yokan-stdlib/stdlib.toml`; and `internal/symbols` (every
   exported name of the package, for yaegi) off the package's source.
   `--check` fails when any is stale, and the sweep runs it. A query that
-  may fail (a table not yet made) is the `…Or` twin; the plain one stops
-  the app, as the library's own does. Each call runs on one thread from
+  may fail (a table not yet made) is the `…Or` twin; the plain one reads
+  the face's checked call and panics in Go with the library's message,
+  which stops the app unless the handler recovers it. Each call runs on one thread from
   the first argument pushed to the answer read (`door.Std`), because the
   face keeps those pieces in thread-local state and a goroutine may move
   between threads — so the library may be called from any goroutine, a

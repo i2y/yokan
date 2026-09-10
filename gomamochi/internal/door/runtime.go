@@ -251,6 +251,9 @@ func Task(work func() any, done func(any)) {
 	dones[id] = done
 	taskMu.Unlock()
 	go func() {
+		// A failing library call panics; off the window's thread the
+		// same guard says it, or the runtime would print a trace.
+		defer guard()
 		v := work()
 		taskMu.Lock()
 		answers[id] = v

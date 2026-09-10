@@ -128,7 +128,8 @@ var (
 	pixieStdCells          func(row int64) int64
 	pixieStdPick           func(row, col int64)
 	pixieStdAnswerNum      func() float64
-	pixieStdCall           func(id int32) int64
+	pixieStdCallChecked    func(id int32) int64
+	pixieStdFailed         func() int32
 )
 
 // ensure opens the library the first time anything needs it. Lazily,
@@ -217,7 +218,8 @@ func open() {
 	reg(&pixieStdCells, "pixie_std_cells")
 	reg(&pixieStdPick, "pixie_std_pick")
 	reg(&pixieStdAnswerNum, "pixie_std_answer_num")
-	reg(&pixieStdCall, "pixie_std_call")
+	reg(&pixieStdCallChecked, "pixie_std_call_checked")
+	reg(&pixieStdFailed, "pixie_std_failed")
 }
 
 // --- writing an element -----------------------------------------------------
@@ -365,8 +367,21 @@ func StdArgList(vs []string) {
 	}
 	pixieStdArgListEnd()
 }
-func StdCall(id int32) int64 { return pixieStdCall(id) }
-func StdAnswerNum() float64  { return pixieStdAnswerNum() }
+
+// StdCall runs the row. A row that fails is handed back by the face
+// rather than ending the process from inside it, and is raised here as
+// a Go panic whose value is the library's message: a handler's guard
+// says it and stops the app, as the library's own plain form would,
+// and a recover in the app receives it instead.
+func StdCall(id int32) int64 {
+	n := pixieStdCallChecked(id)
+	if pixieStdFailed() != 0 {
+		pixieStdPick(0, 0)
+		panic(Answer())
+	}
+	return n
+}
+func StdAnswerNum() float64 { return pixieStdAnswerNum() }
 
 // StdText is the one cell a text answer is.
 func StdText() string {
