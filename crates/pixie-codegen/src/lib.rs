@@ -1582,6 +1582,23 @@ fn lower_method_expr_inner(e: &Expr, cx: &MethodCtx) -> Result<String, EmitError
                     }
                 }
             }
+            // `m.keys` / `m.values` on a map property: the kernel's
+            // methods, which answer sorted lists. A view already lowered
+            // them so; a store fn read them as a field, and rustc refused
+            // the generated crate (`for k in m.keys` in a handler).
+            if name.name == "keys" || name.name == "values" {
+                let on_map = match &receiver.kind {
+                    ExprKind::Ident(n) | ExprKind::AtIdent(n) => cx
+                        .class
+                        .prop(n)
+                        .is_some_and(|p| matches!(p.ty, RustTy::Map(..))),
+                    _ => false,
+                };
+                if on_map {
+                    let base = lower_method_expr(receiver, cx)?;
+                    return Ok(format!("({base}).{}()", name.name));
+                }
+            }
             let base = lower_method_expr(receiver, cx)?;
             Ok(format!("({base}).{}.clone()", camel_to_snake(&name.name)))
         }
@@ -2766,6 +2783,9 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
             };
             let v = match &slot_ty {
                 Some(t) => lower_assign_value(value, t, cx)?,
+                // A local declared `T?` takes a bare value the way a `T?`
+                // prop does — wrapped — and `nil` as `None`.
+                None if cx.is_opt_local(n) && matches!(op, AssignOp::Eq) => lower_nullable_slot(value, cx)?,
                 None => lower_method_expr(value, cx)?,
             };
             if cx.is_local(n) {
