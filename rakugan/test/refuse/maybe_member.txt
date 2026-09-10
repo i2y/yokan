@@ -1,0 +1,3 @@
+test/refuse/maybe_member.pl:14:25: Rakugan cannot take this — `$root` may be nothing; read it inside `if (defined $root)`, where it is the object
+        method go { $note = $root->label }
+                            ^

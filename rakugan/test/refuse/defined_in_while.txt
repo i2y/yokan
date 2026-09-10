@@ -1,0 +1,3 @@
+test/refuse/defined_in_while.pl:9:9: Rakugan cannot take this — `defined` here is the whole condition of an `if` or `unless`, and its branch reads the value; it does not go in a `while`, a `grep`, or beside `&&`
+            while (defined $sel) { $n += 1; $sel = undef }
+            ^

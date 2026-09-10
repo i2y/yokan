@@ -1,0 +1,3 @@
+test/refuse/self_in_class.pl:6:28: Rakugan cannot take this — `$self` inside `Node`: a method reaches its own fields by name, and another method of the same class is not called from here yet
+        method grow { $n += 1; $self->grow }
+                               ^

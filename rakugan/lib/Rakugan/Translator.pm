@@ -112,6 +112,8 @@ my @timers;                 # { ms, body => [lines] }
 my @binds;                  # { kind, args, param, body => [lines] }
 my @lifted;                 # the statics a conditional expression became
 my (@values, %value);       # the value classes: name => [{ name, ty, init }]
+my (@models, %model);       # the classes with methods: name => { fields => [...], by => {...}, methods => {...}, order => [...] }
+my %constant;               # `use constant NAME => literal`: name => { ty, pix, lit }
 my $app_class;              # the class `run` was handed
 my $app_var;                # `my $app = Class->new` at the top of the file
 my @app_stmts;              # every top-level statement, in order
@@ -127,7 +129,7 @@ sub translate {
     my ($file) = @_;
     ($path, $class_name, $class_block, $run_word, $run_list, $view_block) = ($file);
     (@fields, %field, %bag, %const, @methods, %method, @handlers, @timers, @binds, @app_stmts,
-     @lifted, @values, %value) = ();
+     @lifted, @values, %value, @models, %model, %constant) = ();
     $app_class = undef;
     ($app_var, $uses_pl, $uses_std, $tmp) = (undef, 0, 0, 0);
     $where = File::Spec->rel2abs($path);
@@ -239,6 +241,7 @@ sub refuse {
     # A hole in a string is read as Perl of its own, whose lines are its
     # own; the string is where the reader has to look.
     $node = $re_at if $re_at;
+    $node = $node->{_rakugan_at} if $node && ref $node && $node->{_rakugan_at};
     my ($line, $col) = $node && $node->can('line_number') ? ($node->line_number, $node->column_number) : (1, 1);
     my $src = $lines[$line - 1] // '';
     chomp $src;
@@ -247,6 +250,28 @@ sub refuse {
 }
 
 sub sig { grep { $_->significant } $_[0]->children }
+
+# PPI reads a bare word followed by a colon as a label — `HAPPY ? SAD :
+# HAPPY` arrives with `SAD :` as one token. Where an expression is
+# read, such a token is cut back into the word and the colon; the two
+# pieces point at the token they came from, so a refusal still names
+# the right place.
+sub unlabel {
+    my ($toks) = @_;
+    return @$toks unless grep { $_->isa('PPI::Token::Label') } @$toks;
+    my @out;
+    for my $t (@$toks) {
+        if ($t->isa('PPI::Token::Label') && $t->content =~ /\A(\w+)\s*:\z/) {
+            my $w = PPI::Token::Word->new($1);
+            my $c = PPI::Token::Operator->new(':');
+            $w->{_rakugan_at} = $c->{_rakugan_at} = $t;
+            push @out, $w, $c;
+        } else {
+            push @out, $t;
+        }
+    }
+    return @out;
+}
 sub is_word { my ($t, $w) = @_; $t && $t->isa('PPI::Token::Word') && (!defined $w || $t->content eq $w) }
 sub is_op   { my ($t, $o) = @_; $t && $t->isa('PPI::Token::Operator') && (!defined $o || $t->content eq $o) }
 sub is_sym  { my ($t, $kind) = @_; $t && $t->isa('PPI::Token::Symbol') && (!defined $kind || $t->raw_type eq $kind) }
@@ -269,8 +294,14 @@ sub attr_names {
             (my $n = $t->content) =~ s/\s*:\s*\z//;
             push @names, $n;
             $i += 2;
-            # the Label ate the NEXT attribute's colon, so a word here
-            # is that attribute rather than the end of the list
+            # the Label ate the NEXT attribute's colon, so what follows
+            # is that attribute: another label when there is a third
+            # (`:param :reader :writer`), a word for the last
+            while ($toks->[$i] && $toks->[$i]->isa('PPI::Token::Label')) {
+                (my $more = $toks->[$i]->content) =~ s/\s*:\s*\z//;
+                push @names, $more;
+                $i++;
+            }
             if (is_word($toks->[$i])) { push @names, $toks->[$i]->content; $i++ }
         } elsif ($t->isa('PPI::Token::Word')) {
             push @names, $t->content;
@@ -306,6 +337,7 @@ sub declarations {
         next if $st->isa('PPI::Statement::End') || $st->isa('PPI::Statement::Null');
         if ($st->isa('PPI::Statement::Include')) {
             $pragma = $st if ($st->module // '') eq 'Rakugan';
+            constants($st) if ($st->module // '') eq 'constant';
             next;
         }
         my @t = strip_semicolon(sig($st));
@@ -349,7 +381,280 @@ sub declarations {
     refuse($run_word, 'the app is one of the classes in this file, handed to `run` as `Name->new`')
         unless defined $app_class && $seen{$app_class};
     ($class_name, $class_block) = ($app_class, $seen{$app_class});
-    value_class($_, $seen{$_}) for grep { $_ ne $app_class } @order;
+    # The other classes: one with methods is an object the app points
+    # at, one with fields alone is a value it holds. Every name is known
+    # before any body is read, so a class can name another — or itself.
+    my @others = grep { $_ ne $app_class } @order;
+    for my $name (@others) {
+        $model{$name} = { name => $name, fields => [], by => {}, methods => {}, order => [] } if is_model($seen{$name});
+    }
+    for my $name (@others) {
+        if ($model{$name}) { model_class($name, $seen{$name}) } else { value_class($name, $seen{$name}) }
+    }
+}
+
+# `use constant NAME => value;` or `use constant { A => 1, B => 2 };` —
+# a name for a literal, which is what it becomes wherever it is read.
+sub constants {
+    my ($st) = @_;
+    my @t = strip_semicolon(sig($st));
+    splice @t, 0, 2;
+    my @pairs;
+    if (@t == 1 && $t[0]->isa('PPI::Structure::Constructor')) {
+        @pairs = split_args($t[0]);
+        refuse($t[0], '`use constant { ... }` holds `NAME => value` pairs') if grep { !defined $_->{key} } @pairs;
+    } else {
+        refuse($st, 'a constant is `use constant NAME => value;` or `use constant { A => 1, B => 2 };`')
+            unless @t >= 3 && is_word($t[0]) && is_op($t[1], '=>');
+        @pairs = ({ key => $t[0]->content, node => $t[0], toks => [@t[2 .. $#t]] });
+    }
+    for my $p (@pairs) {
+        my ($ty, $pix) = literal_run($p->{toks});
+        # perl keeps a constant per package, so two classes may each
+        # declare it — as long as they mean the same thing by it.
+        if (my $had = $constant{ $p->{key} }) {
+            refuse($p->{node}, "`$p->{key}` is declared twice, and not the same way") unless $had->{pix} eq $pix;
+            next;
+        }
+        my $tok = $p->{toks}[0];
+        my $lit = $ty ne 'String' ? undef
+                : $tok->isa('PPI::Token::Quote::Double') ? unescape($tok, $tok->string) : $tok->literal;
+        $constant{ $p->{key} } = { ty => $ty, pix => $pix, lit => $lit };
+    }
+}
+
+# Whether a class other than the app is one with methods: it has a
+# `method`, or a field that is not the `:param :reader` pair a value's
+# fields are.
+sub is_model {
+    my ($block) = @_;
+    for my $st ($block->schildren) {
+        next if $st->isa('PPI::Statement::Null') || $st->isa('PPI::Statement::Include');
+        my @t = sig($st);
+        next unless @t;
+        return 1 if is_word($t[0], 'method') || is_word($t[0], 'ADJUST');
+        if (is_word($t[0], 'field')) {
+            my ($attrs, $j) = attr_names(\@t, 2);
+            my @a = @{ $attrs // [] };
+            return 1 unless @a == 2 && $a[0] eq 'param' && $a[1] eq 'reader';
+        }
+    }
+    return 0;
+}
+
+# A class with methods: an object, which two names can share, the way
+# perl's objects are shared. Its fields are its own, read by name inside
+# its methods and through `:reader` outside; `:param` says `new` may be
+# given one, `:writer` gives it `set_name`. It crosses to the compiled
+# run as a class of its own, with the same sharing.
+sub model_class {
+    my ($name, $block) = @_;
+    my $m = $model{$name};
+    my $pragma;
+    for my $st ($block->schildren) {
+        next if $st->isa('PPI::Statement::Null');
+        if ($st->isa('PPI::Statement::Include')) {
+            $pragma = 1 if ($st->module // '') eq 'Rakugan';
+            constants($st) if ($st->module // '') eq 'constant';
+            next;
+        }
+        my @t = strip_semicolon(sig($st));
+        next unless @t;
+        while (@t) {
+            if (is_word($t[0], 'field')) {
+                my $sym = $t[1];
+                refuse($sym // $t[0], "a class with methods holds scalars here; a list or a hash belongs to the app")
+                    unless is_sym($sym, '$');
+                my ($attrs, $j) = attr_names(\@t, 2);
+                my %a = map { $_ => 1 } @{ $attrs // [] };
+                refuse($sym, 'a field here takes `:param`, `:reader` and `:writer`, and nothing else')
+                    if grep { !/\A(?:param|reader|writer)\z/ } keys %a;
+                refuse($sym, 'a field needs an initializer (`= 0`, `= ""`, `= maybe(Node)`) — that is where its type comes from')
+                    unless is_op($t[$j], '=') && @t > $j + 1;
+                my @init = @t[$j + 1 .. $#t];
+                my ($ty, $pix) = (is_word($init[0], 'maybe') || is_word($init[0], 'undef'))
+                                ? maybe_init(\@init, $sym) : literal_run(\@init);
+                my $fname = substr $sym->content, 1;
+                refuse($sym, "`$fname` is declared twice") if $m->{by}{$fname};
+                my $fd = { name => $fname, ty => $ty, init => $pix, param => $a{param} ? 1 : 0,
+                           reader => $a{reader} ? 1 : 0, writer => $a{writer} ? 1 : 0, weak => 0 };
+                push @{ $m->{fields} }, $fd;
+                $m->{by}{$fname} = $fd;
+                @t = ();
+            } elsif (is_word($t[0], 'method')) {
+                my $n = model_method($m, \@t);
+                splice @t, 0, $n;
+            } elsif (is_word($t[0], 'ADJUST')) {
+                refuse($t[0], '`ADJUST` in a class with methods is not taken yet; give the fields their values with `:param`');
+            } else {
+                refuse($t[0], "inside `class $name`: `use Rakugan;`, `field` and `method` only");
+            }
+        }
+    }
+    refuse($block, "`class $name` needs `use Rakugan;` as its first line") unless $pragma;
+    push @models, $name;
+}
+
+# `method name :Sig(...) (...) { ... }` inside a class with methods:
+# the same shape as the app's, kept on the class.
+sub model_method {
+    my ($m, $toks) = @_;
+    my @t = @$toks;
+    my ($name, $sig, $taken) = (undef, undef, 0);
+    if ($t[1] && $t[1]->isa('PPI::Token::Label')) {
+        (my $label = $t[1]->content) =~ s/\s*:\s*\z//;
+        refuse($t[1], "`$label` takes `:Sig(...)`: the types of what it is called with, and after `=>` what it answers")
+            unless is_word($t[2], 'Sig') && $t[3] && $t[3]->isa('PPI::Structure::List');
+        ($name, $sig, $taken) = ({ content => $label, node => $t[1] }, $t[3], 4);
+    } else {
+        refuse($t[0], 'a method is written `method name { ... }`') unless is_word($t[1]);
+        ($name, $taken) = ({ content => $t[1]->content, node => $t[1] }, 2);
+    }
+    my @names;
+    if ($t[$taken] && $t[$taken]->isa('PPI::Structure::List')) { @names = param_names($t[$taken]); $taken++ }
+    refuse($name->{node}, "a class with methods has no screen of its own; `view` belongs to the app")
+        if $name->{content} eq 'view';
+    my $block = $t[$taken];
+    refuse($name->{node}, 'a method needs a block') unless $block && $block->isa('PPI::Structure::Block');
+    $taken++;
+    my ($ptys, $ret) = sig_types($sig, scalar @names, $name->{node});
+    refuse($name->{node}, "a method with parameters says what they are: `method $name->{content} :Sig("
+                        . join(', ', ('Int') x @names) . ") (" . join(', ', @names) . ') { ... }`')
+        if @names && !$sig;
+    refuse($name->{node}, "`$name->{content}` is called with " . scalar(@names) . ' value'
+                        . (@names == 1 ? '' : 's') . ", and `:Sig` gives " . scalar(@$ptys) . ' type'
+                        . (@$ptys == 1 ? '' : 's'))
+        if @$ptys != @names;
+    refuse($name->{node}, "`$name->{content}` is declared twice") if $m->{methods}{ $name->{content} };
+    refuse($name->{node}, '`@kids` belongs to a method of the app that answers part of the screen')
+        if grep { /\A\@/ } @names;
+    # The compiled run gives every field a reader and a writer of its
+    # own name (`label`, `set_label`), so a method cannot take those.
+    if ($name->{content} =~ /\A(?:set_)?(\w+)\z/ && $m->{by}{$1}) {
+        refuse($name->{node}, "`$name->{content}` is the name the compiled run gives `$1`'s own "
+                            . ($name->{content} =~ /\Aset_/ ? 'writer; put `:writer` on the field, or name the method for what it does' : 'reader; rename the method'));
+    }
+    my $rec = { name => $name->{content}, block => $block, node => $name->{node},
+                params => [map { [$names[$_], $ptys->[$_]] } 0 .. $#names], ret => $ret };
+    # What could stop it, for a `try` around a call to it.
+    $rec->{may_fail} = grep({ $_->content =~ m{\A[/%]=?\z} } @{ $block->find('PPI::Token::Operator') || [] })
+        || grep({ my $n = $_->content; $n eq 'die' || $n eq 'sqrt' || ($Rakugan::Manifest::NAMES{$n} && !cannot_fail($n)) }
+                @{ $block->find('PPI::Token::Word') || [] });
+    $m->{methods}{ $name->{content} } = $rec;
+    push @{ $m->{order} }, $rec;
+    return $taken;
+}
+
+# `Node->new(label => "alpha")` — an object made where it is written:
+# the compiled run makes it with its defaults and sets what was given.
+sub build_object {
+    my ($word, $list, $env) = @_;
+    my $name = $word->content;
+    my $m = $model{$name};
+    refuse($word, "`$name->new` makes an object, and building a view only reads; make it in a handler and keep it in a field")
+        if $env->{ctx} eq 'view';
+    refuse($word, "`$name->new` needs a line to stand on; give it to a name first: `my \$n = $name->new(...)`")
+        unless $env->{pre};
+    my $o = '__o' . ++$tmp;
+    push @{ $env->{pre} }, "var $o = $name()";
+    my %given;
+    for my $a ($list ? split_args($list) : ()) {
+        refuse($a->{node}, "`$name` is built by naming its fields: `$name->new(label => \"x\")`") unless defined $a->{key};
+        my $fd = $m->{by}{ $a->{key} } or refuse($a->{node}, "`$name` has no field `$a->{key}`");
+        refuse($a->{node}, "`$a->{key}` is not a `:param` field of $name, so `new` cannot be given it") unless $fd->{param};
+        refuse($a->{node}, "`$name` was given `$a->{key}` twice") if $given{ $a->{key} }++;
+        my $v = parse_expr($a->{toks}, { %$env, at => $a->{node} });
+        refuse($a->{node}, "`$name`'s `$a->{key}` holds a $fd->{ty}, and this is a $v->{ty}") unless fits($fd->{ty}, $v->{ty});
+        push @{ $env->{pre} }, "$o.$a->{key} = $v->{pix}";
+    }
+    return { ty => $name, pix => $o };
+}
+
+# `$node->label`, `$node->set_label("x")`, `$node->grow(0.5)`: a field
+# read through its `:reader`, written through its `:writer`, or a method.
+sub member {
+    my ($obj, $word, $ip, $toks, $env) = @_;
+    my $m = $model{ $obj->{ty} };
+    my $what = $word->content;
+    my $args = $toks->[$$ip];
+    my $has_args = $args && $args->isa('PPI::Structure::List');
+    $$ip++ if $has_args;
+    if (my $mm = $m->{methods}{$what}) {
+        refuse($word, "`$what` is a method of $obj->{ty}, and building a view only reads; give the view a field with a `:reader`")
+            if $env->{ctx} eq 'view';
+        refuse($word, "`$what` can fail — it divides, takes a root, writes `die` or calls the library — and a "
+                    . "`try` here does not reach into it yet; put the `try` inside `$what`, around the line that can fail")
+            if $env->{try} && $mm->{may_fail};
+        my @vals = call_args($word, $has_args ? $args : undef, $mm, $env);
+        refuse($word, "`$what` does not say what it answers; write `:Sig(... => Str)`")
+            if !defined $mm->{ret} && !$env->{as_statement};
+        my $o = '__o' . ++$tmp;
+        push @{ $env->{pre} }, "var $o = $obj->{pix}";
+        return { ty => $mm->{ret} // 'Void', pix => "$o.$what(" . join(', ', @vals) . ')' };
+    }
+    if ($what =~ /\Aset_(\w+)\z/ && $m->{by}{$1}) {
+        my ($fname, $fd) = ($1, $m->{by}{$1});
+        refuse($word, "`$fname` has no `:writer`; put it on the field, or write a method that sets it") unless $fd->{writer};
+        refuse($word, "`$what` writes an object, and building a view only reads") if $env->{ctx} eq 'view';
+        refuse($word, "`$what` sets a field and answers nothing worth reading; it stands on a line of its own")
+            unless $env->{as_statement};
+        my @a = $has_args ? split_args($args) : ();
+        refuse($word, "`$what` takes the new value: `\$n->$what(...)`") unless @a == 1 && !defined $a[0]{key};
+        my $v = parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+        refuse($a[0]{node}, "`$fname` holds a $fd->{ty}, and this is a $v->{ty}") unless fits($fd->{ty}, $v->{ty});
+        my $o = '__o' . ++$tmp;
+        push @{ $env->{pre} }, "var $o = $obj->{pix}";
+        return { ty => 'Void', pix => "$o.$fname = $v->{pix}" };
+    }
+    if (my $fd = $m->{by}{$what}) {
+        refuse($word, "`$what` has no `:reader`, so it is the object's own; add `:reader` to the field") unless $fd->{reader};
+        refuse($args, 'a field is read, not called') if $has_args;
+        my $pix = "$obj->{pix}.$what";
+        if ($env->{narrowed} && (my $nw = $env->{narrowed}{$pix})) {
+            return { ty => $nw->{ty}, pix => $nw->{pix}, narrowed => $what };
+        }
+        return { ty => $fd->{ty}, pix => $pix };
+    }
+    refuse($word, "`$obj->{ty}` has no `$what`; its fields are " . join(', ', map { "`$_->{name}`" } @{ $m->{fields} })
+               . (@{ $m->{order} } ? ' and its methods ' . join(', ', map { "`$_->{name}`" } @{ $m->{order} }) : ''));
+}
+
+# `$root->kid->parent`: what a member answered may be an object with
+# members of its own.
+sub chain {
+    my ($r, $ip, $toks, $env) = @_;
+    while (is_op($toks->[$$ip], '->') && is_word($toks->[$$ip + 1])) {
+        if ($model{ $r->{ty} }) {
+            $$ip += 2;
+            $r = member($r, $toks->[$$ip - 1], $ip, $toks, $env);
+            next;
+        }
+        refuse($toks->[$$ip], "this may be nothing; read it inside `if (defined ...)`, where it is the object")
+            if $r->{ty} =~ /\A(\w+)\?\z/ && $model{$1};
+        refuse($toks->[$$ip], "`->` reads a member of an object, and this is a $r->{ty}");
+    }
+    return $r;
+}
+
+# `weaken($parent);` — inside a class with methods, on a field that
+# points back at another object. perl's collector and the compiled
+# run's both count references, so both need the back pointer not to
+# count; the field is declared weak, and the line itself is the
+# declaration.
+sub weaken_stmt {
+    my ($toks, $env) = @_;
+    my ($w, @rest) = @$toks;
+    refuse($w, '`weaken` breaks a cycle between two objects, and belongs in the class that holds the pointer back: '
+             . '`method set_parent :Sig(Node) ($p) { $parent = $p; weaken($parent) }`')
+        unless $env->{model};
+    @rest = sig(($rest[0]->schildren)[0]) if @rest == 1 && $rest[0]->isa('PPI::Structure::List') && $rest[0]->schildren;
+    refuse($w, '`weaken` takes one field: `weaken($parent)`') unless @rest == 1 && is_sym($rest[0], '$');
+    my $fname = substr $rest[0]->content, 1;
+    my $fd = $model{ $env->{model} }{by}{$fname} or refuse($rest[0], "`\$$fname` is not a field of $env->{model}");
+    refuse($rest[0], "`\$$fname` holds a $fd->{ty}; a pointer back at an object is a `maybe(Node)` field")
+        unless $fd->{ty} =~ /\A(\w+)\?\z/ && $model{$1};
+    $fd->{weak} = 1;
+    return ();
 }
 
 # A class the app holds values of: fields and nothing else, each one
@@ -465,6 +770,7 @@ sub class_body {
         next if $st->isa('PPI::Statement::Null');
         if ($st->isa('PPI::Statement::Include')) {
             $pragma = 1 if ($st->module // '') eq 'Rakugan';
+            constants($st) if ($st->module // '') eq 'constant';
             next;
         }
         my @t = strip_semicolon(sig($st));
@@ -614,6 +920,15 @@ sub field {
         my $v = primary(\$i, \@init, $env);
         refuse($init[$i], 'this does not continue the value') if $i < @init;
         ($ty, $pix) = ($v->{ty}, $v->{pix});
+    } elsif (is_word($init[0], 'maybe') || is_word($init[0], 'undef')) {
+        ($ty, $pix) = maybe_init(\@init, $sym);
+    } elsif (is_word($init[0]) && $model{ $init[0]->content }) {
+        # An object the app holds from the start: made with nothing, so
+        # its fields start at their defaults; values go in `ADJUST`.
+        refuse($init[0], "a field starts as `$init[0]->{content}->new` with no values; give it values in `ADJUST`, "
+                       . 'or make it in a handler')
+            unless @init == 3 && is_op($init[1], '->') && is_word($init[2], 'new');
+        ($ty, $pix) = ($init[0]->content, $init[0]->content . '()');
     } else {
         refuse($init[0], 'a scalar field starts as one literal, or as one of this file\'s own values '
                        . '(`Point->new(x => 3, y => 4)`)')
@@ -623,6 +938,20 @@ sub field {
     push @fields, $name;
     $field{$name} = { ty => $ty, init => $pix, kind => $sym->raw_type };
     return scalar @t;
+}
+
+# `field $sel = maybe(Int);` — a scalar that starts as nothing, and says
+# what it may hold. `undef` alone is refused: it says nothing about the type.
+sub maybe_init {
+    my ($toks, $sym) = @_;
+    my ($w, $list) = @$toks;
+    refuse($w, '`undef` alone says nothing about the type; say what this may hold: `maybe(Int)`, `maybe(Str)`')
+        if is_word($w, 'undef');
+    refuse($w, '`maybe` takes the type it may hold: `maybe(Int)`, `maybe(Str)`, `maybe(Node)`')
+        unless $list && $list->isa('PPI::Structure::List') && @$toks == 2;
+    my @st = $list->schildren;
+    refuse($list, '`maybe` takes one type') unless @st == 1;
+    return (type_of_words([sig($st[0])], $list) . '?', 'nil');
 }
 
 # `field @items = empty(Str);` or `field @xs = ("a", "b");`
@@ -726,10 +1055,18 @@ sub type_of_words {
         refuse($param, '`' . $w->content . '` takes one type') unless @st == 1;
         return sprintf $outer, type_of_words([sig($st[0])], $param);
     }
+    # `Maybe[Int]`: a value that may be nothing.
+    if ($w->content eq 'Maybe') {
+        refuse($w, '`Maybe` takes the type it may hold in brackets: `Maybe[Int]`')
+            unless $param && $param->isa('PPI::Structure::Constructor') && @$toks == 2;
+        my @st = $param->schildren;
+        refuse($param, '`Maybe` takes one type') unless @st == 1;
+        return type_of_words([sig($st[0])], $param) . '?';
+    }
     # A class in this file is a type name too.
-    return $w->content if $value{ $w->content } && @$toks == 1;
-    refuse($w, 'a type here is `Int`, `Str`, `Num`, `Bool`, `ArrayRef[...]` or one of this file\'s own '
-             . 'classes; `' . $w->content . '` is not one')
+    return $w->content if ($value{ $w->content } || $model{ $w->content }) && @$toks == 1;
+    refuse($w, 'a type here is `Int`, `Str`, `Num`, `Bool`, `Maybe[...]`, `ArrayRef[...]` or one of this '
+             . 'file\'s own classes; `' . $w->content . '` is not one')
         unless $TYPE_WORD{ $w->content } && @$toks == 1;
     return $TYPE_WORD{ $w->content };
 }
@@ -771,6 +1108,8 @@ sub literal {
         return ('String', '"' . pix_text($tok, unescape($tok, $s)) . '"');
     }
     return ('Bool', $tok->content) if is_word($tok, 'true') || is_word($tok, 'false');
+    # A constant's name stands for its literal.
+    if (is_word($tok) && (my $c = $constant{ $tok->content })) { return ($c->{ty}, $c->{pix}) }
     refuse($tok, 'a literal (a number, a string, `true` or `false`) was expected here');
 }
 
@@ -808,6 +1147,7 @@ my %BP = ('or' => 1, '||' => 1, '//' => 1, 'and' => 2, '&&' => 2,
 
 sub parse_expr {
     my ($toks, $env) = @_;
+    $toks = [unlabel($toks)];
     refuse($env->{at}, 'an expression is missing here') unless @$toks;
     if (my @cut = ternary_cut($toks)) { return conditional($toks, @cut, $env) }
     my $i = 0;
@@ -913,6 +1253,26 @@ sub expr_bp {
 
 sub num_ty { my ($t) = @_; $t eq 'Int' || $t eq 'Float' }
 
+# Whether a value of one type can be put where another is wanted: the
+# same type, an Int where a Float is, and `undef` or a T where a
+# `Maybe[T]` is.
+sub fits {
+    my ($want, $have) = @_;
+    return 1 if $have eq $want;
+    return 1 if $want eq 'Float' && $have eq 'Int';
+    if ($want =~ /\A(.+)\?\z/) {
+        my $inner = $1;
+        return 1 if $have eq 'Nil' || $have eq $inner || ($inner eq 'Float' && $have eq 'Int');
+    }
+    return 0;
+}
+
+# What a message adds when the value in hand may be nothing.
+sub maybe_hint {
+    my ($v, $what) = @_;
+    return $v->{ty} =~ /\?\z/ ? "; `defined $what` first, or `$what // <value>` to say what to use instead" : '';
+}
+
 sub binop {
     my ($node, $o, $l, $r, $env) = @_;
     if ($o eq '.') {
@@ -925,6 +1285,18 @@ sub binop {
         return { ty => 'String', pix => group($l->{pix}) . ' + ' . group($r->{pix}) };
     }
     if ($o eq '//') {
+        # A value that may be nothing: the value, or what stands after
+        # `//`. The compiled run has no `??`, so this is a static that
+        # looks inside — callable from a view, where a hole has nowhere
+        # to put a line of its own.
+        if ($l->{ty} =~ /\A(.+)\?\z/ && !$l->{maybe} && !$l->{soft}) {
+            my $inner = $1;
+            refuse($node, "`//` answers a $inner here, and this is a $r->{ty}") unless fits($inner, $r->{ty});
+            my $id = '__m' . scalar @lifted;
+            push @lifted, { name => $id, ret => $inner, async => 0, params => [['x', "$inner?"], ['d', $inner]],
+                            body => ['if let some(v) = x {', '  return v', '}', 'd'] };
+            return { ty => $inner, pix => "Helpers.$id($l->{pix}, $r->{pix})" };
+        }
         refuse($node, '`//` answers what a hash or a list holds there, or the value after it: '
                     . '`$prices{$k} // 0`')
             unless ($l->{maybe} || $l->{soft})
@@ -1134,7 +1506,22 @@ sub primary {
         return { ty => 'Int', pix => "$v->{pix}.length - 1" };
     }
     if (is_word($t, 'true') || is_word($t, 'false')) { $$ip++; return { ty => 'Bool', pix => $t->content } }
+    # `undef`: nothing, which goes wherever a value may be nothing.
+    if (is_word($t, 'undef')) { $$ip++; return { ty => 'Nil', pix => 'nil' } }
     if ($t->isa('PPI::Token::Word')) {
+        # `use constant HAPPY => "happy"` — the name is the literal.
+        if (my $c = $constant{ $t->content }) {
+            $$ip++;
+            return { ty => $c->{ty}, pix => $c->{pix}, ($c->{ty} eq 'String' ? (lit => $c->{lit}, str => 1) : ()) };
+        }
+        # `Node->new(label => "alpha")` — an object of one of the file's
+        # classes with methods, made where it is written.
+        if ($model{ $t->content } && is_op($toks->[$$ip + 1], '->') && is_word($toks->[$$ip + 2], 'new')) {
+            my $list = $toks->[$$ip + 3];
+            $$ip += 3;
+            $$ip++ if $list && $list->isa('PPI::Structure::List');
+            return build_object($t, ($list && $list->isa('PPI::Structure::List')) ? $list : undef, $env);
+        }
         # `Point->new(x => 3, y => 4)` — a value of one of the file's
         # own classes, built where it is written.
         if ($value{ $t->content } && is_op($toks->[$$ip + 1], '->') && is_word($toks->[$$ip + 2], 'new')) {
@@ -1168,6 +1555,10 @@ sub symbol_expr {
     $$ip++;
     # Inside the class the app is `$self`; at the top of the file it is
     # the name the app was given, and a timer reaches its methods there.
+    if ($kind eq '$' && $name eq 'self' && $env->{model}) {
+        refuse($t, "`\$self` inside `$env->{model}`: a method reaches its own fields by name, and another method of "
+                 . 'the same class is not called from here yet');
+    }
     if ($kind eq '$' && ($name eq 'self' || (defined $app_var && $name eq $app_var))) {
         my ($arrow, $word) = @{$toks}[$$ip, $$ip + 1];
         refuse($t, "`\$$name` is read for its methods (`\$$name->name`) and nothing else")
@@ -1189,6 +1580,12 @@ sub symbol_expr {
     }
     if ($kind eq '$' && is_op($next, '->') && is_word($toks->[$$ip + 1])) {
         my $v = read_var($t, $name, $env);
+        if ($model{ $v->{ty} }) {
+            $$ip += 2;
+            return chain(member($v, $toks->[$$ip - 1], $ip, $toks, $env), $ip, $toks, $env);
+        }
+        refuse($t, "`\$$name` may be nothing; read it inside `if (defined \$$name)`, where it is the object")
+            if $v->{ty} =~ /\A(\w+)\?\z/ && $model{$1};
         if (my $fields = $value{ $v->{ty} }) {
             my $f = $toks->[$$ip + 1];
             my ($fd) = grep { $_->{name} eq $f->content } @$fields;
@@ -1275,7 +1672,7 @@ sub build_value {
             or refuse($word, "`$name` is built with every one of its fields; `$f->{name}` is missing");
         my $v = parse_expr($a->{toks}, { %$env, at => $a->{node} });
         refuse($a->{node}, "`$name`'s `$f->{name}` holds a $f->{ty}, and this is a $v->{ty}")
-            unless $v->{ty} eq $f->{ty} || ($f->{ty} eq 'Float' && $v->{ty} eq 'Int');
+            unless fits($f->{ty}, $v->{ty});
         push @vals, $v->{pix};
     }
     return { ty => $name, pix => "$name(" . join(', ', @vals) . ')' };
@@ -1283,6 +1680,24 @@ sub build_value {
 
 sub read_var {
     my ($node, $name, $env) = @_;
+    my $v = read_var_raw($node, $name, $env);
+    # Inside `if (defined $x)` the name reads as the value it holds.
+    if ($env->{narrowed} && (my $nw = $env->{narrowed}{ $v->{pix} })) {
+        return { ty => $nw->{ty}, pix => $nw->{pix}, narrowed => $name };
+    }
+    return $v;
+}
+
+sub read_var_raw {
+    my ($node, $name, $env) = @_;
+    # A field of the class whose method this is, when that class is not
+    # the app: its fields are the object's own, read by name.
+    if (my $mname = $env->{model}) {
+        my $m = $model{$mname};
+        if (my $fd = $m->{by}{$name}) { return { ty => $fd->{ty}, pix => $name } }
+        return { ty => $env->{vars}{$name}{ty}, pix => $env->{vars}{$name}{pix} } if $env->{vars}{$name};
+        refuse($node, "`\$$name` is not a field of $mname, nor anything in scope here");
+    }
     if (my $v = $env->{vars}{$name}) { return lifted($env, $name, { ty => $v->{ty}, pix => $v->{pix} }) }
     if ($env->{outer} && $env->{outer}{$name}) {
         my $v = $env->{outer}{$name};
@@ -1302,6 +1717,8 @@ sub read_var {
 
 sub read_list {
     my ($node, $name, $env) = @_;
+    refuse($node, "`\@$name` is not in scope here; a class with methods holds scalars, and a list belongs to the app")
+        if $env->{model} && !$env->{vars}{$name} && !($env->{outer} && $env->{outer}{$name});
     if (my $v = $env->{vars}{$name}) {
         refuse($node, "`\@$name` holds a $v->{ty}") unless $v->{ty} =~ /\AList</;
         return lifted($env, $name, { ty => $v->{ty}, pix => $v->{pix} });
@@ -1318,6 +1735,8 @@ sub read_list {
 
 sub read_map {
     my ($node, $name, $env) = @_;
+    refuse($node, "`%$name` is not in scope here; a class with methods holds scalars, and a hash belongs to the app")
+        if $env->{model} && !$env->{vars}{$name};
     if (my $v = $env->{vars}{$name}) {
         refuse($node, "`%$name` holds a $v->{ty}") unless $v->{ty} =~ /\AMap</;
         return { ty => $v->{ty}, pix => $v->{pix} };
@@ -1369,8 +1788,8 @@ sub call_args {
         refuse($given[$i]{node}, "`$m->{name}` takes its arguments in order, without names") if defined $given[$i]{key};
         my ($pname, $pty) = @{ $m->{params}[$i] };
         my $v = parse_expr($given[$i]{toks}, { %$env, at => $given[$i]{node} });
-        refuse($given[$i]{node}, "`$m->{name}` takes a $pty here (got $v->{ty})")
-            unless $v->{ty} eq $pty || ($pty eq 'Float' && $v->{ty} eq 'Int');
+        refuse($given[$i]{node}, "`$m->{name}` takes a $pty here (got $v->{ty})" . maybe_hint($v, 'it'))
+            unless fits($pty, $v->{ty});
         push @vals, $v->{pix};
     }
     return @vals;
@@ -1434,8 +1853,18 @@ sub word_expr {
     if ($name eq 'defined') {
         $$ip++;
         my $v = expr_bp($ip, $toks, { %$env, allow_maybe => 1 }, 30);
-        refuse($w, '`defined` asks a hash whether it has a key: `defined $prices{$k}`') unless $v->{maybe};
-        return { ty => 'Bool', pix => "$v->{of}.contains($v->{key})" };
+        return { ty => 'Bool', pix => "$v->{of}.contains($v->{key})" } if $v->{maybe};
+        # A value that may be nothing, asked as a bool rather than as
+        # the condition of an `if`: the answer is worked out first.
+        if ($v->{ty} =~ /\?\z/) {
+            refuse($w, 'in a view, `defined` is the condition of an `if` or `unless`, whose branch reads the value')
+                if $env->{ctx} eq 'view';
+            my $b = '__b' . ++$tmp;
+            push @{ $env->{pre} }, "var $b = false", "if let some(__v$tmp) = $v->{pix} {", "  $b = true", '}';
+            return { ty => 'Bool', pix => $b };
+        }
+        refuse($w, '`defined` asks whether a value that may be nothing is there (`defined $sel`), or whether a '
+                 . 'hash has a key (`defined $prices{$k}`); this can be neither');
     }
     if ($name eq 'join') {
         $$ip++;
@@ -1920,6 +2349,10 @@ sub interpolate {
 sub hole {
     my ($tok, $v, $env) = @_;
     refuse($tok, "a list has no text; write what to put between it (`join(\", \", \@xs)`)") if $v->{ty} =~ /\A(?:List|Map)</;
+    refuse($tok, 'this may be nothing, and nothing has no text; say what to print then: `$x // "-"`, or read it '
+               . 'inside `if (defined $x)`')
+        if $v->{ty} =~ /\?\z/;
+    refuse($tok, "an object of `$v->{ty}` has no text; read one of its fields") if $model{ $v->{ty} };
     if ($v->{ty} eq 'Float') { $uses_pl = 1; return "Pl.numText($v->{pix})" }
     if ($v->{ty} eq 'Bool')  { $uses_pl = 1; return "Pl.boolText($v->{pix})" }
     return $v->{pix};
@@ -2106,7 +2539,7 @@ sub parse_element {
 # `?:` that leaves the child out.
 sub child_nodes {
     my ($a, $env) = @_;
-    my @t = @{ $a->{toks} };
+    my @t = unlabel($a->{toks});
     # Parentheses around a child, which is how Perl writes a `map` into
     # an argument list.
     return map { child_nodes($_, $env) } split_args($t[0])
@@ -2122,12 +2555,15 @@ sub child_nodes {
     if (defined $q) {
         my ($c) = grep { is_op($t[$_], ':') && $_ > $q } 0 .. $#t;
         refuse($t[$q], 'a `?` needs its `:`') unless defined $c;
-        my $cond = cond_of([@t[0 .. $q - 1]], $env, $t[$q]);
-        my @then = child_nodes({ node => $t[$q + 1], toks => [@t[$q + 1 .. $c - 1]] }, $env);
+        my %sink;
+        my $cond = cond_of([@t[0 .. $q - 1]], $env, $t[$q], \%sink);
+        my ($tenv, $eenv, $swap) = branch_envs($env, \%sink, 0);
+        my @then = child_nodes({ node => $t[$q + 1], toks => [@t[$q + 1 .. $c - 1]] }, $tenv);
         my @else = is_empty_list([@t[$c + 1 .. $#t]])
                  ? ()
-                 : child_nodes({ node => $t[$c + 1], toks => [@t[$c + 1 .. $#t]] }, $env);
-        return { n => 'if', cond => $cond, then => \@then, else => \@else };
+                 : child_nodes({ node => $t[$c + 1], toks => [@t[$c + 1 .. $#t]] }, $eenv);
+        return $swap ? { n => 'if', cond => $cond, then => \@else, else => \@then }
+                     : { n => 'if', cond => $cond, then => \@then, else => \@else };
     }
     return elem_of(\@t, $a->{node}, $env);
 }
@@ -2658,15 +3094,17 @@ sub stmt {
             }
             my %caught;
             my $loop = $kw eq 'while';
-            my $cond = cond_of(\@tail, $loop ? { %$env, in_loop => 1 } : $env, $t[$i], \%caught);
-            $cond = "!($cond)" if $kw eq 'unless';
+            my $cond = cond_of(\@tail, $loop ? { %$env, in_loop => 1 } : $env, $t[$i], $loop ? undef : \%caught);
+            my ($tenv, $eenv, $swap) = branch_envs($env, \%caught, $kw eq 'unless');
+            $cond = "!($cond)" if $kw eq 'unless' && !$caught{narrow};
             # What stands before the condition runs only sometimes, so a
             # `die` there does not make the lines after it dead.
-            my $guarded = { %$env, conditional => 1, ($loop ? (in_loop => 1) : ()) };
-            $guarded->{capture} = \%caught if %caught && $kw ne 'unless';
+            my $guarded = { %$tenv, conditional => 1, ($loop ? (in_loop => 1) : ()) };
+            $guarded->{capture} = \%caught if $caught{pat} && $kw ne 'unless';
             my @body = stmt_run(\@head, $guarded, $st);
             $env->{async} = 1 if $guarded->{async};
             return ("$kw $cond {", (map { "  $_" } @body), '}') if $loop;
+            return ("if $cond {", '} else {', (map { "  $_" } @body), '}') if $swap;
             return ("if $cond {", (map { "  $_" } @body), '}');
         }
         return stmt_run(\@t, $env, $st);
@@ -2705,6 +3143,17 @@ sub simple_stmt {
     if (is_sym($head, '$') && is_op($t[1], '=~') && $t[2] && $t[2]->isa('PPI::Token::Regexp::Substitute')) {
         return substitution(\@t, $env);
     }
+    # `$node->grow(0.5);`, `$node->set_label("x");` — an object's own.
+    if (is_sym($head, '$') && is_op($t[1], '->') && is_word($t[2])) {
+        my $rv = eval { read_var($head, substr($head->content, 1), $env) };
+        if ($rv && ($model{ $rv->{ty} } || ($rv->{ty} =~ /\A(\w+)\?\z/ && $model{$1}))) {
+            my $i = 0;
+            my $v = symbol_expr(\$i, \@t, { %$env, as_statement => 1, at => $head });
+            refuse($t[$i], 'this does not continue the call') if $i < @t;
+            return $v->{pix};
+        }
+    }
+    if (is_word($head, 'weaken')) { return weaken_stmt(\@t, $env) }
     if (is_sym($head, '@') || is_sym($head, '%')) { return whole_assign(\@t, $env) }
     refuse($head, $NOT_TAKEN{ $head->content }) if is_word($head) && $NOT_TAKEN{ $head->content };
     # A call whose answer nobody wants — the framework's own, and
@@ -2741,7 +3190,9 @@ sub declare {
         $env->{vars}{$name} = { ty => $p->{ty}, pix => $name };
         return "var $name : $p->{ty} = $p->{pix}";
     }
-    if ($sym->raw_type eq '@' && is_word($rhs[0], 'empty')) {
+    if ($sym->raw_type eq '$' && (is_word($rhs[0], 'maybe') || is_word($rhs[0], 'undef'))) {
+        ($ty, $pix) = maybe_init(\@rhs, $sym);
+    } elsif ($sym->raw_type eq '@' && is_word($rhs[0], 'empty')) {
         ($ty, $pix) = list_init(\@rhs, $sym);
     } elsif ($sym->raw_type eq '@' && @rhs == 1 && $rhs[0]->isa('PPI::Structure::List')) {
         ($ty, $pix) = list_init(\@rhs, $sym);
@@ -2761,8 +3212,8 @@ sub ret {
     my @t = @$toks;
     return 'return' if @t == 1;
     my $v = parse_expr([@t[1 .. $#t]], { %$env, at => $t[0] });
-    refuse($t[0], "this method answers a $env->{ret}, and this is a $v->{ty}")
-        if $env->{ret} && $v->{ty} ne $env->{ret} && !($env->{ret} eq 'Float' && $v->{ty} eq 'Int');
+    refuse($t[0], "this method answers a $env->{ret}, and this is a $v->{ty}" . maybe_hint($v, 'it'))
+        if $env->{ret} && !fits($env->{ret}, $v->{ty});
     refuse($t[0], 'this method does not say what it answers; write `:Sig(... => ' .
                   ($v->{ty} eq 'String' ? 'Str' : $v->{ty} eq 'Float' ? 'Num' : $v->{ty}) . ')`')
         unless $env->{ret};
@@ -2837,7 +3288,7 @@ sub whole_assign {
 # `$x = e`, `$x += e`, `$xs[$i] = e`, `$h{k} = e`.
 sub assign {
     my ($toks, $env) = @_;
-    my @t = @$toks;
+    my @t = unlabel($toks);
     my $sym = shift @t;
     my $name = substr $sym->content, 1;
     my ($target, $tty);
@@ -2854,6 +3305,8 @@ sub assign {
         ($target, $tty) = ($mv->{pix} . "[" . subscript_key($sub, $env) . "]", $inner);
     } else {
         my $v = read_var($sym, $name, $env);
+        refuse($sym, "`\$$name` is read as the value it holds inside `if (defined \$$name)`; write it outside that block")
+            if $v->{narrowed};
         refuse($sym, "`\$$name` cannot be written here; it is what this is called with")
             if $env->{vars}{$name} && $env->{vars}{$name}{fixed};
         ($target, $tty) = ($v->{pix}, $v->{ty});
@@ -2884,7 +3337,7 @@ sub assign {
     if ($op->content eq '=') {
         if (my $p = pipeline_rhs(\@t, $env, $sym)) {
             refuse($op, "`\$$name` holds a $tty, and this is a $p->{ty}")
-                unless $p->{ty} eq $tty || ($tty eq 'Float' && $p->{ty} eq 'Int');
+                unless fits($tty, $p->{ty});
             return "$target = $p->{pix}";
         }
         return "$target = " . typed_rhs($name, $tty, \@t, $env, $op);
@@ -2931,7 +3384,8 @@ sub substitution {
 sub typed_rhs {
     my ($name, $fty, $toks, $env, $at) = @_;
     my $v = parse_expr($toks, { %$env, at => $at });
-    refuse($at, "`\$$name` holds a $fty, and this is a $v->{ty}") unless $v->{ty} eq $fty || ($fty eq 'Float' && $v->{ty} eq 'Int');
+    refuse($at, "`\$$name` holds a $fty, and this is a $v->{ty}" . maybe_hint($v, 'the value'))
+        unless fits($fty, $v->{ty});
     return $v->{pix};
 }
 
@@ -2940,10 +3394,49 @@ sub cond_of {
     my @t = @$toks;
     # `if ($c)` — the parentheses are the statement's, not the expression's
     @t = sig(($t[0]->schildren)[0]) if @t == 1 && $t[0]->isa('PPI::Structure::Condition');
+    # `defined $x` on a value that may be nothing: the branch it guards
+    # reads `$x` as the value. The compiled run spells that `if let`.
+    if (my ($neg, @d) = narrowing_shape(\@t)) {
+        my $v = parse_expr(\@d, { %$env, at => $at, allow_maybe => 1 });
+        if ($v->{ty} =~ /\A(.+)\?\z/ && !$v->{maybe}) {
+            refuse($at, '`defined` here is the whole condition of an `if` or `unless`, and its branch reads '
+                      . 'the value; it does not go in a `while`, a `grep`, or beside `&&`')
+                unless $sink;
+            my $bind = '__v' . ++$tmp;
+            $sink->{narrow} = { key => $v->{pix}, ty => $1, pix => $bind, neg => $neg };
+            return "let some($bind) = $v->{pix}";
+        }
+    }
     my $v = parse_expr(\@t, { %$env, at => $at, ($sink ? (sink => $sink) : ()) });
     refuse($at, "a condition is a bool (got $v->{ty}); Perl's truthiness of a number or a string is not in the translator — compare it (`!= 0`, `ne \"\"`)")
         unless $v->{ty} eq 'Bool';
     return $v->{pix};
+}
+
+# `defined $x`, `defined($x)`, `!defined $x`, `not defined $x`: whether
+# the run of tokens is one of those, which way round, and the tokens of
+# `$x`. Anything else is not a narrowing.
+sub narrowing_shape {
+    my ($toks) = @_;
+    my @t = @$toks;
+    my $neg = 0;
+    if (@t && (is_op($t[0], '!') || is_word($t[0], 'not'))) { $neg = 1; shift @t }
+    return () unless @t >= 2 && is_word($t[0], 'defined');
+    shift @t;
+    @t = sig(($t[0]->schildren)[0]) if @t == 1 && $t[0]->isa('PPI::Structure::List') && $t[0]->schildren;
+    return () unless @t && is_sym($t[0], '$');
+    return ($neg, @t);
+}
+
+# The two branches of an `if` whose condition narrowed a value: the env
+# each is read in, and whether the branches change places (a `!defined`
+# reads the value in the else).
+sub branch_envs {
+    my ($env, $sink, $unless) = @_;
+    my $n = $sink->{narrow} or return ($env, $env, 0);
+    my $neg = $n->{neg} ^ ($unless ? 1 : 0);
+    my $narrowed = { %$env, narrowed => { %{ $env->{narrowed} // {} }, $n->{key} => { ty => $n->{ty}, pix => $n->{pix} } } };
+    return $neg ? ($env, $narrowed, 1) : ($narrowed, $env, 0);
 }
 
 # if / elsif / else, unless, while, for.
@@ -2964,7 +3457,27 @@ sub compound {
                 unless $cnd && $cnd->isa('PPI::Structure::Condition') && $blk && $blk->isa('PPI::Structure::Block');
             my %caught;
             my $c = cond_of([$cnd], $env, $kw, \%caught);
-            $c = "!($c)" if $kw->content eq 'unless';
+            my ($tenv, $eenv, $swap) = branch_envs($env, \%caught, $kw->content eq 'unless');
+            $c = "!($c)" if $kw->content eq 'unless' && !$caught{narrow};
+            if ($swap) {
+                # `if (!defined $x) { A } else { B }`: the compiled run
+                # reads the value in its own then-branch, so B goes first.
+                refuse($kw, 'an `elsif` cannot ask `!defined`; write the `if` the other way round')
+                    if $kw->content eq 'elsif';
+                my $nxt = $t[$i + 3];
+                refuse($nxt, 'after `if (!defined $x)` comes `else` or nothing; for an `elsif`, write the `if` the other way round')
+                    if is_word($nxt, 'elsif');
+                my $else_blk = is_word($nxt, 'else') ? $t[$i + 4] : undef;
+                refuse($nxt, '`else` takes a block') if is_word($nxt, 'else') && !($else_blk && $else_blk->isa('PPI::Structure::Block'));
+                push @out, "if $c {";
+                push @out, map { "  $_" } ($else_blk ? stmts($else_blk, scope($eenv)) : ());
+                push @out, '} else {';
+                push @out, map { "  $_" } stmts($blk, scope($tenv));
+                push @out, '}';
+                $i += $else_blk ? 5 : 3;
+                refuse($t[$i], 'this does not belong in an if statement: `' . $t[$i]->content . '`') if $i < @t;
+                return @out;
+            }
             if ($kw->content eq 'elsif') {
                 push @out, '} else {';
                 push @out, "  if $c {";
@@ -2972,8 +3485,8 @@ sub compound {
             } else {
                 push @out, "if $c {";
             }
-            my $branch = scope($env);
-            $branch->{capture} = \%caught if %caught && $kw->content ne 'unless';
+            my $branch = scope($tenv);
+            $branch->{capture} = \%caught if $caught{pat} && $kw->content ne 'unless';
             push @out, map { ('  ' x ($depth + 1)) . $_ } stmts($blk, $branch);
             $i += 3;
         } elsif (is_word($kw, 'else')) {
@@ -3021,6 +3534,8 @@ sub loop {
 sub task_stmt {
     my ($toks, $env) = @_;
     my @t = @$toks;
+    refuse($t[0], '`task` is started from a handler or a method of the app, whose fields the answer is kept in')
+        if $env->{model};
     refuse($t[0], '`task` is called with parentheses') unless @t == 2 && $t[1]->isa('PPI::Structure::List');
     my @a = split_args($t[1]);
     refuse($t[0], '`task` takes the work and what to do with its answer: `task(sub { ... }, on_done => sub ($v) { ... })`')
@@ -3095,11 +3610,14 @@ sub answer {
     shift @t if is_word($t[0], 'return');
     my ($ix) = grep { is_word($t[$_], 'if') || is_word($t[$_], 'unless') } 1 .. $#t;
     if (defined $ix) {
-        my $cond = cond_of([@t[$ix + 1 .. $#t]], $env, $t[$ix]);
-        $cond = "!($cond)" if $t[$ix]->content eq 'unless';
-        my @then = child_nodes({ node => $t[0], toks => [@t[0 .. $ix - 1]] }, nonneg_in($env, $cond));
-        my @else = answer($st, $i + 1, $env, $at);
-        return { n => 'if', cond => $cond, then => \@then, else => \@else };
+        my %sink;
+        my $cond = cond_of([@t[$ix + 1 .. $#t]], $env, $t[$ix], \%sink);
+        my ($tenv, $eenv, $swap) = branch_envs($env, \%sink, $t[$ix]->content eq 'unless');
+        $cond = "!($cond)" if $t[$ix]->content eq 'unless' && !$sink{narrow};
+        my @then = child_nodes({ node => $t[0], toks => [@t[0 .. $ix - 1]] }, nonneg_in($tenv, $cond));
+        my @else = answer($st, $i + 1, $eenv, $at);
+        return $swap ? { n => 'if', cond => $cond, then => \@else, else => \@then }
+                     : { n => 'if', cond => $cond, then => \@then, else => \@else };
     }
     refuse($st->[$i + 1], 'nothing follows the element this answers') if $i < $#$st;
     return child_nodes({ node => $t[0], toks => \@t }, $env);
@@ -3172,10 +3690,13 @@ sub append_of {
     my @rest = @t[3 .. $#t];
     my ($ix) = grep { is_word($rest[$_], 'if') || is_word($rest[$_], 'unless') } 1 .. $#rest;
     if (defined $ix) {
-        my $cond = cond_of([@rest[$ix + 1 .. $#rest]], $env, $rest[$ix]);
-        $cond = "!($cond)" if $rest[$ix]->content eq 'unless';
-        my @then = child_nodes({ node => $rest[0], toks => [@rest[0 .. $ix - 1]] }, nonneg_in($env, $cond));
-        return ($target, { n => 'if', cond => $cond, then => \@then, else => [] });
+        my %sink;
+        my $cond = cond_of([@rest[$ix + 1 .. $#rest]], $env, $rest[$ix], \%sink);
+        my ($tenv, $eenv, $swap) = branch_envs($env, \%sink, $rest[$ix]->content eq 'unless');
+        $cond = "!($cond)" if $rest[$ix]->content eq 'unless' && !$sink{narrow};
+        my @then = child_nodes({ node => $rest[0], toks => [@rest[0 .. $ix - 1]] }, nonneg_in($tenv, $cond));
+        return ($target, $swap ? { n => 'if', cond => $cond, then => [], else => \@then }
+                               : { n => 'if', cond => $cond, then => \@then, else => [] });
     }
     return ($target, child_nodes({ node => $rest[0], toks => \@rest }, $env));
 }
@@ -3187,25 +3708,30 @@ sub if_appends {
     my ($cnd, $blk) = @{$t}[$i + 1, $i + 2];
     refuse($kw, '`' . $kw->content . '` takes its condition in parentheses and a block')
         unless $cnd && $cnd->isa('PPI::Structure::Condition') && $blk && $blk->isa('PPI::Structure::Block');
-    my $cond = cond_of([$cnd], $env, $kw);
-    $cond = "!($cond)" if $kw->content eq 'unless';
-    my ($target, @then) = block_appends($blk, nonneg_in($env, $cond));
+    my %sink;
+    my $cond = cond_of([$cnd], $env, $kw, \%sink);
+    my ($tenv, $eenv, $swap) = branch_envs($env, \%sink, $kw->content eq 'unless');
+    $cond = "!($cond)" if $kw->content eq 'unless' && !$sink{narrow};
+    my ($target, @then) = block_appends($blk, nonneg_in($tenv, $cond));
     my @else;
     if (my $next = $t->[$i + 3]) {
         if (is_word($next, 'elsif')) {
-            my ($t2, @n) = if_appends($t, $i + 3, $env);
+            refuse($next, 'after `if (!defined $x)` comes `else` or nothing; for an `elsif`, write the `if` the other way round')
+                if $swap;
+            my ($t2, @n) = if_appends($t, $i + 3, $eenv);
             refuse($next, 'every branch here adds to one list of elements') if $t2 ne $target;
             @else = @n;
         } elsif (is_word($next, 'else')) {
             refuse($next, '`else` takes a block') unless $t->[$i + 4] && $t->[$i + 4]->isa('PPI::Structure::Block');
-            my ($t2, @n) = block_appends($t->[$i + 4], $env);
+            my ($t2, @n) = block_appends($t->[$i + 4], $eenv);
             refuse($next, 'every branch here adds to one list of elements') if $t2 ne $target;
             @else = @n;
         } else {
             refuse($next, 'this does not belong in an if statement: `' . $next->content . '`');
         }
     }
-    return ($target, { n => 'if', cond => $cond, then => \@then, else => \@else });
+    return ($target, $swap ? { n => 'if', cond => $cond, then => \@else, else => \@then }
+                           : { n => 'if', cond => $cond, then => \@then, else => \@else });
 }
 
 # A branch whose condition says a number is not negative lets the .pix
@@ -3532,6 +4058,13 @@ sub answers_of {
 }
 
 sub bodies {
+    for my $name (@models) {
+        for my $mm (@{ $model{$name}{order} }) {
+            my $env = { ctx => 'fn', model => $name, vars => {}, nonneg => {}, ret => $mm->{ret}, at => $mm->{node} };
+            $env->{vars}{ substr $_->[0], 1 } = { ty => $_->[1], pix => substr($_->[0], 1), fixed => 1 } for @{ $mm->{params} };
+            $mm->{body} = [stmts($mm->{block}, $env)];
+        }
+    }
     for my $m (@methods) {
         next if $m->{element} || $m->{paints};
         my $env = { ctx => 'fn', vars => {}, nonneg => {}, ret => $m->{ret}, at => $m->{node} };
@@ -3635,6 +4168,15 @@ sub emit {
     for my $name (@values) {
         push @out, "struct $name {";
         push @out, "  var $_->{name} : $_->{ty} = $_->{init}" for @{ $value{$name} };
+        push @out, '}', '';
+    }
+    for my $name (@models) {
+        my $m = $model{$name};
+        push @out, "class $name {";
+        push @out, '  pub ' . ($_->{weak} ? 'weak ' : '') . "prop $_->{name} : $_->{ty}, default: $_->{init}" for @{ $m->{fields} };
+        for my $mm (@{ $m->{order} }) {
+            push @out, '', '  pub ' . fn_head($mm) . ' {', (map { "    $_" } @{ $mm->{body} }), '  }';
+        }
         push @out, '}', '';
     }
     push @out, 'store App {';

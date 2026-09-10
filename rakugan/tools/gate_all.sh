@@ -100,6 +100,8 @@ gate flow    ./bin/rakugan gate demo/flow.pl --script "click:step,click:tally,du
 gate forms   ./bin/rakugan gate demo/forms.pl --script "click:Dark mode,slide:7,select:banana"
 gate roster  ./bin/rakugan gate demo/roster.pl --script "select:member 7,dump,click:score,dump,click:score,dump"
 gate points  ./bin/rakugan gate demo/points.pl --script "click:right,click:measure,dump,click:swap,dump"
+gate moods   ./bin/rakugan gate demo/moods.pl --script "click:flip,click:pick,click:describe,dump,click:track,click:clear,click:describe,dump,click:wipe,dump"
+gate links   ./bin/rakugan gate demo/links.pl --script "click:build,click:peek,dump,click:drop,click:peek,dump"
 gate edges   ./bin/rakugan gate demo/edges.pl --script "click:oob,dump,click:shrink,click:shrink,click:partial,dump"
 gate calc    ./bin/rakugan gate demo/calc.pl --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate calcgrid ./bin/rakugan gate demo/calcgrid.pl --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="

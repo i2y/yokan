@@ -50,6 +50,12 @@ my @CATALOGUE = (
 ['state', 'points',
  "a small class of values, carried on the app's own state",
  '値のための小さなクラスを、アプリの状態として持つ'],
+['state', 'moods',
+ 'a value that may be nothing, read inside `if (defined ...)`; a few named things as constants; and a second class with methods the app holds',
+ 'なにもないかもしれない値を `if (defined ...)` の中で読む。いくつかの決まった値は定数で。アプリが持つ、メソッドを持つ二つ目のクラス'],
+['state', 'links',
+ 'objects that point at one another, with the pointer back weakened the way perl asks, so cutting the chain frees it in both runs',
+ '互いを指し合うオブジェクト。戻りの参照は perl の作法どおり弱くしてあるので、鎖を切れば両方の実行で解放される'],
 
 ['look', 'forms',
  'the controls a person changes: a box, a switch, a track, and the four choosers',

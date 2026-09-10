@@ -1,0 +1,3 @@
+test/refuse/write_inside_defined.pl:11:13: Rakugan cannot take this — `$sel` is read as the value it holds inside `if (defined $sel)`; write it outside that block
+                $sel = undef;
+                ^

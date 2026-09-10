@@ -65,6 +65,13 @@ What it refuses, and what to write instead:
 - `++` on a string. Perl counts letters there (`"az"++` is `"ba"`), and
   the compiled run does not.
 - A hash read with no `//`, and `keys` without `sort`.
+- `undef` as a field's start (`maybe(Int)` says the type), a value that
+  may be nothing read outside `defined` or `//`, `defined` anywhere but
+  as the whole condition of an `if`, and a write to the value inside
+  its own `defined` branch.
+- In a class with methods: `$self`, a list or a hash field, `ADJUST`, a
+  method named like a field or `set_<field>`, and a constant declared
+  twice with two values.
 - An index a view cannot prove is inside the list.
 - A method that writes a field, called while a view is being built.
 - `$1` outside the `if` that matched, a pattern built at run time, and

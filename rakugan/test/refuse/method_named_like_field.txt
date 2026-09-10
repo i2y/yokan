@@ -1,0 +1,3 @@
+test/refuse/method_named_like_field.pl:6:12: Rakugan cannot take this — `set_n` is the name the compiled run gives `n`'s own writer; put `:writer` on the field, or name the method for what it does
+        method set_n :Sig(Int) ($v) { $n = $v }
+               ^

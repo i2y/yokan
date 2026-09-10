@@ -1,7 +1,7 @@
 <!-- Written by website/tools/demos_page.pl from demo/. Edit the demos. -->
 # Demos
 
-41 apps, every one of them gated: the interpreted run and the compiled
+43 apps, every one of them gated: the interpreted run and the compiled
 one, driven by the same script, compared byte for byte. Each runs as-is
 from `rakugan/` in the repository.
 
@@ -552,6 +552,180 @@ whole file.
     }
 
     run(Points->new, title => "points");
+    ```
+
+#### moods — a value that may be nothing, read inside `if (defined ...)`; a few named things as constants; and a second class with methods the app holds
+<img src="images/demos/moods.png" width="360">
+
+??? note "moods.pl"
+
+    ```perl
+    # Values that are one of a few named things, and a value that may be
+    # nothing at all. Perl writes the first as constants and the second as
+    # `undef`: a field that starts as nothing says what it may hold, and
+    # `defined` is the `if` inside which it is read as the value. The
+    # tracker is a second class with methods of its own, which the app
+    # holds and calls.
+    use Rakugan;
+
+    class Tracker {
+        use Rakugan;
+        use constant { HAPPY => "happy", SAD => "sad" };
+        field $last  :reader = maybe(Int);
+        field $trend :reader = HAPPY;
+
+        method note :Sig(Int) ($v) {
+            $last = $v;
+            $trend = $trend eq HAPPY ? SAD : HAPPY;
+        }
+
+        method wipe {
+            $last = undef;
+        }
+    }
+
+    class Moods {
+        use Rakugan;
+        use constant { HAPPY => "happy", SAD => "sad" };
+        field $mood    = HAPPY;
+        field $sel     = maybe(Int);
+        field $note    = "-";
+        field $tracker = Tracker->new;
+
+        method flip {
+            $mood = $mood eq HAPPY ? SAD : HAPPY;
+        }
+
+        method describe {
+            if (defined $sel) {
+                $note = "chose $sel";
+            } else {
+                $note = "nothing chosen";
+            }
+        }
+
+        method mood_line {
+            return text("mood: up", size => 18, color => "accent", animate => 120, easing => "out") if $mood eq HAPPY;
+            return text("mood: down", size => 18, color => "#f38ba8", animate => 120, easing => "out");
+        }
+
+        method view {
+            my @cells = ($self->mood_line);
+            if (defined $sel) {
+                push @cells, text("selection: $sel");
+            } else {
+                push @cells, text("(no selection)");
+            }
+            push @cells, text("note: $note");
+            if (defined $tracker->last) {
+                push @cells, text("tracked: @{[ $tracker->last ]}", size => 12);
+            } else {
+                push @cells, text("(nothing tracked)", size => 12);
+            }
+            return column(
+                @cells,
+                row(
+                    button("flip",     on_click => sub { $self->flip }),
+                    button("pick",     on_click => sub { $sel = 7 }),
+                    button("clear",    on_click => sub { $sel = undef }),
+                    button("describe", on_click => sub { $self->describe }),
+                    button("track",    animate => 100, easing => "inOut", on_click => sub { $tracker->note(9) }),
+                    button("wipe",     on_click => sub { $tracker->wipe }),
+                    spacing => 6,
+                ),
+                spacing => 8,
+                padding => 12,
+            );
+        }
+    }
+
+    run(Moods->new, title => "moods");
+    ```
+
+#### links — objects that point at one another, with the pointer back weakened the way perl asks, so cutting the chain frees it in both runs
+<img src="images/demos/links.png" width="360">
+
+??? note "links.pl"
+
+    ```perl
+    # Objects that point at one another. A perl object is a reference, and
+    # two names can hold the same one; the compiled run keeps that. The
+    # pointer back is weakened, as perl itself asks, so a parent and a
+    # child do not keep each other alive: cut the owning chain and the
+    # survivor's pointer back answers nothing, in both runs.
+    use Rakugan;
+
+    class Node {
+        use Rakugan;
+        field $label  :param :reader = "n";
+        field $kid    :reader :writer = maybe(Node);
+        field $parent :reader = maybe(Node);
+
+        method hang_under :Sig(Node) ($p) {
+            $parent = $p;
+            weaken($parent);
+        }
+    }
+
+    class Tree {
+        use Rakugan;
+        field $root = maybe(Node);
+        field $keep = maybe(Node);
+        field $note = "-";
+
+        method build {
+            my $a = Node->new(label => "alpha");
+            my $b = Node->new(label => "beta");
+            $a->set_kid($b);
+            $b->hang_under($a);
+            $root = $a;
+            $keep = $b;
+        }
+
+        method peek {
+            if (defined $root) {
+                if (defined $root->kid) {
+                    if (defined $root->kid->parent) {
+                        $note = "kid=@{[ $root->kid->label ]} parent=@{[ $root->kid->parent->label ]}";
+                    } else {
+                        $note = "kid=@{[ $root->kid->label ]} parent=gone";
+                    }
+                } else {
+                    $note = "no kid";
+                }
+            } elsif (defined $keep) {
+                if (defined $keep->parent) {
+                    $note = "kept @{[ $keep->label ]}, parent=@{[ $keep->parent->label ]}";
+                } else {
+                    $note = "kept @{[ $keep->label ]}, parent=gone";
+                }
+            } else {
+                $note = "no root";
+            }
+        }
+
+        method view {
+            my @cells = (text("note: $note"));
+            if (defined $root) {
+                push @cells, text("root: @{[ $root->label ]}");
+            } else {
+                push @cells, text("root: (none)");
+            }
+            return column(
+                @cells,
+                row(
+                    button("build", on_click => sub { $self->build }),
+                    button("peek",  on_click => sub { $self->peek }),
+                    button("drop",  on_click => sub { $root = undef }),
+                    spacing => 6,
+                ),
+                spacing => 8,
+                padding => 12,
+            );
+        }
+    }
+
+    run(Tree->new, title => "links");
     ```
 
 ## Look and layout

@@ -27,7 +27,9 @@ Rakugan（落雁）を使うと、Perl で書いたデスクトップアプリ�
 - [ハンドラ](#ハンドラ)
 - [一覧、グラフ、必要な行だけ作る一覧](#一覧グラフ必要な行だけ作る一覧)
 - [ハッシュ](#ハッシュ)
+- [なにもないかもしれない値](#なにもないかもしれない値)
 - [値のクラス](#値のクラス)
+- [メソッドを持つクラス](#メソッドを持つクラス)
 - [正規表現](#正規表現)
 - [キャンバス](#キャンバス)
 - [キーボード](#キーボード)
@@ -352,6 +354,71 @@ run(Ledger->new, title => "ledger");
 perl が鍵を返す順序は、そのとき鍵を保持している順序のままであり、perl を起動するたびに変わります。
 画面がその順序に依存するわけにはいきません。
 
+## なにもないかもしれない値
+
+Perl には `undef` があり、アプリにも使いどころがあります。
+まだ誰も選んでいない選択、いない親などです。
+なにもない状態で始まるフィールドは、何を持ちうるかを `field $sel = maybe(Int);` と言います。
+型はそこから来ます（`empty` と同じです）。
+なにもない状態に戻すときにハンドラが書くのが `undef` で、なにも答えないことのあるメソッドは、Types::Standard の綴りで `:Sig(Int => Maybe[Int])` と言います。
+
+二つの実行が一致していなければならないのは読むところなので、読みは問いの中に置きます。
+`if (defined $sel) { … }` の分岐の中では `$sel` はその値で、分岐の外では値として読みません。
+もう一つの書き方が `//` で、一つの式で済みます。
+`$sel // 0` は、値があればその値、なければ後ろのものです。
+`$sel` を裸で文字列や算術や引数に置くことは断ります。
+なにもないものには文面も和もないからです。
+
+<!-- script: dump,click:pick,dump,click:clear,dump -->
+```perl
+use Rakugan;
+
+class Choice {
+    use Rakugan;
+    field $sel  = maybe(Int);
+    field $note = "-";
+
+    method pick :Sig(Int => Maybe[Int]) ($v) {
+        return undef if $v < 0;
+        return $v;
+    }
+
+    method choose :Sig(Int) ($v) {
+        $sel = $self->pick($v);
+        if (defined $sel) {
+            $note = "chose $sel";
+        } else {
+            $note = "nothing to choose";
+        }
+    }
+
+    method view {
+        my @cells = (text("note: $note"), text("or zero: @{[ $sel // 0 ]}"));
+        if (defined $sel) {
+            push @cells, text("selection: $sel");
+        } else {
+            push @cells, text("(no selection)");
+        }
+        return column(
+            @cells,
+            row(
+                button("pick",  on_click => sub { $self->choose(7) }),
+                button("clear", on_click => sub { $self->choose(-1) }),
+                spacing => 6,
+            ),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Choice->new, title => "choice");
+```
+
+`unless (defined $sel)` と `if (!defined $sel)` は、同じ分岐を逆から書いたものです。
+そこでは `defined` が条件の全部で、`&&` の片側にはなりません。
+その分岐の中では `$sel` を読むだけで、書きません。
+
 ## 値のクラス
 
 `view` を持たない二つ目のクラスは値です。
@@ -393,6 +460,68 @@ run(Points->new, title => "points");
 値は書き換えるのではなく、置き換えます。
 上のボタンが新しい `Point` を作っているのはそのためです。
 値のリストは `field @seen = empty(Point);` で、二つのゲームが星や弾を入れているのもこれです。
+
+## メソッドを持つクラス
+
+メソッドを持つ二つ目のクラスは、値ではなくオブジェクトです。
+二つの名前が同じ一つを持て、どちらを通した変更ももう一方から見えます。
+perl 自身のオブジェクトがそう振る舞い、コンパイルした実行もそう持ちます。
+`:param` は `new` に渡せるものを、`:reader` は外から読めるものを言い、メソッドはフィールドを名前で触ります。
+perl 5.42 で加わった `:writer` はフィールドに `set_name` を与え、方言はそれも受け取ります。
+
+<!-- script: click:bump,click:bump,dump -->
+```perl
+use Rakugan;
+
+class Tally {
+    use Rakugan;
+    field $count :reader = 0;
+    field $label :param :reader = "clicks";
+
+    method bump :Sig(Int) ($by) {
+        $count += $by;
+    }
+
+    method rename :Sig(Str) ($to) {
+        $label = $to;
+    }
+}
+
+class Board {
+    use Rakugan;
+    field $tally = Tally->new;
+    field $note  = "-";
+
+    method bump {
+        $tally->bump(2);
+        $tally->rename("clicks so far") if $tally->count > 2;
+        $note = "@{[ $tally->label ]}: @{[ $tally->count ]}";
+    }
+
+    method view {
+        return column(
+            text("note: $note"),
+            text("count: @{[ $tally->count ]}"),
+            button("bump", on_click => sub { $self->bump }),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Board->new, title => "tally");
+```
+
+オブジェクトは、なにもないかもしれないフィールド `field $kid = maybe(Node);` を通して互いを指します。
+メソッドから代入し、`defined` の中で読みます。
+戻りの参照は perl の作法どおり弱くします。
+代入したメソッドの中で、そのあとに `weaken($parent)` と書きます。
+そうすれば親と子が互いを生かし続けることはなく、コンパイルした実行もそのフィールドを弱い参照として宣言し、perl と同じ文で鎖を解放します。
+`demo/links.pl` がその形で、`demo/moods.pl` はアプリが持って問いかけるクラスです。
+
+コンパイルした実行がこのクラスに自前で与えるものがいくつかあり、方言はそれらを断ります。
+フィールドと同じ名前のメソッドと `set_<field>` という名前のメソッド（そこではフィールド自身の読み手と書き手の名前です）、そのメソッドの中の `$self`、フィールドとしてのリストやハッシュ、`ADJUST`、そしてフィールドの初期値としての値つきの `Name->new` です。
+`Name->new` で始めて、`ADJUST` かハンドラで値を入れます。
 
 ## 正規表現
 
@@ -904,6 +1033,8 @@ key, so say what to answer when it does not: `$prices{$k} // 0`
 - 文字列への `++`。
   perl はそこで文字を数え上げますが（`"az"++` は `"ba"`）、コンパイルした実行はそれをしません。
 - `//` のないハッシュの読みと、`sort` のない `keys`。
+- フィールドの初期値としての `undef`（型は `maybe(Int)` が言います）、`defined` や `//` の外で読む「なにもないかもしれない値」、`if` の条件の全部としてではない `defined`、そして自分の `defined` の分岐の中でのその値への書き込み。
+- メソッドを持つクラスの中の `$self`、リストやハッシュのフィールド、`ADJUST`、フィールドや `set_<field>` と同じ名前のメソッド、そして二つの値で二度宣言された定数。
 - リストの中に収まっていることをビューが示せない添字。
 - ビューを組み立てている最中に呼ばれる、フィールドを書き換えるメソッド。
 - 一致を作った `if` の外の `$1`、実行時に組み立てたパターン、置換の `/e`。

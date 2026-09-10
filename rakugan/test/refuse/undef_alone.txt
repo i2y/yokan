@@ -1,0 +1,3 @@
+test/refuse/undef_alone.pl:5:18: Rakugan cannot take this — `undef` alone says nothing about the type; say what this may hold: `maybe(Int)`, `maybe(Str)`
+        field $sel = undef;
+                     ^

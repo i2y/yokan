@@ -30,7 +30,9 @@ rename in the vocabulary breaks this page before a reader meets it.
 - [Handlers](#handlers)
 - [Lists, charts, and rows built on demand](#lists-charts-and-rows-built-on-demand)
 - [Hashes](#hashes)
+- [Values that may be nothing](#values-that-may-be-nothing)
 - [Value classes](#value-classes)
+- [Classes with methods](#classes-with-methods)
 - [Regular expressions](#regular-expressions)
 - [The canvas](#the-canvas)
 - [The keyboard](#the-keyboard)
@@ -358,6 +360,72 @@ what to answer, `exists` asks, and `keys` is written `sort keys %prices`
 is a different order every time perl starts, and a screen cannot depend
 on that.
 
+## Values that may be nothing
+
+Perl has `undef`, and an app has uses for it: a selection nobody has
+made yet, a parent that is not there. A field that starts as nothing
+says what it may hold, `field $sel = maybe(Int);`, and that is where
+its type comes from, as with `empty`. `undef` is what a handler writes
+to put it back to nothing, and a method that may answer nothing spells
+that `:Sig(Int => Maybe[Int])`, the way Types::Standard spells it.
+
+Reading it is where the two runs have to agree, so the read is inside
+the question: `if (defined $sel) { … }` is the branch where `$sel` is
+the value, and outside that branch it is not read as one. `//` is the
+other way, in one expression: `$sel // 0` is the value, or the one after
+it. `$sel` alone in text, in arithmetic or as an argument is refused,
+because nothing has no text and no sum.
+
+<!-- script: dump,click:pick,dump,click:clear,dump -->
+```perl
+use Rakugan;
+
+class Choice {
+    use Rakugan;
+    field $sel  = maybe(Int);
+    field $note = "-";
+
+    method pick :Sig(Int => Maybe[Int]) ($v) {
+        return undef if $v < 0;
+        return $v;
+    }
+
+    method choose :Sig(Int) ($v) {
+        $sel = $self->pick($v);
+        if (defined $sel) {
+            $note = "chose $sel";
+        } else {
+            $note = "nothing to choose";
+        }
+    }
+
+    method view {
+        my @cells = (text("note: $note"), text("or zero: @{[ $sel // 0 ]}"));
+        if (defined $sel) {
+            push @cells, text("selection: $sel");
+        } else {
+            push @cells, text("(no selection)");
+        }
+        return column(
+            @cells,
+            row(
+                button("pick",  on_click => sub { $self->choose(7) }),
+                button("clear", on_click => sub { $self->choose(-1) }),
+                spacing => 6,
+            ),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Choice->new, title => "choice");
+```
+
+`unless (defined $sel)` and `if (!defined $sel)` are the same branch
+the other way round. `defined` is the whole condition there, not one
+side of an `&&`, and inside its branch `$sel` is read and not written.
+
 ## Value classes
 
 A second class with no `view` is a value: `:param` says what `new` is
@@ -399,6 +467,75 @@ run(Points->new, title => "points");
 A value is replaced rather than edited, which is why the buttons above
 build a new `Point`. A list of them is `field @seen = empty(Point);`,
 and it is what the games carry their stars and their bullets in.
+
+## Classes with methods
+
+A second class with methods is an object rather than a value: two names
+can hold the same one, and a change made through either is seen through
+both, which is how perl's own objects behave and how the compiled run
+holds them. `:param` says what `new` is given, `:reader` what can be
+read from outside, and a method reaches the fields by their names.
+perl 5.42 adds `:writer`, which gives a field `set_name`, and the
+dialect takes it.
+
+<!-- script: click:bump,click:bump,dump -->
+```perl
+use Rakugan;
+
+class Tally {
+    use Rakugan;
+    field $count :reader = 0;
+    field $label :param :reader = "clicks";
+
+    method bump :Sig(Int) ($by) {
+        $count += $by;
+    }
+
+    method rename :Sig(Str) ($to) {
+        $label = $to;
+    }
+}
+
+class Board {
+    use Rakugan;
+    field $tally = Tally->new;
+    field $note  = "-";
+
+    method bump {
+        $tally->bump(2);
+        $tally->rename("clicks so far") if $tally->count > 2;
+        $note = "@{[ $tally->label ]}: @{[ $tally->count ]}";
+    }
+
+    method view {
+        return column(
+            text("note: $note"),
+            text("count: @{[ $tally->count ]}"),
+            button("bump", on_click => sub { $self->bump }),
+            spacing => 8,
+            padding => 12,
+        );
+    }
+}
+
+run(Board->new, title => "tally");
+```
+
+Objects point at one another through fields that may be nothing,
+`field $kid = maybe(Node);`, set from a method and read inside
+`defined`. A pointer back is weakened, as perl asks, with `weaken($parent)`
+after the assignment in the method that makes it, so a parent and a
+child do not keep each other alive; the compiled run declares that
+field weak and frees the chain at the same statement perl does.
+`demo/links.pl` is that shape, and `demo/moods.pl` is a class the app
+holds and asks.
+
+A few things the compiled run gives such a class of its own, so the
+dialect refuses them: a method named like a field or `set_<field>`
+(those are the field's own reader and writer there), `$self` inside
+one of its methods, a list or a hash as one of its fields, `ADJUST`,
+and `Name->new` with values as a field's initializer; start it with
+`Name->new` and fill it in `ADJUST` or a handler.
 
 ## Regular expressions
 
@@ -924,6 +1061,13 @@ What it refuses, and what to write instead:
 - `++` on a string. Perl counts letters there (`"az"++` is `"ba"`), and
   the compiled run does not.
 - A hash read with no `//`, and `keys` without `sort`.
+- `undef` as a field's start (`maybe(Int)` says the type), a value that
+  may be nothing read outside `defined` or `//`, `defined` anywhere but
+  as the whole condition of an `if`, and a write to the value inside
+  its own `defined` branch.
+- In a class with methods: `$self`, a list or a hash field, `ADJUST`, a
+  method named like a field or `set_<field>`, and a constant declared
+  twice with two values.
 - An index a view cannot prove is inside the list.
 - A method that writes a field, called while a view is being built.
 - `$1` outside the `if` that matched, a pattern built at run time, and

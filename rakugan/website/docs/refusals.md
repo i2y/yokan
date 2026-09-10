@@ -8,7 +8,7 @@ the file first, so a shape perl rejects never reaches the translator.
 `check` runs before every build and every gate, needs no compiler and no
 window, and prints nothing at all when there is nothing to say.
 
-Each of the 31 below has a file under `test/refuse/` that triggers it and
+Each of the 40 below has a file under `test/refuse/` that triggers it and
 the message it must print, word for word. The sweep runs them, so a
 refusal cannot quietly change its wording, and this page is quoted from
 those same files.
@@ -61,6 +61,30 @@ The top of the file is where the app is made, not a second place to keep state.
 test/refuse/top_statement.pl:3:1: Rakugan cannot take this — a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`), a name for a literal (`my $WIDTH = 120;`) or the app itself (`my $app = Counter->new;`)
     my @greetings = ("hello", "goodbye");
     ^
+```
+
+Inside a class with methods a field is reached by its name; calling another method of the same class from there is not carried yet.
+
+```console
+test/refuse/self_in_class.pl:6:28: Rakugan cannot take this — `$self` inside `Node`: a method reaches its own fields by name, and another method of the same class is not called from here yet
+        method grow { $n += 1; $self->grow }
+                               ^
+```
+
+A field starts at what `new` gives with no values, so the type is known before anything runs; values go in `ADJUST` or a handler.
+
+```console
+test/refuse/new_with_values_in_field.pl:11:19: Rakugan cannot take this — a field starts as `Node->new` with no values; give it values in `ADJUST`, or make it in a handler
+        field $node = Node->new(n => 3);
+                      ^
+```
+
+The compiled run gives every field a reader and a writer of its own name, and a method cannot take those names.
+
+```console
+test/refuse/method_named_like_field.pl:6:12: Rakugan cannot take this — `set_n` is the name the compiled run gives `n`'s own writer; put `:writer` on the field, or name the method for what it does
+        method set_n :Sig(Int) ($v) { $n = $v }
+               ^
 ```
 
 ## Types
@@ -119,6 +143,54 @@ Perl counts letters there, and the compiled run has no such counting in it.
 test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds a String, and Perl's `++` on a string counts letters (`"az"++` is `"ba"`), which the compiled run does not do; join or replace the string instead
             $tag++;
                 ^
+```
+
+A field's type is read from its initializer, and `undef` alone names none; `maybe(Int)` says what it may hold.
+
+```console
+test/refuse/undef_alone.pl:5:18: Rakugan cannot take this — `undef` alone says nothing about the type; say what this may hold: `maybe(Int)`, `maybe(Str)`
+        field $sel = undef;
+                     ^
+```
+
+Nothing has no text; the app says what to print then, or reads the value inside `defined`.
+
+```console
+test/refuse/maybe_in_text.pl:8:25: Rakugan cannot take this — this may be nothing, and nothing has no text; say what to print then: `$x // "-"`, or read it inside `if (defined $x)`
+        method go { $note = "sel=$sel" }
+                            ^
+```
+
+A member of nothing is where perl dies at run time; inside `if (defined $x)` the object is there in both runs.
+
+```console
+test/refuse/maybe_member.pl:14:25: Rakugan cannot take this — `$root` may be nothing; read it inside `if (defined $root)`, where it is the object
+        method go { $note = $root->label }
+                            ^
+```
+
+The branch of that `if` is where the value is read as a value; a `while` or an `&&` has no such branch.
+
+```console
+test/refuse/defined_in_while.pl:9:9: Rakugan cannot take this — `defined` here is the whole condition of an `if` or `unless`, and its branch reads the value; it does not go in a `while`, a `grep`, or beside `&&`
+            while (defined $sel) { $n += 1; $sel = undef }
+            ^
+```
+
+Inside the branch the name is a copy of the value; a write there would change the copy in one run and the field in the other.
+
+```console
+test/refuse/write_inside_defined.pl:11:13: Rakugan cannot take this — `$sel` is read as the value it holds inside `if (defined $sel)`; write it outside that block
+                $sel = undef;
+                ^
+```
+
+perl keeps a constant per package, and two classes may share the name — as long as they mean one thing by it.
+
+```console
+test/refuse/constant_twice.pl:6:18: Rakugan cannot take this — `LIMIT` is declared twice, and not the same way
+        use constant LIMIT => 10;
+                     ^
 ```
 
 perl would grow the number into one with a fraction; 64 bits is the edge the dialect holds, and two written numbers are worked out before anything is built.

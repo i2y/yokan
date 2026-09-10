@@ -39,6 +39,7 @@ sub Bool :prototype() { 'Bool' }
 # `ArrayRef[Int]` parses as ArrayRef([Int]) because of the prototype.
 sub ArrayRef :prototype(;$) { 'ArrayRef' . (@_ ? "[$_[0][0]]" : '') }
 sub HashRef  :prototype(;$) { 'HashRef'  . (@_ ? "[$_[0][0]]" : '') }
+sub Maybe    :prototype(;$) { 'Maybe'    . (@_ ? "[$_[0][0]]" : '') }
 
 # A container that starts empty says what it will hold:
 #
@@ -52,8 +53,18 @@ sub HashRef  :prototype(;$) { 'HashRef'  . (@_ ? "[$_[0][0]]" : '') }
 # exception for an empty one.
 sub empty { return }
 
+# A scalar that starts as nothing says what it may hold:
+#
+#     field $sel = maybe(Int);
+#
+# At run time this is `undef`, which is what the field starts as; the
+# translator reads the type from the argument, and the compiled run
+# holds the field as a value that may be nothing. `undef` alone is
+# refused there, because it says nothing about the type.
+sub maybe { return }
+
 my @VOCAB = (@Rakugan::Elements::ELEMENTS, @Rakugan::Elements::OPS, @Rakugan::Stdlib::EXPORT,
-             qw(run every task shortcut menu_item on_key on_file_drop quit empty Int Str Num Bool ArrayRef HashRef));
+             qw(run every task shortcut menu_item on_key on_file_drop quit empty maybe Int Str Num Bool ArrayRef HashRef Maybe));
 
 # Every class in the file is a type name too, so a container that
 # starts empty can say what it will hold: `field @floors =

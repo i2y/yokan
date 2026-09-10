@@ -39,8 +39,8 @@ my @PAGES = (
         ja   => ['ビューと制御構造',
                  '画面をどう組み立て、どう分け、アプリの持つもので動かすか。'],
         take => ['Writing views', 'Control flow in a view', 'Form controls', 'Handlers',
-                 'Lists, charts, and rows built on demand', 'Hashes', 'Value classes',
-                 'Regular expressions'],
+                 'Lists, charts, and rows built on demand', 'Hashes', 'Values that may be nothing',
+                 'Value classes', 'Classes with methods', 'Regular expressions'],
     },
     {
         file => 'tour-canvas.md',

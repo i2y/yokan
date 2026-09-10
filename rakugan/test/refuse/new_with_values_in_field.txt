@@ -1,0 +1,3 @@
+test/refuse/new_with_values_in_field.pl:11:19: Rakugan cannot take this — a field starts as `Node->new` with no values; give it values in `ADJUST`, or make it in a handler
+        field $node = Node->new(n => 3);
+                      ^

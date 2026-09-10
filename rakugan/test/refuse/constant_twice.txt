@@ -1,0 +1,3 @@
+test/refuse/constant_twice.pl:6:18: Rakugan cannot take this — `LIMIT` is declared twice, and not the same way
+        use constant LIMIT => 10;
+                     ^

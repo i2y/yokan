@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も出力しません。
 
-下の 31 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
+下の 40 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
 `tools/gate_all.sh` がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -60,6 +60,33 @@ test/refuse/quote_method.pl:7:12: Rakugan cannot take this — a method named `s
 test/refuse/top_statement.pl:3:1: Rakugan cannot take this — a declaration at the top of the file is a hash of keywords (`my %PILL = (...)`), a name for a literal (`my $WIDTH = 120;`) or the app itself (`my $app = Counter->new;`)
     my @greetings = ("hello", "goodbye");
     ^
+```
+
+メソッドを持つクラスの中では、フィールドは名前で触ります。
+同じクラスの別のメソッドをそこから呼ぶ形は、まだ運びません。
+
+```console
+test/refuse/self_in_class.pl:6:28: Rakugan cannot take this — `$self` inside `Node`: a method reaches its own fields by name, and another method of the same class is not called from here yet
+        method grow { $n += 1; $self->grow }
+                               ^
+```
+
+フィールドは値なしの `new` から始まり、何も動く前に型が決まります。
+値は `ADJUST` かハンドラで入れます。
+
+```console
+test/refuse/new_with_values_in_field.pl:11:19: Rakugan cannot take this — a field starts as `Node->new` with no values; give it values in `ADJUST`, or make it in a handler
+        field $node = Node->new(n => 3);
+                      ^
+```
+
+コンパイルした実行はすべてのフィールドに、その名前の読み手と書き手を与えます。
+メソッドはその名前を取れません。
+
+```console
+test/refuse/method_named_like_field.pl:6:12: Rakugan cannot take this — `set_n` is the name the compiled run gives `n`'s own writer; put `:writer` on the field, or name the method for what it does
+        method set_n :Sig(Int) ($v) { $n = $v }
+               ^
 ```
 
 ## 型
@@ -121,6 +148,59 @@ perl はそこで文字を数えますが、コンパイルした実行にその
 test/refuse/string_increment.pl:8:13: Rakugan cannot take this — `$tag` holds a String, and Perl's `++` on a string counts letters (`"az"++` is `"ba"`), which the compiled run does not do; join or replace the string instead
             $tag++;
                 ^
+```
+
+フィールドの型は初期値から読みますが、`undef` だけでは型が決まりません。`maybe(Int)` が何を持ちうるかを言います。
+
+```console
+test/refuse/undef_alone.pl:5:18: Rakugan cannot take this — `undef` alone says nothing about the type; say what this may hold: `maybe(Int)`, `maybe(Str)`
+        field $sel = undef;
+                     ^
+```
+
+なにもないものには文面がありません。
+そのとき何を出すかをアプリが言うか、`defined` の中で値を読みます。
+
+```console
+test/refuse/maybe_in_text.pl:8:25: Rakugan cannot take this — this may be nothing, and nothing has no text; say what to print then: `$x // "-"`, or read it inside `if (defined $x)`
+        method go { $note = "sel=$sel" }
+                            ^
+```
+
+なにもないもののメンバーは、perl が実行時に die する場所です。
+`if (defined $x)` の中なら、どちらの実行でもオブジェクトがそこにあります。
+
+```console
+test/refuse/maybe_member.pl:14:25: Rakugan cannot take this — `$root` may be nothing; read it inside `if (defined $root)`, where it is the object
+        method go { $note = $root->label }
+                            ^
+```
+
+その `if` の分岐が、値を値として読む場所です。
+`while` や `&&` にはそのような分岐がありません。
+
+```console
+test/refuse/defined_in_while.pl:9:9: Rakugan cannot take this — `defined` here is the whole condition of an `if` or `unless`, and its branch reads the value; it does not go in a `while`, a `grep`, or beside `&&`
+            while (defined $sel) { $n += 1; $sel = undef }
+            ^
+```
+
+分岐の中では、その名前は値の写しです。
+そこで書けば、片方の実行では写しが、もう片方ではフィールドが変わります。
+
+```console
+test/refuse/write_inside_defined.pl:11:13: Rakugan cannot take this — `$sel` is read as the value it holds inside `if (defined $sel)`; write it outside that block
+                $sel = undef;
+                ^
+```
+
+perl は定数をパッケージごとに持つので、二つのクラスが同じ名前を使えます。
+ただし、同じ値を指しているときだけです。
+
+```console
+test/refuse/constant_twice.pl:6:18: Rakugan cannot take this — `LIMIT` is declared twice, and not the same way
+        use constant LIMIT => 10;
+                     ^
 ```
 
 perl はその数を小数のある数に育てますが、方言が持つのは 64 bit までです。

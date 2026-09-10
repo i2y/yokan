@@ -140,17 +140,17 @@ constants are written from the same table by its own generator.
 
 ## What is in today
 
-Forty-one demos gate green — the counter, the todo list, a calculator
+Forty-three demos gate green — the counter, the todo list, a calculator
 on two layouts, a roster that sorts, charts, a dashboard driven by a
-timer, work done off the window's thread, a pixel canvas and two of
-Pyxel's games — and every one of them is a line-by-line port of the
-same app in the two sibling languages, so the screens can be compared
-side by side. Twenty-eight of the thirty-nine still pictures are
-pixel-identical to Wakakusa's; of the eleven that are not, two are
-alive when the picture is taken (a timer is running) and the rest are
-differences this port meant (one of them is perl printing `0` where
-Ruby prints `0.0`, which is perl being right about perl). The two games
-carry a recording of play instead of a still.
+timer, work done off the window's thread, a pixel canvas, objects that
+point at one another, and two of Pyxel's games — and every one of them
+is a line-by-line port of the same app in the two sibling languages, so
+the screens can be compared side by side. Twenty-eight of the forty-one
+still pictures are pixel-identical to Wakakusa's; of the thirteen that
+are not, two are alive when the picture is taken (a timer is running)
+and the rest are differences this port meant (one of them is perl
+printing `0` where Ruby prints `0.0`, which is perl being right about
+perl). The two games carry a recording of play instead of a still.
 
 What an app can write:
 
@@ -159,7 +159,12 @@ What an app can write:
   `ADJUST` for what has to be worked out before the first screen;
   methods with `:Sig(Int => Str)` for what they are called with and
   what they answer. A second class in the file, with fields and no
-  `view`, is a value the app holds (`field $x :param :reader = 0`).
+  `view`, is a value the app holds (`field $x :param :reader = 0`);
+  one with methods is an object two names can share, read through
+  `:reader`, with `weaken` for a pointer back. A field that starts as
+  nothing says what it may hold (`maybe(Int)`), and is read inside
+  `if (defined ...)` or with `// default`; `use constant` names a
+  literal.
 - **The screen.** Every element in the table, the keywords each takes
   and the ones every element takes; `if` / `unless` / `for` around the
   parts of a view, which an app collects into a list and hands to a

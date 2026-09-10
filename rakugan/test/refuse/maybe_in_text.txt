@@ -1,0 +1,3 @@
+test/refuse/maybe_in_text.pl:8:25: Rakugan cannot take this — this may be nothing, and nothing has no text; say what to print then: `$x // "-"`, or read it inside `if (defined $x)`
+        method go { $note = "sel=$sel" }
+                            ^
