@@ -738,17 +738,22 @@ run($app, title => "keys");
 ## Perl 自身の標準ライブラリ
 
 名前が Perl のものであるかぎり、仕様を決めるのは perl です。
-`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+`length`、`substr`、`index`、`rindex`、`uc`、`lc`、`ucfirst`、`lcfirst`、`reverse`、`join`、`split`、`sprintf`、`abs`、`int`、`sqrt`、`sort`、`grep`、`map`、`scalar`、`exists`、`defined`、`keys`、`values`、`rand`、`srand`、`List::Util` の `sum`、`max`、`min`、`first`、`uniq`、`shuffle`、`POSIX` の `floor`、`ceil`、`fmod`、`strftime` は、Rakugan のものではなく言語自身のものです。
+
+乱数も perl 自身のものです。
+5.20 以降の perl はどのプラットフォームでも同じ生成器を持つので、`srand(42)` のあとは二つの実行が同じ `rand` を引き、同じ `shuffle` を配り、ゲートはそれもほかと同じように比べます。
+一度も種を蒔かないアプリは断ります。
+実行のたびに別の数列になるからです。
 
 <!-- script: click:run,dump -->
 ```perl
 use Rakugan;
-use List::Util qw(sum max min);
+use List::Util qw(sum max min shuffle);
 use POSIX qw(floor);
 
 class Stats {
     use Rakugan;
-    use List::Util qw(sum max min);
+    use List::Util qw(sum max min shuffle);
     use POSIX qw(floor);
     field @scores = (3, 5, 8, 13, 21);
     field $line   = "-";
@@ -758,10 +763,13 @@ class Stats {
         my $mean = sum(@scores) / scalar @scores;
         my @big  = grep { $_ > 5 } @scores;
         my @text = map { "$_" } @big;
-        $line = sprintf("mean %.1f median %d min %d max %d floor %d big %s",
+        srand(3);
+        my @dealt = shuffle(@scores);
+        my @hand  = map { "$_" } @dealt;
+        $line = sprintf("mean %.1f median %d min %d max %d floor %d big %s dealt %s",
                         $mean, $sorted[int(scalar(@sorted) / 2)],
                         min(@scores), max(@scores), floor(2.7),
-                        join(",", @text));
+                        join(",", @text), join(",", @hand));
     }
 
     method view {
@@ -1084,9 +1092,6 @@ perl 5.40 もツールチェインも入っていないマシンで、そのま�
   ほかのモジュールの `use` は読んで無視され、その中の関数を呼べば名前を挙げて断られます。
 - `sprintf` は `%s %d %i %f %F %e %E %g %G %x %X %o %b %%` までです。
   幅と精度、`-`、`+`、空白、`0`、`#` の指定は付けられます。
-- 乱数は、二つの実行で同じ生成器になりません。
-  どちらの実行でも同じ数列がほしいなら、生成器を自分で書きます。
-  二つのゲームがそうしていて、算術だけの数行で足ります。
 - `check` が見つけるのは上に挙げたものです。
   翻訳器が取りこぼすものをすべて見ているわけではないので、残りを見つけるのは今もゲートです。
 - macOS と Linux です。

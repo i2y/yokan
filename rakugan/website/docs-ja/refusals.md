@@ -7,7 +7,7 @@
 `check` はビルドの前にもゲートの前にも走ります。
 コンパイラもウィンドウも要らず、言うことがなければ何も出力しません。
 
-下の 40 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
+下の 43 個には、それを起こすファイルと、出力されるべき文面が、`test/refuse/` にそのまま置いてあります。
 `tools/gate_all.sh` がそれを回すので、断りの文面が黙って変わることはありません。
 このページも、その同じファイルから引いています。
 
@@ -256,6 +256,14 @@ test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `k
                        ^
 ```
 
+同じ画面を二度組み立てたら同じ画面になる必要がありますが、組み立てながら引いた数は二度目には別の数です。
+
+```console
+test/refuse/rand_in_view.pl:10:28: Rakugan cannot take this — a view calls what cannot change; draw the number in a handler and keep it in a field
+            return column(text("roll: @{[ int(rand(6)) ]}"), button("go", on_click => sub { $self->go }));
+                               ^
+```
+
 ## コンパイルした実行に perl がないこと
 
 コンパイルしたアプリが書くのは画面で、ゲートが木を読むのもそこからです。
@@ -356,5 +364,23 @@ perl はその行をすぐに走らせ、コンパイルした実行は処理が
 ```console
 test/refuse/after_task.pl:10:9: Rakugan cannot take this — `task` is the last thing a handler does: the compiled run reaches these lines when the work is done, and perl reaches them at once; write them before the `task`
             $status = "working";
+            ^
+```
+
+何も種を蒔かないと、perl は時計とプロセスから自分で種を取ります。
+だから種のないアプリは、どちらの実行でも起動ごとに別の数列を引きます。
+
+```console
+test/refuse/rand_unseeded.pl:7:26: Rakugan cannot take this — `rand` in an app that never calls `srand` draws a different sequence every time it starts, in both runs; seed it once (`srand(42);`) and the two runs draw the same numbers
+        method go { $n = int(rand(10)) }
+                             ^
+```
+
+同じ理由です。
+引数のない `srand()` は、自分で種を選びます。
+
+```console
+test/refuse/srand_bare.pl:8:9: Rakugan cannot take this — `srand` with nothing picks a seed of its own, a different one in each run; write the seed: `srand(42)`
+            srand();
             ^
 ```

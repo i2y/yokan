@@ -94,6 +94,9 @@ my %CANNOT_FAIL = map { $_ => 1 } qw(fs_exists fs_app_dir clipboard_set_text cli
                                      keys_down keys_pressed keys_released audio_play audio_stop
                                      notify_send strings_to_int strings_to_float http_status);
 sub cannot_fail { my ($name) = @_; return $CANNOT_FAIL{$name} || $name =~ /_or\z/ }
+# The framework's functions with a side effect or an answer that can
+# change: a method that calls one is not a static a view may call.
+my %IMPURE = map { ("$_->{module}_$_->{name}" => 1) } grep { !$_->{pure} } @Rakugan::Manifest::ROWS;
 my %ELEMENT = %Rakugan::Vocab::ELEMENT;
 my %RIDER = %Rakugan::Vocab::RIDER;
 my @RIDERS = @Rakugan::Vocab::RIDERS;
@@ -114,6 +117,7 @@ my @lifted;                 # the statics a conditional expression became
 my (@values, %value);       # the value classes: name => [{ name, ty, init }]
 my (@models, %model);       # the classes with methods: name => { fields => [...], by => {...}, methods => {...}, order => [...] }
 my %constant;               # `use constant NAME => literal`: name => { ty, pix, lit }
+my $seeds;                  # the app calls `srand` somewhere, so `rand` draws one sequence in both runs
 my $app_class;              # the class `run` was handed
 my $app_var;                # `my $app = Class->new` at the top of the file
 my @app_stmts;              # every top-level statement, in order
@@ -138,6 +142,7 @@ sub translate {
     close $fh;
     @lines = split /^/m, $src;
     my $doc = PPI::Document->new(\$src) or die PPI::Document->errstr . "\n";
+    $seeds = grep { $_->content eq 'srand' } @{ $doc->find('PPI::Token::Word') || [] };
 
     declarations($doc);
     class_body();
@@ -231,6 +236,11 @@ class Pl {
   static fn tryDivNum(a: Float, b: Float, at: String) !Float @rust("rakugan_stdlib::try_div_num")
   static fn tryModInt(a: Int, b: Int, at: String) !Int @rust("rakugan_stdlib::try_mod_int")
   static fn trySqrt(v: Float, at: String) !Float @rust("rakugan_stdlib::try_sqrt")
+  static fn srand(seed: Int) Int @rust("rakugan_stdlib::srand")
+  static fn rand(n: Float) Float @rust("rakugan_stdlib::rand")
+  static fn shuffleInt(xs: List<Int>) List<Int> @rust("rakugan_stdlib::shuffle_int")
+  static fn shuffleNum(xs: List<Float>) List<Float> @rust("rakugan_stdlib::shuffle_num")
+  static fn shuffleStr(xs: List<String>) List<String> @rust("rakugan_stdlib::shuffle_str")
 }
 RPI
 }
@@ -1906,6 +1916,44 @@ sub word_expr {
         $$ip++;
         return framework_call($name, $w, $next, $env);
     }
+    # perl's own random numbers: one drand48 on every platform since
+    # 5.20, so a seeded sequence is the same in both runs — and only a
+    # seeded one, which is why an app that never seeds is refused.
+    if ($name eq 'rand') {
+        $$ip++;
+        refuse($w, 'a view calls what cannot change; draw the number in a handler and keep it in a field')
+            if $env->{ctx} eq 'view';
+        refuse($w, '`rand` in an app that never calls `srand` draws a different sequence every time it starts, '
+                 . 'in both runs; seed it once (`srand(42);`) and the two runs draw the same numbers')
+            unless $seeds;
+        my $n = { ty => 'Float', pix => '1.0' };
+        if ($next && $next->isa('PPI::Structure::List')) {
+            $$ip++;
+            my @a = split_args($next);
+            refuse($w, '`rand` takes one number, or nothing: `rand(10)`') if @a > 1;
+            if (@a) {
+                $n = parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+                refuse($a[0]{node}, "`rand` takes a number (got $n->{ty})") unless num_ty($n->{ty});
+            }
+        }
+        $uses_pl = 1;
+        return { ty => 'Float', pix => "Pl.rand($n->{pix})" };
+    }
+    if ($name eq 'srand') {
+        $$ip++;
+        refuse($w, 'a view calls what cannot change; `srand` belongs before `run`, in `ADJUST` or in a handler')
+            if $env->{ctx} eq 'view';
+        refuse($w, '`srand` takes the seed, a whole number written out or held in a field: `srand(42)`')
+            unless $next && $next->isa('PPI::Structure::List');
+        $$ip++;
+        my @a = split_args($next);
+        refuse($w, '`srand` with nothing picks a seed of its own, a different one in each run; write the seed: `srand(42)`')
+            unless @a == 1;
+        my $v = parse_expr($a[0]{toks}, { %$env, at => $a[0]{node} });
+        refuse($a[0]{node}, "`srand` takes a whole number (got $v->{ty})") unless $v->{ty} eq 'Int';
+        $uses_pl = 1;
+        return { ty => 'Int', pix => "Pl.srand($v->{pix})" };
+    }
     if ($name eq 'quit') {
         $$ip++;
         refuse($w, '`quit` is called with nothing: `quit()`')
@@ -1940,6 +1988,20 @@ sub word_expr {
         return { ty => 'String', pix => "Pl.reverseStr($v->{pix})" } if $v->{ty} eq 'String';
         refuse($w, "`reverse` turns a string or a list around (got $v->{ty})") unless $v->{ty} =~ /\AList</;
         return { ty => $v->{ty}, pix => "$v->{pix}.reversed()" };
+    }
+    if ($name eq 'shuffle') {
+        $$ip++;
+        refuse($w, 'a view calls what cannot change; shuffle in a handler and keep the order in a field')
+            if $env->{ctx} eq 'view';
+        refuse($w, '`shuffle` in an app that never calls `srand` puts things in a different order every time it '
+                 . 'starts, in both runs; seed it once (`srand(42);`)')
+            unless $seeds;
+        my $v = one_arg($ip, $toks, $env, $w, $name, 1);
+        my $inner = $v->{ty} =~ /\AList<(.+)>\z/ ? $1 : refuse($w, "`shuffle` reads a list (got $v->{ty})");
+        my %by = (Int => 'Int', Float => 'Num', String => 'Str');
+        refuse($w, "`shuffle` puts a list of numbers or strings in a new order; this one holds $inner") unless $by{$inner};
+        $uses_pl = 1;
+        return { ty => $v->{ty}, pix => "Pl.shuffle$by{$inner}($v->{pix})" };
     }
     if ($name =~ /\A(?:sum|max|min|uniq)\z/) {
         $$ip++;
@@ -3154,6 +3216,12 @@ sub simple_stmt {
         }
     }
     if (is_word($head, 'weaken')) { return weaken_stmt(\@t, $env) }
+    if (is_word($head, 'srand')) {
+        my $i = 0;
+        my $v = word_expr(\$i, \@t, { %$env, at => $head });
+        refuse($t[$i], 'this does not continue the call') if $i < @t;
+        return 'var __seed' . ++$tmp . " : Int = $v->{pix}";
+    }
     if (is_sym($head, '@') || is_sym($head, '%')) { return whole_assign(\@t, $env) }
     refuse($head, $NOT_TAKEN{ $head->content }) if is_word($head) && $NOT_TAKEN{ $head->content };
     # A call whose answer nobody wants — the framework's own, and
@@ -4007,6 +4075,14 @@ sub classify {
             my $text = $q->content;
             $m->{own_fields} ||= grep { exists $field{$_} } $text =~ /[\$\@%]\{?(\w+)/g;
         }
+        # A method that draws a random number, dies, warns or calls into
+        # the library is the store's whatever fields it touches: a static
+        # a view may call has to answer the same thing twice. And
+        # `ADJUST` is the store's start, fields or no fields.
+        $m->{own_fields} ||= $m->{name} eq '__start'
+            || grep({ my $n = $_->content;
+                      $n =~ /\A(?:rand|srand|shuffle|die|warn)\z/ || $IMPURE{$n} }
+                    @{ $m->{block}->find('PPI::Token::Word') || [] });
         $m->{answers} = [answers_of($m->{block})];
         # A method whose statements are drawing commands paints; it is
         # written out inside the canvas that calls it.

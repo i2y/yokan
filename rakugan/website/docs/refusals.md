@@ -8,7 +8,7 @@ the file first, so a shape perl rejects never reaches the translator.
 `check` runs before every build and every gate, needs no compiler and no
 window, and prints nothing at all when there is nothing to say.
 
-Each of the 40 below has a file under `test/refuse/` that triggers it and
+Each of the 43 below has a file under `test/refuse/` that triggers it and
 the message it must print, word for word. The sweep runs them, so a
 refusal cannot quietly change its wording, and this page is quoted from
 those same files.
@@ -243,6 +243,14 @@ test/refuse/unsorted_keys.pl:10:20: Rakugan cannot take this — a hash hands `k
                        ^
 ```
 
+Building a screen twice has to build the same screen, and a number drawn while building it would not be.
+
+```console
+test/refuse/rand_in_view.pl:10:28: Rakugan cannot take this — a view calls what cannot change; draw the number in a handler and keep it in a field
+            return column(text("roll: @{[ int(rand(6)) ]}"), button("go", on_click => sub { $self->go }));
+                               ^
+```
+
 ## Perl the compiled run has no perl for
 
 A compiled app writes its screen, which is where the gate reads the tree from.
@@ -338,5 +346,21 @@ perl runs those lines at once and the compiled run when the work is done; before
 ```console
 test/refuse/after_task.pl:10:9: Rakugan cannot take this — `task` is the last thing a handler does: the compiled run reaches these lines when the work is done, and perl reaches them at once; write them before the `task`
             $status = "working";
+            ^
+```
+
+perl seeds itself from the clock and the process when nothing else does, so an unseeded app draws a different sequence every start, in either run.
+
+```console
+test/refuse/rand_unseeded.pl:7:26: Rakugan cannot take this — `rand` in an app that never calls `srand` draws a different sequence every time it starts, in both runs; seed it once (`srand(42);`) and the two runs draw the same numbers
+        method go { $n = int(rand(10)) }
+                             ^
+```
+
+The same reason: `srand()` with nothing picks a seed of its own.
+
+```console
+test/refuse/srand_bare.pl:8:9: Rakugan cannot take this — `srand` with nothing picks a seed of its own, a different one in each run; write the seed: `srand(42)`
+            srand();
             ^
 ```

@@ -187,6 +187,22 @@ fn dispatch(name: &str, a: &[V]) -> V {
         "div_int" => V::F(div_int(a[0].i(), a[1].i())),
         "div_num" => V::F(div_num(a[0].f(), a[1].f())),
         "die_text" => V::S(die_text(&a[0].s(), &a[1].s())),
+        "rand_seq" => {
+            srand(a[0].i());
+            V::L((0..a[1].i()).map(|_| V::F(rand(1.0))).collect())
+        }
+        "rand_ten" => {
+            srand(a[0].i());
+            V::L((0..a[1].i()).map(|_| V::F(rand(10.0))).collect())
+        }
+        "shuffle_int_after" => {
+            srand(a[0].i());
+            V::L(shuffle_int(a[1].is()).into_iter().map(V::I).collect())
+        }
+        "shuffle_str_after" => {
+            srand(a[0].i());
+            V::L(shuffle_str(a[1].ss()).into_iter().map(V::S).collect())
+        }
         "int_of" => V::I(int_of(a[0].f())),
         "num_of" => V::F(num_of(&a[0].s())),
         "num_text" => V::S(num_text(a[0].f())),
@@ -253,4 +269,11 @@ fn time_matches_perl() {
 #[test]
 fn regular_expressions_match_perl() {
     check("regexp.txt", dispatch);
+}
+
+#[test]
+fn random_numbers_match_perl() {
+    // Each row seeds first, so the rows can be checked in any order and
+    // the twin's state never leaks from one to the next.
+    check("random.txt", dispatch);
 }

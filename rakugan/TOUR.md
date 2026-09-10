@@ -761,19 +761,26 @@ decodes.
 Where the name is Perl's, perl is the specification. `length`, `substr`,
 `index`, `rindex`, `uc`, `lc`, `ucfirst`, `lcfirst`, `reverse`, `join`,
 `split`, `sprintf`, `abs`, `int`, `sqrt`, `sort`, `grep`, `map`,
-`scalar`, `exists`, `defined`, `keys`, `values`, `List::Util`'s `sum`,
-`max`, `min`, `first` and `uniq`, and `POSIX`'s `floor`, `ceil`, `fmod`
-and `strftime` are the language's own, not Rakugan's.
+`scalar`, `exists`, `defined`, `keys`, `values`, `rand`, `srand`,
+`List::Util`'s `sum`, `max`, `min`, `first`, `uniq` and `shuffle`, and
+`POSIX`'s `floor`, `ceil`, `fmod` and `strftime` are the language's
+own, not Rakugan's.
+
+Random numbers are perl's own too. Since 5.20 perl carries one
+generator on every platform, so after `srand(42)` both runs draw the
+same `rand` and deal the same `shuffle`, and the gate compares them like
+anything else. An app that never seeds is refused: each of its runs
+would draw a sequence of its own.
 
 <!-- script: click:run,dump -->
 ```perl
 use Rakugan;
-use List::Util qw(sum max min);
+use List::Util qw(sum max min shuffle);
 use POSIX qw(floor);
 
 class Stats {
     use Rakugan;
-    use List::Util qw(sum max min);
+    use List::Util qw(sum max min shuffle);
     use POSIX qw(floor);
     field @scores = (3, 5, 8, 13, 21);
     field $line   = "-";
@@ -783,10 +790,13 @@ class Stats {
         my $mean = sum(@scores) / scalar @scores;
         my @big  = grep { $_ > 5 } @scores;
         my @text = map { "$_" } @big;
-        $line = sprintf("mean %.1f median %d min %d max %d floor %d big %s",
+        srand(3);
+        my @dealt = shuffle(@scores);
+        my @hand  = map { "$_" } @dealt;
+        $line = sprintf("mean %.1f median %d min %d max %d floor %d big %s dealt %s",
                         $mean, $sorted[int(scalar(@sorted) / 2)],
                         min(@scores), max(@scores), floor(2.7),
-                        join(",", @text));
+                        join(",", @text), join(",", @hand));
     }
 
     method view {
@@ -1126,9 +1136,6 @@ bundle is the whole program: it opens on a machine with neither perl
   refused by name.
 - No `sprintf` beyond `%s %d %i %f %F %e %E %g %G %x %X %o %b %%`, with
   a width, a precision, and the `-`, `+`, ` `, `0` and `#` flags.
-- Random numbers are not the same generator in the two runs, so a
-  program that wants one sequence in both writes the generator itself.
-  The two games do, in a few lines of arithmetic.
 - `check` names what is listed above, but it does not yet see everything
   the translator gets wrong; the gate is still what catches the rest.
 - macOS and Linux. `--app` is a macOS shape and names itself off it;

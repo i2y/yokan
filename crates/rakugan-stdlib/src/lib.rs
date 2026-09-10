@@ -992,6 +992,72 @@ pub fn re_count(pat: &str, flags: &str, s: &str) -> i64 {
     re_all(pat, flags, s).len() as i64
 }
 
+// --- perl's own random numbers -----------------------------------------------
+//
+// Since 5.20 perl carries its own drand48 on every platform: a 48-bit
+// linear congruence, seeded from the low 32 bits of what `srand` is
+// given, and `rand(N)` is the next value times N. So the sequence a
+// seeded app draws is the same everywhere, and this is that sequence.
+// `List::Util::shuffle` draws from the same state.
+// One state for the whole program, as perl has one per interpreter:
+// the app seeds at startup and draws from a handler, and the compiled
+// run does those on different threads.
+static RAND48: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+
+const DRAND48_MASK: u64 = (1u64 << 48) - 1;
+
+/// `srand($seed)`: perl reads the number's digits, so a minus sign is
+/// dropped (`srand(-1)` is `srand(1)`), keeps the low 32 bits of what is
+/// left, and answers the seed as given.
+pub fn srand(seed: i64) -> i64 {
+    let low = seed.unsigned_abs() as u32;
+    *RAND48.lock().unwrap_or_else(|e| e.into_inner()) = 0x330E + ((low as u64) << 16);
+    seed
+}
+
+fn drand48() -> f64 {
+    let mut s = RAND48.lock().unwrap_or_else(|e| e.into_inner());
+    let x = (s.wrapping_mul(0x5DEECE66D).wrapping_add(0xB)) & DRAND48_MASK;
+    *s = x;
+    x as f64 / (1u64 << 48) as f64
+}
+
+/// `rand($n)`: the next value in `[0, n)`; `rand(0)` and `rand()` are
+/// `rand(1)`, as perl has them.
+pub fn rand(n: f64) -> f64 {
+    let n = if n == 0.0 { 1.0 } else { n };
+    drand48() * n
+}
+
+fn shuffle_in_place<T>(xs: &mut [T]) {
+    let mut index = xs.len();
+    while index > 1 {
+        let swap = (drand48() * index as f64) as usize;
+        index -= 1;
+        xs.swap(swap, index);
+    }
+}
+
+/// `List::Util::shuffle`, drawing from perl's own state: the swaps
+/// walk down from the end, as the XS does.
+pub fn shuffle_int(xs: Vec<i64>) -> Vec<i64> {
+    let mut xs = xs;
+    shuffle_in_place(&mut xs);
+    xs
+}
+
+pub fn shuffle_str(xs: Vec<String>) -> Vec<String> {
+    let mut xs = xs;
+    shuffle_in_place(&mut xs);
+    xs
+}
+
+pub fn shuffle_num(xs: Vec<f64>) -> Vec<f64> {
+    let mut xs = xs;
+    shuffle_in_place(&mut xs);
+    xs
+}
+
 #[cfg(test)]
 mod failing {
     //! What stops a handler, and what a `try` is handed instead. The
@@ -1020,5 +1086,18 @@ mod failing {
         assert_eq!(try_div_int(7, 2, at), Ok(3.5));
         assert_eq!(try_mod_int(-7, 3, at), Ok(2));
         assert_eq!(die_text("boom\n", at), "boom\n");
+    }
+
+    #[test]
+    fn rand_is_perls_drand48() {
+        // `perl -e 'srand(42); printf "%.17g %.17g", rand(), rand()'`
+        srand(42);
+        assert_eq!(rand(1.0), 0.74452500006100664);
+        assert_eq!(rand(0.0), 0.34270147871890799);
+        // the low 32 bits of the seed are what perl keeps
+        srand(4294967296);
+        let a = rand(1.0);
+        srand(0);
+        assert_eq!(a, rand(1.0));
     }
 }

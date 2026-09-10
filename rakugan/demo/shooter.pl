@@ -101,18 +101,17 @@ class Game {
     field @hit_bullets  = empty(Int);
     field $player_struck = false;
     field $enemy_struck  = false;
-    # Whole numbers from arithmetic alone, so both runs play one game.
-    field $seed = 7;
 
     ADJUST {
+        srand(7);
         for my $i (0 .. 99) {
             $self->boot_star;
         }
     }
 
+    # perl's own numbers: seeded once, so both runs play one game.
     method roll :Sig(Int, Int => Int) ($lo, $hi) {
-        $seed = ($seed * 1103515245 + 12345) % 2147483648;
-        return $lo + int($seed / 256) % ($hi - $lo + 1);
+        return $lo + int(rand($hi - $lo + 1));
     }
 
     method boot_star {

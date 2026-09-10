@@ -132,9 +132,6 @@ bundle is the whole program: it opens on a machine with neither perl
   refused by name.
 - No `sprintf` beyond `%s %d %i %f %F %e %E %g %G %x %X %o %b %%`, with
   a width, a precision, and the `-`, `+`, ` `, `0` and `#` flags.
-- Random numbers are not the same generator in the two runs, so a
-  program that wants one sequence in both writes the generator itself.
-  The two games do, in a few lines of arithmetic.
 - `check` names what is listed above, but it does not yet see everything
   the translator gets wrong; the gate is still what catches the rest.
 - macOS and Linux. `--app` is a macOS shape and names itself off it;

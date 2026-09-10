@@ -1,0 +1,3 @@
+test/refuse/rand_unseeded.pl:7:26: Rakugan cannot take this — `rand` in an app that never calls `srand` draws a different sequence every time it starts, in both runs; seed it once (`srand(42);`) and the two runs draw the same numbers
+        method go { $n = int(rand(10)) }
+                             ^

@@ -1900,22 +1900,21 @@ whole file.
         field $far_off  = 0;
         field $near_off = 0;
         field $player_u = 0;
-        # Whole numbers from arithmetic alone, so both runs draw one game.
-        field $seed = 11;
         field @far   = (Cloud->new(x => -10, y => 75), Cloud->new(x => 40, y => 65), Cloud->new(x => 90, y => 60));
         field @near  = (Cloud->new(x => 10, y => 25), Cloud->new(x => 70, y => 35), Cloud->new(x => 120, y => 15));
         field @floors = empty(Floor);
         field @fruits = empty(Fruit);
 
         ADJUST {
+            srand(11);
             for my $i (0 .. 3) {
                 $self->boot_one($i);
             }
         }
 
+        # perl's own numbers: seeded once, so both runs draw one game.
         method roll :Sig(Int, Int => Int) ($lo, $hi) {
-            $seed = ($seed * 1103515245 + 12345) % 2147483648;
-            return $lo + int($seed / 256) % ($hi - $lo + 1);
+            return $lo + int(rand($hi - $lo + 1));
         }
 
         method boot_one :Sig(Int) ($i) {
@@ -2179,18 +2178,17 @@ whole file.
         field @hit_bullets  = empty(Int);
         field $player_struck = false;
         field $enemy_struck  = false;
-        # Whole numbers from arithmetic alone, so both runs play one game.
-        field $seed = 7;
 
         ADJUST {
+            srand(7);
             for my $i (0 .. 99) {
                 $self->boot_star;
             }
         }
 
+        # perl's own numbers: seeded once, so both runs play one game.
         method roll :Sig(Int, Int => Int) ($lo, $hi) {
-            $seed = ($seed * 1103515245 + 12345) % 2147483648;
-            return $lo + int($seed / 256) % ($hi - $lo + 1);
+            return $lo + int(rand($hi - $lo + 1));
         }
 
         method boot_star {

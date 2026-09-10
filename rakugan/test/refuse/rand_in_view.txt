@@ -1,0 +1,3 @@
+test/refuse/rand_in_view.pl:10:28: Rakugan cannot take this — a view calls what cannot change; draw the number in a handler and keep it in a field
+            return column(text("roll: @{[ int(rand(6)) ]}"), button("go", on_click => sub { $self->go }));
+                               ^

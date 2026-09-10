@@ -183,13 +183,14 @@ What an app can write:
   redefined under the object it already has.
 
 - **Perl's own functions.** `length` `substr` `index` `uc` `lc`
-  `ucfirst` `reverse` `join` `split` `abs` `sqrt` `sprintf`, POSIX's
-  `floor` `ceil` `fmod` `strftime`, List::Util's `sum` `max` `min`
-  `uniq` `first`, and regular expressions — `=~`, `s///`, `split /…/`,
-  `$1` and `$+{name}`. Where the name is Perl's, perl's output is the
-  specification: every one of them is held to a table of 1,019 rows
-  that perl itself printed, and the sweep fails when a table is not
-  what perl says now.
+  `ucfirst` `reverse` `join` `split` `abs` `sqrt` `sprintf` `rand`
+  `srand`, POSIX's `floor` `ceil` `fmod` `strftime`, List::Util's `sum`
+  `max` `min` `uniq` `first` `shuffle`, and regular expressions — `=~`,
+  `s///`, `split /…/`, `$1` and `$+{name}`. Where the name is Perl's,
+  perl's output is the specification: every one of them is held to a
+  table of rows that perl itself printed, and the sweep fails when a
+  table is not what perl says now. The random numbers are perl's own
+  drand48, so a seeded app draws one sequence in both runs.
 - **The framework's own.** Files, a database with bound values, JSON
   read by path, the clipboard, the keyboard and the menu bar, dialogs,
   and sound. One implementation answers both runs: the compiled one

@@ -27,7 +27,7 @@
 use v5.36;
 use utf8;
 use open qw(:std :encoding(UTF-8));
-use List::Util qw(sum max min uniq);
+use List::Util qw(sum max min uniq shuffle);
 use POSIX qw(floor ceil fmod strftime);
 use Encode qw(encode);
 use File::Basename qw(dirname);
@@ -272,6 +272,31 @@ sub perl_re {
     return $out;
 }
 
+# perl's own random numbers, from its own drand48: the sequence after a
+# seed, and List::Util's shuffle drawing from the same state.
+sub random_table {
+    @rows = ();
+    # The sequence after a seed: the first values, and `rand(10)` over
+    # them. A seed past 32 bits and a negative one show what perl keeps.
+    for my $seed (0, 1, 42, 12345, 4294967295, 4294967296, -1, 2**40 + 7) {
+        srand($seed);
+        my @seq = map { rand() } 1 .. 5;
+        row('rand_seq', [tag_int($seed), tag_int(5)], tag_list(map { tag_float($_) } @seq));
+        srand($seed);
+        my @tens = map { rand(10) } 1 .. 4;
+        row('rand_ten', [tag_int($seed), tag_int(4)], tag_list(map { tag_float($_) } @tens));
+    }
+    for my $seed (7, 2024) {
+        srand($seed);
+        my @s = shuffle(1 .. 6);
+        row('shuffle_int_after', [tag_int($seed), tag_list(map { tag_int($_) } 1 .. 6)], tag_list(map { tag_int($_) } @s));
+        srand($seed);
+        my @t = shuffle(qw(a b c d e));
+        row('shuffle_str_after', [tag_int($seed), tag_list(map { tag_str($_) } qw(a b c d e))], tag_list(map { tag_str($_) } @t));
+    }
+    return join('', map { "$_\n" } @rows);
+}
+
 # --- write, or check ---------------------------------------------------------
 
 my $banner = "# perl $^V — printed by rakugan/tools/gen_expected.pl, not by hand.\n";
@@ -282,6 +307,7 @@ my %TABLES = (
     'sprintf.txt'   => $banner . sprintf_table(),
     'time.txt'      => $banner . time_table(),
     'regexp.txt'    => $banner . regexp(),
+    'random.txt'    => $banner . random_table(),
 );
 
 my $check = grep { $_ eq '--check' } @ARGV;
