@@ -2191,12 +2191,22 @@ fn expr_is_opt(e: &Expr, cx: &MethodCtx) -> bool {
                 .iter()
                 .find(|f| f.name.name == *fname)
                 .is_some_and(|f| fn_ret_is_opt(f)),
-            // `Binding.f(...)` in path shape.
-            ExprKind::Path(p) if p.len() == 2 => cx
-                .bindings
-                .get(&p[0].name)
-                .and_then(|b| b.statics.get(&p[1].name))
-                .is_some_and(|bf| matches!(bf.ret, RustTy::Opt(_)) && !bf.fallible),
+            // `Binding.f(...)` in path shape — or `Class.f(...)`, a
+            // static on a class of the program, whose `T?` return was
+            // the one shape this missed: a translated language's
+            // helpers are all statics, and `sel = Helpers.pick(3)`
+            // wrapped an `Option` in `Some`.
+            ExprKind::Path(p) if p.len() == 2 => {
+                if let Some(ci) = cx.classes.get(&p[0].name) {
+                    if let Some(m) = ci.statics.iter().chain(ci.methods.iter()).find(|m| m.name.name == p[1].name) {
+                        return fn_ret_is_opt(m);
+                    }
+                }
+                cx.bindings
+                    .get(&p[0].name)
+                    .and_then(|b| b.statics.get(&p[1].name))
+                    .is_some_and(|bf| matches!(bf.ret, RustTy::Opt(_)) && !bf.fallible)
+            }
             _ => false,
         },
         // `Receiver.f(...)`: a binding static, a method on a
@@ -2225,6 +2235,15 @@ fn expr_is_opt(e: &Expr, cx: &MethodCtx) -> bool {
                         .get(trait_name.as_str())
                         .and_then(|t| t.methods.iter().find(|m| m.name.name == method.name))
                         .is_some_and(fn_ret_is_opt);
+                }
+                // `Class.f(...)`: a static on a class of the program,
+                // whose `T?` return was the one shape this missed — a
+                // translated language's helpers are all statics, and
+                // `sel = Helpers.pick(3)` wrapped an `Option` in `Some`.
+                if let Some(ci) = cx.classes.get(r) {
+                    if let Some(m) = ci.statics.iter().chain(ci.methods.iter()).find(|m| m.name.name == method.name) {
+                        return fn_ret_is_opt(m);
+                    }
                 }
                 let class = cx
                     .local_class(r)
@@ -4013,6 +4032,25 @@ fn lower_view_display(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
 /// binds its row by reference — reading it displays fine, but a
 /// parameter is an owned value, so the row is cloned on the way in.
 fn lower_view_arg(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
+    // A `T?` read handed to a static is the value, not its display:
+    // the display arms show an Option as text, and a parameter of `T?`
+    // wants the Option itself (`Helpers.orZero(App.sel, 0)`).
+    if let ExprKind::Member { receiver, name } = &e.kind {
+        if let ExprKind::Ident(f) = &receiver.kind {
+            if let Some((class, handle)) = cx.handle_for(f) {
+                if let Some(p) = class.prop(&name.name) {
+                    if matches!(p.ty, RustTy::Opt(_)) {
+                        return Ok(format!("{handle}.{}(w)", p.rust));
+                    }
+                }
+            }
+        }
+        if let Some((read, ty)) = cx.struct_field_read(receiver, &name.name) {
+            if matches!(ty, RustTy::Opt(_)) {
+                return Ok(read);
+            }
+        }
+    }
     let v = lower_view_display_inner(e, cx)?;
     Ok(match &e.kind {
         ExprKind::Ident(n) if cx.is_loop_var(n) => format!("{v}.clone()"),
