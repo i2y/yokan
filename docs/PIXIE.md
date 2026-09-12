@@ -106,11 +106,17 @@ server.
 
 Early but real. Working today:
 
-- **Widgets** — an 18-element catalog: Column / Row / Grid / Stack /
-  Text / Button / TextField (IME, selection, Tab ring) / ListView /
-  ScrollView / HScrollView / Image / Svg / DataTable / Modal /
-  BarChart / LineChart / ProgressBar / Spinner, plus `if` / `if let`
-  / `case` conditional rendering and `for` repeaters. `Grid` gives
+- **Widgets** — the catalog, by what each is for. Arranging: Column /
+  Row / Grid / GridCell / Stack / Spacer / Divider / Split (two panes
+  and a divider you drag). Showing: Text / Link / Image / Svg /
+  Canvas / ProgressBar / Spinner / BarChart / LineChart. Input:
+  Button / TextField (IME, selection, Tab ring) / NumberField /
+  IntField / Checkbox / Switch / Slider / Select / RadioGroup /
+  TabBar / Segmented / MenuButton. Showing many: ListView (row
+  selection, virtualization) / Table / DataTable / ScrollView /
+  HScrollView. Over the app: Modal / Toast (closes itself on the
+  framework's clock) / ContextMenu. Plus `if` / `if let` / `case`
+  conditional rendering and `for` repeaters. `Grid` gives
   equal tracks with `colSpan:` / `rowSpan:` placement on any
   element. Reusable **components** are just views: parameters with
   defaults, per-instance `state`,

@@ -89,8 +89,13 @@ Cursor と VSCodium と Windsurf はそれぞれ自分の拡張ディレクト�
 初期段階ですが、実物です。
 今日の時点で動くものは次のとおりです。
 
-- **ウィジェット**：cute_ui から移植した全 17 エレメントは Column / Row / Stack / Text / Button / TextField（IME、選択、Tab リング）/ ListView / ScrollView / HScrollView / Image / Svg / DataTable / Modal / BarChart / LineChart / ProgressBar / Spinner で、これに `if` による条件レンダリングと `for` リピータが加わります。
-  移植元になかった 18 番目が `Grid` で、均等トラックと、任意の要素に書ける `colSpan:` / `rowSpan:` を持ちます。
+- **ウィジェット**：用途で分けると、並べるものが Column / Row / Grid / GridCell / Stack / Spacer / Divider / Split（二つの区画とドラッグできる仕切り）。
+  見せるものが Text / Link / Image / Svg / Canvas / ProgressBar / Spinner / BarChart / LineChart。
+  入力が Button / TextField（IME、選択、Tab リング）/ NumberField / IntField / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Segmented / MenuButton。
+  並べて見せるものが ListView（行の選択と仮想化）/ Table / DataTable / ScrollView / HScrollView。
+  アプリの上に重ねるものが Modal / Toast（フレームワークの時計で自分で閉じる）/ ContextMenu。
+  これに `if` による条件レンダリングと `for` リピータが加わります。
+  `Grid` は均等トラックと、任意の要素に書ける `colSpan:` / `rowSpan:` を持ちます。
   再利用できる**コンポーネント**は view そのもので、既定値付きのパラメータ、インスタンスごとの `state`、`Slot { }` による子要素を持ちます。
   行ごとの状態はリピータの深さを問わず（ネストした `for` の中でも、仮想化リストの中でも）、リピータは求めれば行の位置も束ねます（`for row, i in xs`）。
 - **アニメーション**：「この更新をアニメーションさせる」と囲むのではなく、値が動く要素そのものに宣言します（`animate: 200.0` と `easing:`、それに `enter:` / `exit:` のフェード）。

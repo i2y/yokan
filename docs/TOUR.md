@@ -766,12 +766,41 @@ returns, and writing one property three times notifies once.
 
 ## 7. Views and styles
 
-### The 18-widget catalog
+### The widget catalog
 
-Column / Row / Grid / Stack / Text / Button / TextField (IME-capable) /
-ListView (optionally virtualized) / ScrollView / HScrollView /
-Image / Svg / DataTable / Modal / BarChart / LineChart /
-ProgressBar / Spinner.
+Arranging: Column / Row / Grid (with GridCell for a span) / Stack /
+Spacer / Divider / Split.
+Showing: Text / Link / Image / Svg / Canvas / ProgressBar / Spinner /
+BarChart / LineChart.
+Input: Button / TextField (IME-capable) / NumberField / IntField /
+Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Segmented /
+MenuButton.
+Showing many: ListView (optionally virtualized) / Table / DataTable /
+ScrollView / HScrollView.
+Over the app: Modal / Toast / ContextMenu.
+
+Six more are riders: Tooltip, Themed, Anim, Sized, Disabled and
+Semantics. They wrap whatever they are written on instead of adding a
+box of their own, and the lowerers produce them from `tooltip:`,
+`theme:`, `animate:`, `width:` / `height:`, `disabled:` and `role:` /
+`label:` — so an app writes properties and the tree carries wrappers.
+
+Five contracts are worth stating once, because every element that has
+one has the same one:
+
+- The **choosers** (Select / RadioGroup / TabBar / Segmented) take a
+  `List<String>` of options, an `Int` for the current one, and an
+  `onSelect:` that receives the chosen index. Nothing moves on its
+  own: the app writes the new index back.
+- A **MenuButton** is a chooser with no current value — a `text:` that
+  stays put and the same `options:` and `onSelect:`.
+- A **ListView** takes `selected:` / `onSelect:` to mark a row, and
+  `scrollTo:` to bring one into view when the number changes.
+- A **Split** is two panes and a divider: `ratio:` is a bound Float,
+  as a Slider's `value:` is, and dragging calls `onChange:`.
+- A **Toast** closes itself by CALLING `onClose:` after `durationMs:`,
+  and a **ContextMenu** wraps one element with the items a right-click
+  offers on it.
 
 ```ruby
 view Main {
@@ -1459,6 +1488,10 @@ pixie remove kit                 # drop a dependency + its caches
 PIXIE_SCRIPT="click:go,input:hi" ./app     # headless step replay
 PIXIE_SCRIPT="click:go,dump,click:go" ./app # ... printing the middle too
 PIXIE_SCRIPT="click:go,advance:100" ./app  # ... standing 100 ms in
+PIXIE_SCRIPT="select:cherry,slide:0.25" ./app # a chooser, a slider or a split
+PIXIE_SCRIPT="key:cmd-s,menu:Save" ./app   # a chord, a menu item
+PIXIE_SCRIPT="hover:2,submit" ./app        # the pointer on a chart point, enter
+PIXIE_SCRIPT="file:/tmp/a,drop:/tmp/b" ./app # a dialog's answer, a dropped file
 PIXIE_SCRIPT="a11y" ./app                  # print the accessibility tree
 PIXIE_SCRIPT="theme:light" ./app           # flip the root palette
 PIXIE_SCRIPT="mem" ./app                   # print the live-object count

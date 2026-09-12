@@ -750,9 +750,29 @@ view は状態を読むだけで、書き込みは必ずメソッドを通りま
 
 ## 7. view とスタイル
 
-### 18 ウィジェット
+### ウィジェット一覧
 
-Column / Row / Grid / Stack / Text / Button / TextField（IME 対応）/ ListView（仮想化オプション付き）/ ScrollView / HScrollView / Image / Svg / DataTable / Modal / BarChart / LineChart / ProgressBar / Spinner。
+並べる：Column / Row / Grid（範囲をまたぐときは GridCell）/ Stack / Spacer / Divider / Split。
+見せる：Text / Link / Image / Svg / Canvas / ProgressBar / Spinner / BarChart / LineChart。
+入力：Button / TextField（IME 対応）/ NumberField / IntField / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / Segmented / MenuButton。
+並べて見せる：ListView（仮想化オプション付き）/ Table / DataTable / ScrollView / HScrollView。
+アプリの上に重ねる：Modal / Toast / ContextMenu。
+
+このほかに 6 つのライダーがあります。
+Tooltip、Themed、Anim、Sized、Disabled、Semantics です。
+自分の箱を足さずに、書かれた相手を包みます。
+`tooltip:`、`theme:`、`animate:`、`width:` / `height:`、`disabled:`、`role:` / `label:` から lowerer が作るので、アプリはプロパティを書き、木は包みを持ちます。
+
+同じ約束を持つ要素がいくつかあるので、ここで一度だけ書いておきます。
+
+- **選択の要素**（Select、RadioGroup、TabBar、Segmented）は、選択肢の `List<String>`、現在位置の `Int`、選ばれた番号を受け取る `onSelect:` を取ります。
+  勝手には動きません。新しい番号を書き戻すのはアプリです。
+- **MenuButton** は、現在値を持たない選択の要素です。
+  変わらない `text:` と、同じ `options:` と `onSelect:` を取ります。
+- **ListView** は、行に印を付けるために同じ `selected:` / `onSelect:` を取り、見せたい行を `scrollTo:` で指します（番号が変わったときに従います）。
+- **Split** は二つの区画と仕切りです。
+  `ratio:` は Slider の `value:` と同じ束縛された Float で、ドラッグすると `onChange:` を呼びます。
+- **Toast** は `durationMs:` のあとに `onClose:` を呼んで自分で閉じ、**ContextMenu** は包んだ一つの要素の上で右クリックしたときに出る項目を持ちます。
 
 ```ruby
 view Main {
@@ -1431,6 +1451,10 @@ pixie remove kit                 # 依存 + キャッシュを削除
 PIXIE_SCRIPT="click:go,input:hi" ./app     # ヘッドレス操作再生
 PIXIE_SCRIPT="click:go,dump,click:go" ./app # 途中の画面も出力
 PIXIE_SCRIPT="click:go,advance:100" ./app  # 100ms 進めた地点で出力
+PIXIE_SCRIPT="select:cherry,slide:0.25" ./app # 選択の要素、スライダー、Split
+PIXIE_SCRIPT="key:cmd-s,menu:Save" ./app   # キーの組み合わせ、メニュー項目
+PIXIE_SCRIPT="hover:2,submit" ./app        # チャートの点にポインタ、enter
+PIXIE_SCRIPT="file:/tmp/a,drop:/tmp/b" ./app # ダイアログの答え、落としたファイル
 PIXIE_SCRIPT="a11y" ./app                  # アクセシビリティツリーを出力
 PIXIE_SCRIPT="theme:light" ./app           # ルートのパレットを切替
 PIXIE_SCRIPT="mem" ./app                   # 生存オブジェクト数を出力
