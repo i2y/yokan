@@ -264,6 +264,16 @@ if show():
         button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
+A `toast` is open by existing too — a message over the app at the bottom of the window, whatever container declared it, with no scrim, so the app underneath keeps taking clicks.
+Give it `duration_ms` and it closes itself that many milliseconds later by calling `on_close`, which is where the app clears what the `if` reads.
+The countdown runs on the framework's own clock, so a verification script says `advance:1500` and sees what a person waiting would.
+Several toasts stack upward in the order they were declared.
+
+```python
+if saved():
+    toast("Saved", duration_ms=1500, on_close=lambda: saved.set(False))
+```
+
 ## Form controls
 
 Value input always has the same shape.

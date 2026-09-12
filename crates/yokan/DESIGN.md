@@ -2990,3 +2990,35 @@ is on — which is a different cell from the one this has. And it is
 not verifiable here: a headless run never enters the engine, so no
 gate can see it, and nothing in this environment can press a key at a
 window. Shipping it would mean shipping behaviour nobody had watched.
+
+## A message that closes itself (2026-09-12)
+
+A **toast** is a transient message shown over the app at the bottom
+of the window, whatever container declared it. It is hoisted the way
+a Modal is — taffy resolves an `absolute` child against its direct
+parent, so escaping a container is re-parenting, not positioning —
+but with no scrim and no `occlude`, so the app underneath keeps
+taking clicks: a toast interrupts nothing. All of a frame's toasts
+share one bottom-anchored column, so a second message stacks above
+the first instead of landing on the same pixels.
+
+It is the first element whose dismissal is a **declaration** rather
+than a handler. `duration_ms` puts a countdown on the kernel's own
+clock — the one animation reads and `advance:<ms>` moves — armed per
+element by a tree pass and fired by the timer store the frame pump
+already drove. That is what lets a verification script stand a toast
+up, say a second and a half passed, and watch `on_close` run: no new
+script verb, and no tier able to disagree, because time is an input
+rather than a wall clock.
+
+Closing itself means CALLING `on_close`, never writing the flag the
+view read. The flag belongs to the app, and a widget that quietly
+rewrote a bound value would be lying to the view that produced it.
+That is also why `duration_ms` without `on_close` is refused rather
+than ignored, in both lowerers, with the same sentence.
+
+An app-side timer was rejected: `every` belongs to a store's
+lifetime, while a toast's countdown starts when the element appears
+and must end when it leaves — an identity the view owns and a store
+has no name for. In the dialect a toast is open by existing, as a
+modal is, and an `open=` argument is refused with the same reason.

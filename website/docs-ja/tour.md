@@ -241,6 +241,19 @@ if show():
         button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
+`toast` も「置けば開いている」ものです。
+どのコンテナの中に書いても、ウィンドウの下端にアプリの上から重なって出ます。
+覆いは付かないので、その下のアプリはクリックを受け取り続けます。
+`duration_ms` を渡すと、そのミリ秒のあとに `on_close` を呼んで自分で閉じます。
+`if` が読んでいる値を消すのは、その `on_close` の中です。
+時間はフレームワーク自身の時計で数えるので、検証スクリプトは `advance:1500` と書けば、待っている人が見るのと同じものを見ます。
+複数の toast は、書いた順に下から積み上がります。
+
+```python
+if saved():
+    toast("Saved", duration_ms=1500, on_close=lambda: saved.set(False))
+```
+
 ## フォームの要素
 
 値の入力はどれも同じ形です。
