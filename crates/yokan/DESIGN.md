@@ -2547,3 +2547,19 @@ the pointer leaves. A bar chart tints the hovered slot; a line chart
 draws a guide down the sample and grows its dots. A chart nobody hovers
 dumps exactly as it did, so no existing gate moved. The legend is still
 missing.
+
+## Turns of unequal height, and a brace that doubled (2026-09-12)
+
+A transcript — turns of prose and code, read top to bottom — is not a
+`list_view`, whose rows share one `item_height`; it is a `scroll_view`
+over a `column`, and a session of hundreds of turns is what a column
+draws without virtualization. `demo/transcript.py` is that shape: a
+value class per turn, the view picking a pill, wrapped prose, a `mono`
+block on a panel or a dim tool line by its kind.
+
+Its gate found a compiler bug. A store default carrying `{` — a code
+sample with an f-string in it — shipped as `{{`: the constant-default
+path escaped the text for `format!` and then emitted it as a plain
+string. `lower_interp` had learned the same lesson from a JSON literal;
+the default path had not. It uses the plain escaper now, and the demo
+is in the sweep as the case.

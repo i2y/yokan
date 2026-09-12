@@ -24,6 +24,7 @@ gate calc    python3 yokan_gate.py gate demo/calc.py --script "click:7,click:×,
 gate calcgrid python3 yokan_gate.py gate demo/calcgrid.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
 gate links   python3 yokan_gate.py gate demo/links.py --script "click:build,click:peek,click:drop,click:peek"
 gate table   python3 yokan_gate.py gate demo/table.py --script "click:refresh,dump,click:refresh"
+gate transcript python3 yokan_gate.py gate demo/transcript.py --script "click:more,dump,click:copy code,click:paste,dump"
 gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
 gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
 gate keys    python3 yokan_gate.py gate demo/keys.py --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
@@ -89,7 +90,7 @@ gate init    python3 yokan_gate.py gate .gate/init/app.py --script "click:+1"
 for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
-    counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
+    counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;

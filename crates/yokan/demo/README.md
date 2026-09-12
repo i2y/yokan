@@ -97,6 +97,9 @@ shows a finished transcript — its launch state is an empty table.
 #### table — data_table: the first `row` is the header, later `row`s are data rows shaded in alternation, and the frame comes with the element
 <img src="screenshots/table.png" width="360">
 
+#### transcript — a conversation with a coding agent, read top to bottom: turns of unequal height (a pill, wrapped prose, a `mono` code block on a panel, a dim tool line) in a `scroll_view` over a `column`, which is the shape for rows that do not share one height; `copy code` puts a block on the clipboard
+<img src="screenshots/transcript.png" width="360">
+
 #### dialog — the modal: existing IS being open, so wrap it in `if`
 <img src="screenshots/dialog.png" width="360">
 

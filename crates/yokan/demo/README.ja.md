@@ -93,6 +93,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### table — data_table：最初の `row` がヘッダー行、以降の `row` は交互に色の付くデータ行になり、枠線は要素に付いてくる
 <img src="screenshots/table.png" width="360">
 
+#### transcript — コーディングエージェントとの対話を上から読む。高さの揃わない行（吹き出し、折り返す文章、パネルに載せた `mono` のコード、薄いツール行）を `scroll_view` の中の `column` に並べる。高さが揃わない行はこの形で描く。`copy code` はコードをクリップボードへ
+<img src="screenshots/transcript.png" width="360">
+
 #### dialog — モーダル。「存在すること」が「開いていること」なので、`if` で包む
 <img src="screenshots/dialog.png" width="360">
 
