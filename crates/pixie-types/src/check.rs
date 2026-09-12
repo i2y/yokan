@@ -2060,7 +2060,23 @@ impl<'a> Checker<'a> {
                 let mut sub = env.child();
                 let mut param_tys = Vec::with_capacity(params.len());
                 for p in params {
-                    let pt = lower_type(&p.ty, self.program);
+                    let mut pt = lower_type(&p.ty, self.program);
+                    // Nothing here expects a function type, so nothing
+                    // can say what an unannotated parameter is. Saying
+                    // so beats letting the body fail on a placeholder.
+                    if is_placeholder(&pt) {
+                        self.diags.push(Diagnostic::error(
+                            p.span,
+                            format!(
+                                "`{n}` needs a type here: a closure's parameters are not \
+                                 inferred from its body. Write `{{ |{n}: Int| … }}`, or say \
+                                 what the closure is (an annotated `let`, a declared \
+                                 parameter, a field)",
+                                n = p.name.name
+                            ),
+                        ));
+                        pt = Type::Error;
+                    }
                     sub.bind(p.name.name.clone(), pt.clone());
                     param_tys.push(pt);
                 }
@@ -2908,6 +2924,13 @@ impl<'a> Checker<'a> {
                 crate::table::OverloadResolution::NoArityMatch { arities } => {
                     if overloads.len() == 1 {
                         let only = &overloads[0];
+                        if let Some(m) = closure_prop_note(only, &method.name, class_name) {
+                            self.diags.push(Diagnostic::error(call_span, m));
+                            for a in args {
+                                let _ = self.synth(env, a);
+                            }
+                            return Type::Error;
+                        }
                         let mut diag = Diagnostic::error(
                             call_span,
                             format!(
@@ -3015,6 +3038,13 @@ impl<'a> Checker<'a> {
                     crate::table::OverloadResolution::NoArityMatch { arities } => {
                         if overloads.len() == 1 {
                             let only = &overloads[0];
+                            if let Some(m) = closure_prop_note(only, &method.name, &base) {
+                                self.diags.push(Diagnostic::error(call_span, m));
+                                for a in args {
+                                    let _ = self.synth(env, a);
+                                }
+                                return Type::Error;
+                            }
                             let mut diag = Diagnostic::error(
                                 call_span,
                                 format!(
@@ -4218,6 +4248,22 @@ impl<'a> Checker<'a> {
 /// block parameters (`|x|` rather than `|x: T|`). cute-syntax models
 /// this as a Named type with the literal name `_`, which `lower_type`
 /// produces as `Type::External("_")`.
+/// A "method" that is really a CLOSURE-typed property: the reader
+/// wrote `S.f(1)`, and what `f` answers is a function value. Calling
+/// one goes through a local, and a view may not call one at all.
+fn closure_prop_note(only: &crate::table::FnTy, name: &str, owner: &str) -> Option<String> {
+    if !only.params.is_empty() {
+        return None;
+    }
+    matches!(only.ret, Type::Fn { .. }).then(|| {
+        format!(
+            "`{name}` on `{owner}` is a closure, not a method: read it into a local and \
+             call that (`let g = {owner}.{name}`, then `g(…)`), inside a `fn`. A view \
+             cannot call one at all, because a closure may write"
+        )
+    })
+}
+
 fn is_placeholder(t: &Type) -> bool {
     matches!(t, Type::External(s) if s == "_")
 }

@@ -1,0 +1,101 @@
+# A function VALUE: `{ |x: Int| … }` is a closure, carried the way
+# the engine carries a listener — an `Rc` over the World — so one can
+# be held in a local, handed to a method, kept in a state field and
+# swapped for another while the app runs.
+#
+# Captures are by VALUE, taken when the closure is made: `base` below
+# is the number that was there at that moment, not the field. A
+# closure may write, which is why a view may not call one; every call
+# here is inside a `fn`.
+
+store Board {
+  state n : Int = 0
+  state label : String = "-"
+  # A field's default closure sees its own parameters and nothing
+  # else: it is built before the object exists.
+  state step : fn(Int) -> Int = { |x: Int| x + 1 }
+
+  # A local closure, called in the same method.
+  fn twice {
+    let double = { |x: Int| x * 2 }
+    n = double(n)
+  }
+
+  # Captured by value: `base` is read once, here.
+  fn offset {
+    let base = n
+    let add = { |x: Int| x + base }
+    n = add(10)
+  }
+
+  # A closure that writes: it takes the World like any method body.
+  fn tally {
+    let count = { |x: Int| n = n + x }
+    count(3)
+    count(4)
+  }
+
+  # A closure as an argument, and as a parameter: the lambda takes
+  # its parameter types from the signature it is handed to.
+  fn apply(g: fn(Int) -> Int, v: Int) Int {
+    g(v)
+  }
+
+  fn through {
+    n = Board.apply({ |x| x * 10 }, n)
+  }
+
+  # A closure in a field, read into a local and called, then swapped
+  # for another one.
+  fn advance {
+    let f = step
+    n = f(n)
+  }
+
+  fn harder {
+    step = { |x| x * x }
+    label = "squares"
+  }
+
+  fn reset {
+    n = 1
+    step = { |x| x + 1 }
+    label = "-"
+  }
+
+  # A closure over a list: `map` is a loop that calls one.
+  fn sumDoubled {
+    let twice = { |x: Int| x * 2 }
+    var total : Int = 0
+    for x in [1, 2, 3] {
+      total = total + twice(x)
+    }
+    n = total
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8
+    padding: 12
+    Text { text: "n: #{Board.n}"; fontSize: 24 }
+    Text { text: "step: #{Board.label}" }
+    Row {
+      spacing: 6
+      Button { text: "double"; onClick: Board.twice() }
+      Button { text: "offset"; onClick: Board.offset() }
+      Button { text: "tally"; onClick: Board.tally() }
+    }
+    Row {
+      spacing: 6
+      Button { text: "through"; onClick: Board.through() }
+      Button { text: "advance"; onClick: Board.advance() }
+      Button { text: "harder"; onClick: Board.harder() }
+    }
+    Row {
+      spacing: 6
+      Button { text: "sum"; onClick: Board.sumDoubled() }
+      Button { text: "reset"; onClick: Board.reset() }
+    }
+  }
+}

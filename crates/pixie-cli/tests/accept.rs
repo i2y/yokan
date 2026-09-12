@@ -595,6 +595,17 @@ fn tiers_agree_on_every_demo() {
             "examples/handler/handler.pix",
             "click:chip,click:unlock,click:chip",
         ),
+        // Function VALUES: a closure in a local, one capturing a local
+        // by value, one that writes, one handed to a method that takes
+        // a `fn(Int) -> Int`, one kept in a state field and swapped
+        // for another, and a loop calling one. Every number on the
+        // screen is the answer of a closure, so a tier that built one
+        // differently would say a different number.
+        (
+            "examples/closures/closures.pix",
+            "click:reset,click:double,click:offset,click:tally,click:through,\
+             click:advance,click:harder,click:advance,click:sum",
+        ),
         // §8.68: the property types that used to stop at the
         // reflection table. One reading covers a map (iterated by
         // `keys`, subscripted for a `T?`), an optional printed both

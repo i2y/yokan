@@ -165,6 +165,49 @@ fn greet(name: String) {       # no return type = Void
 }
 ```
 
+### Function values
+
+A `{ |x: Int| … }` is a closure: a value that can be held in a local,
+handed to a method, kept in a state field and swapped for another
+while the app runs.
+
+```ruby
+store Board {
+  state n : Int = 0
+  state step : fn(Int) -> Int = { |x: Int| x + 1 }   # a field holds one
+
+  fn twice {
+    let double = { |x: Int| x * 2 }                  # a local holds one
+    n = double(n)
+  }
+
+  fn apply(g: fn(Int) -> Int, v: Int) Int {          # a parameter takes one
+    g(v)
+  }
+
+  fn through {
+    n = Board.apply({ |x| x * 10 }, n)               # types come from the signature
+  }
+
+  fn advance {
+    let f = step                                     # read the field, then call
+    n = f(n)
+  }
+}
+```
+
+A closure takes the World the way a method body does, so it may write
+as well as read — which is why a **view may not call one**, and why a
+closure is made inside a `fn` rather than inside a handler. Its
+parameter types come from the surface (`|x: Int|`) or from the slot it
+is going into (an annotated `let`, a declared parameter, a field);
+they are never inferred from the body, and the refusal says so.
+
+Captures are **by value, taken when the closure is made** — the same
+capture rule handlers follow: only Copy handles and values. A captured
+handle can go stale, and reading through one answers what a stale
+handle always answers rather than reaching a freed object.
+
 ### Control flow
 
 ```ruby
@@ -1464,6 +1507,10 @@ silently.
   both cross, tuple structs included (rpi-gen declares them); so does
   everything else, in both directions: numbers, bools, strings, bytes,
   maps, lists, optionals, and `!T` returns
+- A closure written inside a HANDLER, and a view calling one: a
+  function value is made and called inside a `fn`, because it takes
+  the World and may write. Its parameter types come from the surface
+  or from the slot it goes into, never from its body
 - An HTTP **server** (the sketch is a declarative `service` block;
   deliberately last)
 - Windows (the engine is exercised on macOS and Linux)

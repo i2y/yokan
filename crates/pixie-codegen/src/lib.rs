@@ -69,6 +69,12 @@ enum RustTy {
     Handle(String),
     /// `!T` — `Result<T, E>` with the module's default error enum.
     Fallible { ok: Box<RustTy>, err: String },
+    /// `fn(A, B) -> R` — a FUNCTION VALUE, carried the way the kernel
+    /// carries a listener: an `Rc` closure whose first argument is the
+    /// World. One shape, not two: a closure may write, so a view may
+    /// not call one (the checker says so by name), and everything that
+    /// can call one already has `w` in hand.
+    Fn { params: Vec<RustTy>, ret: Box<RustTy> },
 }
 
 impl RustTy {
@@ -86,10 +92,21 @@ impl RustTy {
             RustTy::Named(n) => n.clone(),
             RustTy::Handle(n) => format!("Handle<{n}>"),
             RustTy::Fallible { ok, err } => format!("Result<{}, {err}>", ok.render()),
+            RustTy::Fn { params, ret } => {
+                let mut ps = String::from("&mut World");
+                for p in params {
+                    ps.push_str(", ");
+                    ps.push_str(&p.render());
+                }
+                format!("std::rc::Rc<dyn Fn({ps}) -> {}>", ret.render())
+            }
         }
     }
+    /// Does a write to a field of this type compare the old value
+    /// first? A list is too big to compare and a closure has no
+    /// equality at all, so both write and notify.
     fn dirty_checks(&self) -> bool {
-        !matches!(self, RustTy::List(_) | RustTy::Unit)
+        !matches!(self, RustTy::List(_) | RustTy::Unit | RustTy::Fn { .. })
     }
 }
 
@@ -468,6 +485,48 @@ fn declared_ty_of(e: &Expr, cx: &MethodCtx) -> Option<RustTy> {
     }
 }
 
+/// Where a callable NAME comes from, and how many arguments it takes.
+/// Resolution order is an identifier's own: an innermost local or
+/// parameter first, then one of this class's own fields.
+///
+/// A local can be callable without anything having written its type
+/// down (`let add = { |x: Int| x + 1 }`), so the lambda's own
+/// parameters are remembered when it is bound. Nothing here needs the
+/// closure's RETURN type, which is why nothing here invents one.
+enum CallableName {
+    /// A local or parameter, cloned out before the call.
+    Local(String),
+    /// One of this class's own fields, read through its getter.
+    Prop(String),
+}
+
+fn callable_name(name: &str, cx: &MethodCtx) -> Option<(CallableName, usize)> {
+    if let Some(arity) = cx
+        .closures
+        .iter()
+        .rev()
+        .find(|(n, _)| n == name)
+        .map(|(_, a)| *a)
+    {
+        return Some((CallableName::Local(camel_to_snake(name)), arity));
+    }
+    let local = cx
+        .locals
+        .iter()
+        .rev()
+        .find(|(l, _, _, _)| l == name)
+        .and_then(|(_, _, _, t)| t.clone());
+    if let Some(RustTy::Fn { params, .. }) = local {
+        return Some((CallableName::Local(camel_to_snake(name)), params.len()));
+    }
+    match cx.class.prop(name).map(|p| (p.rust.clone(), p.ty.clone())) {
+        Some((rust, RustTy::Fn { params, .. })) => {
+            Some((CallableName::Prop(rust), params.len()))
+        }
+        _ => None,
+    }
+}
+
 /// The class a type expression names outright, if it names one. Used
 /// to register class-typed parameters and locals as handles.
 fn named_class(t: &TypeExpr, classes: ClassNames<'_>) -> Option<String> {
@@ -529,10 +588,20 @@ fn lower_type(t: &TypeExpr, classes: ClassNames<'_>) -> Result<RustTy, EmitError
         // coerce at the boundaries; props and `let` locals of `T?`
         // are gated separately.
         TypeKind::Nullable(inner) => Ok(RustTy::Opt(Box::new(lower_type(inner, classes)?))),
-        // `TypeKind::Fn` is never produced by the parser (see its AST
-        // comment) and `SelfType` is reserved — neither is reachable
-        // today, but a shape that arrives here is a pixie gap, not a
-        // design decision (§8.63).
+        // `fn(A, B) -> R` — a function value's type.
+        TypeKind::Fn { params, ret } => {
+            let mut ps = Vec::with_capacity(params.len());
+            for a in params {
+                ps.push(lower_type(a, classes)?);
+            }
+            Ok(RustTy::Fn {
+                params: ps,
+                ret: Box::new(lower_type(ret, classes)?),
+            })
+        }
+        // `SelfType` is reserved and not reachable today, but a shape
+        // that arrives here is a pixie gap, not a design decision
+        // (§8.63).
         _ => err(t.span, "this type shape is not lowerable yet (M0)"),
     }
 }
@@ -822,6 +891,11 @@ fn lower_binding_call(
             RustTy::Handle(_) => {
                 return err(span, "a class cannot cross a binding — bindings take value types");
             }
+            // A closure is pixie's own shape: it takes the World, and
+            // a foreign function has no World to hand it.
+            RustTy::Fn { .. } => {
+                return err(span, "a closure cannot cross a binding — bindings take value types");
+            }
             RustTy::Str => format!("({v}).as_str()"),
             RustTy::Bytes => format!("({v}).as_slice()"),
             // The kernel's own COW map passes by value — battery fns
@@ -1006,6 +1080,10 @@ struct StructInfo<'a> {
 // ---------------------------------------------------------------------------
 // Expression lowering inside class method bodies.
 
+/// Clonable so a LAMBDA can be lowered in a child of the context it
+/// appears in: its parameters are locals of the closure's own body
+/// and must not leak into the statements after it.
+#[derive(Clone)]
 struct MethodCtx<'a> {
     class: &'a ClassInfo<'a>,
     /// Class names, for `lower_type` (§11.23).
@@ -1044,6 +1122,10 @@ struct MethodCtx<'a> {
     /// coerce (`nil` → `None`, plain values wrap in `Some`, values
     /// already `T?` pass through).
     nullable_ret: bool,
+    /// Locals bound to a LAMBDA, with the number of parameters it
+    /// takes: `let add = { |x: Int| x + 1 }` is callable as `add(n)`
+    /// though nothing wrote its type down.
+    closures: Vec<(String, usize)>,
     /// Nesting depth of `for`/`while` — `break`/`continue` outside
     /// a loop are named errors, not rustc surprises.
     loop_depth: usize,
@@ -1234,6 +1316,11 @@ fn pixie_ty_name(t: &RustTy) -> String {
         RustTy::Map(k, v) => format!("Map<{}, {}>", pixie_ty_name(k), pixie_ty_name(v)),
         RustTy::Named(n) | RustTy::Handle(n) => n.clone(),
         RustTy::Fallible { ok, .. } => format!("!{}", pixie_ty_name(ok)),
+        RustTy::Fn { params, ret } => format!(
+            "fn({}) -> {}",
+            params.iter().map(pixie_ty_name).collect::<Vec<_>>().join(", "),
+            pixie_ty_name(ret)
+        ),
     }
 }
 
@@ -1808,6 +1895,42 @@ fn lower_method_expr_inner(e: &Expr, cx: &MethodCtx) -> Result<String, EmitError
             type_args,
             ..
         } => {
+            // Calling a function VALUE: a local, a parameter, or one
+            // of this class's own fields (which a method body names
+            // bare, and the parser spells `@name`). A name that holds
+            // a closure resolves as one before anything else is
+            // tried, which is what scoping means. The closure comes
+            // out of its slot first, because calling it needs
+            // `&mut World` and reading a field borrows the World.
+            if let ExprKind::Ident(fname) | ExprKind::AtIdent(fname) = &callee.kind {
+                if let Some((from, arity)) = callable_name(fname, cx) {
+                    if args.len() != arity {
+                        return err(
+                            e.span,
+                            format!("`{fname}` takes {arity} argument(s), got {}", args.len()),
+                        );
+                    }
+                    let target = match from {
+                        CallableName::Local(n) => format!("{n}.clone()"),
+                        CallableName::Prop(rust) => format!("self.{rust}(w)"),
+                    };
+                    let mut out = format!("{{ let __f = {target}; ");
+                    let mut names = Vec::with_capacity(args.len());
+                    for (i, a) in args.iter().enumerate() {
+                        let v = lower_method_expr(a, cx)?;
+                        write!(out, "let __a{i} = {v}; ").unwrap();
+                        names.push(format!("__a{i}"));
+                    }
+                    write!(
+                        out,
+                        "__f(w{}{}) }}",
+                        if names.is_empty() { "" } else { ", " },
+                        names.join(", ")
+                    )
+                    .unwrap();
+                    return Ok(out);
+                }
+            }
             if let ExprKind::Path(p) = &callee.kind {
                 if p.len() == 2 {
                     if let Some(bc) = cx.bindings.get(&p[0].name) {
@@ -1990,6 +2113,14 @@ fn lower_method_expr_inner(e: &Expr, cx: &MethodCtx) -> Result<String, EmitError
             Ok(format!("({xs}).at({i})"))
         }
         ExprKind::Call { block: Some(_), .. } => Err(block_call_error(e)),
+        // A function VALUE. The site that knows the target type calls
+        // `lower_lambda` with it (an annotated `let`, an argument, a
+        // field's default); here there is none, so the parameters
+        // carry their own types or the refusal asks for them.
+        ExprKind::Lambda { params, body } => {
+            let mut inner = cx.clone();
+            lower_lambda(params, body, None, &mut inner, e.span)
+        }
         _ => err(e.span, "this expression is not lowerable yet (M0)"),
     }
 }
@@ -2157,9 +2288,17 @@ fn lower_w_call_args(
 ) -> Result<Vec<String>, EmitError> {
     let mut out = Vec::with_capacity(args.len());
     for (i, a) in args.iter().enumerate() {
-        let param_opt = params
-            .and_then(|ps| ps.get(i))
-            .is_some_and(|q| matches!(q.ty.kind, TypeKind::Nullable(_)));
+        let declared = params.and_then(|ps| ps.get(i));
+        let param_opt = declared.is_some_and(|q| matches!(q.ty.kind, TypeKind::Nullable(_)));
+        // A LAMBDA written at a call takes its parameter types from
+        // the one the callee declared, so `{ |x| x * 2 }` needs no
+        // types of its own where the signature already has them.
+        if let ExprKind::Lambda { params: lp, body } = &a.kind {
+            let want = declared.and_then(|q| lower_type(&q.ty, cx.class_names).ok());
+            let mut inner = cx.clone();
+            out.push(lower_lambda(lp, body, want.as_ref(), &mut inner, a.span)?);
+            continue;
+        }
         out.push(if param_opt {
             lower_nullable_slot(a, cx)?
         } else {
@@ -2290,6 +2429,12 @@ fn lower_assign_value(
     ty: &RustTy,
     cx: &MethodCtx,
 ) -> Result<String, EmitError> {
+    // A LAMBDA assigned into a typed slot takes its parameter types
+    // from the slot, so `hook = { |x| x * 10 }` needs none of its own.
+    if let ExprKind::Lambda { params, body } = &value.kind {
+        let mut inner = cx.clone();
+        return lower_lambda(params, body, Some(ty), &mut inner, value.span);
+    }
     match ty {
         RustTy::Opt(_) => lower_nullable_slot(value, cx),
         _ => lower_method_expr(value, cx),
@@ -2477,6 +2622,87 @@ fn lower_interp(
     }
 }
 
+/// Is this the parser's placeholder for a block parameter whose type
+/// the author left out (`{ |x| … }`)?
+fn is_placeholder_ty(t: &TypeExpr) -> bool {
+    matches!(&t.kind, TypeKind::Named { path, args }
+        if args.is_empty() && path.len() == 1 && path[0].name == "_")
+}
+
+/// `{ |x: Int| body }` as a VALUE. The shape is the one the kernel
+/// already carries a listener in: an `Rc` closure taking the World
+/// first, so a closure can do anything a method can. Captures are by
+/// value at creation and only of Copy handles and values, which is
+/// the rule generated views have always followed.
+///
+/// `want` is the target's type when the site knows it (an annotated
+/// `let`, a declared parameter, a field's default): it supplies the
+/// parameter types the author left out. Without either, the refusal
+/// asks for the type rather than guessing one.
+fn lower_lambda(
+    params: &[ast::Param],
+    body: &ast::Block,
+    want: Option<&RustTy>,
+    cx: &mut MethodCtx,
+    span: Span,
+) -> Result<String, EmitError> {
+    let want_params: Option<&[RustTy]> = match want {
+        Some(RustTy::Fn { params: ps, .. }) => Some(ps.as_slice()),
+        _ => None,
+    };
+    let mut sig = String::from("move |w: &mut World");
+    let mut bound: Vec<(String, Option<String>, bool, Option<RustTy>)> = Vec::new();
+    for (i, q) in params.iter().enumerate() {
+        let ty = if is_placeholder_ty(&q.ty) {
+            match want_params.and_then(|w| w.get(i)) {
+                Some(t) => t.clone(),
+                None => {
+                    return err(
+                        q.span,
+                        format!(
+                            "`{n}` needs a type here: write `{{ |{n}: Int| … }}`, or say \
+                             what the closure is (an annotated `let`, a declared parameter, \
+                             a field)",
+                            n = q.name.name
+                        ),
+                    );
+                }
+            }
+        } else {
+            lower_type(&q.ty, cx.class_names)?
+        };
+        write!(sig, ", {}: {}", camel_to_snake(&q.name.name), ty.render()).unwrap();
+        bound.push((
+            q.name.name.clone(),
+            named_class(&q.ty, cx.class_names),
+            matches!(q.ty.kind, TypeKind::Nullable(_)),
+            Some(ty),
+        ));
+    }
+    sig.push('|');
+    let depth = cx.locals.len();
+    cx.locals.extend(bound);
+    let mut inner = String::new();
+    let r = lower_scope(&body.stmts, body.trailing.as_deref(), false, cx, &mut inner, "        ");
+    let tail = match (r, &body.trailing) {
+        (Err(e), _) => {
+            cx.locals.truncate(depth);
+            return Err(e);
+        }
+        (Ok(()), Some(t)) => Some(lower_method_expr(t, cx)),
+        (Ok(()), None) => None,
+    };
+    cx.locals.truncate(depth);
+    let tail = match tail {
+        Some(Ok(v)) => format!("        {v}
+"),
+        Some(Err(e)) => return Err(e),
+        None => String::new(),
+    };
+    let _ = span;
+    Ok(format!("std::rc::Rc::new({sig} {{\n{inner}{tail}    }})"))
+}
+
 /// Lower a statement list as one SCOPE: every statement, then the
 /// trailing expression, then a `World::remove` for each object the
 /// scope created and provably never let out (§8.42).
@@ -2598,6 +2824,9 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
                     _ => declared_ty_of(value, cx),
                 },
             };
+            if let ExprKind::Lambda { params, .. } = &value.kind {
+                cx.closures.push((name.name.clone(), params.len()));
+            }
             cx.locals.push((name.name.clone(), handle_class, is_opt, local_ty));
             Ok(())
         }
@@ -4963,6 +5192,16 @@ fn lower_action_expr_inner(e: &Expr, cx: &ActionCtx) -> Result<String, EmitError
             out.push_str("__lit }");
             Ok(out)
         }
+        // A closure is a value a METHOD makes: a handler runs inside
+        // the view's own frame, where there is no scope to own one.
+        // The rule this follows is the one a handler already follows
+        // for everything else it cannot do — put it in a method and
+        // call that.
+        ExprKind::Lambda { .. } => err(
+            e.span,
+            "a closure belongs in a method, not in a handler — move the body to a \
+             `fn` on the store and call it here",
+        ),
         _ => err(e.span, "this expression is not lowerable in actions yet (M0)"),
     }
 }
@@ -7683,6 +7922,7 @@ impl<'a> Program<'a> {
             default_error: self.default_error.as_deref(),
             fallible_ret: false,
             nullable_ret: false,
+            closures: Vec::new(),
             loop_depth: 0,
             progress_task: false,
         }
@@ -8974,6 +9214,9 @@ fn lower_init_stmt(
 
 fn emit_class(info: &ClassInfo, p: &Program, out: &mut String) -> Result<(), EmitError> {
     let name = &info.name;
+    // `p` is shadowed by the property loops below; a closure default
+    // needs the program to build a context to lower its body in.
+    let program = p;
 
     // Storage struct + constructor (prop defaults, or the user
     // `init` — §8.25). Generic classes carry their params on every
@@ -8995,12 +9238,24 @@ fn emit_class(info: &ClassInfo, p: &Program, out: &mut String) -> Result<(), Emi
         None => {
             writeln!(out, "    pub fn new() -> Self {{").unwrap();
             writeln!(out, "        Self {{").unwrap();
-            for p in &info.props {
-                if p.derived.is_some() {
+            for prop in &info.props {
+                if prop.derived.is_some() {
                     continue;
                 }
-                let d = p.default.as_ref().expect("no-default props require init (validated)");
-                writeln!(out, "            {}: {},", p.rust, lower_default(d, &p.ty)?).unwrap();
+                let d = prop.default.as_ref().expect("no-default props require init (validated)");
+                // A CLOSURE default is a constant in the sense that
+                // matters — it is built before the object exists and
+                // captures nothing, since there is nothing yet to
+                // capture. Its body sees its own parameters and the
+                // literals, which is what `lower_lambda` will say if
+                // it reaches for anything else.
+                let v = if let ExprKind::Lambda { params, body } = &d.kind {
+                    let mut mcx = program.method_ctx(info, &[]);
+                    lower_lambda(params, body, Some(&prop.ty), &mut mcx, d.span)?
+                } else {
+                    lower_default(d, &prop.ty)?
+                };
+                writeln!(out, "            {}: {},", prop.rust, v).unwrap();
             }
             writeln!(out, "        }}").unwrap();
             writeln!(out, "    }}").unwrap();
