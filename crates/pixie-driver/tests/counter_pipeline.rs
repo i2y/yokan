@@ -4623,6 +4623,110 @@ fn toast_needs_a_message_and_a_handler_to_close_with() {
 }
 
 #[test]
+fn split_emits_two_panes_and_a_bound_ratio() {
+    // The Slider's contract with a different gesture: `ratio:` lowers
+    // as a property READ and `onChange` binds the same implicit
+    // `value: f64`, so what the emitter has to prove is that the two
+    // panes land in the children vector and that `vertical:` reaches
+    // the variant.
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = "store App {\n  state r : Float = 0.5\n}\n\nview Main {\n  \
+               Split {\n    ratio: App.r\n    vertical: true\n    \
+               onChange: { App.r = value }\n    Text { text: \"a\" }\n    \
+               Text { text: \"b\" }\n  }\n}\n";
+    let f = dir.join("split_emit.pix");
+    std::fs::write(&f, src).unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code = pixie_codegen::emit_program(
+        outcome.module.as_ref().expect("module"),
+        outcome.binding_items,
+        None,
+    )
+    .expect("emit succeeds");
+    for needle in [
+        "Element::Split { ratio: w.singleton_ref::<App>().r(w), vertical: true, on_change: Some(",
+        "move |w: &mut World, value: f64|",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+}
+
+#[test]
+fn split_refuses_a_missing_ratio_and_a_wrong_pane_count() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = "store App {\n  state r : Float = 0.5\n  state ns : List<String> = []\n}\n\n";
+    let emit_err = |name: &str, body: &str| -> String {
+        let f = dir.join(name);
+        std::fs::write(&f, format!("{store}view Main {{\n{body}\n}}\n")).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .expect_err("this Split must not emit")
+        .message
+    };
+
+    let err = emit_err(
+        "split_no_ratio.pix",
+        "  Split {\n    Text { text: \"a\" }\n    Text { text: \"b\" }\n  }",
+    );
+    assert!(
+        err.contains("Split needs `ratio:`"),
+        "error should name the missing prop: {err}"
+    );
+
+    // A literal cannot reflect a divider the user has moved — the
+    // Slider's `value:` rule, reported with this key's name.
+    let err = emit_err(
+        "split_literal_ratio.pix",
+        "  Split {\n    ratio: 0.5\n    Text { text: \"a\" }\n    Text { text: \"b\" }\n  }",
+    );
+    assert!(
+        err.contains("`ratio:` must be a Float property"),
+        "a literal ratio should be refused by name: {err}"
+    );
+
+    let err = emit_err(
+        "split_three_panes.pix",
+        "  Split {\n    ratio: App.r\n    Text { text: \"a\" }\n    Text { text: \"b\" }\n    \
+         Text { text: \"c\" }\n  }",
+    );
+    assert!(
+        err.contains("Split takes exactly two panes — this one has 3"),
+        "the count should be in the message: {err}"
+    );
+
+    let err = emit_err(
+        "split_one_pane.pix",
+        "  Split {\n    ratio: App.r\n    Text { text: \"a\" }\n  }",
+    );
+    assert!(
+        err.contains("Split takes exactly two panes — this one has 1"),
+        "the count should be in the message: {err}"
+    );
+
+    // A repeater among the panes is not a pane count anyone can read.
+    let err = emit_err(
+        "split_repeated_panes.pix",
+        "  Split {\n    ratio: App.r\n    for n in App.ns {\n      Text { text: \"a\" }\n    }\n  }",
+    );
+    assert!(
+        err.contains("a Split's panes are two elements written out"),
+        "a repeater among the panes should be refused by name: {err}"
+    );
+}
+
+#[test]
 fn disabled_and_sized_riders_emit_their_wrappers() {
     let dir = std::env::temp_dir().join("pixie-m0-gate");
     std::fs::create_dir_all(&dir).unwrap();

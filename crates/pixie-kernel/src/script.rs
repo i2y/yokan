@@ -154,9 +154,11 @@ fn split_steps(script: &str) -> Vec<String> {
 /// commits nothing) · `submit[@n]` (the same numbering; `onSubmitted`
 /// on a TextField, accepted and inert on a numeric field, so
 /// `input:3,submit` reads naturally) · `slide[@n]:<value>` (the n-th
-/// Slider in tree order, default 0: clamp the value to `[min, max]`,
-/// snap it to the nearest step multiple counted from min, run
-/// `onChange`) ·
+/// Slider OR Split in tree order — the two count TOGETHER, because a
+/// Split's `ratio` is the same bound Float behind the same handler —
+/// default 0: clamp the value to `[min, max]` (a Split's range is the
+/// fraction's own `[0, 1]`), snap it to the nearest step multiple
+/// counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
 /// TabBar / Segmented / Table, counted together — picks the option with exactly
 /// this text; a Table's options are its rows' first cells, so the
@@ -536,8 +538,9 @@ pub fn run_parts<C: Component>(
                 .unwrap_or_else(|_| crate::script_refusal!("bad slide value `{step}`"));
             let (min, max, snap_step, change) = rt
                 .with(|w| tree.find_slider(w, n))
-                .unwrap_or_else(|| crate::script_refusal!("no Slider #{n}"));
-            let f = change.unwrap_or_else(|| crate::script_refusal!("Slider #{n} has no onChange"));
+                .unwrap_or_else(|| crate::script_refusal!("no Slider / Split #{n}"));
+            let f = change
+                .unwrap_or_else(|| crate::script_refusal!("Slider / Split #{n} has no onChange"));
             // The same clamp-and-snap the engine's pointer math runs,
             // so a scripted slide and a real drag land on identical
             // values.

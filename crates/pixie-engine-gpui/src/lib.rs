@@ -9,6 +9,7 @@
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
 //! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented /
 //! Toast (hoisted to the window's bottom, as Modal is to its middle) /
+//! Split /
 //! Canvas (whose drawing commands this crate rasterizes itself — see `raster`),
 //! plus the riders every element takes — Themed / Semantics / Tooltip /
 //! Disabled / Sized / Anim (and the GridCell above) — each a wrapper
@@ -217,6 +218,7 @@ fn children_of(el: &Element) -> Option<std::slice::Iter<'_, Element>> {
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. }
+        | Element::Split { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
         | Element::Modal { children, .. }
@@ -443,6 +445,12 @@ const MONO_FAMILY: &str = "Menlo";
 const SLIDER_TRACK: f32 = 4.0;
 const SLIDER_THUMB: f32 = 14.0;
 const SLIDER_H: f32 = 20.0;
+
+/// Split metrics: the divider is a 6 px rule — thin enough to read as
+/// a line between two panes — with the scrollbar thumb's 3 px grab
+/// inflation on each side, so a 6 px target is a 12 px one to hit.
+const SPLIT_BAR: f32 = 6.0;
+const SPLIT_SLOP: f32 = 3.0;
 
 /// The clip height of a scrolling viewport: the `height:` prop when the
 /// view set one, else the 320 px the engine used before the prop
@@ -4182,6 +4190,290 @@ fn render_el_in<C: Component>(
             // landing on the same pixels.
             pass.toasts.push(surface.into_any_element());
             div().absolute().into_any_element()
+        }
+        // Two panes and a rule that drags.
+        //
+        // The panes are flex items whose shares ARE the ratio, so
+        // taffy divides the box and nothing here computes a pane's
+        // size. What the GESTURE needs numbers for it reads at paint,
+        // the scrollbar's rule: the split's own box turns a pointer
+        // into a ratio, and the rule records its own laid-out rect so
+        // the hit test asks where the divider IS rather than where a
+        // second copy of the layout model says it should be.
+        //
+        // The listeners are window-wide, not the div's: `on_mouse_*`
+        // on a div only fires while its hitbox is hovered, and a
+        // divider dragged fast leaves a 6 px rule at once — so a
+        // hover-gated drag would stick. Registering from inside paint
+        // is what puts a `&mut Window` in reach to do it.
+        Element::Split {
+            ratio,
+            vertical,
+            on_change,
+            children,
+        } => {
+            let key = pass.path.clone();
+            pass.seen.push(key.clone());
+            // The Select's cell already carries what a Split needs — a
+            // flag and a rect — and the map is path-keyed with this
+            // pass's GC, so the two share it: a path names one element
+            // and no element is both. Here the flag means "a drag is
+            // under way" and the rect is the divider's, recorded at
+            // paint and read at event time, so the order the two
+            // canvases paint in does not matter. The third slot is the
+            // Select's window height, carried through untouched.
+            let cell = selects.entry(key).or_default().clone();
+            // `PIXIE_TRACE_SPLIT=1` prints the rule's laid-out rect,
+            // every press tested against it and every move that
+            // reaches the handler — the numbers between "the divider
+            // did not move" and reading this arm (`PIXIE_TRACE_SCROLL`
+            // is the precedent). Read once here, not per event.
+            let trace = std::env::var_os("PIXIE_TRACE_SPLIT").is_some();
+            let vertical = *vertical;
+            let value = *ratio;
+            let r = value.clamp(0.0, 1.0) as f32;
+            let on_change = on_change.clone();
+            let root = cx.entity().downgrade();
+
+            // `flex_basis(0)` is what makes the shares the whole
+            // story — content would otherwise set the base size — and
+            // the zero minimum is flexbox's min-content trap: without
+            // it a pane full of text refuses to shrink below it.
+            let mut panes: Vec<gpui::AnyElement> = Vec::new();
+            for (i, c) in children.iter().take(2).enumerate() {
+                pass.path.push(i);
+                let inner = render_el(
+                    c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow,
+                    Sem::default(), th, cx,
+                );
+                pass.path.pop();
+                panes.push(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_basis(px(0.))
+                        .flex_grow(if i == 0 { r } else { 1.0 - r })
+                        .min_w(px(0.))
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(inner)
+                        .into_any_element(),
+                );
+            }
+            // Neither lowerer can produce a Split with fewer than two
+            // panes — both refuse it by name — so an empty box here
+            // is a guard, not a shape the vocabulary offers.
+            while panes.len() < 2 {
+                let share = if panes.is_empty() { r } else { 1.0 - r };
+                panes.push(
+                    div()
+                        .flex_basis(px(0.))
+                        .flex_grow(share)
+                        .min_w(px(0.))
+                        .min_h(px(0.))
+                        .into_any_element(),
+                );
+            }
+            let second = panes.pop().unwrap();
+            let first = panes.pop().unwrap();
+
+            // The rule itself. A `cursor` style is enough to give a
+            // div a hitbox (`should_insert_hitbox`), which is what
+            // makes the resize pointer appear over it; the cross axis
+            // comes from the flex container's default stretch.
+            let bar = {
+                let cell = cell.clone();
+                let b = div()
+                    .flex_none()
+                    .bg(rgb(th.border))
+                    .cursor(if vertical {
+                        gpui::CursorStyle::ResizeUpDown
+                    } else {
+                        gpui::CursorStyle::ResizeLeftRight
+                    });
+                let b = if vertical {
+                    b.h(px(SPLIT_BAR))
+                } else {
+                    b.w(px(SPLIT_BAR))
+                };
+                b.child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds: Bounds<Pixels>, _, _window: &mut Window, _: &mut App| {
+                            let (dragging, _, other) = cell.get();
+                            if trace {
+                                eprintln!(
+                                    "pixie split: rule at {:?} {:?}",
+                                    bounds.origin, bounds.size
+                                );
+                            }
+                            cell.set((
+                                dragging,
+                                (
+                                    bounds.origin.x.as_f32(),
+                                    bounds.origin.y.as_f32(),
+                                    bounds.size.width.as_f32(),
+                                    bounds.size.height.as_f32(),
+                                ),
+                                other,
+                            ));
+                        },
+                    )
+                    .size_full(),
+                )
+            };
+
+            // An inert measuring layer over the whole split: no id,
+            // no listeners, no hover style and no cursor, so it has
+            // no hitbox and a click in a pane reaches what the pane
+            // holds.
+            let hit = {
+                let cell = cell.clone();
+                div().absolute().inset_0().child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds: Bounds<Pixels>, _, window: &mut Window, _: &mut App| {
+                            let (x0, y0) = (bounds.origin.x.as_f32(), bounds.origin.y.as_f32());
+                            let (w, h) = (
+                                bounds.size.width.as_f32(),
+                                bounds.size.height.as_f32(),
+                            );
+                            // Pointer → ratio inverts exactly what
+                            // taffy did: the two shares divide the box
+                            // MINUS the rule, and the rule's middle is
+                            // where the divider stands.
+                            let span = ((if vertical { h } else { w }) - SPLIT_BAR).max(1.0);
+                            let origin = if vertical { y0 } else { x0 };
+                            let ratio_at = move |at: f32| -> f64 {
+                                (((at - origin - SPLIT_BAR / 2.0) / span) as f64).clamp(0.0, 1.0)
+                            };
+                            let send = {
+                                let root = root.clone();
+                                let on_change = on_change.clone();
+                                move |v: f64, cx: &mut App| {
+                                    if let Some(f) = on_change.clone() {
+                                        let _ = root.update(cx, move |root, cx| {
+                                            root.apply(cx, move |w| f(w, v));
+                                        });
+                                    }
+                                }
+                            };
+                            // A press ON THE RULE starts the drag, and
+                            // only there: a press in a pane belongs to
+                            // whatever the pane holds. (A Slider jumps
+                            // to a press anywhere in its box; a split's
+                            // box is the app's content.)
+                            {
+                                let cell = cell.clone();
+                                window.on_mouse_event(
+                                    move |ev: &MouseDownEvent, phase, window, cx: &mut App| {
+                                        if phase != DispatchPhase::Bubble
+                                            || ev.button != MouseButton::Left
+                                        {
+                                            return;
+                                        }
+                                        let (_, (bx, by, bw, bh), other) = cell.get();
+                                        if bw <= 0.0 || bh <= 0.0 {
+                                            return;
+                                        }
+                                        let (p, q) =
+                                            (ev.position.x.as_f32(), ev.position.y.as_f32());
+                                        let on_rule = p >= bx - SPLIT_SLOP
+                                            && p <= bx + bw + SPLIT_SLOP
+                                            && q >= by - SPLIT_SLOP
+                                            && q <= by + bh + SPLIT_SLOP;
+                                        if trace {
+                                            eprintln!(
+                                                "pixie split: down at ({p}, {q}) \
+                                                 rule=({bx}, {by}, {bw}, {bh}) on_rule={on_rule}"
+                                            );
+                                        }
+                                        if !on_rule {
+                                            return;
+                                        }
+                                        cell.set((true, (bx, by, bw, bh), other));
+                                        cx.stop_propagation();
+                                        window.refresh();
+                                    },
+                                );
+                            }
+                            {
+                                let cell = cell.clone();
+                                window.on_mouse_event(
+                                    move |ev: &MouseMoveEvent, phase, window, cx: &mut App| {
+                                        if phase != DispatchPhase::Bubble {
+                                            return;
+                                        }
+                                        let (dragging, rect, other) = cell.get();
+                                        if !dragging {
+                                            return;
+                                        }
+                                        // A button released outside the
+                                        // window never sends a MouseUp;
+                                        // a move with the button up ends
+                                        // the drag anyway (the Slider's
+                                        // rule).
+                                        if ev.pressed_button != Some(MouseButton::Left) {
+                                            cell.set((false, rect, other));
+                                            window.refresh();
+                                            return;
+                                        }
+                                        let v = ratio_at(if vertical {
+                                            ev.position.y.as_f32()
+                                        } else {
+                                            ev.position.x.as_f32()
+                                        });
+                                        // The `sync` rule: only a ratio
+                                        // that differs from the bound
+                                        // one goes out, so a pointer
+                                        // held still fires nothing.
+                                        if trace {
+                                            eprintln!(
+                                                "pixie split: move to {v} \
+                                                 (bound {value}) vertical={vertical}"
+                                            );
+                                        }
+                                        if v != value {
+                                            send(v, cx);
+                                            window.refresh();
+                                        }
+                                    },
+                                );
+                            }
+                            {
+                                let cell = cell.clone();
+                                window.on_mouse_event(
+                                    move |_: &MouseUpEvent, phase, window, _: &mut App| {
+                                        if phase != DispatchPhase::Bubble {
+                                            return;
+                                        }
+                                        let (dragging, rect, other) = cell.get();
+                                        if dragging {
+                                            cell.set((false, rect, other));
+                                            window.refresh();
+                                        }
+                                    },
+                                );
+                            }
+                        },
+                    )
+                    .size_full(),
+                )
+            };
+
+            pass.next_id += 1;
+            let outer = with_a11y(div().id(pass.next_id), el, sem)
+                .flex()
+                .flex_grow(1.0)
+                .min_w(px(0.))
+                .min_h(px(0.));
+            let outer = if vertical { outer.flex_col() } else { outer.flex_row() };
+            outer
+                .child(first)
+                .child(bar)
+                .child(second)
+                .child(hit)
+                .into_any_element()
         }
         // The drawing surface. Everything else in the catalog hands
         // gpui elements and lets it paint; this one paints itself,

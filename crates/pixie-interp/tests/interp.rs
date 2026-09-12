@@ -641,6 +641,66 @@ fn slider_requires_a_value_binding() {
 }
 
 #[test]
+fn split_dumps_its_ratio_and_its_panes() {
+    // The Slider's contract with a different gesture: the bound ratio
+    // always prints (it is what a person sees the divider standing
+    // on), `vertical` joins it only when set, and the panes dump like
+    // any container's children.
+    let mut w = World::new();
+    let job = w.insert(Job { ratio: 0.25 });
+    let e = FieldEnv {
+        fields: vec![("job".into(), "Job".into(), job.erase())],
+    };
+    let tb = tables();
+    let lv = view_of(
+        "view Main {\n  let job = Job()\n  Column {\n    \
+         Split { ratio: job.ratio\n      Text { text: \"a\" }\n      Text { text: \"b\" }\n    }\n    \
+         Split { ratio: job.ratio; vertical: true\n      Text { text: \"c\" }\n      Text { text: \"d\" }\n    }\n  }\n}\n",
+    );
+    let tree = build_view(&lv, &e, &tb, &w).expect("builds");
+    assert_eq!(
+        tree.dump(&w),
+        "Column[Split(ratio=0.25)[Text(a), Text(b)], \
+         Split(ratio=0.25, vertical=true)[Text(c), Text(d)]]"
+    );
+}
+
+#[test]
+fn split_requires_a_ratio_and_exactly_two_panes() {
+    // Mirrors codegen's errors word for word; the emission tests
+    // assert the same strings on the other tier.
+    let mut w = World::new();
+    let job = w.insert(Job { ratio: 0.5 });
+    let e = FieldEnv {
+        fields: vec![("job".into(), "Job".into(), job.erase())],
+    };
+    let tb = tables();
+    for (body, needle) in [
+        (
+            "Split {\n      Text { text: \"a\" }\n      Text { text: \"b\" }\n    }",
+            "Split needs `ratio:`",
+        ),
+        (
+            "Split { ratio: job.ratio\n      Text { text: \"a\" }\n    }",
+            "Split takes exactly two panes — this one has 1",
+        ),
+        (
+            "Split { ratio: job.ratio\n      Text { text: \"a\" }\n      \
+             Text { text: \"b\" }\n      Text { text: \"c\" }\n    }",
+            "Split takes exactly two panes — this one has 3",
+        ),
+    ] {
+        let lv = view_of(&format!(
+            "view Main {{\n  let job = Job()\n  Column {{\n    {body}\n  }}\n}}\n"
+        ));
+        match build_view(&lv, &e, &tb, &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(err.contains(needle), "error should say `{needle}`: {err}"),
+        }
+    }
+}
+
+#[test]
 fn image_dumps_source_and_dimensions() {
     let w = World::new();
     let e = FieldEnv { fields: vec![] };

@@ -606,8 +606,9 @@ impl<'a> Checker<'a> {
         }
         // The value controls' `onChange:` binds an implicit `value`
         // argument (the new value) the same way — a Float on the
-        // Slider and the NumberField, an Int on the IntField, which
-        // is the whole point of having two number fields.
+        // Slider, the NumberField and the Split (whose value is the
+        // divider's new ratio), an Int on the IntField, which is the
+        // whole point of having two number fields.
         if key == "onChange" {
             let mut child = env.child();
             let prim = if element == "IntField" {

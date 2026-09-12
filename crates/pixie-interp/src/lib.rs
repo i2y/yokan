@@ -2918,6 +2918,27 @@ fn build_element_inner(
                 on_close: on_close.map(|a| make_listener(a, env)),
             })
         }
+        // Two panes and a draggable divider — the mirror of codegen's
+        // `Split` arm. `ratio:` is required; codegen restricts it to a
+        // property READ and here any Float expression evaluates (the
+        // Slider's asymmetry, compile-time strictness with a lenient
+        // mirror). `vertical:` defaults to false, `onChange` binds the
+        // implicit `value`, and the two-pane count is checked with
+        // codegen's words.
+        "Split" => {
+            let r = prop_of(el, "ratio").ok_or("Split needs `ratio:`")?;
+            let vertical = match prop_of(el, "vertical") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_bool()?,
+                None => false,
+            };
+            check_split_panes(el)?;
+            Ok(Element::Split {
+                ratio: eval_expr(r, env, scope, w)?.as_float()?,
+                vertical,
+                on_change: prop_of(el, "onChange").map(|a| make_float_listener(a, env)),
+                children: build_children(el, env, scope, w)?,
+            })
+        }
         // The drawing surface — the mirror of codegen's `Canvas` arm,
         // same required props, same defaults, same errors.
         "Canvas" => {
@@ -3180,6 +3201,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "borderWidth",
             "borderColor",
         ],
+        "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
@@ -3257,6 +3279,30 @@ pub fn native_size_keys(element: &str) -> &'static [&'static str] {
 /// `when some(..)` — the present half of a `T?` match (§8.69).
 fn is_some_pattern(p: &ast::Pattern) -> bool {
     matches!(p, ast::Pattern::Ctor { name, .. } if name.name == "some")
+}
+
+/// The mirror of `pixie_codegen::check_split_panes`, word for word: a
+/// Split's panes are exactly two children, each written out, and a
+/// repeater or a conditional among them is refused rather than
+/// counted — a Split whose pane count depends on data is not a split.
+fn check_split_panes(el: &ast::Element) -> Result<(), String> {
+    let items = items_of_members(&el.members);
+    for it in &items {
+        if !matches!(it, ViewItem::Child(_)) {
+            return Err("a Split's panes are two elements written out — a `for`, an `if` \
+                        or a `case` between them cannot be counted; move it inside a \
+                        pane's own Column"
+                .to_string());
+        }
+    }
+    if items.len() != 2 {
+        return Err(format!(
+            "Split takes exactly two panes — this one has {}; put what belongs to \
+             one side in a single Column or Row",
+            items.len()
+        ));
+    }
+    Ok(())
 }
 
 fn build_children(

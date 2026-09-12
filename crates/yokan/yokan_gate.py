@@ -11154,6 +11154,41 @@ class Translator:
                     props.append(f"onSelect: {h}")
                 return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
 
+        # Two panes and a divider the user can drag. `ratio=` follows
+        # the slider's `value=` rule with a different gesture — a Float
+        # read, because a literal could never reflect a divider someone
+        # has moved — and the two panes are the ARGUMENTS, so what the
+        # widget takes is visible where it is written, and countable in
+        # both runs the way a `with` block's body would not be.
+        if self._is_ui(node.func, "split"):
+            if "ratio" not in kw:
+                raise Untranslatable(
+                    node,
+                    "split() needs ratio= — the share of the split the FIRST pane takes",
+                )
+            if len(node.args) != 2:
+                raise Untranslatable(
+                    node,
+                    f"split() takes exactly two panes — this one has {len(node.args)}; "
+                    "put what belongs to one side in a single column() or row()",
+                )
+            props = [f"ratio: {typed_read(kw['ratio'], 'Float', 'ratio=')}"]
+            vertical = self._boolean(kw, "vertical")
+            if vertical is not None:
+                props.append(f"vertical: {vertical}")
+            lines = [f"{pad}Split {{"] + [f"{pad}  {p}" for p in props]
+            if "on_change" in kw:
+                h = self.handler(kw["on_change"], takes_text=True, implicit=("value", "Float"))
+                if isinstance(h, tuple):
+                    lines += [f"{pad}  onChange: {{"] + [f"{pad}    {ln}" for ln in h[1]]
+                    lines += [f"{pad}  }}"]
+                else:
+                    lines.append(f"{pad}  onChange: {h}")
+            for child in node.args:
+                lines += self.element(child, indent + 1)
+            lines.append(f"{pad}}}")
+            return lines
+
         for fname, tag in (("bar_chart", "BarChart"), ("line_chart", "LineChart")):
             if self._is_ui(node.func, fname):
                 props = []
@@ -11321,7 +11356,7 @@ class Translator:
         if isinstance(node.func, ast.Name) and node.func.id in self.defs:
             return self._component_use(node, indent)
 
-        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, spacer, divider, link, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, toast, image, svg, bar_chart, line_chart, progress, spinner")
+        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, spacer, divider, link, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, toast, image, svg, bar_chart, line_chart, progress, spinner, split")
 
     def _rows_source(self, ca, what):
         """The list a row-built element (list_view, table) counts with

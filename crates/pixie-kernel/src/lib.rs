@@ -1635,6 +1635,37 @@ pub enum Element {
         duration_ms: f64,
         on_close: Option<Listener>,
     },
+    /// Two panes with a divider the user can drag.
+    ///
+    /// `ratio` is the share of the split's main axis the FIRST pane
+    /// takes, and it is BOUND data the app owns — the Slider's
+    /// contract with a different gesture. Dragging the divider runs
+    /// `on_change` with the new ratio and nothing else happens; the
+    /// divider moves when the app writes the number back. That is why
+    /// `slide[@n]:` reaches a Split: the same bound Float behind the
+    /// same handler, so the verb that drives a Slider drives this too
+    /// and the two count together in one numbering.
+    ///
+    /// A ratio is a FRACTION, so its range is `[0, 1]` by
+    /// construction and the widget carries no `min:` / `max:` props:
+    /// the engine clamps what it paints, and an app that wants a
+    /// floor under a pane clamps in its own handler — a range prop
+    /// here would give one number two owners.
+    ///
+    /// `vertical` names how the PANES sit, the way `Column` names how
+    /// its children sit: `false` (the default) puts them side by side
+    /// with an upright divider between them, `true` stacks them with
+    /// the divider across.
+    ///
+    /// Exactly two children. Both lowerers refuse anything else by
+    /// name — the kernel type cannot say "two", so the engine paints
+    /// an empty pane for a tree that somehow arrives with fewer.
+    Split {
+        ratio: f64,
+        vertical: bool,
+        on_change: Option<FloatListener>,
+        children: Vec<Element>,
+    },
     /// A grid of virtual pixels the app paints command by command.
     ///
     /// `width`/`height` are counted in VIRTUAL pixels and `scale` is
@@ -2739,6 +2770,24 @@ impl Element {
                     format!("Toast({message}, open={open}, durationMs={duration_ms})")
                 }
             }
+            // The bound ratio is the whole widget, so it always
+            // prints — as the Slider's `value` does, and for the same
+            // reason: it is what a person sees the divider standing
+            // on. `vertical` joins it only when set (the per-prop
+            // rule); the panes dump like any container's children.
+            Element::Split {
+                ratio,
+                vertical,
+                children,
+                ..
+            } => {
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
+                let mut props = vec![format!("ratio={ratio}")];
+                if *vertical {
+                    props.push("vertical=true".to_string());
+                }
+                format!("Split({})[{}]", props.join(", "), inner.join(", "))
+            }
             // The one element that dumps over several lines. Every
             // other element joins its children with ", " because a
             // tree is short; a frame is hundreds of commands, and the
@@ -3039,6 +3088,7 @@ impl Element {
             | Element::Tooltip { children: cs, .. }
             | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
+            | Element::Split { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
@@ -3194,6 +3244,7 @@ impl Element {
                 | Element::Tooltip { children: cs, .. }
                 | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
+                | Element::Split { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
@@ -3285,6 +3336,7 @@ impl Element {
             | Element::Tooltip { children: cs, .. }
             | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
+            | Element::Split { children: cs, .. }
             | Element::Stack(cs)
             | Element::ScrollView { children: cs, .. }
             | Element::HScrollView(cs)
@@ -3313,7 +3365,10 @@ impl Element {
 
     /// The n-th Slider in document order (headless-script targeting):
     /// its (min, max, step, on_change) tuple — `find_input`'s shape,
-    /// one widget over.
+    /// one widget over. A Split counts in the SAME numbering: its
+    /// `ratio` is the same bound Float behind the same handler, so
+    /// `slide:` drives it with no verb of its own, and it reports the
+    /// fraction's `(0, 1, continuous)`.
     #[allow(clippy::type_complexity)]
     /// The n-th chart in tree order — BarChart and LineChart counted
     /// together, the way `hover[@n]:` names one — as the number of
@@ -3340,6 +3395,7 @@ impl Element {
                 | Element::Tooltip { children: cs, .. }
                 | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
+                | Element::Split { children: cs, .. }
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
@@ -3391,6 +3447,30 @@ impl Element {
                     }
                     *seen += 1;
                     None
+                }
+                // A Split is the only target here that is also a
+                // container: it counts itself in this numbering —
+                // the same bound Float behind the same handler, so
+                // `slide:` means the same thing — and THEN walks its
+                // panes, so a Slider inside a pane keeps its place in
+                // document order. The range is the fraction's own
+                // `[0, 1]` and the step is continuous; there are no
+                // props to read them from.
+                Element::Split {
+                    children: cs,
+                    on_change,
+                    ..
+                } => {
+                    if *seen == n {
+                        let on_change = if disabled {
+                            Some(inert_float())
+                        } else {
+                            on_change.clone()
+                        };
+                        return Some((0.0, 1.0, 0.0, on_change));
+                    }
+                    *seen += 1;
+                    cs.iter().find_map(|c| walk(c, w, seen, n, disabled))
                 }
                 Element::Disabled { children: cs } => {
                     cs.iter().find_map(|c| walk(c, w, seen, n, true))
