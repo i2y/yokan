@@ -906,6 +906,163 @@ onClick: {
 view の構築は状態を読むだけであり、だからこそ再構築が安全になります。
 view の本体はプロパティを読み、何かを変えるのはハンドラの側です。
 
+### 入力のエレメントは値を預かり、新しい値を返す
+
+入力のエレメントは、どれも同じ結び方をします。
+表示する値は状態から来て、ハンドラは**新しい値を1つ**受け取ります。
+勝手には動きません。書き戻すのはアプリです。
+だからダンプが画面のすべてになります。
+ウィジェットの中に値の写しがもう1つある、ということが起きません。
+
+```ruby
+store Settings {
+  state dark : Bool = false
+  state volume : Float = 5.0
+  state fruits : List<String> = ["apple", "banana", "cherry"]
+  state fruit : Int = 0
+  state qty : Int = 1
+}
+
+view Main {
+  Column {
+    Checkbox { label: "Dark mode"; checked: Settings.dark; onToggle: { Settings.dark = checked } }
+    Switch { label: "Wi-Fi"; checked: Settings.dark; onToggle: { Settings.dark = checked } }
+    Slider { value: Settings.volume; min: 0.0; max: 10.0; step: 1.0; onChange: { Settings.volume = value } }
+    IntField { value: Settings.qty; min: 1; max: 99; placeholder: "qty"; onChange: { Settings.qty = value } }
+
+    # 選択のエレメント。選択肢はデータ、現在位置は Int、ハンドラは
+    # 選ばれた番号を取ります。1つの約束の4つの綴りで、MenuButton は
+    # 現在値を持たない5つ目です。
+    Select { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    RadioGroup { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    TabBar { labels: Settings.fruits; active: Settings.fruit; onSelect: { Settings.fruit = index } }
+    Segmented { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    MenuButton { text: "Actions"; options: Settings.fruits; onSelect: { Settings.fruit = index } }
+  }
+}
+```
+
+ハンドラが束縛する名前は、運ばれてくる値そのものです。
+トグルなら `checked`、スライダーや数値フィールドなら `value`、選択のエレメントなら `index`、テキストフィールドなら `text` です。
+
+数値フィールドは、打つたびには報告しません。
+enter、矢印キー、フィールドを離れる操作のどれかで確定します。
+確定したテキストを読み、`min:` / `max:` に収め、`step:` に吸着させ、束縛された値と違ったときだけ `onChange:` を走らせます。
+
+`Split` は、同じ約束を別の操作で結んだものです。
+`ratio:` は束縛された Float、二つの区画はその二つの子で、仕切りをドラッグすると最初の区画が取るべき割合を持って `onChange:` を呼びます。
+区画がつぶれないための下限は、プロパティではなくハンドラの中で押さえます。
+
+```ruby
+Split {
+  ratio: Panes.ratio
+  onChange: { Panes.ratio = value }
+  Column { Text { text: "files" } }
+  Column { Text { text: "editor" } }
+}
+```
+
+### リストと表
+
+`ListView` は、行をリピータから作ります。
+`virtualized: true` なら、表示する範囲の分しか作りません。
+10 万行でもエレメントは十数個で済みます。
+付けなければ全行を作り、箱が入り切らない分を切ります。
+
+`selected:` は行に印を付け、`onSelect:` は行のクリックを報告します。
+これも束縛された値の約束です。
+`scrollTo:` は、見えるところに出したい行を頼みます。
+番号が変わったときに従うので、誰かがスクロールしたリストはそのままにします。
+
+`Table` は、それに見出しと列トラックを足したものです。
+`columns:` が列の名前、`widths:` がその比率、`onSort:` は見出しのクリックが指す列の番号を受け取り、並べ替えそのものはストアが自分のリストに対して行います。
+
+```ruby
+Table {
+  columns: ["name", "team", "score"]
+  widths: [2.0, 1.0, 1.0]
+  height: 180.0
+  selected: Roster.sel
+  sort: Roster.sortCol
+  descending: Roster.desc
+  onSelect: Roster.pick(index)
+  onSort: Roster.sortBy(index)
+  for it, i in Roster.names {
+    Row {
+      Text { text: it }
+      Text { text: "#{Roster.teams[i]}" }
+      Text { text: "#{Roster.scores[i]}" }
+    }
+  }
+}
+```
+
+`DataTable` は軽いほうです。
+トラックも仮想化もなく、最初の `Row` が見出し、以降が中身です。
+
+### アプリの上に重ねる Modal と Toast と ContextMenu
+
+この3つはすべての上に描かれ、**置けば開いています**。
+`if` が画面に出し、取り除けば閉じます。
+渡すための `open:` はありません。
+同じことを言う道が2つあると、食い違えるからです。
+
+```ruby
+if App.asking {
+  Modal {
+    Text { text: "discard the draft?" }
+    Button { text: "yes"; onClick: App.discard() }
+  }
+}
+if App.saved {
+  # 閉じるときは onClose を呼びます。App.saved を書き換えることは
+  # しません。あれはアプリのものです。数えるのはフレームワーク自身の
+  # 時計なので、スクリプトの `advance:1500` は待っている人と同じものを
+  # 見ます。
+  Toast { message: "Saved"; durationMs: 1500.0; onClose: { App.saved = false } }
+}
+ContextMenu {
+  options: App.actions
+  onSelect: App.act(index)
+  Column { Text { text: "right-click me" } }
+}
+```
+
+Modal は後ろを暗くしてクリックを受け取ります。
+Toast は覆いなしで下端に出るので、その下のアプリは動き続けます。
+ContextMenu は箱を足しません。
+メニューが属する一つのエレメントを包むだけです。
+項目はパネルが開いているかどうかに関わらず木に出ているので、ヘッドレスの `select:` は右クリックなしで選べます。
+
+### Canvas — アプリが描くピクセルの格子
+
+`Canvas` は `width` × `height` の仮想的なピクセルを `scale` 倍で描きます。
+色はすべて `palette` の番号です。
+中の命令はエレメントではありません。
+クリックもテーマもアニメーションも効かず、読み上げにはキャンバス全体が1枚の画像として見えます。
+命令はデータなので、ダンプはフレームを1命令1行で出し、tier gate がそれを突き合わせます。
+
+```ruby
+Canvas {
+  width: 48
+  height: 24
+  scale: 6
+  background: 0
+  palette: ["#11111b", "#89b4fa", "#f38ba8", "#eeeeee"]
+  Rect { x: 2; y: 2; w: 10; h: 6; color: 1 }
+  Circle { x: 30; y: 5; r: 4; color: 3 }
+  Line { x1: 2; y1: 11; x2: 45; y2: 11; color: 2 }
+  PixelText { x: 2; y: 15; text: "hi"; color: 3 }
+  for b in Sky.blips {
+    Pixel { x: b.x; y: b.y; color: b.c }
+  }
+}
+```
+
+残りは `RectOutline`、`CircleOutline`、`Triangle`、`TriangleOutline`、`Sprite` です。
+`Sprite` は別の画像の矩形を写すもので、`colkey:` は写さない色を指します。
+座標はすべて整数のピクセルです。
+
 ### カスタムコンポーネント — 再利用できるステートフルビュー
 
 `Main` 以外の `view` はすべて**コンポーネント**です。

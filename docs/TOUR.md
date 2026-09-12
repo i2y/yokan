@@ -934,6 +934,165 @@ is **call a method**. Building a view only reads state — that is what
 makes a rebuild safe — so a view body reads properties, and a handler
 is where anything changes.
 
+### Controls carry a value and hand back the new one
+
+Every input element is bound the same way. The value it shows comes
+from state, and its handler receives **the one new value** — nothing
+moves on its own, because the app writes it back. That is what makes
+a dump the whole truth about a screen: there is no second copy of the
+value inside the widget.
+
+```ruby
+store Settings {
+  state dark : Bool = false
+  state volume : Float = 5.0
+  state fruits : List<String> = ["apple", "banana", "cherry"]
+  state fruit : Int = 0
+  state qty : Int = 1
+}
+
+view Main {
+  Column {
+    Checkbox { label: "Dark mode"; checked: Settings.dark; onToggle: { Settings.dark = checked } }
+    Switch { label: "Wi-Fi"; checked: Settings.dark; onToggle: { Settings.dark = checked } }
+    Slider { value: Settings.volume; min: 0.0; max: 10.0; step: 1.0; onChange: { Settings.volume = value } }
+    IntField { value: Settings.qty; min: 1; max: 99; placeholder: "qty"; onChange: { Settings.qty = value } }
+
+    # The choosers: the options are DATA, the current one an Int, and
+    # the handler takes the chosen index. Four spellings of one
+    # contract, and a MenuButton is the fifth with no current value.
+    Select { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    RadioGroup { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    TabBar { labels: Settings.fruits; active: Settings.fruit; onSelect: { Settings.fruit = index } }
+    Segmented { options: Settings.fruits; selected: Settings.fruit; onSelect: { Settings.fruit = index } }
+    MenuButton { text: "Actions"; options: Settings.fruits; onSelect: { Settings.fruit = index } }
+  }
+}
+```
+
+The name a handler binds is the payload it carries: `checked` for a
+toggle, `value` for a slider or a numeric field, `index` for a
+chooser, `text` for a field. A numeric field commits on enter, an
+arrow key or leaving the field, never per keystroke: the text is
+parsed, clamped into `min:` / `max:`, snapped to `step:`, and
+`onChange:` runs only when the result differs from what was bound.
+
+A `Split` is the same contract with a different gesture. Its `ratio:`
+is a bound Float, the two panes are its two children, and dragging the
+divider calls `onChange:` with the share the first pane should take —
+so a floor under a pane is a clamp in the handler, not a property.
+
+```ruby
+Split {
+  ratio: Panes.ratio
+  onChange: { Panes.ratio = value }
+  Column { Text { text: "files" } }
+  Column { Text { text: "editor" } }
+}
+```
+
+### Lists and tables
+
+A `ListView` builds its rows from a repeater. `virtualized: true`
+builds only the range the viewport asks for, so a hundred thousand
+rows cost a dozen elements; without it every row is built and the box
+clips what does not fit. `selected:` marks a row and `onSelect:`
+reports a click on one, the bound-value contract again, and
+`scrollTo:` asks for a row to be brought into view — obeyed when the
+number changes, so a list someone scrolled is left where they put it.
+
+A `Table` is that with a header and column tracks: `columns:` names
+them, `widths:` are their shares, `onSort:` receives the column a
+header click names, and the store re-sorts its own lists.
+
+```ruby
+Table {
+  columns: ["name", "team", "score"]
+  widths: [2.0, 1.0, 1.0]
+  height: 180.0
+  selected: Roster.sel
+  sort: Roster.sortCol
+  descending: Roster.desc
+  onSelect: Roster.pick(index)
+  onSort: Roster.sortBy(index)
+  for it, i in Roster.names {
+    Row {
+      Text { text: it }
+      Text { text: "#{Roster.teams[i]}" }
+      Text { text: "#{Roster.scores[i]}" }
+    }
+  }
+}
+```
+
+`DataTable` is the lighter one: no tracks and no virtualization, the
+first `Row` its header, later `Row`s its data.
+
+### Over the app: Modal, Toast, ContextMenu
+
+These three are drawn over everything, and they are **open by
+existing**: an `if` puts one on the screen and taking it away closes
+it. There is no `open:` to pass, because two ways to say the same
+thing can disagree.
+
+```ruby
+if App.asking {
+  Modal {
+    Text { text: "discard the draft?" }
+    Button { text: "yes"; onClick: App.discard() }
+  }
+}
+if App.saved {
+  # Closes itself by CALLING onClose — never by writing App.saved,
+  # which belongs to the app. The countdown is on the framework's
+  # clock, so a script's `advance:1500` sees what a person waiting
+  # would.
+  Toast { message: "Saved"; durationMs: 1500.0; onClose: { App.saved = false } }
+}
+ContextMenu {
+  options: App.actions
+  onSelect: App.act(index)
+  Column { Text { text: "right-click me" } }
+}
+```
+
+A Modal dims what is behind it and takes the clicks; a Toast sits at
+the bottom with no scrim, so the app underneath keeps working; a
+ContextMenu adds no box at all — it wraps the one element the menu
+belongs to, and its items are in the tree whether the panel is open
+or not, which is why a headless `select:` picks from it without a
+right-click.
+
+### Canvas — a grid of pixels an app paints
+
+A `Canvas` is `width` x `height` virtual pixels drawn at `scale`, and
+every color is an INDEX into `palette`. Its commands are not elements:
+nothing inside can be clicked, themed or animated, and the whole
+canvas is one image to a screen reader. What they are is DATA, so the
+dump prints the frame one command per line and the tier gate compares
+it.
+
+```ruby
+Canvas {
+  width: 48
+  height: 24
+  scale: 6
+  background: 0
+  palette: ["#11111b", "#89b4fa", "#f38ba8", "#eeeeee"]
+  Rect { x: 2; y: 2; w: 10; h: 6; color: 1 }
+  Circle { x: 30; y: 5; r: 4; color: 3 }
+  Line { x1: 2; y1: 11; x2: 45; y2: 11; color: 2 }
+  PixelText { x: 2; y: 15; text: "hi"; color: 3 }
+  for b in Sky.blips {
+    Pixel { x: b.x; y: b.y; color: b.c }
+  }
+}
+```
+
+`RectOutline`, `CircleOutline`, `Triangle`, `TriangleOutline` and
+`Sprite` (a rectangle of another image, with `colkey:` the color that
+is not copied) complete the set. Coordinates are whole pixels.
+
 ### Custom components — reusable stateful views
 
 Every `view` other than `Main` is a **component**: parameterized,
