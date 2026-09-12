@@ -264,7 +264,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **方言に形のないものを返す str のメソッド**：`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
   使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
-- **一部の制御構文**：入れ子の def（クロージャにはコンパイル後の形がありません。ヘルパはモジュールレベルに書きます）と、ビューの中の条件式（ビューでは要素を `if` で分けます）。
+- **ビューの中の条件式**（`a if c else b`）。ビューでは要素を `if` で分けます。ハンドラの中なら int、float、str、bool に対して書けます。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
 - **`set`**。

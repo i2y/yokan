@@ -18,32 +18,33 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 3. [Writing views](#writing-views)
 4. [Form controls](#form-controls)
 5. [Handlers and control flow](#handlers-and-control-flow)
-6. [Arithmetic](#arithmetic)
-7. [Strings](#strings)
-8. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
-9. [The canvas](#the-canvas)
-10. [Dicts](#dicts)
-11. [Tuples](#tuples)
-12. [Value classes and interfaces](#value-classes-and-interfaces)
-13. [Memory](#memory)
-14. [Sum types and match](#sum-types-and-match)
-15. [Optional and Enum](#optional-and-enum)
-16. [Components](#components)
-17. [Shared properties](#shared-properties)
-18. [Styles and themes](#styles-and-themes)
-19. [Animation](#animation)
-20. [The window](#the-window)
-21. [Error handling](#error-handling)
-22. [The standard library](#the-standard-library)
-23. [Calling a Rust crate](#calling-a-rust-crate)
-24. [CPython escapes](#cpython-escapes)
-25. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
-26. [Working with type checkers](#working-with-type-checkers)
-27. [Testing](#testing)
-28. [Headless runs and the gate](#headless-runs-and-the-gate)
-29. [Shipping](#shipping)
-30. [A real app](#a-real-app)
-31. [What does not work yet](#what-does-not-work-yet)
+6. [Functions as values](#functions-as-values)
+7. [Arithmetic](#arithmetic)
+8. [Strings](#strings)
+9. [Lists, charts, virtualized lists](#lists-charts-virtualized-lists)
+10. [The canvas](#the-canvas)
+11. [Dicts](#dicts)
+12. [Tuples](#tuples)
+13. [Value classes and interfaces](#value-classes-and-interfaces)
+14. [Memory](#memory)
+15. [Sum types and match](#sum-types-and-match)
+16. [Optional and Enum](#optional-and-enum)
+17. [Components](#components)
+18. [Shared properties](#shared-properties)
+19. [Styles and themes](#styles-and-themes)
+20. [Animation](#animation)
+21. [The window](#the-window)
+22. [Error handling](#error-handling)
+23. [The standard library](#the-standard-library)
+24. [Calling a Rust crate](#calling-a-rust-crate)
+25. [CPython escapes](#cpython-escapes)
+26. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
+27. [Working with type checkers](#working-with-type-checkers)
+28. [Testing](#testing)
+29. [Headless runs and the gate](#headless-runs-and-the-gate)
+30. [Shipping](#shipping)
+31. [A real app](#a-real-app)
+32. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -392,6 +393,61 @@ if (v := sel()) is not None:
 else:
     text("(none)")
 ```
+
+## Functions as values
+
+A function is a value here: a lambda kept in a local, a nested def, a
+callback a store is armed with, an argument another function takes.
+Its type is written with `Callable`, and that annotation is what the
+compiled closure is built from — the types are never read off the
+body, so every closure goes somewhere that says what it takes.
+
+```python
+from typing import Callable
+
+
+@store
+class Pipeline:
+    n: int = 1
+    step: Callable[[int], int] = lambda x: x + 1   # a callback field
+
+    def advance(self) -> None:
+        f = self.step
+        self.n = f(self.n)
+
+    def harder(self) -> None:
+        self.step = lambda x: x * x               # armed with another
+
+    def apply(self, g: Callable[[int], int]) -> None:
+        self.n = g(self.n)                        # a parameter takes one
+
+
+def offset() -> None:
+    base = Pipeline.n
+
+    def add(x: int) -> int:                       # a nested def
+        return x + base
+
+    Pipeline.n = add(10)
+
+
+def doubled() -> None:
+    twice: Callable[[int], int] = lambda x: x * 2  # a local
+    total.set(sum(list(map(twice, xs()))))         # `map` calls one
+```
+
+**A closure captures by value, where it is made.** `base` above is the
+number that was there at that moment. Python closes over the variable
+instead, so the two would part company in exactly two places, and both
+are refused by name: writing to a local a closure has already captured,
+and letting a closure that took a loop variable outlive its iteration.
+Inside the iteration it is fine, because both runs read the same value.
+A State cell or a store field read inside a closure is read when the
+closure runs, which is Python's behaviour too.
+
+A view may not call a closure: building the screen only reads, and a
+closure may write. Call it from a handler and keep the answer in a
+State.
 
 ## Arithmetic
 
@@ -1458,7 +1514,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
 - **str methods that answer something the dialect has no shape for**: `.encode()` (bytes), `.format()` and `.translate()` (a template or a table built at run time), `.casefold()` (its mapping expands `ß` to `ss`, which is a different Unicode table from the one the case methods use). What is in: `.partition()`, `.rpartition()`, `.upper()`, `.lower()`, `.title()`, `.capitalize()`, `.swapcase()`, `.strip()` / `.lstrip()` / `.rstrip()` (with or without a set of characters), `.split()`, `.splitlines()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.rfind()`, `.index()`, `.rindex()`, `.count()`, `.zfill()`, `.ljust()`, `.rjust()`, `.center()`, `.expandtabs()`, `.removeprefix()`, `.removesuffix()`, the `.is…()` family, `len(s)`, `s[i]`, `s[a:b]` and `in`.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
-- **Some control flow**: nested defs (a closure has no compiled shape — define helpers at module level) and a conditional expression in a view (branch the elements with `if` there).
+- **A conditional expression in a view** (`a if c else b`): branch the elements with `if` there. In a handler it works over int, float, str and bool.
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
 - **`set`.** A Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered; a `list` covers it. A tuple is in — see [Tuples](#tuples) — but only where its shape is written out: a tuple that a Rust crate would have to answer is not carried yet, which is why `re.findall` still refuses a pattern with two groups or more.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).

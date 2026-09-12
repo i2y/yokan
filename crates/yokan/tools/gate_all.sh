@@ -72,6 +72,10 @@ gate roster  "$PY" yokan_gate.py gate demo/roster.py --script "select:member 7,d
 # The shared properties on every element; the middle steps are inert while locked.
 gate shared  "$PY" yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 gate pyops   "$PY" yokan_gate.py gate demo/pyops.py --script "click:crunch,click:walk,click:pairs,click:order,dump"
+# Functions as values: a lambda in a local, a nested def that captures,
+# a callback field armed and swapped, a closure handed to a method, and
+# `map` over one. Every number on the screen is a closure's answer.
+gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,dump,click:harder,click:advance,dump,click:through,dump,click:offset,dump,click:double,dump,click:counted,dump,click:reset,dump"
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what
@@ -105,7 +109,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader) continue;;
+    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;

@@ -1,7 +1,7 @@
 # 制御フローとデータ
 
 [ツアー](tour.md)の続きです。
-ハンドラに書けること、CPython と同じ意味を持つ算術、リスト、チャート、辞書、タプルを見ます。
+ハンドラに書けること、値としての関数、CPython と同じ意味を持つ算術、リスト、チャート、辞書、タプルを見ます。
 
 ## ハンドラと制御フロー
 
@@ -78,6 +78,61 @@ if (v := sel()) is not None:
 else:
     text("(none)")
 ```
+
+## 関数を値として扱う
+
+関数はここでは値です。
+ローカル変数に入れたラムダ、入れ子の def、store に持たせるコールバック、別の関数が受け取る引数として使えます。
+型は `Callable` で書き、コンパイルされるクロージャはその注釈から作られます。
+本体から型を読み取ることはないので、クロージャは必ず「何を受け取るか」を書いてある場所に置きます。
+
+```python
+from typing import Callable
+
+
+@store
+class Pipeline:
+    n: int = 1
+    step: Callable[[int], int] = lambda x: x + 1   # コールバックのフィールド
+
+    def advance(self) -> None:
+        f = self.step
+        self.n = f(self.n)
+
+    def harder(self) -> None:
+        self.step = lambda x: x * x               # 別のものに差し替える
+
+    def apply(self, g: Callable[[int], int]) -> None:
+        self.n = g(self.n)                        # 引数として受け取る
+
+
+def offset() -> None:
+    base = Pipeline.n
+
+    def add(x: int) -> int:                       # 入れ子の def
+        return x + base
+
+    Pipeline.n = add(10)
+
+
+def doubled() -> None:
+    twice: Callable[[int], int] = lambda x: x * 2  # ローカル変数
+    total.set(sum(list(map(twice, xs()))))         # map が呼び出す
+```
+
+**クロージャは、作られた場所で値を捕まえます。**
+上の `base` は、その時点でそこにあった数です。
+Python は変数のほうを捕まえるので、二つの場合に食い違いが起こります。
+どちらも名前を挙げて断ります。
+クロージャがすでに捕まえたローカル変数への書き込みと、ループ変数を捕まえたクロージャがその回を超えて生き残ることです。
+同じ回の中で呼ぶだけなら、どちらの実行も同じ値を読むので通ります。
+クロージャの中で State やフィールドを読むと、読むのはクロージャが動く時点です。
+これは Python でも同じです。
+
+ビューからクロージャは呼べません。
+画面を組み立てるのは読むだけの作業で、クロージャは書き換えられるからです。
+ハンドラから呼んで、答えを State に置いてください。
+
 
 ## 算術
 

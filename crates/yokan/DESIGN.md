@@ -1275,6 +1275,8 @@ without one names it.
 
 ## A key function is a loop, not a callback
 
+*(Superseded in part on 2026-09-12 by "A function is a value": closures exist now, and this lowering stays for an inline `key=`.)*
+
 `sorted(xs, key=f)` is decorate-sort-undecorate: the keys are
 computed first, then the elements move to where their keys went.
 Written that way the key function never becomes a value — the
@@ -2629,3 +2631,54 @@ generated main, and it can only be set once the dump has a channel of
 its own to go to. That channel is the next phase's `PIXIE_DUMP`, so
 this waits for it rather than trading the gate for a tidy launch.
 
+
+## A function is a value (2026-09-12)
+
+The first wall a Python programmer meets was "a nested def has no
+compiled shape". It has one now, and the shape was already half built:
+pixie's parser took `{ |x| … }` as an expression and `fn(A) -> R` as a
+type, and the checker inferred and checked both. What stopped at the
+emitter was the lowering, which supersedes
+*A key function is a loop, not a callback* — the reason given there
+(adding closure lowering for one keyword was too large a change) no
+longer holds, though the decorate-sort-undecorate lowering it chose
+stays for an inline `key=`, because a built key list beats a call per
+comparison.
+
+**One closure type, not two.** A closure is carried the way the engine
+has always carried a listener: an `Rc` whose first argument is the
+World. So it can do anything a method body can, including write —
+which is why a view may not call one, and why `Callable` needs no
+second spelling for a pure one. The checker says so by name where a
+closure field is called like a method, and points at the local a call
+goes through.
+
+**The type is written down, never inferred from the body.** A
+closure's parameter types come from the slot it goes into: an
+annotated local, a declared parameter, a field, an argument whose
+callee declared one. `Callable[[int], int]` is the dialect's spelling,
+and a lambda with nowhere to get its types is refused asking for the
+annotation — the same bargain `out: list[str] = []` already strikes.
+
+**Captures are values, taken where the closure is made**, which is the
+capture rule handlers have always followed (Copy handles and values).
+Python closes over the variable instead, so the dialect refuses
+exactly the two shapes where the two would answer differently: writing
+to a local a closure has already captured, and letting a closure that
+took a loop variable outlive its iteration. Used inside the iteration
+it is allowed, because both runs then read the same value. A State
+cell or a store field read inside a closure is read when the closure
+runs, which is Python's behaviour too — those are not captures.
+
+**Where a closure may be made.** In a method or a handler body, which
+is where Yokan puts every Python function; a closure written inside a
+pixie HANDLER block is refused by name, because a handler is the
+view's frame rather than a scope that owns values. A closure in a
+store field is allowed, and the field skips the dirty check a setter
+usually does: a closure has no equality to compare.
+
+`map(f, xs)` over a function value is the loop it stands for.
+`filter` waits on something else: a predicate answers a comparison,
+and a comparison is a condition in the dialect rather than a value —
+the refusal says so and points at the comprehension, which puts the
+comparison where one is allowed.

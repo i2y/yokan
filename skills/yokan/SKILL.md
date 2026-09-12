@@ -410,6 +410,30 @@ Three forms: a lambda (a tuple for several operations, `lambda:
 method (`on_click=Cart.clear`). A def body compiles with real
 control flow:
 
+A function is also a VALUE, typed with `Callable`: a lambda in an
+annotated local, a nested def, a callback field on a store, a
+parameter another function declares, the function `map` calls. The
+annotation is what the compiled closure is built from — types are
+never read off the body, so a lambda always goes somewhere that
+declares one.
+
+```python
+step: Callable[[int], int] = lambda x: x + 1   # a store field
+def apply(self, g: Callable[[int], int]) -> None: self.n = g(self.n)
+
+def offset() -> None:
+    base = Pipeline.n
+    def add(x: int) -> int:      # a nested def, capturing by value
+        return x + base
+    Pipeline.n = add(10)
+```
+
+A closure captures VALUES where it is made, so two shapes are refused
+by name: writing to a local a closure already captured, and letting a
+closure that took a loop variable outlive the iteration. A view may
+not call a closure (it may write); call it from a handler.
+
+
 ```python
 def double(v: int) -> int:             # a pure helper: annotated, ends in return
     return v * 2
@@ -830,8 +854,8 @@ reason.
   `s[a:b]` and `in` are in).
 - Format specs beyond fill, align, sign, width, `,`, precision and
   `d` / `f` / `e` / `%` / `s`.
-- Nested defs (no closures — helpers go at module level) and a
-  conditional expression inside a view.
+- A conditional expression inside a view (in a handler it works over
+  int, float, str and bool).
 - `print`: stdout carries the headless dump, so `log("…")` writes
   to stderr in both runs instead.
 - Component parameters that are value classes or enums, and a body

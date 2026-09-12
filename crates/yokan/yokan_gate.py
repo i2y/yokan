@@ -413,6 +413,11 @@ def py_ty(t) -> str:
     m = re.fullmatch(r"Map<(\w+), (.+)>", t)
     if m:
         return f"dict[{py_ty(m.group(1))}, {py_ty(m.group(2))}]"
+    m = re.fullmatch(r"fn\((.*)\) -> (.+)", t)
+    if m:
+        args = [py_ty(a.strip()) for a in _split_top(m.group(1))]
+        ret = "None" if m.group(2) == "Void" else py_ty(m.group(2))
+        return f"Callable[[{', '.join(args)}], {ret}]"
     return {
         "Int": "int", "Float": "float", "String": "str", "Bool": "bool",
         # The datetime values carry a name of their own inside the
@@ -688,6 +693,10 @@ class Translator:
         self.helpers = {}              # pure fn name -> (params, ret, body expr)
         self.helper_params = None      # param name -> pix type while inside one
         self.nonneg_loop_vars = set()  # range() loop vars provably >= 0
+        self.closure_locals = {}       # local holding a closure -> its pix type
+        self.loop_closures = {}        # closure local -> the loop variable it took
+        self.captured_locals = {}      # local a closure captured -> where it did
+        self.active_loop_vars = []     # loop variables of the loops we are inside
         self.text_hole = False         # inside an f-string hole (reads only)
         self.structs = {}              # frozen dataclass -> [(field, pixty, default_lit)]
         self.models = {}               # @ui.model -> {"fields", "methods", "impls"}
@@ -1018,6 +1027,8 @@ class Translator:
                 if any(t is None for t in tys):
                     return None
                 return self._tuple_ty(tys, ann)
+            if base == "Callable":
+                return self._callable_ty(ann)
             if base == "list":
                 inner = self._dt_alone(self._pix_ty(ann.slice), ann)
                 return f"List<{inner}>" if inner else None
@@ -1031,6 +1042,265 @@ class Translator:
                 if k in ("String", "Int") and v:
                     return f"Map<{k}, {v}>"
         return None
+
+    def _callable_ty(self, ann):
+        """`Callable[[A, B], R]` — the type of a function VALUE. Every
+        part is named, because the compiled side takes its parameter
+        types from the type and never from the body; `Callable[..., R]`
+        says nothing about the parameters, so it is refused by name."""
+        if not (isinstance(ann.slice, ast.Tuple) and len(ann.slice.elts) == 2):
+            raise Untranslatable(
+                ann, "`Callable` here is written `Callable[[int], str]` — the argument "
+                "types in a list, then what it answers"
+            )
+        args, ret = ann.slice.elts
+        if isinstance(args, ast.Constant) and args.value is Ellipsis:
+            raise Untranslatable(
+                ann, "`Callable[..., T]` does not say what the function takes, and the "
+                "compiled side needs that — write the argument types "
+                "(`Callable[[int], str]`)"
+            )
+        if not isinstance(args, ast.List):
+            raise Untranslatable(ann, "`Callable`'s argument types go in a list (`Callable[[int], str]`)")
+        parts = [self._dt_alone(self._pix_ty(a), ann) for a in args.elts]
+        out = self._dt_alone(self._pix_ty(ret), ann) if not (
+            isinstance(ret, ast.Constant) and ret.value is None
+        ) else "Void"
+        if out is None or any(t is None for t in parts):
+            return None
+        return f"fn({', '.join(parts)}) -> {out}"
+
+    # ---- function values -------------------------------------------
+
+    @staticmethod
+    def _fn_ty_parts(ty: str):
+        """`fn(A, B) -> R` split into its parts. Written by hand rather
+        than by a regular expression because a parameter can be
+        `Map<String, Int>`, whose comma is not a separator."""
+        if not ty.startswith("fn(") or " -> " not in ty:
+            return None
+        depth, cut = 0, None
+        for i, ch in enumerate(ty):
+            if ch in "(<":
+                depth += 1
+            elif ch in ")>":
+                depth -= 1
+                if depth == 0 and ch == ")":
+                    cut = i
+                    break
+        if cut is None:
+            return None
+        inner, ret = ty[3:cut], ty[cut + len(") -> "):]
+        return [p.strip() for p in _split_top(inner) if p.strip()], ret
+
+    def _closure_captures(self, node, own: set) -> list:
+        """The enclosing function's locals a closure body reads. State
+        cells and store fields are not captures: both runs read those
+        when the closure RUNS, which is what Python does too."""
+        seen = []
+        for n in ast.walk(node):
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                if n.id in own or n.id in seen:
+                    continue
+                if n.id in self.handler_locals:
+                    seen.append(n.id)
+        return seen
+
+    def _closure(self, node, want: str, param, where: str) -> str:
+        """A lambda or a nested def as a pixie closure value. `want` is
+        the `fn(A, B) -> R` the slot declares: the compiled side reads
+        a closure's parameter types from its type, never from its body,
+        so a closure with nowhere to get them is refused by name."""
+        parts = self._fn_ty_parts(want) if want else None
+        if parts is None:
+            raise Untranslatable(
+                node,
+                f"{where} needs to say what it takes and answers — annotate it "
+                "(`f: Callable[[int], int] = lambda x: ...`), because the compiled "
+                "side reads a closure's types from its type, not from its body",
+            )
+        tys, _ret = parts
+        args = node.args
+        if args.posonlyargs or args.kwonlyargs or args.vararg or args.kwarg or args.defaults:
+            raise Untranslatable(
+                node, "a closure takes plain positional parameters — no defaults, no `*args`"
+            )
+        names = [a.arg for a in args.args]
+        if len(names) != len(tys):
+            raise Untranslatable(
+                node,
+                f"this closure takes {len(names)} parameter(s) and its type says "
+                f"{len(tys)}",
+            )
+        own = set(names)
+        self._closure_took_loop_var = None
+        for cap in self._closure_captures(node, own):
+            # A loop variable is the one capture Python and the
+            # compiled side can disagree about, and only when the
+            # closure OUTLIVES the iteration: called where it was
+            # made, both read the same value. So it is remembered
+            # here and refused where it would escape.
+            if cap in self.active_loop_vars:
+                self._closure_took_loop_var = cap
+            self.captured_locals[cap] = node
+        prev_locals = set(self.handler_locals)
+        prev_typed = dict(self.typed_locals)
+        prev_clos = dict(self.closure_locals)
+        self.handler_locals |= own
+        for n, t in zip(names, tys):
+            self.typed_locals[n] = t
+        try:
+            if isinstance(node, ast.Lambda):
+                body = [self.expr(node.body, "store", param)]
+            else:
+                if not node.body or not isinstance(node.body[-1], ast.Return):
+                    lines = self._block(node.body, param)
+                    body = lines
+                else:
+                    lines = []
+                    for st in node.body[:-1]:
+                        lines += self._stmt(st, param)
+                    tail = node.body[-1].value
+                    body = lines + ([self.expr(tail, "store", param)] if tail is not None else [])
+        finally:
+            self.handler_locals = prev_locals
+            self.typed_locals = prev_typed
+            self.closure_locals = prev_clos
+        sig = ", ".join(f"{n}: {t}" for n, t in zip(names, tys))
+        if len(body) == 1:
+            return "{ |" + sig + "| " + body[0] + " }"
+        # A body of several statements is written over several lines,
+        # the way the same statements are written anywhere else.
+        inner = "\n".join("  " + l for l in body)
+        return "{ |" + sig + "|\n" + inner + "\n}"
+
+    def _note_loop_closure(self, name: str):
+        """Remember a closure that captured a loop variable, so the
+        places it could outlive the iteration can refuse it."""
+        if getattr(self, "_closure_took_loop_var", None):
+            self.loop_closures[name] = self._closure_took_loop_var
+            self._closure_took_loop_var = None
+        else:
+            self.loop_closures.pop(name, None)
+
+    def _no_loop_escape(self, node, where: str):
+        """A closure that captured a loop variable may be called where
+        it was made; keeping it past the iteration is where Python and
+        value-capture part company."""
+        if isinstance(node, ast.Name) and node.id in self.loop_closures:
+            var = self.loop_closures[node.id]
+            raise Untranslatable(
+                node,
+                f"`{node.id}` captured the loop variable `{var}`, so it cannot be kept "
+                f"{where}: Python's closure would read whatever `{var}` is when it is "
+                "called later, and the compiled one keeps the value it had. Call it "
+                "inside the loop, or pass the value as a parameter",
+            )
+
+    def _enter_fn_scope(self, params=None):
+        """A function body starts with no closures of its own, except
+        the ones it was handed: a `Callable` parameter is a function
+        value the body can call. The rest of the bookkeeping is
+        per-body too — which locals hold one, and which locals a
+        closure has already captured (writing to one of those is the
+        shape Python and value-capture disagree about). Answers what to
+        hand `_leave_fn_scope` where a body can be translated inside
+        another one."""
+        prev = (self.closure_locals, self.captured_locals, self.loop_closures)
+        self.closure_locals, self.captured_locals, self.loop_closures = {}, {}, {}
+        for n, t in params or ():
+            if isinstance(t, str) and t.startswith("fn("):
+                self.closure_locals[n] = t
+        return prev
+
+    def _leave_fn_scope(self, prev):
+        self.closure_locals, self.captured_locals, self.loop_closures = prev
+
+    def _closure_value(self, node, want: str, param, where: str) -> str:
+        """The value a closure-typed slot is given: a lambda, a nested
+        def by name, or a helper by name. A NAME is a function value
+        too, which is what makes `map(double, xs)` and a callback field
+        work without a lambda at the use site."""
+        if isinstance(node, (ast.Lambda, ast.FunctionDef)):
+            return self._closure(node, want, param, where)
+        if isinstance(node, ast.Name):
+            self._no_loop_escape(node, where)
+            if node.id in self.closure_locals:
+                if self.closure_locals[node.id] != want:
+                    raise Untranslatable(
+                        node,
+                        f"{where} is `{py_ty(want)}` and `{node.id}` is "
+                        f"`{py_ty(self.closure_locals[node.id])}`",
+                    )
+                return node.id
+            if node.id in self.helpers:
+                params, ret, _b, _g = self.helpers[node.id]
+                ty = f"fn({', '.join(t for _n, t in params)}) -> {ret}"
+                if ty != want:
+                    raise Untranslatable(
+                        node,
+                        f"{where} is `{py_ty(want)}` and `{node.id}` is `{py_ty(ty)}`",
+                    )
+                # A helper is a free fn on the compiled side, and a
+                # closure is a value: the value is a closure that calls
+                # it, which is what Python's function object does too.
+                names = [n for n, _t in params]
+                sig = ", ".join(f"{n}: {t}" for n, t in params)
+                return "{ |" + sig + "| " + f"{node.id}({', '.join(names)})" + " }"
+        raise Untranslatable(
+            node,
+            f"{where} takes a lambda, a nested def, or the name of one — "
+            "`{}` is not a function value here".format(self._src(node)),
+        )
+
+    def _nested_def(self, stmt, param) -> list[str]:
+        """A def inside a def: a closure bound to a local. Python makes
+        one function object per execution, capturing what it can see,
+        and this is that — with the two capture rules the dialect
+        enforces (see `_closure`)."""
+        self._check_name(stmt, stmt.name, "nested def")
+        if stmt.decorator_list:
+            raise Untranslatable(stmt, "a nested def takes no decorators")
+        for a in stmt.args.args:
+            if a.annotation is None:
+                raise Untranslatable(
+                    a,
+                    f"`{a.arg}` needs an annotation: a nested def's parameter types are "
+                    "what the compiled closure is built with",
+                )
+        tys = []
+        for a in stmt.args.args:
+            t = self._param_ty(a.annotation)
+            if t is None:
+                raise Untranslatable(
+                    a.annotation,
+                    f"`{ast.unparse(a.annotation)}` is not a closure parameter type — "
+                    "int, float, str, bool, a list or dict of those, a value class or an enum",
+                )
+            tys.append(t)
+        if stmt.returns is None:
+            raise Untranslatable(
+                stmt, f"nested def `{stmt.name}` needs a return annotation (`-> int`, or `-> None`)"
+            )
+        ret = (
+            "Void"
+            if isinstance(stmt.returns, ast.Constant) and stmt.returns.value is None
+            else self._param_ty(stmt.returns)
+        )
+        if ret is None:
+            raise Untranslatable(stmt.returns, f"`{ast.unparse(stmt.returns)}` is not a return type here")
+        fty = f"fn({', '.join(tys)}) -> {ret}"
+        self._not_a_field(stmt, stmt.name, "nested def")
+        prev_ret, self.ret_ty = self.ret_ty, None if ret == "Void" else ret
+        try:
+            val = self._closure(stmt, fty, param, f"nested def `{stmt.name}`")
+        finally:
+            self.ret_ty = prev_ret
+        self.handler_locals.add(stmt.name)
+        self.typed_locals[stmt.name] = fty
+        self.closure_locals[stmt.name] = fty
+        self._note_loop_closure(stmt.name)
+        return [f"var {stmt.name} : {fty} = {val}"]
 
     def _literal_of(self, node, ty: str) -> str:
         """The pixie literal a default writes, for any type `_pix_ty`
@@ -1611,6 +1881,7 @@ class Translator:
             for p, _ty in params:
                 self._not_a_field(m, p, "parameter")
             self.handler_locals = set(p for p, _ in params)
+            self._enter_fn_scope(params)
             self.counter_locals = set()
             prev_typed = self.typed_locals
             self.typed_locals = {p: t for p, t in params}
@@ -1731,6 +2002,18 @@ class Translator:
     def _store_field_ty(self, ann, default):
         """(pix type, literal) for a store field — the cell type
         grammar, annotated directly (`total: int = 0`)."""
+        if (
+            isinstance(ann, ast.Subscript)
+            and isinstance(ann.value, ast.Name)
+            and ann.value.id == "Callable"
+        ):
+            # A field holding a function value: the callback a store
+            # is armed with. Its default is built before anything else
+            # exists, so it sees its own parameters and nothing more.
+            fty = self._callable_ty(ann)
+            if fty is None:
+                raise Untranslatable(ann, "`Callable`'s parameter and answer types have to be ones the compiled side reads")
+            return fty, self._closure_value(default, fty, None, "a callback field")
         mref = self._model_ref_ann(ann)
         if mref is not None:
             mname2, weak2 = mref
@@ -2130,6 +2413,7 @@ class Translator:
             for p, _ty in params:
                 self._not_a_field(m, p, "parameter")
             self.handler_locals = set(p for p, _ in params)
+            self._enter_fn_scope(params)
             self.counter_locals = set()
             self.dead_locals = {}
             try:
@@ -2253,6 +2537,7 @@ class Translator:
             prev_scope, prev_locals, prev_typed = self.struct_self, self.handler_locals, self.typed_locals
             self.struct_self = sname
             self.handler_locals = set(p for p, _ in params)
+            self._enter_fn_scope(params)
             self.counter_locals = set()
             self.typed_locals = {p: t for p, t in params}
             try:
@@ -2576,6 +2861,7 @@ class Translator:
         self.helpers[node.name] = (params, ret, None, bool(bounds))  # registered first: recursion works
         prev = self.helper_params
         prev_locals, prev_dead, prev_typed = self.handler_locals, self.dead_locals, self.typed_locals
+        prev_clos = self._enter_fn_scope(params)
         bound_of = {v: t for v, t in bounds}
         self.helper_params = {p: (bound_of.get(t, t) if t in bound_of else t) for p, t in params}
         self.handler_locals = set(p for p, _ in params)
@@ -2592,6 +2878,7 @@ class Translator:
             self.ret_ty = prev_ret
             self.helper_params = prev
             self.handler_locals, self.dead_locals, self.typed_locals = prev_locals, prev_dead, prev_typed
+            self._leave_fn_scope(prev_clos)
         sig = ", ".join(f"{p}: {t}" for p, t in params)
         if bounds:
             # Protocol-bounded helpers stay FREE generic fns (statics
@@ -3210,8 +3497,10 @@ class Translator:
             return "a list or dict literal is not in the dialect here — keep it in a State or a store field (`items.set([...])`)"
         if isinstance(node, ast.Lambda):
             return (
-                "a lambda as a value is not in the dialect — handlers take lambdas, and so "
-                "does `key=`, but an expression does not"
+                "a lambda needs to say what it takes and answers, because that is what "
+                "the compiled closure is built with — annotate what it goes into "
+                "(`f: Callable[[int], int] = lambda x: ...`), or hand it to a parameter, "
+                "a field or a `key=` that already declares one"
             )
         if (
             isinstance(node, ast.Attribute)
@@ -3271,7 +3560,11 @@ class Translator:
         if isinstance(stmt, ast.Assert):
             return "`assert` is not in the dialect yet"
         if isinstance(stmt, ast.FunctionDef):
-            return "a nested def is not in the dialect — define helpers at module level"
+            return (
+                "a nested def belongs in a handler or a method, where it becomes a "
+                "closure — here there is no scope to hold one, so define it at module "
+                "level instead"
+            )
         if isinstance(stmt, ast.With):
             return "`with` inside a handler is not in the dialect"
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
@@ -4473,6 +4766,9 @@ class Translator:
             return self.row[2]
         if isinstance(node, ast.ListComp):
             return self._comprehension(node, ctx, param)
+        mapped = self._mapped_list(node, ctx, param)
+        if mapped is not None:
+            return mapped
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
@@ -4509,8 +4805,9 @@ class Translator:
             if sret is not None:
                 if ctx != "store":
                     raise Untranslatable(node, f"a view cannot call `{sname}.{meth}()` — building the screen only reads state, and a method may write to it; read a `@property`, or call the method in a handler and keep the result in a field")
-                ordered = self._call_args(node, self.stores[sname]["params"].get(meth, []), f"{sname}.{meth}", self.stores[sname]["defaults"].get(meth))
-                margs = ", ".join(self.expr(a, "store", param) for a in ordered)
+                sparams = self.stores[sname]["params"].get(meth, [])
+                ordered = self._call_args(node, sparams, f"{sname}.{meth}", self.stores[sname]["defaults"].get(meth))
+                margs = self._args_text(ordered, sparams, param, f"{sname}.{meth}")
                 return f"{sname}.{self._smeth(sname, meth)}({margs})"
         if (
             isinstance(node, ast.Call)
@@ -4525,8 +4822,9 @@ class Translator:
             if mret is not None:
                 if ctx != "store" or self.pre_lines is None:
                     raise Untranslatable(node, f"a view cannot call `{base}.{node.func.attr}()` — building the screen only reads state, and a method may write to it; call it in a handler and keep the result in a field")
-                ordered = self._call_args(node, self.models[mname]["params"].get(node.func.attr, []), f"{base}.{node.func.attr}", self.models[mname]["defaults"].get(node.func.attr))
-                oargs = ", ".join(self.expr(a, "store", param) for a in ordered)
+                mparams = self.models[mname]["params"].get(node.func.attr, [])
+                ordered = self._call_args(node, mparams, f"{base}.{node.func.attr}", self.models[mname]["defaults"].get(node.func.attr))
+                oargs = self._args_text(ordered, mparams, param, f"{base}.{node.func.attr}")
                 tmp = f"__o{len(self.handler_locals)}"
                 self.handler_locals.add(tmp)
                 self.pre_lines.append(f"var {tmp} = {self.expr(node.func.value, 'store', param)}")
@@ -4912,6 +5210,30 @@ class Translator:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
+            and node.func.id in self.closure_locals
+        ):
+            # Calling a function VALUE: a local holding a closure, or a
+            # nested def. A local shadows a module-level name here the
+            # way it does in Python.
+            name = node.func.id
+            tys, _ret = self._fn_ty_parts(self.closure_locals[name])
+            if node.keywords:
+                raise Untranslatable(node, f"`{name}` is a function value — it takes positional arguments")
+            if len(node.args) != len(tys):
+                raise Untranslatable(
+                    node, f"`{name}` takes {len(tys)} argument(s), got {len(node.args)}"
+                )
+            if ctx == "view":
+                raise Untranslatable(
+                    node,
+                    f"a view cannot call `{name}`: building the screen only reads, and a "
+                    "closure may write. Call it from a handler and keep the answer in a State",
+                )
+            args = ", ".join(self.expr(a, ctx, param) for a in node.args)
+            return f"{name}({args})"
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
             and node.func.id in self.defs
             and node.func.id not in self.escapes
             and node.func.id not in self.comp_defs
@@ -5261,6 +5583,13 @@ class Translator:
         c = self._cell_read(node)
         if c is not None and self._ty(c).startswith("Map<"):
             raise Untranslatable(node, "a dict has no single text — render entries with `.get(key, default)`")
+        if c is not None and self._ty(c).startswith("List<"):
+            raise Untranslatable(
+                node,
+                "a list has no single text here — Python writes `[1, 2, 3]` and the "
+                "compiled side has no text for a list yet; join it "
+                '(`", ".join(...)`), or render its length or one item',
+            )
 
     def _reject_float_text(self, node):
         for sub in ast.walk(node):
@@ -5628,6 +5957,19 @@ class Translator:
         start = len(names) - len(m.args.defaults)
         return {names[start + i]: d for i, d in enumerate(m.args.defaults)}
 
+    def _args_text(self, ordered, params, param, what: str) -> str:
+        """A call's arguments as pixie text. A parameter that declares a
+        function type takes a closure, and the declaration is where the
+        lambda's own parameter types come from."""
+        out = []
+        for i, a in enumerate(ordered):
+            t = params[i][1] if i < len(params) else None
+            if isinstance(t, str) and t.startswith("fn("):
+                out.append(self._closure_value(a, t, param, f"`{what}`'s `{params[i][0]}`"))
+            else:
+                out.append(self.expr(a, "store", param))
+        return ", ".join(out)
+
     def _call_args(self, call, params, what, defaults=None):
         """A call's arguments in the signature's order. Python binds by
         name, the compiled call binds by position, so a keyword
@@ -5841,6 +6183,102 @@ class Translator:
         """A type a container can be declared to hold: a scalar, an
         enum, or a value class (a tuple is one of those)."""
         return ty in ("Int", "Float", "Bool", "String") or ty in self.enums or ty in self.structs
+
+    def _mapped_list(self, node, ctx, param):
+        """`map(f, xs)` and `filter(f, xs)` where `f` is a function
+        VALUE — the loop they stand for, built into a local the
+        expression then reads. An inline lambda is the comprehension
+        the dialect already writes, so this is the shape a NAME takes:
+        a nested def, a local holding a closure, or a helper."""
+        # `list(map(f, xs))` is the Python that means a list: `map`
+        # alone answers an iterator, and a State holding one would not
+        # be the list the compiled side holds.
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "list"
+            and node.func.id not in self.defs
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            node = node.args[0]
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("map", "filter")
+            and node.func.id not in self.defs
+            and len(node.args) == 2
+            and not node.keywords
+        ):
+            return None
+        which = node.func.id
+        fn = node.args[0]
+        fty = None
+        if isinstance(fn, ast.Name) and fn.id in self.closure_locals:
+            fty = self.closure_locals[fn.id]
+        elif isinstance(fn, ast.Name) and fn.id in self.defs and fn.id not in self.escapes:
+            if fn.id not in self.helpers:
+                self._take_helper(self.defs[fn.id])
+            params, ret, _l, _b = self.helpers[fn.id]
+            fty = f"fn({', '.join(t for _n, t in params)}) -> {ret}"
+        if fty is None:
+            return None
+        if ctx != "store" or self.pre_lines is None:
+            raise Untranslatable(
+                node, f"`{which}` builds a list in a handler — a view reads one that is already built"
+            )
+        tys, ret = self._fn_ty_parts(fty)
+        if len(tys) != 1:
+            raise Untranslatable(node, f"`{which}` calls its function with one item at a time")
+        src = self._list_any(node.args[1], ctx, param)
+        if src is None:
+            raise Untranslatable(
+                node.args[1], f"`{which}` walks a list the dialect can name — a state read, a field or a local"
+            )
+        code, el = src
+        if el != tys[0]:
+            raise Untranslatable(
+                node.args[0],
+                f"`{self._src(fn)}` takes {py_ty(tys[0])} and the list holds {py_ty(el)}",
+            )
+        if which == "filter":
+            # A predicate answers a comparison, and a comparison is a
+            # CONDITION in the dialect rather than a value, so there is
+            # no function to hand `filter` yet. The comprehension says
+            # the same thing with the comparison where one is allowed.
+            raise Untranslatable(
+                node,
+                "`filter(f, xs)` needs a function that answers a comparison, and a "
+                "comparison is a condition here rather than a value — write it as a "
+                "comprehension (`[x for x in xs if x > 1]`)",
+            )
+        item_ty = el if which == "filter" else ret
+        if not self._nameable(item_ty):
+            raise Untranslatable(node, f"`{which}` builds a list of a type the dialect can name — {py_ty(item_ty)} is not one")
+        var = f"__mv{len(self.handler_locals)}"
+        out = f"__mp{len(self.handler_locals)}"
+        self.handler_locals.add(out)
+        self.typed_locals[out] = f"List<{item_ty}>"
+        call = f"{self._closure_call_text(fn, var)}"
+        body = (
+            [f"  if {call} {{", f"    {out}.push({var})", "  }"]
+            if which == "filter"
+            else [f"  {out}.push({call})"]
+        )
+        self.pre_lines += [
+            f"var {out} : List<{item_ty}> = []",
+            f"for {var} in {code} {{",
+            *body,
+            "}",
+        ]
+        return out
+
+    def _closure_call_text(self, fn, arg: str) -> str:
+        """Calling the function `map`/`filter` was handed, by name: a
+        closure local is called directly, a helper through its static."""
+        if isinstance(fn, ast.Name) and fn.id in self.closure_locals:
+            return f"{fn.id}({arg})"
+        return f"Helpers.{fn.id}({arg})"
 
     def _comprehension(self, node: ast.ListComp, ctx, param):
         """`[f(x) for x in xs if cond]` — the loop it stands for, built
@@ -7077,6 +7515,7 @@ class Translator:
 
         stmts = []
         self.handler_locals = set()
+        self._enter_fn_scope()
         self.counter_locals = set()
         self.dead_locals = {}
         prev_pty = self.typed_locals.get(param) if param else None
@@ -7425,21 +7864,56 @@ class Translator:
                 or vt in self.DT_TYPES.values()
                 or vt.startswith("Map<")
                 or vt.startswith("List<")
+                or vt.startswith("fn(")
                 or vt.endswith("?")
             ):
                 self.typed_locals[name] = vt
+            # A local bound to a function value is callable, the way
+            # the one the lambda was written into is.
+            if vt is not None and vt.startswith("fn("):
+                self.closure_locals[name] = vt
+            else:
+                self.closure_locals.pop(name, None)
             # A Counter stays one through a binding, the way it does in
             # Python — `.most_common` is its method, not a dict's.
             if value in self.counter_locals:
                 self.counter_locals.add(name)
             else:
                 self.counter_locals.discard(name)
+            if name in self.captured_locals:
+                raise Untranslatable(
+                    stmt,
+                    f"`{name}` was captured by a closure above, and writing to it here "
+                    "is the one thing the two runs would not agree about: Python's "
+                    "closure would read this new value, and the compiled one keeps the "
+                    "value it captured. Use another name, or make the closure after "
+                    "the last write",
+                )
             if name in self.handler_locals:
                 # Python locals are mutable; the binding was emitted
                 # as `var`, so a plain reassignment is exactly right.
                 return [f"{name} = {value}"]
             self.handler_locals.add(name)
             return [f"var {name} = {value}"]
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.value is not None
+            and (fty := self._param_ty(stmt.annotation)) is not None
+            and fty.startswith("fn(")
+        ):
+            # `f: Callable[[int], int] = lambda x: x + 1` — a local
+            # holding a function value. The annotation is what tells
+            # the compiled side the parameter types, the way it tells
+            # a local list its element type.
+            name = stmt.target.id
+            self._not_a_field(stmt, name, "local")
+            val = self._closure_value(stmt.value, fty, param, f"`{name}`")
+            self.handler_locals.add(name)
+            self.typed_locals[name] = fty
+            self.closure_locals[name] = fty
+            self._note_loop_closure(name)
+            return [f"var {name} : {fty} = {val}"]
         if (
             isinstance(stmt, ast.AnnAssign)
             and isinstance(stmt.target, ast.Name)
@@ -7518,6 +7992,11 @@ class Translator:
                 return [f"{sname}.{t0.attr} = {self._list_literal(v0, ftys[t0.attr][5:-1])}"]
             if isinstance(v0, ast.Dict) and ftys[t0.attr].startswith("Map<"):
                 return [f"{sname}.{t0.attr} = {self._dict_literal(v0, ftys[t0.attr].split(', ', 1)[1][:-1])}"]
+            if ftys[t0.attr].startswith("fn("):
+                return [
+                    f"{sname}.{t0.attr} = "
+                    f"{self._closure_value(v0, ftys[t0.attr], param, f'`{t0.attr}`')}"
+                ]
             return [f"{sname}.{t0.attr} = {self.expr(v0, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
@@ -7577,6 +8056,10 @@ class Translator:
             fty = self.model_scope[1][fld]
             if isinstance(v, ast.Dict) and fty.startswith("Map<"):
                 return [f"{fld} = {self._dict_literal(v, fty[fty.index(', ') + 2:-1])}"]
+            if fty.startswith("fn("):
+                # Arming a callback: the field's type says what the
+                # closure takes, so the lambda needs no types of its own.
+                return [f"{fld} = {self._closure_value(v, fty, param, f'`{fld}`')}"]
             return [f"{fld} = {self.expr(v, 'store', param)}"]
         if (
             isinstance(stmt, ast.AugAssign)
@@ -7603,8 +8086,9 @@ class Translator:
             call = stmt.value
             sname = self.model_scope[0]
             meth = self._smeth(sname, call.func.attr)
-            ordered = self._call_args(call, self.stores[sname]["params"].get(call.func.attr, []), f"{sname}.{call.func.attr}", self.stores[sname]["defaults"].get(call.func.attr))
-            args = ", ".join(self.expr(a, "store", param) for a in ordered)
+            sparams = self.stores[sname]["params"].get(call.func.attr, [])
+            ordered = self._call_args(call, sparams, f"{sname}.{call.func.attr}", self.stores[sname]["defaults"].get(call.func.attr))
+            args = self._args_text(ordered, sparams, param, f"{sname}.{call.func.attr}")
             return [f"{sname}.{meth}({args})"]
         if (
             isinstance(stmt, ast.Expr)
@@ -7618,8 +8102,9 @@ class Translator:
             meth = call.func.attr
             if meth not in self.stores[sname]["method_names"]:
                 raise Untranslatable(call, f"`{meth}` is not a method of store {sname}")
-            ordered = self._call_args(call, self.stores[sname]["params"].get(meth, []), f"{sname}.{meth}", self.stores[sname]["defaults"].get(meth))
-            args = ", ".join(self.expr(a, "store", param) for a in ordered)
+            sparams = self.stores[sname]["params"].get(meth, [])
+            ordered = self._call_args(call, sparams, f"{sname}.{meth}", self.stores[sname]["defaults"].get(meth))
+            args = self._args_text(ordered, sparams, param, f"{sname}.{meth}")
             return [f"{sname}.{self._smeth(sname, meth)}({args})"]
         if (
             isinstance(stmt, ast.Expr)
@@ -7634,8 +8119,9 @@ class Translator:
             known = {m.strip().split("(")[0].replace("  pub fn ", "") for lines in self.models[mname]["methods"] for m in lines[:1]}
             known |= {ln[0].strip().split("(")[0].replace("pub fn ", "").split(" ")[0] for tl in self.models[mname]["impls"].values() for ln in tl}
             meth = call.func.attr
-            ordered = self._call_args(call, self.models[mname]["params"].get(meth, []), f"{inst}.{meth}", self.models[mname]["defaults"].get(meth))
-            args = ", ".join(self.expr(a, "store", param) for a in ordered)
+            mparams = self.models[mname]["params"].get(meth, [])
+            ordered = self._call_args(call, mparams, f"{inst}.{meth}", self.models[mname]["defaults"].get(meth))
+            args = self._args_text(ordered, mparams, param, f"{inst}.{meth}")
             tmp = f"__o{len(self.handler_locals)}"
             self.handler_locals.add(tmp)
             return [f"var {tmp} = {inst}", f"{tmp}.{self._mmeth(mname, meth)}({args})"]
@@ -7757,6 +8243,8 @@ class Translator:
             lines += self._block(stmt.body, param)
             lines.append("}")
             return lines
+        if isinstance(stmt, ast.FunctionDef):
+            return self._nested_def(stmt, param)
         if isinstance(stmt, ast.For):
             return self._handler_for(stmt, param)
         if isinstance(stmt, ast.Try):
@@ -7817,6 +8305,7 @@ class Translator:
         if isinstance(stmt, ast.Return) and stmt.value is None:
             return ["return"]
         if isinstance(stmt, ast.Return) and self.ret_ty is not None:
+            self._no_loop_escape(stmt.value, "as an answer")
             return [f"return {self.expr(stmt.value, 'store', param)}"]
         # `quit()` — close the window. A handler asks; the window
         # answers on its next frame, and a headless run has no window
@@ -9138,6 +9627,7 @@ class Translator:
         bound while the body is read and gone after it."""
         self._not_a_field(stmt, var, "loop variable")
         self.handler_locals.add(var)
+        self.active_loop_vars.append(var)
         # A loop variable is Int by construction (range) or the list's
         # element type — Int/String render in text holes.
         prev_ty = self.typed_locals.get(var)
@@ -9147,7 +9637,10 @@ class Translator:
             ety = self._loop_src_elem
             if ety is not None and (ety in self.models or ety in self.structs or ety in self.enums or ety in ("Int", "Float", "Bool", "String")):
                 self.typed_locals[var] = ety
-        body = self._block(stmt.body, param)
+        try:
+            body = self._block(stmt.body, param)
+        finally:
+            self.active_loop_vars.pop()
         self.handler_locals.discard(var)
         self.nonneg_loop_vars.discard(var)
         if prev_ty is None:

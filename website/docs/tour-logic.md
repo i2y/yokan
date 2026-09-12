@@ -1,6 +1,6 @@
 # Flow and data
 
-The [tour](tour.md) continues: what handlers can do, arithmetic with CPython's meaning, lists, charts, dicts and tuples.
+The [tour](tour.md) continues: what handlers can do, functions as values, arithmetic with CPython's meaning, lists, charts, dicts and tuples.
 
 ## Handlers and control flow
 
@@ -70,6 +70,62 @@ if (v := sel()) is not None:
 else:
     text("(none)")
 ```
+
+## Functions as values
+
+A function is a value here: a lambda kept in a local, a nested def, a
+callback a store is armed with, an argument another function takes.
+Its type is written with `Callable`, and that annotation is what the
+compiled closure is built from — the types are never read off the
+body, so every closure goes somewhere that says what it takes.
+
+```python
+from typing import Callable
+
+
+@store
+class Pipeline:
+    n: int = 1
+    step: Callable[[int], int] = lambda x: x + 1   # a callback field
+
+    def advance(self) -> None:
+        f = self.step
+        self.n = f(self.n)
+
+    def harder(self) -> None:
+        self.step = lambda x: x * x               # armed with another
+
+    def apply(self, g: Callable[[int], int]) -> None:
+        self.n = g(self.n)                        # a parameter takes one
+
+
+def offset() -> None:
+    base = Pipeline.n
+
+    def add(x: int) -> int:                       # a nested def
+        return x + base
+
+    Pipeline.n = add(10)
+
+
+def doubled() -> None:
+    twice: Callable[[int], int] = lambda x: x * 2  # a local
+    total.set(sum(list(map(twice, xs()))))         # `map` calls one
+```
+
+**A closure captures by value, where it is made.** `base` above is the
+number that was there at that moment. Python closes over the variable
+instead, so the two would part company in exactly two places, and both
+are refused by name: writing to a local a closure has already captured,
+and letting a closure that took a loop variable outlive its iteration.
+Inside the iteration it is fine, because both runs read the same value.
+A State cell or a store field read inside a closure is read when the
+closure runs, which is Python's behaviour too.
+
+A view may not call a closure: building the screen only reads, and a
+closure may write. Call it from a handler and keep the answer in a
+State.
+
 
 ## Arithmetic
 
