@@ -777,6 +777,32 @@ fn eval_expr(e: &Expr, env: &ClosEnv, scope: &Scope, w: &World) -> Result<Value,
             }
             Err("this expression is not interpretable in views yet".into())
         }
+        // `#{if c { a } else { b }}` — a value-position `if`. A view
+        // only reads, so each branch is one expression, which is what
+        // codegen emits on the other side.
+        ExprKind::If {
+            cond,
+            then_b,
+            else_b: Some(eb),
+            let_binding: None,
+        } => {
+            let (Some(a), Some(b)) = (then_b.trailing.as_deref(), eb.trailing.as_deref()) else {
+                return Err("an `if` used as a value answers in both cases".into());
+            };
+            if !then_b.stmts.is_empty() || !eb.stmts.is_empty() {
+                return Err("a value `if` in a view is two expressions, with no statements".into());
+            }
+            let taken = match eval_expr(cond, env, scope, w)? {
+                Value::Bool(t) => t,
+                other => {
+                    return Err(format!(
+                        "an `if` asks a Bool, and this is `{}`",
+                        other.render()
+                    ));
+                }
+            };
+            eval_expr(if taken { a } else { b }, env, scope, w)
+        }
         _ => Err("this expression is not interpretable in views yet".into()),
     }
 }

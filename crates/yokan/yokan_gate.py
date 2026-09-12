@@ -17,6 +17,8 @@ import argparse
 import ast
 import contextlib
 import copy
+import io
+from itertools import zip_longest
 import re
 import importlib
 import importlib.machinery
@@ -532,7 +534,16 @@ class Untranslatable(Exception):
 def esc(s: str) -> str:
     if "#{" in s:
         raise ValueError("literal contains `#{` (pixie interpolation opener)")
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        # A newline or a tab inside a literal is written the way pixie
+        # writes one, not as the byte itself: a pixie string is one
+        # line. (`print(..., end="")` and `sep="\\n"` bring these in.)
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+    )
 
 
 def _pix_param_types(spelling: str) -> list[str]:
@@ -1892,7 +1903,7 @@ class Translator:
                 for st in (m.body[:-1] if ret is not None else m.body):
                     stmts += self._stmt(st, None)
                 if ret is not None:
-                    stmts.append(self.expr(m.body[-1].value, "store", None))
+                    stmts.append(self._answer(m.body[-1].value))
             finally:
                 self.ret_ty = prev_ret
                 self.model_scope = prev_scope
@@ -1921,6 +1932,45 @@ class Translator:
             self.stores[node.name]["methods"].append([head, *[f"    {l}" for l in stmts], "  }"])
             self.stores[node.name]["method_names"].add(m.name)
 
+    def _answer(self, node, param=None) -> str:
+        """The text a `return` answers with, for a body whose return
+        type `self.ret_ty` names. `None` is the empty half of a `T?`
+        and lowers to `nil`; everything else is an ordinary
+        expression."""
+        if isinstance(node, ast.Constant) and node.value is None:
+            if not (self.ret_ty or "").endswith("?"):
+                raise Untranslatable(
+                    node,
+                    "`return None` needs a signature that says so — annotate the answer "
+                    f"`{py_ty(self.ret_ty)} | None`",
+                )
+            return "nil"
+        return self.expr(node, "store", param)
+
+    @staticmethod
+    def _flattened_tail(body):
+        """`if c: return a` / `else: return b` at the END of a body,
+        rewritten as `if c: return a` followed by `return b`. Same
+        control flow, and it leaves the body ending in the `return`
+        that answers — which is what a compiled function needs, since
+        its last statement is where the value comes from. An
+        `elif` chain flattens the same way, one step at a time."""
+        def ends_in_value_return(stmts):
+            return bool(stmts) and isinstance(stmts[-1], ast.Return) and stmts[-1].value is not None
+
+        if not body or not isinstance(body[-1], ast.If) or not body[-1].orelse:
+            return body
+        last = body[-1]
+        if not ends_in_value_return(last.body):
+            return body
+        tail = Translator._flattened_tail(last.orelse)
+        if not ends_in_value_return(tail):
+            return body
+        shortened = ast.If(test=last.test, body=last.body, orelse=[])
+        ast.copy_location(shortened, last)
+        ast.fix_missing_locations(shortened)
+        return list(body[:-1]) + [shortened] + list(tail)
+
     def _method_ret(self, m, kind: str):
         """The pixie return type of a store/model method, or None for a
         method that returns nothing. A returning method ends with
@@ -1936,10 +1986,12 @@ class Translator:
                 f"a {kind} method returns int, float, str, bool, a list of those, a value class or an enum — "
                 f"`{ast.unparse(m.returns)}` is not in the dialect yet",
             )
+        m.body = self._flattened_tail(m.body)
         if not m.body or not isinstance(m.body[-1], ast.Return) or m.body[-1].value is None:
             raise Untranslatable(
                 m, f"`{m.name}` returns {py_ty(ret)}, so its body ends with `return <expression>` — "
-                "an early `return` inside a branch is not in the dialect yet")
+                "the answer is the last thing it does. An early `return` inside a branch "
+                "is in, and so is an `if` / `else` where both sides return")
         return ret
 
     @staticmethod
@@ -2856,8 +2908,14 @@ class Translator:
             if ty is None:
                 raise Untranslatable(a.annotation, f"helper parameter `{a.arg}` is int, float, str, bool, list[...] of those, a value class, an enum or a Protocol — `{ast.unparse(a.annotation)}` does not cross a helper yet")
             params.append((a.arg, ty))
+        node.body = self._flattened_tail(node.body)
         if not node.body or not isinstance(node.body[-1], ast.Return) or node.body[-1].value is None:
-            raise Untranslatable(node, "a helper's body ends with `return <expression>` — the value it answers")
+            raise Untranslatable(
+                node,
+                "a helper's body ends with `return <expression>` — the value it answers. "
+                "An early `return` inside a branch is in, and so is an `if` / `else` "
+                "where both sides return",
+            )
         self.helpers[node.name] = (params, ret, None, bool(bounds))  # registered first: recursion works
         prev = self.helper_params
         prev_locals, prev_dead, prev_typed = self.handler_locals, self.dead_locals, self.typed_locals
@@ -2873,7 +2931,7 @@ class Translator:
             stmts = []
             for st in node.body[:-1]:
                 stmts += self._stmt(st, None)
-            tail = self.expr(node.body[-1].value, "store", None)
+            tail = self._answer(node.body[-1].value)
         finally:
             self.ret_ty = prev_ret
             self.helper_params = prev
@@ -3440,6 +3498,16 @@ class Translator:
         "endswith", "replace", "find", "index", "count", "title", "capitalize",
         "isdigit", "isalpha", "format", "zfill", "center", "ljust", "rjust",
     )
+    # A set is a DECISION, not a gap: Python iterates one in an order
+    # that depends on the values' hashes, and the compiled side would
+    # not reproduce it — so a dump could differ between the two runs
+    # for no reason the app could see.
+    SET_REASON = (
+        "a `set` iterates in an order the compiled run would not reproduce, so it is "
+        "refused rather than quietly reordered — a `list` covers it (with `in` for "
+        "membership), and a `dict` covers a set of keys"
+    )
+
     BUILTIN_HINTS = {
         "str": "`str(x)` is not in the dialect yet — render the value in an f-string (`f\"{x}\"`)",
         "int": "`int(...)` is not in the dialect yet — parse text with `strings.to_int(s, default)` (int of a float is planned)",
@@ -3484,8 +3552,10 @@ class Translator:
             hint = self.BUILTIN_HINTS.get(node.func.id)
             if hint:
                 return hint
+            if node.func.id == "set":
+                return self.SET_REASON
             if node.func.id in ("round", "abs", "min", "max", "sum", "sorted", "reversed",
-                                "enumerate", "zip", "list", "dict", "set", "tuple", "range"):
+                                "enumerate", "zip", "list", "dict", "tuple", "range"):
                 return f"`{node.func.id}(...)` is not in the dialect yet"
         if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
             return "a comprehension is not in the dialect yet — build the list with a `for` loop and `xs.set(xs() + [x])`"
@@ -3493,7 +3563,9 @@ class Translator:
             return "a conditional expression (`a if c else b`) is not in the dialect yet — write an `if` / `else` statement"
         if isinstance(node, ast.NamedExpr):
             return "the walrus here is not in the dialect — it narrows an Optional (`if (v := x()) is not None:`); assign a local first"
-        if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
+        if isinstance(node, ast.Set):
+            return self.SET_REASON
+        if isinstance(node, (ast.List, ast.Tuple, ast.Dict)):
             return "a list or dict literal is not in the dialect here — keep it in a State or a store field (`items.set([...])`)"
         if isinstance(node, ast.Lambda):
             return (
@@ -3527,7 +3599,8 @@ class Translator:
     def _unknown_stmt(self, stmt) -> str:
         if isinstance(stmt, ast.Return):
             if self.helper_params is not None:
-                return "an early `return` inside a helper is not in the dialect yet — end the helper with a single `return <expression>`"
+                return ("a `return` with a value needs a helper that declares one — "
+                        "annotate it (`def f(x: int) -> int:`)")
             return "a `return` with a value is not in the dialect here — handlers and store methods return None; keep the result in a field or a State"
         if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.List):
             return (
@@ -3570,7 +3643,8 @@ class Translator:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             f = stmt.value.func
             if isinstance(f, ast.Name) and f.id == "print":
-                return "`print(...)` writes to stdout, which is where a headless run\'s screen dump goes — `log(\"…\")` writes the same line to stderr in both runs"
+                return ("`print(...)` writes to stdout from a handler — a view only "
+                        "builds the screen, so there is nothing to print from one")
             if isinstance(f, ast.Attribute) and f.attr in ("append", "extend", "pop", "remove", "insert", "clear", "sort", "reverse"):
                 return (
                     f"in-place list methods such as `.{f.attr}()` are not in the dialect — "
@@ -4721,7 +4795,18 @@ class Translator:
                 return repr(node.value)
             if type(node.value) is str:
                 return f'"{esc(node.value)}"'
-            raise Untranslatable(node, f"a literal of this kind ({node.value!r}) is not in the dialect — the literals are int, float, str, bool and None")
+            if node.value is None:
+                raise Untranslatable(
+                    node,
+                    "`None` is the empty half of an optional, so it needs a slot that "
+                    "says so: a `T | None` state or field, or the answer of a method "
+                    "annotated `-> T | None`",
+                )
+            raise Untranslatable(
+                node,
+                f"a literal of this kind ({node.value!r}) is not in the dialect — the "
+                "literals are int, float, str, bool and None",
+            )
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
@@ -5512,11 +5597,28 @@ class Translator:
             raise Untranslatable(node, "`not` as a value works over bools — write a comparison for other types")
         if isinstance(node, ast.IfExp):
             t = self._num_ty(node.body, ctx, param) or self._num_ty(node.orelse, ctx, param)
-            if ctx != "store" or self.pre_lines is None or t not in self.ZERO_OF:
+            if ctx != "store" or self.pre_lines is None:
+                # In a VIEW there is nowhere to put a statement, so the
+                # conditional lowers as the value it is: pixie's own
+                # `if c { a } else { b }` expression, which both runs
+                # build the same way.
+                if t not in self.ZERO_OF:
+                    raise Untranslatable(
+                        node,
+                        "a conditional expression (`a if c else b`) answers an int, a "
+                        f"float, a str or a bool — `{self._src(node)}` answers "
+                        f"{py_ty(t) if t else 'something the dialect cannot name here'}",
+                    )
+                cond = self._cond(node.test, ctx, param)
+                a = self.expr(node.body, ctx, param)
+                b = self.expr(node.orelse, ctx, param)
+                return RawPix(f"if {cond} {{ {a} }} else {{ {b} }}")
+            if t not in self.ZERO_OF:
                 raise Untranslatable(
                     node,
-                    "a conditional expression (`a if c else b`) is written in a handler over "
-                    "int, float, str or bool — in a view, branch the elements with `if` / `else`",
+                    "a conditional expression (`a if c else b`) answers an int, a float, "
+                    f"a str or a bool — `{self._src(node)}` answers "
+                    f"{py_ty(t) if t else 'something the dialect cannot name here'}",
                 )
             cond = self._cond(node.test, ctx, param)
             saved = self.pre_lines
@@ -5561,6 +5663,24 @@ class Translator:
                     node, "a unary minus in a view is not in the dialect yet — compute in a handler and render the result"
                 )
             return f"-{self.expr(node.operand, ctx, param)}"
+        # A COMPARISON as a value. `n() > 1` is the same text a
+        # condition lowers to — pixie takes one as an expression — so
+        # a bool can be stored, returned and answered by a predicate,
+        # and not only tested by an `if`.
+        if isinstance(node, (ast.Compare, ast.BoolOp)) or (
+            isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)
+        ):
+            if self.text_hole:
+                # A hole renders a bool through `Py.boolRepr`, which
+                # the hole path reaches by asking `_num_ty` first; a
+                # comparison arriving here is one it could not type.
+                raise Untranslatable(
+                    node,
+                    "this comparison has no text here — the two runs spell a bool "
+                    "differently unless the renderer knows it is one; keep it in a "
+                    "State or a local and render that",
+                )
+            return self._cond(node, ctx, param)
         raise Untranslatable(node, self._unknown_expr(node))
 
     def _reject_bool_text(self, node):
@@ -6241,16 +6361,9 @@ class Translator:
                 node.args[0],
                 f"`{self._src(fn)}` takes {py_ty(tys[0])} and the list holds {py_ty(el)}",
             )
-        if which == "filter":
-            # A predicate answers a comparison, and a comparison is a
-            # CONDITION in the dialect rather than a value, so there is
-            # no function to hand `filter` yet. The comprehension says
-            # the same thing with the comparison where one is allowed.
+        if which == "filter" and ret != "Bool":
             raise Untranslatable(
-                node,
-                "`filter(f, xs)` needs a function that answers a comparison, and a "
-                "comparison is a condition here rather than a value — write it as a "
-                "comprehension (`[x for x in xs if x > 1]`)",
+                node.args[0], "`filter` asks its function a yes-or-no question — it answers bool"
             )
         item_ty = el if which == "filter" else ret
         if not self._nameable(item_ty):
@@ -7351,6 +7464,39 @@ class Translator:
             return inner[1:-1]
         return "#{" + inner + "}"
 
+    def _lower_print(self, call, param) -> list[str]:
+        """`print(*values, sep=" ", end="\\n")`. The values are
+        rendered the way an f-string hole renders them, which is where
+        Python's own text for a float, a bool and an enum comes from;
+        the joining is the call's, so the twin takes one string and
+        whatever ends it. Stdout belongs to the app now: a scripted
+        run's screens go to the file `PIXIE_DUMP` names."""
+        sep, end = " ", "\n"
+        for kw in call.keywords:
+            if kw.arg not in ("sep", "end"):
+                raise Untranslatable(
+                    kw.value,
+                    f"`print` takes `sep=` and `end=` — `{kw.arg}=` is not in the dialect",
+                )
+            if not (isinstance(kw.value, ast.Constant) and type(kw.value.value) is str):
+                raise Untranslatable(
+                    kw.value, f"`print`'s `{kw.arg}=` is a str literal here"
+                )
+            if kw.arg == "sep":
+                sep = kw.value.value
+            else:
+                end = kw.value.value
+        parts = []
+        for i, a in enumerate(call.args):
+            if i:
+                parts.append(esc(sep))
+            parts.append(self._str_parts(a, "store", param))
+        self.uses_stdlib = True
+        name = f"__pr{len(self.handler_locals)}"
+        self.handler_locals.add(name)
+        text = '"' + "".join(parts) + '"'
+        return [f'var {name} = Py.printText({text}, "{esc(end)}")']
+
     def _str_parts(self, node, ctx, param) -> str:
         """A String expression as pixie interpolation: `name() + "!"`
         becomes `#{App.name}!`, so a literal inside a concatenation
@@ -7758,6 +7904,22 @@ class Translator:
             and len(stmt.targets) == 1
             and isinstance(stmt.targets[0], ast.Subscript)
             and isinstance(stmt.targets[0].value, ast.Name)
+            and stmt.targets[0].value.id in self.handler_locals
+            and self.typed_locals.get(stmt.targets[0].value.id, "").startswith("Map<")
+        ):
+            # `counts[k] = v` on a LOCAL dict. A local is written in
+            # place, which is what Python does and what the compiled
+            # map does; a State cell takes the same line through its
+            # own path below.
+            t = stmt.targets[0]
+            name = t.value.id
+            key = self._dict_key(t.slice, "store", param)
+            return [f'{name}[{key}] = {self.expr(stmt.value, "store", param)}']
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Subscript)
+            and isinstance(stmt.targets[0].value, ast.Name)
             and stmt.targets[0].value.id in self.cells
         ):
             t = stmt.targets[0]
@@ -7922,6 +8084,34 @@ class Translator:
             isinstance(stmt, ast.AnnAssign)
             and isinstance(stmt.target, ast.Name)
             and stmt.value is not None
+            and (mty := self._param_ty(stmt.annotation)) is not None
+            and mty.startswith("Map<")
+        ):
+            # `counts: dict[str, int] = {}` — a local dict. The
+            # annotation is what tells the compiled side its key and
+            # value types, the way it tells a local list its element
+            # type.
+            name = stmt.target.id
+            self._not_a_field(stmt, name, "local")
+            vty = mty.split(", ", 1)[1][:-1]
+            if isinstance(stmt.value, ast.Dict):
+                lit = self._dict_literal(stmt.value, vty)
+            else:
+                got = self._num_ty(stmt.value, "store", param)
+                if got != mty:
+                    raise Untranslatable(
+                        stmt.value,
+                        f"a `{py_ty(mty)}` local starts from a dict literal or another "
+                        "dict of the same type",
+                    )
+                lit = self.expr(stmt.value, "store", param)
+            self.handler_locals.add(name)
+            self.typed_locals[name] = mty
+            return [f"var {name} : {mty} = {lit}"]
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.value is not None
             and (lty := self._param_ty(stmt.annotation)) is not None
             and lty.startswith("List<")
         ):
@@ -7931,6 +8121,20 @@ class Translator:
             name = stmt.target.id
             lit = self._list_literal(stmt.value, lty[5:-1]) if isinstance(stmt.value, ast.List) else None
             if lit is None:
+                # `list(map(f, xs))` / `list(filter(f, xs))` build the
+                # list in a local of their own above; the annotation
+                # then binds that.
+                built = self._mapped_list(stmt.value, "store", param)
+                if built is not None:
+                    got = self.typed_locals.get(built)
+                    if got != lty:
+                        raise Untranslatable(
+                            stmt.value,
+                            f"this builds a `{py_ty(got)}` and the local says `{py_ty(lty)}`",
+                        )
+                    self.handler_locals.add(name)
+                    self.typed_locals[name] = lty
+                    return [f"var {name} : {lty} = {built}"]
                 src = self._list_of(stmt.value, "store", param)
                 if src is None or f"List<{src[1]}>" != lty:
                     raise Untranslatable(stmt.value, f"a `{py_ty(lty)}` local starts from a list literal or another list of the same type")
@@ -8310,7 +8514,7 @@ class Translator:
             return ["return"]
         if isinstance(stmt, ast.Return) and self.ret_ty is not None:
             self._no_loop_escape(stmt.value, "as an answer")
-            return [f"return {self.expr(stmt.value, 'store', param)}"]
+            return [f"return {self._answer(stmt.value, param)}"]
         # `quit()` — close the window. A handler asks; the window
         # answers on its next frame, and a headless run has no window
         # to answer, so a script runs on and both runs dump the same.
@@ -8348,6 +8552,14 @@ class Translator:
                 frac = f"Py.floatOfInt({frac})"
             note = self.expr(call.args[1], "store", param)
             return [f"var {name} = Py.report({frac}, {note})"]
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and isinstance(stmt.value.func, ast.Name)
+            and stmt.value.func.id == "print"
+            and "print" not in self.defs
+        ):
+            return self._lower_print(stmt.value, param)
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
@@ -8918,6 +9130,11 @@ class Translator:
                 and (t in self.enums or t in self.structs or t in self.DT_TYPES.values())
             ):
                 return t
+            # An OPTIONAL field answers its own type: the places that
+            # care (a text hole, a narrowing) ask for it by name, and
+            # everything else treated `None` as "cannot say" already.
+            if t is not None and t.endswith("?"):
+                return t
             return None
         return None
 
@@ -8927,6 +9144,20 @@ class Translator:
         CPython's text; everything else lowers as before."""
         self._reject_map_text(node)
         t = self._num_ty(node, ctx, param)
+        if t is not None and t.endswith("?"):
+            # Python writes `None` for the empty half and pixie writes
+            # nothing, and neither is wrong for its own language — so
+            # an optional is narrowed before it is rendered, rather
+            # than rendered one way in one run and another in the
+            # other. (A cell read is caught by `_reject_opt_enum_text`
+            # further down; this catches a field, a parameter and a
+            # method's answer.)
+            raise Untranslatable(
+                node,
+                "an optional has no text of its own here — Python writes `None` and the "
+                "compiled run writes nothing, so narrow it first "
+                "(`if (v := x) is not None:`) and render `v`",
+            )
         prev = self.text_hole
         self.text_hole = True
         try:
@@ -9086,7 +9317,49 @@ class Translator:
             and catchable(st.value)
         ):
             return (st.value, "local", st.targets[0].id)
+        # `v = d[k]` — the read Python answers with a KeyError when the
+        # key is missing. It is catchable the way a failing call is.
+        for kind, target, value in self._assign_shapes(st):
+            if self._map_read(value) is not None:
+                return (value, f"key:{kind}", target)
         return None
+
+    def _assign_shapes(self, st):
+        """The (kind, target, value) of a statement that binds one
+        value: a local, a State cell, or `self.field`."""
+        if (
+            isinstance(st, ast.Expr)
+            and isinstance(st.value, ast.Call)
+            and isinstance(st.value.func, ast.Attribute)
+            and st.value.func.attr == "set"
+            and isinstance(st.value.func.value, ast.Name)
+            and st.value.func.value.id in self.cells
+            and len(st.value.args) == 1
+        ):
+            return [("cell", st.value.func.value.id, st.value.args[0])]
+        if isinstance(st, ast.Assign) and len(st.targets) == 1:
+            t = st.targets[0]
+            if isinstance(t, ast.Name):
+                return [("local", t.id, st.value)]
+            if (
+                isinstance(t, ast.Attribute)
+                and isinstance(t.value, ast.Name)
+                and t.value.id == "self"
+                and self.model_scope is not None
+            ):
+                return [("selffield", t.attr, st.value)]
+        return []
+
+    def _map_read(self, node):
+        """(map text, map type, key node) for a bare `d[k]` read, or
+        None. This is the read Python raises KeyError from, so it is
+        what a `try` can catch."""
+        if not isinstance(node, ast.Subscript) or isinstance(node.slice, ast.Slice):
+            return None
+        src = self._map_source(node.value)
+        if src is None:
+            return None
+        return (src[0], src[1], node.slice)
 
     def _try_seg(self, stmts, clauses, ok, param) -> list[str]:
         out = []
@@ -9124,7 +9397,52 @@ class Translator:
             self.dead_locals[bindname] = f"`{bindname}` is bound inside its except clause only"
         return lines
 
+    def _lower_key_read(self, node, kind, target, clauses, ok, param) -> list[str]:
+        """`v = d[k]` inside a `try`. Python raises KeyError exactly
+        when the key is missing, so the compiled run asks that
+        question: the value when the map has the key, the except
+        clause when it does not. No new primitive, and nothing for the
+        two runs to disagree about — `contains` and `getOr` are the
+        same two reads the dialect already uses."""
+        recv, mty, key_node = self._map_read(node)
+        match_ix = None
+        for i, (t, _b, _body) in enumerate(clauses):
+            if t is None or any(n in self.EXC_BROAD or n == "KeyError" for n in t):
+                match_ix = i
+                break
+        if match_ix is None:
+            raise Untranslatable(
+                node,
+                "a bare `d[k]` read raises KeyError when the key is missing — catch it "
+                "(`except KeyError:`) or read with `.get(key, default)`",
+            )
+        kty, vty = self._map_kv(mty)
+        key = self._dict_key(key_node, "store", param)
+        tmp = f"__k{len(self.handler_locals)}"
+        self.handler_locals.add(tmp)
+        self.typed_locals[tmp] = kty
+        lines = [f"var {tmp} = {key}"]
+        if kind == "local":
+            self.handler_locals.add(target)
+            self.typed_locals[target] = vty
+            lines.append(f"var {target} = {self._zero_of(vty)}")
+        lines += [
+            f"if {recv}.contains({tmp}) {{",
+            f"  {target} = {recv}.getOr({tmp}, {self._zero_of(vty)})",
+            "} else {",
+        ]
+        # What Python's own `str(KeyError(k))` says: the key's repr, so
+        # `except KeyError as e` reads the same text in both runs.
+        t, bindname, body = clauses[match_ix]
+        msg = f'"\'" + {tmp} + "\'"' if kty == "String" else f'"#{{{tmp}}}"'
+        inner = self._clause_body(bindname, body, msg, ok, param)
+        lines += ["  " + l for l in inner]
+        lines.append("}")
+        return lines
+
     def _lower_fallible(self, call, kind, target, clauses, ok, param) -> list[str]:
+        if kind.startswith("key:"):
+            return self._lower_key_read(call, kind[4:], target, clauses, ok, param)
         is_escape = isinstance(call.func, ast.Name) and call.func.id in self.escapes
         cc = self._crate_call(call.func)
         if cc is not None:
@@ -12454,7 +12772,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
 def tier_b_project(
     proj: str, script: str, release: bool, pyo3_python: str | None = None,
     run: bool = True,
-) -> tuple[str, str]:
+):
     cmd = [
         "cargo", "run", "-q", "--manifest-path", os.path.join(repo(), "Cargo.toml"),
         "-p", "pixie-cli", "--", "build",
@@ -12476,12 +12794,25 @@ def tier_b_project(
     if not binary:
         sys.exit(f"could not find `built:` line in pixie output:\n{p.stdout}")
     if not run:
-        return "", binary
-    env = dict(os.environ, PIXIE_SCRIPT=script)
-    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
-    if r.returncode != 0:
-        sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
-    return r.stdout, binary
+        return "", "", binary
+    dump, said = run_compiled(binary, script)
+    return dump, said, binary
+
+
+def run_compiled(binary: str, script: str, env: dict | None = None) -> tuple[str, str]:
+    """One scripted run of a compiled app, as its two channels: the
+    screens, written to the file `PIXIE_DUMP` names, and whatever the
+    app itself printed, which is stdout's now."""
+    import tempfile  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory() as td:
+        out = os.path.join(td, "dump.txt")
+        e = dict(env or os.environ, PIXIE_SCRIPT=script, PIXIE_DUMP=out)
+        r = subprocess.run([binary], env=e, capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
+        dump = open(out, encoding="utf-8").read() if os.path.exists(out) else ""
+    return dump, r.stdout
 
 
 def app_deps(path: str) -> list[str]:
@@ -12704,16 +13035,12 @@ def describe_artifact(binary: str) -> str:
     return note
 
 
-def run_binary(binary: str, script: str) -> str:
+def run_binary(binary: str, script: str) -> tuple[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
-    env["PIXIE_SCRIPT"] = script
-    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
-    if r.returncode != 0:
-        sys.exit(f"bundled binary failed:\n{r.stdout}\n{r.stderr}")
-    return r.stdout
+    return run_compiled(binary, script, env)
 
 
-def tier_a(path: str, tr: "Translator", script: str) -> str:
+def tier_a(path: str, tr: "Translator", script: str) -> tuple[str, str]:
     sys.path.insert(0, HERE)
     sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
     import yokan  # noqa: PLC0415
@@ -12728,10 +13055,16 @@ def tier_a(path: str, tr: "Translator", script: str) -> str:
             on_start = getattr(getattr(module, tr.on_start[1]), tr.on_start[2])
         else:
             on_start = getattr(module, tr.on_start[1])
+    # `print` is the app's, and this process's stdout is the gate's
+    # report: what the app prints is caught here and compared as its
+    # own channel, the way the dump is.
+    said = io.StringIO()
     try:
-        return yokan.headless(
-            getattr(module, tr.view.name), state, script, on_start=on_start
-        )
+        with contextlib.redirect_stdout(said):
+            dump = yokan.headless(
+                getattr(module, tr.view.name), state, script, on_start=on_start
+            )
+        return dump, said.getvalue()
     except BaseException as e:  # noqa: BLE001
         # A step the app has no handler for panics in the kernel, on
         # purpose: a typo that quietly did nothing would pass as a
@@ -12760,7 +13093,11 @@ def do_show(args, tr: "Translator") -> None:
         os.environ["YOKAN_FRAMES"] = os.path.abspath(args.frames)
     if args.scale:
         os.environ["YOKAN_FRAME_SCALE"] = str(args.scale)
-    out = tier_a(args.app, tr, args.script)
+    out, said = tier_a(args.app, tr, args.script)
+    # What the app printed comes first, as it would on a terminal: the
+    # screens are what `show` is for, so they go last and whole.
+    if said.strip():
+        print(said.rstrip("\n"))
     print(out.rstrip("\n"))
     if not args.frames:
         return
@@ -12795,7 +13132,7 @@ def do_show(args, tr: "Translator") -> None:
     print(f"{args.gif}", file=sys.stderr)
 
 
-def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple[str, str]:
+def tier_b(pix_path: str, script: str, release: bool, run: bool = True):
     cmd = ["cargo", "run", "-q", "-p", "pixie-cli", "--", "build", pix_path]
     if release:
         cmd.append("--release")
@@ -12813,12 +13150,9 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
     if not binary:
         sys.exit(f"could not find `built:` line in pixie output:\n{p.stdout}")
     if not run:
-        return "", binary
-    env = dict(os.environ, PIXIE_SCRIPT=script)
-    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
-    if r.returncode != 0:
-        sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
-    return r.stdout, binary
+        return "", "", binary
+    dump, said = run_compiled(binary, script)
+    return dump, said, binary
 
 
 def _png_to_icns(png: str, out_icns: str) -> bool:
@@ -13549,7 +13883,7 @@ def main():
         if tr.escapes or tr.uses_stdlib or tr.uses_crates or tr.window:
             proj = emit_project(gate_dir, stem, pix, tr)
             pbs = find_pbs() if args.bundle else None
-            _, binary = tier_b_project(
+            _, _, binary = tier_b_project(
                 proj, "", args.release, pyo3_python=pbs[0] if pbs else None, run=False
             )
             if pbs:
@@ -13557,7 +13891,7 @@ def main():
                 if args.onefile:
                     binary = make_onefile(proj, stem, os.path.dirname(binary))
         else:
-            _, binary = tier_b(pix_path, "", args.release, run=False)
+            _, _, binary = tier_b(pix_path, "", args.release, run=False)
         if args.app_bundle or args.appimage:
             if args.onefile:
                 sys.exit("--app makes a folder-shaped bundle; --onefile makes a single file — pick one")
@@ -13601,14 +13935,15 @@ def main():
         os.environ["YOKAN_EXT_DIR"] = os.path.join(
             os.path.dirname(os.path.abspath(args.app)), ".yokan", "ext"
         )
-    a = tier_a(args.app, tr, args.script).rstrip("\n")
+    a, a_said = tier_a(args.app, tr, args.script)
+    a = a.rstrip("\n")
     for f in args.fresh:
         if os.path.exists(f):
             os.remove(f)
     if tr.escapes or tr.uses_stdlib or tr.uses_crates or tr.window:
         proj = emit_project(gate_dir, stem, pix, tr)
         pbs = find_pbs() if args.bundle else None
-        b_raw, binary = tier_b_project(
+        b_raw, b_said, binary = tier_b_project(
             proj, args.script, args.release, pyo3_python=pbs[0] if pbs else None,
             run=not pbs,
         )
@@ -13616,23 +13951,39 @@ def main():
             app = bundle(proj, binary, stem, pbs[1], pbs[2], app_deps(args.app))
             if args.onefile:
                 app = make_onefile(proj, stem, os.path.dirname(app))
-            b_raw = run_binary(app, args.script)
+            b_raw, b_said = run_binary(app, args.script)
             binary = app
     else:
-        b_raw, binary = tier_b(pix_path, args.script, args.release)
+        b_raw, b_said, binary = tier_b(pix_path, args.script, args.release)
     b = b_raw.rstrip("\n")
+    # The app's own output is a second channel: the dump has a file of
+    # its own now, so `print` is checked the way the screen is.
+    a_out, b_out = a_said.rstrip("\n"), b_said.rstrip("\n")
 
-    if a == b:
+    if a == b and a_out == b_out:
         print(f"GATE OK — {len(a.splitlines())} dump lines identical in both runs")
+        if a_out:
+            n = len(a_out.splitlines())
+            print(f"            {n} printed line{'s' if n != 1 else ''} identical in both runs")
         print(f"  script:   {args.script or '(none — startup dump only)'}")
         print(f"  emitted:  {pix_path}")
         print(f"  binary:   {binary} ({describe_artifact(binary)})")
     else:
         print("GATE FAILED — the two runs diverge:")
-        for la, lb in zip(a.splitlines(), b.splitlines()):
-            if la != lb:
-                print(f"  cpython: {la}")
-                print(f"  binary:  {lb}")
+        if a != b:
+            for la, lb in zip(a.splitlines(), b.splitlines()):
+                if la != lb:
+                    print(f"  cpython: {la}")
+                    print(f"  binary:  {lb}")
+            if len(a.splitlines()) != len(b.splitlines()):
+                print(f"  (the dumps are {len(a.splitlines())} and "
+                      f"{len(b.splitlines())} lines long)")
+        if a_out != b_out:
+            print("  what the app printed differs:")
+            for la, lb in zip_longest(a_out.splitlines(), b_out.splitlines(), fillvalue=""):
+                if la != lb:
+                    print(f"  cpython printed: {la!r}")
+                    print(f"  binary printed:  {lb!r}")
         sys.exit(1)
 
 

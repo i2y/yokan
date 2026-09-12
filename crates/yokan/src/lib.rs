@@ -2290,8 +2290,8 @@ fn run(
             });
             let mut tree = rt.with(|w| pixie_kernel::build_prepared(w, h));
             pixie_kernel::script::anim_settle(&rt, h, &mut tree);
-            rt.with(|w| println!("{}", tree.dump(w)));
-            println!("{}", pixie_kernel::script::run(&rt, h, &mut tree, &script));
+            rt.with(|w| pixie_kernel::script::emit(&tree.dump(w)));
+            pixie_kernel::script::emit(&pixie_kernel::script::run(&rt, h, &mut tree, &script));
             return;
         }
         if let Some(f) = &on_start {

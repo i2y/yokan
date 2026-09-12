@@ -366,10 +366,13 @@ def tally():
 ```
 
 Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
-`log("…")` writes a line to stderr from either run, and `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
+`print(...)` writes to stdout, with `sep=` and `end=` as Python has them; `log("…")` writes a line to stderr instead. Both runs print the same bytes, and the gate compares what an app printed the way it compares the screens — a headless run's dump goes to the file `PIXIE_DUMP` names, so the two channels never mix.
+`assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
-A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
+A comparison is also a **value**: `flag.set(n() > 1)`, `ok = a == b`, and a helper that answers `bool`.
+A conditional expression (`a if c else b`) works anywhere one does in Python — in a handler and in a view — over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
+A store or model method may answer `T | None`, with `return None` for the empty half; the caller narrows it (`v = Bag.pick()`, then `if v is not None:`).
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
 
@@ -668,7 +671,17 @@ def scan():
 ```
 
 A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
-Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
+A dict also lives in a local, with its types written down: `counts: dict[str, int] = {}`, then `counts[k] = counts.get(k, 0) + 1`.
+A bare `d[k]` read raises `KeyError` when the key is missing, so it is written one of two ways: `.get(key, default)`, which says what a missing key means, or inside a `try`, which catches the miss as Python does — what the `try` catches is the read itself, bound to a name:
+
+```python
+try:
+    gold = counts["gold"]
+    found.set(f"gold {gold}")
+except KeyError as e:
+    found.set(f"no {e}")        # e reads 'gold', as in Python
+```
+
 `.items()` walks the pairs, in the same insertion order.
 
 A dict of lists groups:
@@ -1493,7 +1506,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 
 What Yokan cannot do as of today, with the reason for each refusal:
 
-- **Bare `d[k]` reads.** The read form is `.get(key, default)`, where the caller decides what a missing key means.
+- **A bare `d[k]` read, uncaught.** The read form is `.get(key, default)`, where the caller decides what a missing key means — or `try: v = d[k] except KeyError:`, which catches the miss the way Python does. What a `try` catches is the read itself, bound to a name.
 - **A local, a parameter or a loop variable that takes a field's name**, inside a store or model method. Python keeps `score` and `self.score` apart; the compiled side reads a field by its bare name, so the two runs would mean different things by it. Rename the local — `score_` reads the same in Python.
 - **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
@@ -1511,15 +1524,13 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Stopping a task once it has started.** `report` says where the work is; nothing says stop, so a task runs to its end.
 - A component's `local` is **identified by call site**. Reordering the calls reassigns the states.
 - Placing the same element object **twice**. Constructors consume their children.
-- **A method that returns `T | None`.** Scalars, lists, value classes and enums come back from a store or model method; an Optional return is not in the dialect yet.
-- **A local dict**, and a local list without an annotation (`out: list[str] = []` says what the compiled side needs to know).
+- **A local list or dict without an annotation** (`out: list[str] = []`, `counts: dict[str, int] = {}` — the annotation is what says the element and value types the compiled side needs).
 - **str methods that answer something the dialect has no shape for**: `.encode()` (bytes), `.format()` and `.translate()` (a template or a table built at run time), `.casefold()` (its mapping expands `ß` to `ss`, which is a different Unicode table from the one the case methods use). What is in: `.partition()`, `.rpartition()`, `.upper()`, `.lower()`, `.title()`, `.capitalize()`, `.swapcase()`, `.strip()` / `.lstrip()` / `.rstrip()` (with or without a set of characters), `.split()`, `.splitlines()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.rfind()`, `.index()`, `.rindex()`, `.count()`, `.zfill()`, `.ljust()`, `.rjust()`, `.center()`, `.expandtabs()`, `.removeprefix()`, `.removesuffix()`, the `.is…()` family, `len(s)`, `s[i]`, `s[a:b]` and `in`.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
-- **A conditional expression in a view** (`a if c else b`): branch the elements with `if` there. In a handler it works over int, float, str and bool.
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
 - **`set`.** A Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered; a `list` covers it. A tuple is in — see [Tuples](#tuples) — but only where its shape is written out: a tuple that a Rust crate would have to answer is not carried yet, which is why `re.findall` still refuses a pattern with two groups or more.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
-- **`print`.** It writes to stdout, which is where a headless run's screen dump goes; `log("…")` writes the same line to stderr in both runs.
+- **An optional rendered as text** (`f"{picked}"` where `picked` is `T | None`). Python writes `None` and the compiled run writes nothing, so narrow it first (`if (v := picked) is not None:`) and render `v`.
 - **In Yokan's own modules**: copying or renaming a file, and streaming or binary downloads.
 - **In Python's modules**: six members of `math` (each refused with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: an aware value (`timezone`, `tzinfo`), `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. From `collections`: everything but `Counter` — `defaultdict` (what a missing key answers is asked at the read here), `deque` (it works in place, and a list lives in a `State`), `namedtuple` (a `@value` class says it with types), `OrderedDict` (a dict here already keeps its order) and `ChainMap`. From `itertools`: what never ends (`count`, `cycle`, `repeat`), what yields an iterator of its own (`groupby`, `tee`), what takes a function (`starmap`, `takewhile`, `filterfalse`) and `batched`, whose last tuple is a different shape from the rest. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `decimal`, `hashlib`, `base64`, `zoneinfo`.
 - **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.

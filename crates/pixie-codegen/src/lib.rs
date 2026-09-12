@@ -2121,8 +2121,69 @@ fn lower_method_expr_inner(e: &Expr, cx: &MethodCtx) -> Result<String, EmitError
             let mut inner = cx.clone();
             lower_lambda(params, body, None, &mut inner, e.span)
         }
+        ExprKind::If {
+            cond,
+            then_b,
+            else_b,
+            let_binding,
+        } => lower_value_if(
+            cond,
+            then_b,
+            else_b.as_ref(),
+            let_binding.is_some(),
+            e.span,
+            cx,
+        ),
         _ => err(e.span, "this expression is not lowerable yet (M0)"),
     }
+}
+
+/// A value-position `if`: `if c { a } else { b }`, which Rust has as
+/// an expression too. Both branches answer, so both need a trailing
+/// expression; a branch that only does something is a STATEMENT `if`
+/// and lowers through the statement path instead.
+fn lower_value_if(
+    cond: &Expr,
+    then_b: &ast::Block,
+    else_b: Option<&ast::Block>,
+    let_binding: bool,
+    span: Span,
+    cx: &MethodCtx,
+) -> Result<String, EmitError> {
+    if let_binding {
+        return err(span, "`if let` survived the desugar (§8.69) — this is a pixie bug");
+    }
+    let Some(eb) = else_b else {
+        return err(
+            span,
+            "an `if` used as a VALUE answers in both cases, so it needs an `else`",
+        );
+    };
+    let mut inner = cx.clone();
+    let a = lower_value_block(then_b, &mut inner, span)?;
+    let mut inner = cx.clone();
+    let b = lower_value_block(eb, &mut inner, span)?;
+    let c = lower_method_expr(cond, cx)?;
+    Ok(format!("(if {c} {{ {a} }} else {{ {b} }})"))
+}
+
+/// One branch of a value-position `if`: its statements, then the
+/// expression it answers with.
+fn lower_value_block(
+    b: &ast::Block,
+    cx: &mut MethodCtx,
+    span: Span,
+) -> Result<String, EmitError> {
+    let Some(t) = b.trailing.as_deref() else {
+        return err(
+            span,
+            "this branch of a value `if` does not answer — end it with the value",
+        );
+    };
+    let mut out = String::new();
+    lower_scope(&b.stmts, Some(t), false, cx, &mut out, "")?;
+    let tail = lower_method_expr(t, cx)?;
+    Ok(format!("{out} {tail}"))
 }
 
 /// The query methods the built-in VALUE types answer. This is a
@@ -2993,10 +3054,29 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
                     .unwrap();
                     return Ok(());
                 }
+                // A LOCAL container is written in place: the local
+                // owns it, so the COW write finds a single owner and
+                // no property has to be read back and stored.
+                if let ExprKind::Ident(n) | ExprKind::AtIdent(n) = &receiver.kind {
+                    if cx.is_local(n) {
+                        let rn = camel_to_snake(n);
+                        match declared_ty_of(receiver, cx) {
+                            Some(RustTy::Map(..)) => {
+                                writeln!(out, "{ind}{{ let __k = {i}; let __v = {v}; {rn}.insert(__k, __v); }}").unwrap();
+                                return Ok(());
+                            }
+                            Some(RustTy::List(_)) => {
+                                writeln!(out, "{ind}{{ let __i = {i}; let __v = {v}; {rn}.set(__i, __v); }}").unwrap();
+                                return Ok(());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 return err(
                     *span,
-                    "`[..] =` writes into a list or map PROPERTY — name the object and \
-                     the container it holds",
+                    "`[..] =` writes into a list or a map: a property, or a local that \
+                     was declared as one",
                 );
             }
             let n = match &target.kind {
@@ -4313,6 +4393,34 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
         ExprKind::Float(v) => Ok(format!("{v}f64")),
         ExprKind::Bool(v) => Ok(format!("{v}")),
         ExprKind::Str(parts) => lower_interp(parts, &mut |inner| lower_view_display(inner, cx)),
+        // `#{if c { a } else { b }}` — a value-position `if` inside a
+        // hole. A view only READS, so both branches are ordinary view
+        // expressions, and so is the condition.
+        ExprKind::If {
+            cond,
+            then_b,
+            else_b: Some(eb),
+            let_binding: None,
+        } => {
+            let (Some(a), Some(b)) = (then_b.trailing.as_deref(), eb.trailing.as_deref()) else {
+                return err(
+                    e.span,
+                    "an `if` used as a value in a view answers in both cases — each \
+                     branch is one expression",
+                );
+            };
+            if !then_b.stmts.is_empty() || !eb.stmts.is_empty() {
+                return err(
+                    e.span,
+                    "a view only reads, so a value `if` here is two expressions — no \
+                     statements in its branches",
+                );
+            }
+            let c = lower_view_display(cond, cx)?;
+            let a = lower_view_display(a, cx)?;
+            let b = lower_view_display(b, cx)?;
+            Ok(format!("(if {c} {{ {a} }} else {{ {b} }})"))
+        }
         // Arithmetic in an interpolation (§8.54). `#{S.n * 2}` and
         // `#{a} of #{b}` are the same shape of thing, and reading a
         // value is exactly what a view body is allowed to do — this
@@ -11474,7 +11582,7 @@ fn emit_main(
     writeln!(out, "        pixie_kernel::build_prepared(w, __view)").unwrap();
     writeln!(out, "    }});").unwrap();
     writeln!(out, "    pixie_kernel::script::anim_settle(&__rt, __view, &mut __tree);").unwrap();
-    writeln!(out, "    __rt.with(|w| println!(\"{{}}\", __tree.dump(w)));").unwrap();
+    writeln!(out, "    __rt.with(|w| pixie_kernel::script::emit(&__tree.dump(w)));").unwrap();
     // Scripted interaction: the M0 stand-in for an event loop, and the
     // hook the acceptance tests drive the generated reactive path with.
     // Steps: `click:<label>` · `input[@n]:<text>` · `submit[@n]` ·
@@ -11482,7 +11590,7 @@ fn emit_main(
     // step settles the async tier before the next one runs, so scripted
     // runs stay deterministic.
     writeln!(out, "    if let Ok(__script) = std::env::var(\"PIXIE_SCRIPT\") {{").unwrap();
-    writeln!(out, "        println!(\"{{}}\", pixie_kernel::script::run(&__rt, __view, &mut __tree, &__script));").unwrap();
+    writeln!(out, "        pixie_kernel::script::emit(&pixie_kernel::script::run(&__rt, __view, &mut __tree, &__script));").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
     Ok(())

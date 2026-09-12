@@ -43,10 +43,13 @@ def tally():
 ```
 
 Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
-`log("…")` writes a line to stderr from either run, and `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
+`print(...)` writes to stdout, with `sep=` and `end=` as Python has them; `log("…")` writes a line to stderr instead. Both runs print the same bytes, and the gate compares what an app printed the way it compares the screens — a headless run's dump goes to the file `PIXIE_DUMP` names, so the two channels never mix.
+`assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
-A conditional expression (`a if c else b`) is written in a handler, over int, float, str or bool.
+A comparison is also a **value**: `flag.set(n() > 1)`, `ok = a == b`, and a helper that answers `bool`.
+A conditional expression (`a if c else b`) works anywhere one does in Python — in a handler and in a view — over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
+A store or model method may answer `T | None`, with `return None` for the empty half; the caller narrows it (`v = Bag.pick()`, then `if v is not None:`).
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
 
@@ -346,7 +349,17 @@ def scan():
 ```
 
 A compiled dict remembers the order its keys went in, so a walk visits them in the order Python does.
-Bare `d[k]` reads are refused: they raise `KeyError` when the key is missing, and `.get(key, default)` says what a missing key means.
+A dict also lives in a local, with its types written down: `counts: dict[str, int] = {}`, then `counts[k] = counts.get(k, 0) + 1`.
+A bare `d[k]` read raises `KeyError` when the key is missing, so it is written one of two ways: `.get(key, default)`, which says what a missing key means, or inside a `try`, which catches the miss as Python does — what the `try` catches is the read itself, bound to a name:
+
+```python
+try:
+    gold = counts["gold"]
+    found.set(f"gold {gold}")
+except KeyError as e:
+    found.set(f"no {e}")        # e reads 'gold', as in Python
+```
+
 `.items()` walks the pairs, in the same insertion order.
 
 A dict of lists groups:

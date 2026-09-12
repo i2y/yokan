@@ -1701,7 +1701,11 @@ pub unsafe extern "C" fn pixie_run(
     install_frames();
     if let Ok(script) = std::env::var("PIXIE_SCRIPT") {
         let light = std::env::var("PIXIE_THEME").is_ok_and(|v| v == "light");
-        print!("{}", headless(build, &script, light));
+        // The transcript goes where `PIXIE_DUMP` says, so an app's
+        // own output has stdout to itself. `headless` ends with a
+        // newline of its own, which `emit` would double.
+        let out = headless(build, &script, light);
+        pixie_kernel::script::emit(out.strip_suffix('\n').unwrap_or(&out));
         return 0;
     }
     let mut w = World::new();

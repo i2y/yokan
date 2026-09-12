@@ -498,6 +498,9 @@ class = "Py"
 # no module: not reachable as `module.fn`
 # no layer
 rows = [
+  # `print(...)`: the values' text joined by the translator, then the
+  # call's `end`. Not `pure` — it writes, so a view may not call it.
+  { fn = "printText", params = "s: String, end: String", ret = "Int", rust = "py_print_text" },
   { fn = "floatRepr", params = "v: Float", ret = "String", rust = "py_float_repr", flags = "pure" },
   { fn = "boolRepr", params = "v: Bool", ret = "String", rust = "py_bool_repr", flags = "pure" },
   { fn = "truedivInt", params = "a: Int, b: Int", ret = "Float", rust = "py_truediv_int", flags = "pure" },

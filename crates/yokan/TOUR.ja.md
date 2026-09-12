@@ -397,15 +397,24 @@ def tally():
 ```
 
 `if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
-`log("…")` はどちらの実行でも stderr に一行書きます。
+`print(...)` は stdout に書きます。
+`sep=` と `end=` も Python と同じように使えます。
+`log("…")` のほうは stderr に一行書きます。
+どちらの実行も同じバイト列を書き、ゲートは画面と同じようにアプリが書いた内容も比べます。
+ヘッドレス実行のダンプは `PIXIE_DUMP` が指すファイルに出るので、二つの出力が混ざることはありません。
 `assert` と `raise` は、Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
 条件には bool をそのまま書けます（`if on:`）。
 比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）と、`:=` での束縛も使えます。
-条件式（`a if c else b`）はハンドラの中で書けます。
+比較は**値**でもあります。
+`flag.set(n() > 1)`、`ok = a == b`、bool を返すヘルパが書けます。
+条件式（`a if c else b`）は Python で書ける場所ならどこでも書けます。
+ハンドラの中でも、ビューの中でもです。
 両の枝に置けるのは int、float、str、bool の値です。
 純粋ヘルパ（引数と返り値を注釈し、`return 式` で終わる関数）はハンドラからもビューのテキストからも呼べます。
 分岐の途中で `return` してよく、自分自身も呼べます。
 `list[...]` の引数と既定引数を取り、Value クラスやリストを返せます。
+ストアやモデルのメソッドは `T | None` を返せます。
+空のほうは `return None` と書き、受け取る側で絞り込みます（`v = Bag.pick()` のあと `if v is not None:`）。
 
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
 
@@ -740,9 +749,21 @@ def scan():
 ```
 
 コンパイル後の辞書はキーを入れた順を覚えているので、回すと Python と同じ順に並びます。
-`d[k]` をそのまま読む書き方は断られます。
-無いキーを読むと Python は KeyError を投げます。
-だから読みは、無いときに何を返すかを書く `.get(key, default)` の形です。
+辞書はローカル変数にも置けます。
+型を書いておくのが条件で、`counts: dict[str, int] = {}` と書いてから `counts[k] = counts.get(k, 0) + 1` のように使います。
+`d[k]` をそのまま読むと、無いキーのとき Python は KeyError を投げます。
+だから書き方は二つです。
+無いときに何を返すかを書く `.get(key, default)` か、Python と同じようにキーの不在を捕まえる `try` です。
+`try` が捕まえるのは、名前に束ねた読みそのものです。
+
+```python
+try:
+    gold = counts["gold"]
+    found.set(f"gold {gold}")
+except KeyError as e:
+    found.set(f"no {e}")        # e は Python と同じく 'gold' と読めます
+```
+
 `.items()` はキーと値の対で回ります。
 こちらの順序も挿入順です。
 
@@ -1681,8 +1702,10 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 
 今日の時点でできないことと、その理由です。
 
-- **素の `d[k]` 読み**。
+- **捕まえない素の `d[k]` 読み**。
   読みの形は `.get(key, default)` で、無いキーをどう扱うかは呼び出し側が決めます。
+  `try: v = d[k] except KeyError:` と書けば、Python と同じようにキーの不在を捕まえられます。
+  `try` が捕まえるのは、名前に束ねた読みそのものです。
 - **ストアやモデルのメソッドの中で、フィールドと同じ名前をローカル、引数、ループ変数に付けること**。
   Python では `score` と `self.score` は別の名前ですが、コンパイル済みの側はフィールドをその名前のまま読むので、同じ `score` が二つの実行で別のものを指してしまいます。
   `score_` のように名前を変えれば、Python での意味は変わりません。
@@ -1728,13 +1751,10 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   呼び出しの順を入れ替えると、状態も入れ替わります。
 - 同じ要素オブジェクトを**二回置くこと**。
   一度置いた要素は使い切りで、二か所には置けません。
-- **`T | None` を返すメソッド**。
-  ストアとモデルのメソッドはスカラー、リスト、Value クラス、Enum を返せますが、Optional の返り値はまだありません。
-- **ローカルの辞書**と、注釈のないローカルのリスト（`out: list[str] = []` と書けば、コンパイル側が要素の型を読めます）。
+- **注釈のないローカルのリストと辞書**（`out: list[str] = []`、`counts: dict[str, int] = {}`。コンパイル側が要素の型や値の型を読めるのは、この注釈があるからです）。
 - **方言に形のないものを返す str のメソッド**：`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
   使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
-- **ビューの中の条件式**（`a if c else b`）。ビューでは要素を `if` で分けます。ハンドラの中なら int、float、str、bool に対して書けます。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
 - **`set`**。
@@ -1744,8 +1764,9 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   ただし形を書き下した場合だけで、Rust crate が**返す**タプルはまだ越えられません。
   `re.findall` が群二つ以上を断るのは、そのためです。
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
-- **`print`**。
-  stdout はヘッドレス実行の画面ダンプが出る場所なので、`log("…")` が同じ行を両方の実行で stderr に書きます。
+- **Optional をそのまま文字列にすること**（`picked` が `T | None` のときの `f"{picked}"`）。
+  Python は `None` と書き、コンパイルされた実行は何も書きません。
+  先に絞り込んでから（`if (v := picked) is not None:`）、`v` を描いてください。
 - **Yokan 自身のモジュールでは**：ファイルのコピーや改名、ストリーミングやバイナリのダウンロード。
 - **Python のモジュールでは**：`math` の六つ（それぞれ理由を挙げて断ります）、`random` の `shuffle`（リストをその場で並べ替えるものですが、ここではリストは `State` の中にあります。`random.sample(xs(), len(xs()))` で新しい順序を取って書き戻します）と `gauss` 以外の分布、int のリストに対する `statistics`（返り値が値によって int か float かに変わるためです）。
   `json.loads` も断ります。

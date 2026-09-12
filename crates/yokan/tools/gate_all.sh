@@ -75,6 +75,11 @@ gate pyops   "$PY" yokan_gate.py gate demo/pyops.py --script "click:crunch,click
 # Functions as values: a lambda in a local, a nested def that captures,
 # a callback field armed and swapped, a closure handed to a method, and
 # `map` over one. Every number on the screen is a closure's answer.
+# The everyday Python that used to be refused: an Optional answer, a
+# local dict, a conditional expression in a view, `d[k]` caught as a
+# KeyError, `print` as a second compared channel, an early return, a
+# comparison as a value.
+gate dialect  "$PY" yokan_gate.py gate demo/dialect.py --script "click:add,click:add,click:add,dump,click:take,dump,click:tally,dump,click:look,dump"
 gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,dump,click:harder,click:advance,dump,click:through,dump,click:offset,dump,click:double,dump,click:counted,dump,click:ordered,dump,click:reset,dump"
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
@@ -109,7 +114,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures) continue;;
+    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;

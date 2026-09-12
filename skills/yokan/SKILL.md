@@ -487,8 +487,19 @@ def tally():
   one element, or a helper's name) and `sorted` a `reverse=` for
   those, and the sort is stable. `reversed(xs)` is Python's
   iterator: it belongs in a `for`, and `xs[::-1]` is the list.
-- `log("…")` writes a line to stderr from either run; `assert` and
-  `raise` end the statement the way Python's exception does.
+- `print(...)` writes to stdout with Python's `sep=` / `end=`, and
+  the gate compares what an app printed as a channel of its own (the
+  headless dump goes to the file `PIXIE_DUMP` names). `log("…")`
+  writes a line to stderr from either run; `assert` and `raise` end
+  the statement the way Python's exception does.
+- A comparison is a VALUE as well as a condition (`ok = a == b`, a
+  helper answering `bool`), and `a if c else b` works in a view as
+  well as a handler, over int/float/str/bool.
+- A local dict with its types written down (`counts: dict[str, int]
+  = {}`), and `d[k]` inside a `try` catching `KeyError` — bind the
+  read to a name (`v = d[k]`), which is what the `try` catches.
+- A store or model method may answer `T | None` (`return None` for
+  the empty half); the caller narrows what comes back.
 - Strings: `+`, `==`, `<`, `"-" * 3`, f-strings with Python's
   format specs, `len(s)`, `s[i]`, `s[a:b]`, `in`, and the common
   methods (`.upper()`, `.lower()`, the `.strip()` family,
@@ -855,10 +866,10 @@ reason.
   `s[a:b]` and `in` are in).
 - Format specs beyond fill, align, sign, width, `,`, precision and
   `d` / `f` / `e` / `%` / `s`.
-- A conditional expression inside a view (in a handler it works over
-  int, float, str and bool).
-- `print`: stdout carries the headless dump, so `log("…")` writes
-  to stderr in both runs instead.
+- A `set` — it iterates in an order the compiled run would not
+  reproduce, so a `list` (with `in`) or a `dict` covers it.
+- An optional rendered as text: Python writes `None` and the
+  compiled run writes nothing, so narrow it and render the value.
 - Component parameters that are value classes or enums, and a body
   that is not one container (a top-level `if`, or several elements
   — wrap them in a `column`). Callbacks and State parameters work:

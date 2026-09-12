@@ -338,6 +338,7 @@ class Dt {
 }
 
 class Py {
+  static fn printText(s: String, end: String) Int @rust("yokan_stdlib::py_print_text")
   static fn floatRepr(v: Float) String @rust("yokan_stdlib::py_float_repr")
   static fn boolRepr(v: Bool) String @rust("yokan_stdlib::py_bool_repr")
   static fn truedivInt(a: Int, b: Int) Float @rust("yokan_stdlib::py_truediv_int")

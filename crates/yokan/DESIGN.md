@@ -2682,3 +2682,67 @@ usually does: a closure has no equality to compare.
 and a comparison is a condition in the dialect rather than a value —
 the refusal says so and points at the comprehension, which puts the
 comparison where one is allowed.
+
+## The dump's own channel, and five things everyday Python does (2026-09-12)
+
+Five shapes left the closing list at once, and one of them needed the
+others' room first: `print` could not exist while stdout WAS the
+dump.
+
+**`PIXIE_DUMP` names where the screens go.** A scripted run's
+transcript went to stdout because nothing else was available; now one
+function in the kernel decides — the file that variable names, or
+stdout when it names none — and the three writers (the generated
+`main`, the C face, Yokan's interpreted run) all call it. Nothing
+changes for a run that does not set it, which is what keeps the other
+three languages' gates as they were. The gate sets a path per run and
+then compares TWO channels: the dumps, and what the app itself
+printed. That is what makes `print` a checked output rather than an
+unchecked one, and it is the only reason to have let it in.
+
+`print(*values, sep, end)` renders each value the way an f-string hole
+renders it — which is where Python's own text for a float, a bool and
+an enum comes from — joins them, and hands one string to a twin that
+writes it. The joining is the call's business, so the twin takes the
+text and whatever ends it.
+
+**A comparison is a value.** `b = n() > 1` was refused everywhere: a
+comparison was a CONDITION and nothing else. It is an ordinary
+expression in pixie, so it is one here — which also gives `filter` the
+predicate it had no way to be handed.
+
+**An `if` is a value too.** pixie's parser and checker already took
+`if c { a } else { b }` as an expression; codegen and the interpreter
+lower it now, in a method body and inside a view's text hole, so a
+Python conditional works in a view where it used to need an element
+branch. A branch that answers nothing is still a statement `if`.
+
+**A local dict** stands beside the local list, with the same bargain:
+the annotation says the types (`counts: dict[str, int] = {}`) because
+the compiled side cannot read them off `{}`. Writing into one needed
+the substrate's index-assign to reach a LOCAL container, which it now
+does in place — the local owns it, so the copy-on-write finds a single
+owner.
+
+**`d[k]` under `try`** is the read Python answers with a `KeyError`,
+so the compiled run asks exactly that question: `contains`, then the
+value or the clause. No new primitive, nothing for the two runs to
+disagree about, and `except KeyError as e` reads the key's repr in
+both. An uncaught `d[k]` keeps its refusal — a missing key has to mean
+something — and the message now names both ways to say so.
+
+**A method may answer `T | None`.** `return None` needed a signature
+that says so, and that is the whole of it: the consuming side already
+narrowed. Early `return`s inside branches already worked; what did not
+was a body ending in an `if` / `else` where both sides answer, which
+is what Python writes most. That shape is rewritten into the one a
+compiled body needs — the `else` hoisted out, the last `return`
+standing on its own.
+
+Two things this turned up. An optional rendered as text disagreed
+silently: Python writes `None`, pixie writes nothing, and the dialect
+now refuses it and says to narrow first — the same decision the cell
+form already carried, applied to fields, parameters and answers. And a
+`set` was refused as a gap ("not in the dialect yet") when the ledger
+had already decided it: it iterates in an order the compiled side
+would not reproduce. Both spellings say the reason now.

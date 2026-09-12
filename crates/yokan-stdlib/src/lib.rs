@@ -4083,6 +4083,23 @@ pub fn clock_local_offset_minutes(ms: i64) -> i64 {
 // frame, a headless run keeps it to itself — so copying and pasting is
 // something a script can check.
 
+/// `print(...)` — the text the translator joined, then whatever the
+/// call's `end=` says (a newline unless the app changed it). Stdout
+/// is the app's channel: a scripted run's transcript goes to the file
+/// `PIXIE_DUMP` names, so the two do not mix. Answers the number of
+/// characters written, which nothing reads — `print` answers `None`
+/// in Python and the dialect discards it.
+pub fn py_print_text(text: &str, end: &str) -> i64 {
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(text.as_bytes());
+    let _ = out.write_all(end.as_bytes());
+    // A run that ends without a flush would lose what it printed;
+    // stdout is line-buffered only when it is a terminal.
+    let _ = out.flush();
+    (text.len() + end.len()) as i64
+}
+
 pub fn clipboard_set_text(text: &str) -> i64 {
     pixie_kernel::clipboard::set(text);
     text.len() as i64

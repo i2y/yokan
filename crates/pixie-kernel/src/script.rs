@@ -9,6 +9,41 @@
 
 use crate::{Component, Element, Handle, Runtime, Str, World, a11y, anim, build_prepared, theme};
 
+/// Where a scripted run's transcript goes.
+///
+/// Stdout, unless `PIXIE_DUMP` names a file — and then the file, so
+/// stdout belongs to the app and what it PRINTS is a channel of its
+/// own. One writer for every front end: the generated `main`, the C
+/// face, and an embedder that drives the harness itself. The first
+/// write of a process truncates and the rest append, so a run that
+/// dumps twice (the screen it started with, then the transcript)
+/// leaves one file and not two.
+pub fn emit(text: &str) {
+    use std::io::Write;
+    let Ok(path) = std::env::var("PIXIE_DUMP") else {
+        println!("{text}");
+        return;
+    };
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let first = !STARTED.swap(true, std::sync::atomic::Ordering::Relaxed);
+    let f = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(first)
+        .append(!first)
+        .open(&path);
+    match f {
+        Ok(mut f) => {
+            let _ = writeln!(f, "{text}");
+        }
+        // A dump nobody can write is a broken run, not a quiet one.
+        Err(e) => {
+            eprintln!("pixie: cannot write the dump to {path}: {e}");
+            std::process::exit(2);
+        }
+    }
+}
+
 /// Flush queued signals; rebuild if any view dirtied.
 pub fn flush<C: Component>(rt: &Runtime, view: Handle<C>, tree: &mut Element) {
     let next = rt.with(|w| {
