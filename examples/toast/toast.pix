@@ -1,0 +1,38 @@
+store App {
+  state note : String = "nothing saved yet"
+  state saved : Bool = false
+  state hint : Bool = true
+
+  fn save {
+    note = "saved"
+    saved = true
+  }
+
+  fn done {
+    saved = false
+    note = "the toast closed itself"
+  }
+
+  fn dismiss {
+    hint = false
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text { text: "#{App.note}"; fontSize: 16.0 }
+    Row {
+      spacing: 8.0
+
+      Button { text: "save"; onClick: App.save() }
+      Button { text: "dismiss"; onClick: App.dismiss() }
+    }
+    Toast { message: "welcome - press save"; open: App.hint }
+    if App.saved {
+      Toast { message: "Saved"; durationMs: 1500.0; onClose: App.done() }
+    }
+  }
+}

@@ -8,6 +8,7 @@
 //! HScrollView / Image / Svg / DataTable / Modal / BarChart /
 //! LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select /
 //! RadioGroup / TabBar / Spacer / Divider / Link / Table / NumberField / IntField / Segmented /
+//! Toast (hoisted to the window's bottom, as Modal is to its middle) /
 //! Canvas (whose drawing commands this crate rasterizes itself — see `raster`),
 //! plus the riders every element takes — Themed / Semantics / Tooltip /
 //! Disabled / Sized / Anim (and the GridCell above) — each a wrapper
@@ -994,6 +995,12 @@ struct RenderPass {
     /// only its enclosing Column. Root::render re-parents them onto the
     /// padding-free outer frame, where `inset_0` means the window.
     overlays: Vec<gpui::AnyElement>,
+    /// Open Toasts, hoisted the same way — but collected apart from
+    /// the overlays because they share ONE bottom-anchored column.
+    /// Two toasts up at once stack with a gap between them; pushed as
+    /// separate full-window overlays they would land on the same
+    /// pixels and one would hide the other.
+    toasts: Vec<gpui::AnyElement>,
     /// Path prefixes owned by lazily-built ListViews this pass. The
     /// input-editor GC must not collect a TextField that lives inside
     /// a lazy row: those paths are only walked when the row range is
@@ -1096,6 +1103,7 @@ impl<C: Component> Render for Root<C> {
             seen: Vec::new(),
             order: Vec::new(),
             overlays: Vec::new(),
+            toasts: Vec::new(),
             lazy_prefixes: Vec::new(),
             disabled: false,
         };
@@ -1275,6 +1283,29 @@ impl<C: Component> Render for Root<C> {
                 .child(app_area.w_full().flex_1().min_h(px(0.0)))
                 .into_any_element(),
         };
+        // Every Toast this frame put up, in one column pinned to the
+        // window's bottom edge. An `inset_0` wrapper stretches ITSELF,
+        // not what is inside it, so the flex is what puts the messages
+        // at the main-axis end (the bottom) and the cross-axis middle;
+        // the gap is what separates two of them. Empty when no toast
+        // is open, which is when nothing is added at all.
+        let toast_layer: Option<gpui::AnyElement> = (!pass.toasts.is_empty()).then(|| {
+            deferred(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .justify_end()
+                    .items_center()
+                    .gap(px(8.))
+                    // Off the window's rim, clear of a resize grip.
+                    .pb(px(24.))
+                    .children(std::mem::take(&mut pass.toasts)),
+            )
+            .into_any_element()
+        });
         gpui::image_cache(self.images.clone())
             .relative()
             .flex()
@@ -1357,6 +1388,16 @@ impl<C: Component> Render for Root<C> {
                     .text_color(rgb(th.text))
                     .child(framed)
                     .children(pass.overlays)
+                    // The toast layer: one full-window column for all
+                    // of them, anchored at the bottom, so a second
+                    // message stacks above the first instead of over
+                    // it. `deferred` paints it after everything the
+                    // app drew; the wrapper carries no id, listener or
+                    // hover style, so gpui builds no hitbox for it and
+                    // clicks fall straight through to the app — a
+                    // toast interrupts nothing, which is the whole
+                    // difference from a Modal.
+                    .children(toast_layer)
                     // Last, so an edge stays takeable over whatever
                     // the app has drawn against the window's rim.
                     .children(resize_grips(decorations)),
@@ -2399,10 +2440,12 @@ fn render_el_in<C: Component>(
                                 path: base_path.clone(),
                                 seen: Vec::new(),
                                 order: Vec::new(),
-                                // Overlays (Modal) inside lazy rows have
-                                // no root frame to hoist onto from here;
-                                // they are dropped. Documented.
+                                // Overlays (Modal, Toast) inside lazy
+                                // rows have no root frame to hoist onto
+                                // from here; they are dropped.
+                                // Documented.
                                 overlays: Vec::new(),
+                                toasts: Vec::new(),
                                 lazy_prefixes: Vec::new(),
                                 disabled: false,
                             };
@@ -3831,6 +3874,7 @@ fn render_el_in<C: Component>(
                                 // Overlays inside lazy rows are dropped
                                 // (ListView's documented limit).
                                 overlays: Vec::new(),
+                                toasts: Vec::new(),
                                 lazy_prefixes: Vec::new(),
                                 disabled: false,
                             };
@@ -4042,6 +4086,52 @@ fn render_el_in<C: Component>(
                 d = d.child(seg);
             }
             d.into_any_element()
+        }
+        // The transient message. Hoisted onto `pass.overlays` like
+        // Modal — taffy resolves an `absolute` child against its
+        // DIRECT parent, so escaping the container that declared it is
+        // re-parenting, not positioning — and dropped at the BOTTOM of
+        // that padding-free outer frame instead of its middle.
+        //
+        // Two deliberate differences from Modal, both because a toast
+        // interrupts nothing:
+        //
+        // - no scrim and no `.occlude()`. A bare div with no id, no
+        //   listener and no hover style creates no hitbox, so the
+        //   full-window wrapper is transparent to clicks and the app
+        //   underneath keeps working while the message is up.
+        // - the in-place placeholder is `absolute()` whether or not
+        //   the toast is open, so standing one up never opens a gap in
+        //   the column that declared it (Modal keeps a flow
+        //   placeholder while open; a dialog already owns the window).
+        Element::Toast {
+            message, open, ..
+        } => {
+            if !*open {
+                return div().absolute().into_any_element();
+            }
+            pass.next_id += 1;
+            let surface = with_a11y(div().id(pass.next_id), el, sem)
+                .bg(rgb(th.surface))
+                .border_1()
+                .border_color(rgb(th.border))
+                .text_color(rgb(th.text))
+                .rounded_md()
+                // Modal's shadow, so the message reads as floating over
+                // the app rather than painted into it.
+                .shadow(vec![
+                    BoxShadow::new(px(0.), px(8.), hsla(0., 0., 0., 0.35)).blur_radius(px(12.)),
+                ])
+                .px_4()
+                .py_2()
+                .max_w(px(480.))
+                .child(SharedString::from(message.as_str().to_string()));
+            // Into the shared layer, not an overlay of its own:
+            // `Root::render` puts every toast of the frame into ONE
+            // bottom-anchored column, so two at once stack instead of
+            // landing on the same pixels.
+            pass.toasts.push(surface.into_any_element());
+            div().absolute().into_any_element()
         }
         // The drawing surface. Everything else in the catalog hands
         // gpui elements and lets it paint; this one paints itself,

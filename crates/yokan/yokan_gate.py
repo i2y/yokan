@@ -10807,6 +10807,41 @@ class Translator:
             props = sty + [f"text: {label}"] + ([f"onClick: {h}"] if h else [])
             return [f"{pad}Button {{ {'; '.join(props)} }}"]
 
+        if self._is_ui(node.func, "toast"):
+            if not node.args:
+                raise Untranslatable(node, "toast() needs its message")
+            if "open" in kw:
+                raise Untranslatable(
+                    node,
+                    "a toast is open by existing — wrap it in `if show():` instead of passing open=",
+                )
+            message = self._text_value(node.args[0])
+            ms = self._num(kw, "duration_ms")
+            h = self.handler(kw["on_close"], takes_text=False) if "on_close" in kw else None
+            if ms is not None and h is None:
+                raise Untranslatable(
+                    node,
+                    "duration_ms= closes the toast by calling on_close= — add a handler that "
+                    "clears the flag the `if` reads, or drop duration_ms= and close it yourself",
+                )
+            for k in kw:
+                if k not in ("duration_ms", "on_close"):
+                    raise Untranslatable(kw[k], f"toast() does not take `{k}=`")
+            if isinstance(h, tuple):
+                lines = [f"{pad}Toast {{", f"{pad}  message: {message}"]
+                if ms is not None:
+                    lines.append(f"{pad}  durationMs: {ms}")
+                lines.append(f"{pad}  onClose: {{")
+                lines += [f"{pad}    {ln}" for ln in h[1]]
+                lines += [f"{pad}  }}", f"{pad}}}"]
+                return lines
+            props = [f"message: {message}"]
+            if ms is not None:
+                props.append(f"durationMs: {ms}")
+            if h:
+                props.append(f"onClose: {h}")
+            return [f"{pad}Toast {{ {'; '.join(props)} }}"]
+
         if self._is_ui(node.func, "link"):
             if len(node.args) < 2:
                 raise Untranslatable(node, 'link() takes the label and the url: `link("Docs", "https://…")`')
@@ -11286,7 +11321,7 @@ class Translator:
         if isinstance(node.func, ast.Name) and node.func.id in self.defs:
             return self._component_use(node, indent)
 
-        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, spacer, divider, link, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, image, svg, bar_chart, line_chart, progress, spinner")
+        raise Untranslatable(node, f"`{ast.unparse(node.func)}` is not an element and not a def in the app — the elements are text, button, text_field, checkbox, switch, slider, select, radio_group, tab_bar, spacer, divider, link, column, row, grid, stack, list_view, scroll_view, h_scroll_view, data_table, modal, toast, image, svg, bar_chart, line_chart, progress, spinner")
 
     def _rows_source(self, ca, what):
         """The list a row-built element (list_view, table) counts with
