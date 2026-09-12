@@ -1,5 +1,6 @@
 store Rows {
   state rows : List<String> = []
+  state at : Int = -1
 
   fn fill {
     rows.push("row #{rows.length}")
@@ -14,6 +15,15 @@ store Rows {
 
   fn clear {
     rows = []
+    at = -1
+  }
+
+  fn bottom {
+    at = rows.length - 1
+  }
+
+  fn top {
+    at = 0
   }
 }
 
@@ -23,11 +33,14 @@ view Main {
     Row {
       Button { text: "fill"; onClick: Rows.fill() }
       Button { text: "clear"; onClick: Rows.clear() }
+      Button { text: "bottom"; onClick: Rows.bottom() }
+      Button { text: "top"; onClick: Rows.top() }
     }
     ListView {
       virtualized: true
       itemHeight: 24.0
       height: 280.0
+      scrollTo: Rows.at
       for r in Rows.rows {
         Text { text: r }
       }

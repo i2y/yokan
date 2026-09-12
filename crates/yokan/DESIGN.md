@@ -3113,3 +3113,29 @@ has a popup; this vocabulary has no way to say so, and a role for one
 element is a change to `Role::parse`, the engine's map and the tour's
 list. The C face has no keyword for it either, so the three sibling
 languages cannot reach it and no generated table went stale.
+
+## The scrolling step that is not being added (2026-09-12)
+
+A scroll position is not the app's. Nothing in the built tree carries
+one — the offset lives in the engine, keyed by element path, exactly
+where a Select's open panel lives — so a headless run has nothing to
+move, and a `scroll:` step would be driving state no dump can see.
+Making the position the app's instead would mean every scrolling
+viewport binds a number and writes it back on every wheel tick, which
+is not a contract a scroll bar has or an app wants.
+
+What an app does legitimately say is "show me this row", and that is a
+property rather than a gesture. `scrollTo:` on a list is that sentence:
+it joins the dump when it is set, both runs are held to it, and the
+engine obeys it when the NUMBER CHANGES. Obeying it every frame would
+drag the viewport back the moment anyone scrolled off the row, so the
+engine records the ask beside the scroll handle; putting the prop back
+to -1 clears the record, which is how the same row is asked for twice.
+
+So the step is refused by design and the property lands instead. The
+wheel stays outside the gate with the open panel and the caret — what
+is not in the tree is not compared — and what the window does with an
+ask is checked by looking at it. The C face declares no keyword for
+it, so the three sibling languages are unaffected, and a table has no
+`scrollTo:` yet either: it shares the machinery and would be a second
+row in the same tables.

@@ -2477,6 +2477,12 @@ fn build_element_inner(
                 None => -1,
             };
             let on_select = prop_of(el, "onSelect").map(|a| make_int_listener(a, env));
+            // The row the app asks to have in view, `-1` for none —
+            // codegen's `scrollTo:` arm, mirrored.
+            let scroll_to = match prop_of(el, "scrollTo") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => -1,
+            };
             if virtualized {
                 if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                     let lazy = build_lazy_rows(binding, index, iter, child, env, scope, w)?;
@@ -2487,6 +2493,7 @@ fn build_element_inner(
                         grow,
                         selected,
                         on_select,
+                        scroll_to,
                         children: Vec::new(),
                         lazy: Some(lazy),
                     });
@@ -2499,6 +2506,7 @@ fn build_element_inner(
                 grow,
                 selected,
                 on_select,
+                scroll_to,
                 children: build_children(el, env, scope, w)?,
                 lazy: None,
             })
@@ -3229,7 +3237,15 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         ],
         "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
-        "ListView" => &["virtualized", "itemHeight", "height", "grow", "selected", "onSelect"],
+        "ListView" => &[
+            "virtualized",
+            "itemHeight",
+            "height",
+            "grow",
+            "selected",
+            "onSelect",
+            "scrollTo",
+        ],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
         "Table" => &[

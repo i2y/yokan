@@ -1345,6 +1345,12 @@ pub enum Element {
         /// when the app writes the new value back.
         selected: i64,
         on_select: Option<IntListener>,
+        /// The row the app asks to have in view, or `-1` for none.
+        /// A scroll POSITION is the engine's — nothing in this tree
+        /// carries one, so a headless run has none to move — but
+        /// "show me this row" is the app's own sentence, and the
+        /// engine obeys it when the number changes.
+        scroll_to: i64,
         children: Vec<Element>,
         lazy: Option<LazyRows>,
     },
@@ -2586,6 +2592,7 @@ impl Element {
                 height,
                 grow,
                 selected,
+                scroll_to,
                 children,
                 lazy,
                 ..
@@ -2606,6 +2613,7 @@ impl Element {
                     && *height == 0.0
                     && *grow == 0.0
                     && *selected < 0
+                    && *scroll_to < 0
                 {
                     format!("ListView[{}]", inner.join(", "))
                 } else {
@@ -2621,6 +2629,12 @@ impl Element {
                     // is in the dump — and only when a row is.
                     if *selected >= 0 {
                         props.push_str(&format!(", selected={selected}"));
+                    }
+                    // What the app asked to have in view, for the same
+                    // reason: it is a sentence the app said, and the
+                    // only part of scrolling either run can compare.
+                    if *scroll_to >= 0 {
+                        props.push_str(&format!(", scrollTo={scroll_to}"));
                     }
                     format!("ListView({props})[{}]", inner.join(", "))
                 }

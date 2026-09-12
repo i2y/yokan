@@ -166,7 +166,7 @@ shows a finished transcript — its launch state is an empty table.
 #### roster — table: a virtualized table with column tracks, row selection and header sort (the app re-sorts its own lists)
 <img src="screenshots/roster.png" width="360">
 
-#### picklist — list_view with a marked row: `selected=` / `on_select`, the pair a table takes, and a script picks a row by what it says
+#### picklist — list_view with a marked row: `selected=` / `on_select`, the pair a table takes, a script picking a row by what it says, and `scroll_to` bringing the picked row into view
 <img src="screenshots/picklist.png" width="360">
 
 #### labels — the accessibility properties `role=` and `a11y_label=`, printed by a script's `a11y` step

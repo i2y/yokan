@@ -288,8 +288,16 @@ list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さ�
 
 ```python
 list_view(len(names()), line, item_height=28.0, height=180.0,
-          selected=picked(), on_select=picked.set)
+          selected=picked(), on_select=picked.set, scroll_to=picked())
 ```
+
+`scroll_to=` は、見えるところに出したい行の番号です。
+スクロールの位置そのものは、スクロールしている人のものなので、アプリが言えるのはこの一言だけです。
+リストは番号が変わったときにだけ従い、それ以外では表示位置に触りません。
+誰かがスクロールしたリストが、画面を組み直すたびに引き戻されることはありません。
+`-1` は何も頼まないという意味です。
+スクリプトにスクロールのステップが無いのも同じ理由です。
+ダンプに出るのは頼んだ番号で、二つの実行が突き合わされるのもそれだからです。
 
 表は、ヘッダーと列トラックを持つ `list_view` です。
 `table(columns, count, row)` は、見えている行についてだけ `row(i)` を呼びます。

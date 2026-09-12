@@ -231,13 +231,18 @@ def list_view(
     grow: float = 0.0,
     selected: int = -1,
     on_select: Optional[Callable[[int], Any]] = None,
+    scroll_to: int = -1,
     **props: Unpack[SharedPropsOwnHeight],
 ) -> Element:
     """`selected` is the row the app has marked, or -1 for none — data
     the app owns, as a slider's value is: clicking a row calls
     `on_select` with its index and the mark moves when the app writes
     the new value back. A verification script picks a row by what it
-    says (`select:<text>`), the first text anywhere in it."""
+    says (`select:<text>`), the first text anywhere in it.
+
+    `scroll_to` is a row to bring into view, or -1 for none. The list
+    obeys it when the number changes, so a list someone has scrolled
+    is left where they put it."""
 def scroll_view(
     *children: Element, height: float = 0.0, **props: Unpack[SharedPropsOwnHeight]
 ) -> Element: ...

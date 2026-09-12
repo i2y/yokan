@@ -4846,7 +4846,7 @@ shows a finished transcript — its launch state is an empty table.
 
 
 
-#### picklist — list_view with a marked row: `selected=` / `on_select`, the pair a table takes, and a script picks a row by what it says
+#### picklist — list_view with a marked row: `selected=` / `on_select`, the pair a table takes, a script picking a row by what it says, and `scroll_to` bringing the picked row into view
 <img src="images/demos/picklist.png" width="360">
 
 <!-- source -->
@@ -4863,6 +4863,11 @@ shows a finished transcript — its launch state is an empty table.
     to move the mark rather than moving it behind the app's back. The
     rows are whatever the builder returns, so a verification script picks
     one by what it says — the first text anywhere in the row.
+
+    The viewport is three rows tall, so `scroll_to` has something to do:
+    it is the row the app asks to have in view, and the list obeys it
+    when the number changes — a scroll position belongs to whoever is
+    scrolling, and this is the one sentence an app can say about it.
     """
     import os
     import sys
@@ -4897,9 +4902,10 @@ shows a finished transcript — its launch state is an empty table.
                 len(names()),
                 line,
                 item_height=28.0,
-                height=180.0,
+                height=84.0,
                 selected=picked(),
                 on_select=choose,
+                scroll_to=picked(),
             )
             text(f"picked: {picked()}")
             button("clear", on_click=clear)

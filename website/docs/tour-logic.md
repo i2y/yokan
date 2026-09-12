@@ -256,8 +256,12 @@ A list with no `on_select` is an ordinary list, and a `select:` step walks past 
 
 ```python
 list_view(len(names()), line, item_height=28.0, height=180.0,
-          selected=picked(), on_select=picked.set)
+          selected=picked(), on_select=picked.set, scroll_to=picked())
 ```
+
+`scroll_to=` names a row to bring into view, and it is the one thing an app can say about scrolling: the position itself belongs to whoever is scrolling.
+The list obeys the number when it changes and leaves the viewport alone otherwise, so a list someone has scrolled is not dragged back every time the screen is rebuilt; `-1` asks for nothing.
+There is no scrolling step in a script, for the same reason — what the dump carries, and what the two runs are held to, is the ask.
 
 A table is a `list_view` with a header and column tracks.
 `table(columns, count, row)` calls `row(i)` for the visible rows only, and the builder returns a `row` of one cell per column; `widths=` are the tracks' shares.

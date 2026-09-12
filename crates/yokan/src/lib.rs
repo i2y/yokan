@@ -1884,8 +1884,8 @@ element_fn! {
     /// Virtualized rows: `row(i)` is called only for the visible range
     /// (pixie's LazyRows + gpui uniform_list — ~14 calls for 100k rows).
     native_height list_view
-    (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, selected=-1, on_select=None,)
-    [count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, selected: i64, on_select: Option<Py<PyAny>>,]
+    (count, row, item_height=24.0, height=0.0, virtualized=true, grow=0.0, selected=-1, on_select=None, scroll_to=-1,)
+    [count: usize, row: Py<PyAny>, item_height: f64, height: f64, virtualized: bool, grow: f64, selected: i64, on_select: Option<Py<PyAny>>, scroll_to: i64,]
     {
         let build = py_row_builder(row);
         Element::ListView {
@@ -1895,6 +1895,7 @@ element_fn! {
             grow,
             selected,
             on_select: on_select.map(int_listener),
+            scroll_to,
             children: Vec::new(),
             lazy: Some(LazyRows { len: count, build }),
         }

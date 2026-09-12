@@ -424,6 +424,12 @@ struct ScrollState {
     drag: Rc<Cell<Option<(f32, f32)>>>,
     /// Pointer inside the thumb's (inflated) hit rect.
     hover: Rc<Cell<bool>>,
+    /// The row `scrollTo:` last asked for, `None` until one is. A
+    /// scroll position belongs to the person scrolling, so the list
+    /// obeys the app when the NUMBER CHANGES and never again: asking
+    /// for row 12 every frame would drag the viewport back the moment
+    /// anyone scrolled off it.
+    asked: Rc<Cell<Option<i64>>>,
 }
 
 /// Scrollbar metrics. cute_ui paints a 4 px thumb inset 2 px with a
@@ -727,6 +733,26 @@ fn style_box<E: gpui::Styled>(
 /// Create-or-reuse the scroll state for the viewport at `pass.path` and
 /// mark that path live for this pass's GC — `Element::TextField`'s
 /// editor lookup, one map over.
+/// Has the app just asked for a row this viewport has not obeyed yet?
+///
+/// `scrollTo:` is a sentence, not a position: the app says "show me
+/// this row" and the engine does it once. Answering true also RECORDS
+/// the ask, so the next frame — and every frame after it, while the
+/// number stands — leaves the viewport where the person scrolling put
+/// it. Putting the prop back to -1 clears the record, so the same row
+/// can be asked for again.
+fn take_ask(st: &ScrollState, scroll_to: i64) -> bool {
+    if scroll_to < 0 {
+        st.asked.set(None);
+        return false;
+    }
+    if st.asked.get() == Some(scroll_to) {
+        return false;
+    }
+    st.asked.set(Some(scroll_to));
+    true
+}
+
 fn scroll_state(
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     pass: &mut RenderPass,
@@ -2421,6 +2447,7 @@ fn render_el_in<C: Component>(
             grow,
             selected,
             on_select,
+            scroll_to,
             children,
             lazy,
         } => {
@@ -2523,6 +2550,11 @@ fn render_el_in<C: Component>(
                 // `track_scroll` is genuinely out of reach.)
                 let ulh = gpui::UniformListScrollHandle::new();
                 ulh.0.borrow_mut().base_handle = st.handle.clone();
+                if take_ask(&st, *scroll_to) {
+                    // Non-strict: a row already in view moves nothing,
+                    // which is what "show me this one" means.
+                    ulh.scroll_to_item(*scroll_to as usize, gpui::ScrollStrategy::Top);
+                }
                 let list = list.track_scroll(&ulh);
                 let mut outer = div().relative();
                 if *grow > 0.0 {
@@ -2581,6 +2613,9 @@ fn render_el_in<C: Component>(
                 pass.next_id += 1;
                 let id = pass.next_id;
                 let st = scroll_state(scrolls, pass);
+                if take_ask(&st, *scroll_to) {
+                    st.handle.scroll_to_item(*scroll_to as usize);
+                }
                 let frame = frame.id(id).overflow_y_scroll().track_scroll(&st.handle);
                 let frame = if *grow > 0.0 {
                     frame.h_full()

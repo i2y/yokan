@@ -10953,7 +10953,22 @@ class Translator:
                     lines += [f"{pad}  onSelect: {{"] + [f"{pad}    {ln}" for ln in h9[1]] + [f"{pad}  }}"]
                 else:
                     lines.append(f"{pad}  onSelect: {h9}")
-            known = {"virtualized", "item_height", "height", "grow", "selected", "on_select"}
+            # "Show me this row." A scroll position is nobody's to
+            # write down — the app does not own one and neither run
+            # carries one — but the row to bring into view is a number
+            # the app holds, so it reads like `selected=`.
+            if "scroll_to" in kw:
+                v8 = kw["scroll_to"]
+                if isinstance(v8, ast.Constant):
+                    raise Untranslatable(
+                        v8,
+                        "scroll_to= is an int state or store-field read — the list "
+                        "obeys it when the number changes, so a literal would ask once "
+                        "and never again",
+                    )
+                lines.append(f"{pad}  scrollTo: {self._int_binding(v8, 'scroll_to=')}")
+            known = {"virtualized", "item_height", "height", "grow", "selected",
+                     "on_select", "scroll_to"}
             for k in kw:
                 if k not in known:
                     raise Untranslatable(kw[k], f"list_view() does not take `{k}=`")

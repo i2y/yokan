@@ -200,7 +200,15 @@ fn container_prop_allowlists_match_across_tiers() {
     // And the table is not vacuous.
     assert_eq!(
         pixie_codegen::container_prop_keys("ListView"),
-        ["virtualized", "itemHeight", "height", "grow", "selected", "onSelect"]
+        [
+            "virtualized",
+            "itemHeight",
+            "height",
+            "grow",
+            "selected",
+            "onSelect",
+            "scrollTo"
+        ]
     );
     // ScrollView takes the viewport height and nothing else; its
     // horizontal twin clips on width, so it takes no props at all.
@@ -468,9 +476,13 @@ fn tiers_agree_on_every_demo() {
             "click:open,input:hi,click:close",
         ),
         ("examples/layers/layers.pix", "click:bump,click:bump"),
+        // A long list, and the one sentence an app can say about
+        // scrolling: `scrollTo:` asks for a row. The position itself
+        // is the person's, so nothing in the tree carries it — what
+        // the dump compares is the ASK, which is the app's own number.
         (
             "examples/biglist/biglist.pix",
-            "click:fill,click:fill,click:clear,click:fill",
+            "click:fill,click:fill,click:bottom,dump,click:top,dump,click:clear,click:fill",
         ),
         // `hover:` puts the pointer on a point; the dump carries the
         // readout, so both tiers are held to one text for it.

@@ -162,7 +162,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### roster — table。仮想化された表に、列トラック、行の選択、見出しでのソートを付ける（並べ替えはアプリ側）
 <img src="screenshots/roster.png" width="360">
 
-#### picklist — 行を選べる list_view。`selected=` / `on_select` は表と同じ組で、スクリプトは行が表示している文字で行を選ぶ
+#### picklist — 行を選べる list_view。`selected=` / `on_select` は表と同じ組で、スクリプトは行が表示している文字で行を選ぶ。`scroll_to` は選ばれた行を見えるところに出す
 <img src="screenshots/picklist.png" width="360">
 
 #### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが出力する

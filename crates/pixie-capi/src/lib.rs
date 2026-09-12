@@ -778,8 +778,10 @@ fn materialize(b: &Bag, children: Vec<Element>) -> Element {
                 // nothing on this face can write one, and -1 is the
                 // value that says no row is marked. A table's selection
                 // does cross, because the table declares both keywords.
+                // `scrollTo:` is the dialect's for the same reason.
                 selected: -1,
                 on_select: None,
+                scroll_to: -1,
                 children: Vec::new(),
                 lazy: b.lazy(K_ROW, count),
             }

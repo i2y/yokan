@@ -321,7 +321,9 @@ item_height=22.0, height=200.0)` is virtualized — `row(i)` runs
 only for visible rows and returns `text(items()[i])`; `grow=1.0`
 fills the parent instead of `height=`. `selected=` / `on_select`
 mark a row as a table's do, and a script picks a row by the first
-text anywhere in it.
+text anywhere in it. `scroll_to=` names a row to bring into view —
+obeyed when the number changes, `-1` for none — and it is all an app
+can say about scrolling, since the position is the reader's.
 
 **Components.** `@component` with `local` for per-instance state;
 `@component(slots=True)` takes children at `slot()`:
