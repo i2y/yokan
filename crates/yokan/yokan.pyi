@@ -417,6 +417,16 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
     **props: Unpack[SharedProps],
 ) -> Element: ...
+def menu_button(
+    label: str,
+    options: Sequence[str] = (),
+    on_select: Optional[Callable[[int], Any]] = None,
+    **props: Unpack[SharedProps],
+) -> Element:
+    """A button that opens a short menu. There is no current value to
+    show, so the label stays put; choosing an item calls `on_select`
+    with its index. A script picks from a menu the way it picks from
+    a `select`."""
 def spinner(size: float = 0.0, **props: Unpack[SharedProps]) -> Element: ...
 def link(label: str, url: str, size: float = 0.0, **props: Unpack[SharedProps]) -> Element:
     """Text that opens `url` in the browser when clicked; a headless

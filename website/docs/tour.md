@@ -196,7 +196,7 @@ The elements, by what they are for:
   `grid(columns=, rows=)` lays equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
   `spacer()` takes the space its row or column has left (`grow=` shares it between several); `divider()` draws a rule across its parent, vertical inside a row.
   `split(first, second, ratio=…)` puts two panes either side of a divider the user can drag.
-- **Input**: `button`, and the [form controls](#form-controls).
+- **Input**: `button`, `menu_button` (a button that opens a short menu), and the [form controls](#form-controls).
 - **Showing**: `text`, `link`, `image`, `svg`, `progress`, `spinner`, `bar_chart`, `line_chart`.
   `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
 - **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
@@ -307,6 +307,7 @@ select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+menu_button("Fruit", Settings.fruits, on_select=Settings.pick_fruit)
 int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
 number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
@@ -314,6 +315,7 @@ number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.se
 - **checkbox / switch**: a label and `checked=`. The handler receives the new bool. In verification scripts, `click:<label>` toggles.
 - **slider**: `value=` plus `min=` / `max=` / `step=`. The handler receives the new float. The script verb is `slide:<value>` (clamped to the range, snapped to the step).
 - **select / radio_group / tab_bar / segmented**: the list of options and the current position. The handler receives the chosen **index**. The script verb is `select:<label>`. `segmented` is the same contract painted as one joined pill group, the current segment filled in.
+- **menu_button**: a label and the items it offers. There is no current value — picking from a menu is an action, not a change — so the label stays put and the handler receives the chosen **index**. It is a chooser like the four above, which is why the script verb is theirs: `select:<item>`, and `select@1:` when a view has more than one chooser.
 - **number_field / int_field**: a typed number. Typing reports nothing; `enter`, an arrow key or leaving the field commits — the text is parsed with Python's `float()` / `int()` rules, clamped into `min=` / `max=` (both 0 = no range), snapped to `step=`, and the handler runs only when the value changed. Text that is not a number is dropped, and the field shows the app's value again. In scripts, `input:<text>` commits in one step.
 - **text_field**: the value and `on_change=`. `multiline=True` makes it a field that holds paragraphs — it wraps, `enter` writes a newline instead of submitting, the caret moves by visual line, and `rows=` says how many lines are visible.
 

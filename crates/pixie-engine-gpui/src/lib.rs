@@ -3494,206 +3494,44 @@ fn render_el_in<C: Component>(
                 .child(paint.size_full())
                 .into_any_element()
         }
-        // The closed dropdown: a bordered control showing the current
-        // option, whose open/closed popover state is engine-side and
-        // path-keyed (the TextField rule — it survives rebuilds and
-        // never appears in a dump). The option list is hoisted through
-        // `pass.overlays` like Modal: taffy resolves `absolute`
-        // against the DIRECT parent, so an overlay left in place
-        // would be clipped and mis-anchored by whatever container
-        // holds the Select. Hoisting discards the control's layout
-        // position, so the control's bounds are recorded at paint by
-        // an inert canvas (the scrollbar rule: post-layout geometry
-        // comes from a paint hook) into the same path-keyed cell as
-        // the open flag, and the overlay anchors to them — both are
-        // window-content coordinates, the overlay's parent being the
-        // padding-free root frame. Clicking elsewhere does not
-        // dismiss it — deferred, with the note in the ledger summary.
+        // The closed dropdown: the current option in a bordered
+        // control, with the option list in a popover. Everything about
+        // that popover is `closed_chooser`, which the menu button
+        // shares; what a Select adds is the option it shows and the
+        // one it marks, and a panel the width of its own control —
+        // the native-select look.
         Element::Select {
             options,
             selected,
             on_select,
         } => {
-            let key = pass.path.clone();
-            pass.seen.push(key.clone());
-            let flag = selects.entry(key).or_default().clone();
-            let (open, at, win_h) = flag.get();
-            // Verification hook: `PIXIE_DEBUG_OPEN_SELECTS=1` renders
-            // every Select open without a click, so a screenshot can
-            // prove the anchoring. The first frame has no recorded
-            // bounds yet (they arrive with the first paint), so it
-            // asks for one more frame; that converges as soon as the
-            // canvas has painted and runs only under the env var.
-            let debug_open = std::env::var_os("PIXIE_DEBUG_OPEN_SELECTS").is_some();
-            let open = open || debug_open;
-            if debug_open && at.2 == 0.0 {
-                cx.notify();
-            }
             let shown = options
                 .get(*selected)
                 .map(|s| s.as_str().to_string())
                 .unwrap_or_default();
-            pass.next_id += 1;
-            let control = with_a11y(div().id(pass.next_id), el, sem)
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(th.border))
-                .cursor_pointer()
-                .text_color(rgb(th.text))
-                .child(SharedString::from(shown))
-                .child(
-                    div()
-                        .text_color(rgba(th.text_dim_rgba))
-                        .child(SharedString::from("▾")),
-                )
-                .on_click(cx.listener({
-                    let flag = flag.clone();
-                    move |_this: &mut Root<C>, _ev, _window, cx| {
-                        let (o, at, h) = flag.get();
-                        flag.set((!o, at, h));
-                        cx.notify();
-                    }
-                }))
-                // An inert measuring layer: its paint callback sees the
-                // control's laid-out bounds and records them for the
-                // overlay to anchor on. No id, no listeners — no
-                // hitbox, so clicks pass straight through to the
-                // control.
-                .child(div().absolute().inset_0().child({
-                    let flag = flag.clone();
-                    canvas(
-                        |_, _, _| (),
-                        move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
-                            let (o, _, _) = flag.get();
-                            flag.set((
-                                o,
-                                (
-                                    bounds.origin.x.as_f32(),
-                                    bounds.origin.y.as_f32(),
-                                    bounds.size.width.as_f32(),
-                                    bounds.size.height.as_f32(),
-                                ),
-                                // Where the window ends, read where
-                                // the control is measured: the panel
-                                // has to know whether "under" fits.
-                                window.viewport_size().height.as_f32(),
-                            ));
-                        },
-                    )
-                    .size_full()
-                }));
-            if open {
-                pass.next_id += 1;
-                let mut panel = div()
-                    .id(pass.next_id)
-                    // A click anywhere else closes the list, which is
-                    // what every native one does. The control itself
-                    // is "anywhere else" as far as the panel's bounds
-                    // go, so the control's own rectangle is excluded
-                    // here — otherwise a click on it would close the
-                    // panel in the capture phase and its own handler
-                    // would re-open it in the same gesture.
-                    .on_mouse_down_out({
-                        let flag = flag.clone();
-                        move |_ev, window: &mut Window, cx: &mut App| {
-                            let (_, at, h) = flag.get();
-                            let p = window.mouse_position();
-                            let (x, y) = (p.x.as_f32(), p.y.as_f32());
-                            let on_control = x >= at.0
-                                && x <= at.0 + at.2
-                                && y >= at.1
-                                && y <= at.1 + at.3;
-                            if !on_control {
-                                flag.set((false, at, h));
-                                cx.refresh_windows();
-                            }
-                        }
-                    })
-                    .bg(rgb(th.panel))
-                    .border_1()
-                    .border_color(rgb(th.border))
-                    .rounded_md()
-                    .p_1()
-                    .flex()
-                    .flex_col()
-                    .min_w(px(160.));
-                for (i, opt) in options.iter().enumerate() {
-                    let f = on_select.clone();
-                    let flag = flag.clone();
-                    pass.next_id += 1;
-                    let mut row = div()
-                        .id(pass.next_id)
-                        .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .text_color(rgb(th.text))
-                        .hover(|s| s.bg(rgb(th.surface_hover)))
-                        .child(SharedString::from(opt.as_str().to_string()))
-                        .on_click(cx.listener(
-                            move |this: &mut Root<C>, _ev, _window, cx| {
-                                let (_, at, h) = flag.get();
-                                flag.set((false, at, h));
-                                match f.clone() {
-                                    Some(f) => this.apply(cx, move |w| f(w, i as i64)),
-                                    None => cx.notify(),
-                                }
-                            },
-                        ));
-                    if i as i64 == *selected {
-                        row = row.text_color(rgb(th.accent));
-                    }
-                    panel = panel.child(row);
-                }
-                // The wrapper carries no id, listeners or hover style,
-                // so it creates no hitbox: clicks around the panel
-                // fall through to the content beneath (no scrim, no
-                // occlude — a Select is lighter than a Modal).
-                //
-                // Anchored under the control via its recorded bounds
-                // (a click opened it, so the control has painted and
-                // the bounds are fresh); the panel matches the
-                // control's width, the native-select look. A zeroed
-                // record — never painted — falls back to centered.
-                let (ax, ay, aw, ah) = at;
-                let wrapper = if aw > 0.0 {
-                    // Under the control, unless under is off the
-                    // bottom of the window — then above it, with the
-                    // panel's BOTTOM pinned to the control's top, so
-                    // the panel's own height (which nothing knows
-                    // until it paints) never enters the arithmetic.
-                    // The test is the control's own bottom edge
-                    // against the middle of the window: a list that
-                    // fits in the upper half fits when it opens
-                    // upward from the lower one.
-                    let up = win_h > 0.0 && ay + ah > win_h / 2.0;
-                    let placed = div().absolute().left(px(ax));
-                    let placed = if up {
-                        placed.bottom(px(win_h - ay + 4.0))
-                    } else {
-                        placed.top(px(ay + ah + 4.0))
-                    };
-                    placed.child(panel.w(px(aw)))
-                } else {
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(panel)
-                };
-                pass.overlays.push(deferred(wrapper).into_any_element());
-            }
-            control.into_any_element()
+            closed_chooser(shown, options, *selected, true, on_select, el, sem, pass, selects, th, cx)
         }
+        // The same widget with nothing to show: the label stays put,
+        // no option is marked, and the panel takes the width its items
+        // need rather than the button's — a menu is usually wider than
+        // the word that opens it.
+        Element::MenuButton {
+            label,
+            options,
+            on_select,
+        } => closed_chooser(
+            label.as_str().to_string(),
+            options,
+            -1,
+            false,
+            on_select,
+            el,
+            sem,
+            pass,
+            selects,
+            th,
+            cx,
+        ),
         // Every option visible: one radio row each — a 14px ring, a
         // 6px accent dot when selected, the label — the whole row
         // clickable.
@@ -4639,6 +4477,217 @@ fn mark_row<C: Component>(
             }));
     }
     d
+}
+
+/// A closed chooser: a bordered control with a caret, and an option
+/// panel that opens over the app. Select and MenuButton are the same
+/// widget twice — what the control shows (the current option, or a
+/// label that never changes) and whether an option is marked are the
+/// only differences — so the popover machinery lives here once: the
+/// open flag keyed by element path (the TextField rule — it survives
+/// rebuilds and never appears in a dump), the inert canvas that
+/// records the control's laid-out bounds, the anchoring that flips
+/// upward near the window's bottom, and the click outside that closes
+/// it.
+///
+/// The panel is hoisted through `pass.overlays` like Modal's: taffy
+/// resolves `absolute` against the DIRECT parent, so an overlay left
+/// in place would be clipped and mis-anchored by whatever container
+/// holds the control. Hoisting discards the control's layout
+/// position, which is why the bounds are read at paint (the scrollbar
+/// rule: post-layout geometry comes from a paint hook) into the same
+/// path-keyed cell as the open flag — both are window-content
+/// coordinates, the overlay's parent being the padding-free root
+/// frame.
+#[allow(clippy::too_many_arguments)]
+fn closed_chooser<C: Component>(
+    shown: String,
+    options: &List<Str>,
+    marked: i64,
+    match_width: bool,
+    on_select: &Option<pixie_kernel::IntListener>,
+    el: &Element,
+    sem: Sem<'_>,
+    pass: &mut RenderPass,
+    selects: &mut HashMap<Vec<usize>, SelectCell>,
+    th: &'static Theme,
+    cx: &mut Context<Root<C>>,
+) -> gpui::AnyElement {
+    let key = pass.path.clone();
+    pass.seen.push(key.clone());
+    let flag = selects.entry(key).or_default().clone();
+    let (open, at, win_h) = flag.get();
+    // Verification hook: `PIXIE_DEBUG_OPEN_SELECTS=1` renders
+    // every Select open without a click, so a screenshot can
+    // prove the anchoring. The first frame has no recorded
+    // bounds yet (they arrive with the first paint), so it
+    // asks for one more frame; that converges as soon as the
+    // canvas has painted and runs only under the env var.
+    let debug_open = std::env::var_os("PIXIE_DEBUG_OPEN_SELECTS").is_some();
+    let open = open || debug_open;
+    if debug_open && at.2 == 0.0 {
+        cx.notify();
+    }
+    pass.next_id += 1;
+    let control = with_a11y(div().id(pass.next_id), el, sem)
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(th.border))
+        .cursor_pointer()
+        .text_color(rgb(th.text))
+        .child(SharedString::from(shown))
+        .child(
+            div()
+                .text_color(rgba(th.text_dim_rgba))
+                .child(SharedString::from("▾")),
+        )
+        .on_click(cx.listener({
+            let flag = flag.clone();
+            move |_this: &mut Root<C>, _ev, _window, cx| {
+                let (o, at, h) = flag.get();
+                flag.set((!o, at, h));
+                cx.notify();
+            }
+        }))
+        // An inert measuring layer: its paint callback sees the
+        // control's laid-out bounds and records them for the
+        // overlay to anchor on. No id, no listeners — no
+        // hitbox, so clicks pass straight through to the
+        // control.
+        .child(div().absolute().inset_0().child({
+            let flag = flag.clone();
+            canvas(
+                |_, _, _| (),
+                move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
+                    let (o, _, _) = flag.get();
+                    flag.set((
+                        o,
+                        (
+                            bounds.origin.x.as_f32(),
+                            bounds.origin.y.as_f32(),
+                            bounds.size.width.as_f32(),
+                            bounds.size.height.as_f32(),
+                        ),
+                        // Where the window ends, read where
+                        // the control is measured: the panel
+                        // has to know whether "under" fits.
+                        window.viewport_size().height.as_f32(),
+                    ));
+                },
+            )
+            .size_full()
+        }));
+    if open {
+        pass.next_id += 1;
+        let mut panel = div()
+            .id(pass.next_id)
+            // A click anywhere else closes the list, which is
+            // what every native one does. The control itself
+            // is "anywhere else" as far as the panel's bounds
+            // go, so the control's own rectangle is excluded
+            // here — otherwise a click on it would close the
+            // panel in the capture phase and its own handler
+            // would re-open it in the same gesture.
+            .on_mouse_down_out({
+                let flag = flag.clone();
+                move |_ev, window: &mut Window, cx: &mut App| {
+                    let (_, at, h) = flag.get();
+                    let p = window.mouse_position();
+                    let (x, y) = (p.x.as_f32(), p.y.as_f32());
+                    let on_control = x >= at.0
+                        && x <= at.0 + at.2
+                        && y >= at.1
+                        && y <= at.1 + at.3;
+                    if !on_control {
+                        flag.set((false, at, h));
+                        cx.refresh_windows();
+                    }
+                }
+            })
+            .bg(rgb(th.panel))
+            .border_1()
+            .border_color(rgb(th.border))
+            .rounded_md()
+            .p_1()
+            .flex()
+            .flex_col()
+            .min_w(px(160.));
+        for (i, opt) in options.iter().enumerate() {
+            let f = on_select.clone();
+            let flag = flag.clone();
+            pass.next_id += 1;
+            let mut row = div()
+                .id(pass.next_id)
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .cursor_pointer()
+                .text_color(rgb(th.text))
+                .hover(|s| s.bg(rgb(th.surface_hover)))
+                .child(SharedString::from(opt.as_str().to_string()))
+                .on_click(cx.listener(
+                    move |this: &mut Root<C>, _ev, _window, cx| {
+                        let (_, at, h) = flag.get();
+                        flag.set((false, at, h));
+                        match f.clone() {
+                            Some(f) => this.apply(cx, move |w| f(w, i as i64)),
+                            None => cx.notify(),
+                        }
+                    },
+                ));
+            if i as i64 == marked {
+                row = row.text_color(rgb(th.accent));
+            }
+            panel = panel.child(row);
+        }
+        // The wrapper carries no id, listeners or hover style,
+        // so it creates no hitbox: clicks around the panel
+        // fall through to the content beneath (no scrim, no
+        // occlude — a Select is lighter than a Modal).
+        //
+        // Anchored under the control via its recorded bounds
+        // (a click opened it, so the control has painted and
+        // the bounds are fresh); the panel matches the
+        // control's width, the native-select look. A zeroed
+        // record — never painted — falls back to centered.
+        let (ax, ay, aw, ah) = at;
+        let wrapper = if aw > 0.0 {
+            // Under the control, unless under is off the
+            // bottom of the window — then above it, with the
+            // panel's BOTTOM pinned to the control's top, so
+            // the panel's own height (which nothing knows
+            // until it paints) never enters the arithmetic.
+            // The test is the control's own bottom edge
+            // against the middle of the window: a list that
+            // fits in the upper half fits when it opens
+            // upward from the lower one.
+            let up = win_h > 0.0 && ay + ah > win_h / 2.0;
+            let placed = div().absolute().left(px(ax));
+            let placed = if up {
+                placed.bottom(px(win_h - ay + 4.0))
+            } else {
+                placed.top(px(ay + ah + 4.0))
+            };
+            placed.child(if match_width { panel.w(px(aw)) } else { panel })
+        } else {
+            div()
+                .absolute()
+                .inset_0()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(panel)
+        };
+        pass.overlays.push(deferred(wrapper).into_any_element());
+    }
+    control.into_any_element()
 }
 
 fn render_table_row<C: Component>(

@@ -1618,6 +1618,19 @@ pub enum Element {
         selected: i64,
         on_select: Option<IntListener>,
     },
+    /// The chooser with no current value: a button that opens a short
+    /// menu. It keeps the chooser contract (a `List<String>` of
+    /// options and an index-carrying handler) and drops the part that
+    /// says which one is current, because choosing from a menu is an
+    /// action rather than a change. The control shows `label`, always;
+    /// whether the menu is open is engine-side transient state, keyed
+    /// by element path exactly as a Select's popover is, so no open
+    /// flag rides here for a dump to see.
+    MenuButton {
+        label: Str,
+        options: List<Str>,
+        on_select: Option<IntListener>,
+    },
     /// A transient message over the app, hoisted to the BOTTOM of the
     /// window the way `Modal` is hoisted to its middle: it escapes
     /// whatever container declared it, because a toast belongs to the
@@ -2771,6 +2784,15 @@ impl Element {
                     options.iter().map(|o| o.as_str().to_string()).collect();
                 format!("Segmented(selected={selected})[{}]", inner.join(", "))
             }
+            // The menu has no current index to print, so its label
+            // takes that place: what the control shows, then what it
+            // offers. The options print whether the menu is open or
+            // not — what the app offers is not engine state.
+            Element::MenuButton { label, options, .. } => {
+                let inner: Vec<String> =
+                    options.iter().map(|o| o.as_str().to_string()).collect();
+                format!("MenuButton({label})[{}]", inner.join(", "))
+            }
             // `open` always prints, the way Modal's does: whether the
             // message is on screen is the element's whole point, and a
             // reader of a dump should not have to know a default to
@@ -3582,6 +3604,11 @@ impl Element {
                     ..
                 }
                 | Element::Segmented {
+                    options, on_select, ..
+                }
+                // A menu is a chooser too: its options are its items,
+                // and picking one is what `select:` does to it.
+                | Element::MenuButton {
                     options, on_select, ..
                 } => {
                     if *seen == n {

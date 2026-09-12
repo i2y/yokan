@@ -3081,3 +3081,35 @@ values: no row marked, no handler. A table's selection does cross,
 because the table declares both keywords. Putting them on the list is
 a row in that table and all four sweeps — a change of its own, not a
 consequence of this one.
+
+## A button that opens a menu (2026-09-12)
+
+A **menu button** is the chooser with nothing to show. It keeps the
+chooser contract — a list of options and an index-carrying handler —
+and drops the part that says which one is current, because choosing
+from a menu is an action rather than a change. That is the whole
+design: what it keeps is what lets `select:` drive it with no verb of
+its own, and a view with a select and two menus numbers all three as
+one family.
+
+The options are in the dump whether the menu is open or not. What an
+app offers is not engine state; whether the panel is open is, keyed by
+element path the way a Select's popover is and invisible to a dump on
+purpose — a tier that could disagree about it would be comparing the
+engine rather than the app.
+
+The engine now has one closed chooser instead of two. A Select and a
+menu button are the same widget twice: a bordered control with a
+caret, a panel hoisted onto the frame's overlays, bounds recorded at
+paint, the upward flip near the window's bottom, the click outside
+that closes it. They differ in what the control shows, whether an
+option is marked, and whether the panel takes the control's width — a
+select looks native at its control's width, a menu is usually wider
+than the word that opens it — so those three became the helper's
+arguments and nothing else is written twice.
+
+It reports as a button named by its label. AccessKit would add that it
+has a popup; this vocabulary has no way to say so, and a role for one
+element is a change to `Role::parse`, the engine's map and the tour's
+list. The C face has no keyword for it either, so the three sibling
+languages cannot reach it and no generated table went stale.

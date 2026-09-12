@@ -84,7 +84,7 @@ Desktop apps, full stop. From a few-screen internal tool to a
 data-facing application of forms, tables, and charts — written with
 Python's feel, shipped as a native app.
 
-There are 34 UI elements (text, buttons, a full set of form
+There are 35 UI elements (text, buttons, a full set of form
 controls, tables, charts, virtualized lists, modals, and a pixel
 canvas you paint command by command), plus styles,
 light/dark themes, and animation; virtualized lists stay smooth at

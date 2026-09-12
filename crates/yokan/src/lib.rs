@@ -1501,6 +1501,24 @@ element_fn! {
 }
 
 element_fn! {
+    /// The chooser with nothing to show: a button that opens a short
+    /// menu. There is no current value, so the control keeps its own
+    /// label, and choosing an item reports its index. The options are
+    /// data rather than engine state, so `select:` picks from a menu
+    /// the way it picks from a `select`.
+    menu_button
+    (label, options=vec![], on_select=None,)
+    [label: String, options: Vec<String>, on_select: Option<Py<PyAny>>,]
+    {
+        Element::MenuButton {
+            label: Str::from(label),
+            options: str_list(options),
+            on_select: on_select.map(int_listener),
+        }
+    }
+}
+
+element_fn! {
     /// A transient message over the app, hoisted to the bottom of the
     /// window. Presence is openness, the way it is for `modal`: an
     /// `open=` kwarg is what a `if` around the call already says, and
@@ -3102,6 +3120,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(number_field, m)?)?;
     m.add_function(wrap_pyfunction!(int_field, m)?)?;
     m.add_function(wrap_pyfunction!(segmented, m)?)?;
+    m.add_function(wrap_pyfunction!(menu_button, m)?)?;
     m.add_function(wrap_pyfunction!(split, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;

@@ -828,6 +828,16 @@ fn tiers_agree_on_every_demo() {
             "examples/toast/toast.pix",
             "dump,click:dismiss,click:save,dump,advance:1000,dump,advance:500,dump",
         ),
+        // The menu button: a chooser with nothing to show, which is
+        // why it needs no verb of its own — `select:` counts it with
+        // the other choosers, and `select@1:` reaches the second one.
+        // The options are in the dump whether the menu is open or not,
+        // so what the app offers is compared even though whether it is
+        // open is engine state neither tier keeps.
+        (
+            "examples/menubutton/menubutton.pix",
+            "dump,select:Delete,dump,select@1:Print,dump",
+        ),
         // The split: a divider whose ratio is a bound value, driven by
         // the verb the Slider already had. `slide:` counts Sliders and
         // Splits together, so `slide@1:` reaches the vertical split

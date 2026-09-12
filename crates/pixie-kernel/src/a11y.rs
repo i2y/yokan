@@ -205,6 +205,10 @@ pub fn role_of(el: &Element) -> Option<Role> {
         Element::Switch { .. } => Some(Role::Switch),
         Element::Slider { .. } => Some(Role::Slider),
         Element::Select { .. } => Some(Role::ComboBox),
+        // A menu button is a button: AccessKit would add that it
+        // has a popup, and this vocabulary has no way to say so —
+        // so it reports what it plainly is, named by its label.
+        Element::MenuButton { .. } => Some(Role::Button),
         Element::RadioGroup { .. } => Some(Role::RadioGroup),
         Element::TabBar { .. } => Some(Role::TabList),
         Element::Link { .. } => Some(Role::Link),
@@ -268,6 +272,9 @@ pub fn name_of(el: &Element) -> Str {
         Element::Segmented {
             options, selected, ..
         } => options.get(*selected).unwrap_or_else(Str::new),
+        // Mirrors how Button derives its name: the label IS the name,
+        // because nothing about a menu button changes with the choice.
+        Element::MenuButton { label, .. } => label.clone(),
         // The message IS the toast — the way a Button's label is.
         Element::Toast { message, .. } => message.clone(),
         _ => Str::new(),

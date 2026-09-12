@@ -243,7 +243,7 @@ and a variant belongs to one sum type.
 
 The catalog: `text`, `link`, `button`, `text_field`, `number_field`,
 `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`,
-`tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`,
+`tab_bar`, `segmented`, `menu_button`, `column`, `row`, `grid`, `stack`, `spacer`,
 `divider`, `split`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
 `data_table`, `modal`, `toast`, `image`, `svg`, `bar_chart`, `line_chart`,
 `progress`, `spinner`, `canvas`. Containers are opened with `with`; elements
@@ -255,6 +255,9 @@ columns line up when the cells of one column share a `grow`. An
 element object is placed once; build fresh ones on every call.
 `spacer()` takes a row's or column's remaining space, `divider()`
 draws a rule (vertical in a row), `link(label, url)` opens a URL.
+`menu_button(label, options, on_select=)` is a button that opens a
+short menu: no current value, so the label stays put and the handler
+takes the chosen index — a chooser, so `select:` picks from it.
 `split(first, second, ratio=, on_change=)` is two panes and a divider
 the user drags: exactly two panes, given as the arguments, and the
 ratio is the app's own number — the handler writes it back and clamps

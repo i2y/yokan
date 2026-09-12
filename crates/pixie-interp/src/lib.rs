@@ -2900,6 +2900,21 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // The menu button, mirroring codegen's arm: `text:` (a
+        // Button's spelling, and not the `label:` rider) and
+        // `options:` are required, there is no current value, and
+        // `onSelect` binds the implicit `index`.
+        "MenuButton" => {
+            let l = prop_of(el, "text")
+                .ok_or("MenuButton needs `text:` (what the button says)")?;
+            let o = prop_of(el, "options")
+                .ok_or("MenuButton needs `options:` (the items it offers)")?;
+            Ok(Element::MenuButton {
+                label: eval_text(l, env, scope, w)?,
+                options: eval_str_list(o, env, scope, w)?,
+                on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
+            })
+        }
         // The transient message — the mirror of codegen's `Toast` arm:
         // same required prop, same `open:` default, same refusal for a
         // countdown with nothing to call.

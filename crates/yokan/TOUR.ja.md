@@ -245,7 +245,7 @@ def view():
   `spacer()` は余った幅を引き受けます（`grow=` で分け合えます）。
   `divider()` は親を横切る罫線で、行の中では縦線になります。
   `split(first, second, ratio=…)` は、ドラッグできる仕切りで二つの区画を分けます。
-- **入力**：`button` と[フォームの要素](#フォームの要素)。
+- **入力**：`button`、`menu_button`（押すと短いメニューが開くボタン）、[フォームの要素](#フォームの要素)。
 - **見せる**：`text`、`link`、`image`、`svg`、`progress`、`spinner`、`bar_chart`、`line_chart`。
   `link("Docs", "https://…")` は、クリックすると URL をブラウザで開きます（ヘッドレス実行では `click:` を受けても開きません）。
 - **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
@@ -371,6 +371,7 @@ select(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick
 radio_group(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
 tab_bar(labels=Settings.tabs, active=Settings.tab, on_change=Settings.pick_tab)
 segmented(options=Settings.fruits, selected=Settings.fruit, on_change=Settings.pick_fruit)
+menu_button("Fruit", Settings.fruits, on_select=Settings.pick_fruit)
 int_field(Settings.count, min=1, max=99, on_change=Settings.set_count)
 number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.set_price)
 ```
@@ -385,6 +386,11 @@ number_field(Settings.price, min=0.0, max=100.0, step=0.5, on_change=Settings.se
   ハンドラは選ばれた**インデックス**を受け取ります。
   スクリプトは `select:<ラベル>`。
   `segmented` も値の受け渡しは同じで、現在の区画を塗りつぶした一続きのピルとして描きます。
+- **menu_button**：ラベルと、差し出す項目の一覧。
+  現在値はありません。
+  メニューから選ぶのは値の変更ではなく動作だからです。
+  だからラベルは変わらず、ハンドラは選ばれた**インデックス**を受け取ります。
+  上の四つと同じ選択の要素なので、スクリプトも同じ `select:<項目>` で動かせます（画面に選択の要素が複数あるときは `select@1:`）。
 - **number_field / int_field**：型付きの数値。
   入力中は何も報告せず、`enter`、矢印キー、フィールドを離れる操作のどれかで確定します。
   確定したテキストは Python の `float()` / `int()` と同じ規則で読み、`min=` / `max=`（両方 0 なら範囲なし）に収めて `step=` に吸着させます。

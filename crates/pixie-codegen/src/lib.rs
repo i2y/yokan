@@ -7209,6 +7209,37 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
         // the flag belongs to the app and no widget rewrites a bound
         // value — so a countdown with nothing to call is a declaration
         // that could never do anything.
+        // The chooser with no current value: `label:` is what the
+        // control shows and `options:` what it offers, so there is no
+        // `selected:` to require. `onSelect` binds the same implicit
+        // `index` every chooser's handler binds.
+        "MenuButton" => {
+            // `text:`, the way a Button spells the string it shows —
+            // and not `label:`, which is the accessibility rider every
+            // element takes. A control that OWNS its visible text
+            // reads it from `text:`; a label riding on top of that
+            // would wrap it in a Semantics carrying the same string.
+            let label = element_prop(el, "text").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "MenuButton needs `text:` (what the button says)".into(),
+            })?;
+            let options = element_prop(el, "options").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "MenuButton needs `options:` (the items it offers)".into(),
+            })?;
+            let on_select = match element_prop(el, "onSelect") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSelect", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            Ok(format!(
+                "Element::MenuButton {{ label: {}, options: {}, on_select: {on_select} }}",
+                lower_view_text(label, cx)?,
+                lower_view_str_list(options, cx, "options")?
+            ))
+        }
         "Toast" => {
             let message = element_prop(el, "message").ok_or_else(|| EmitError {
                 span: el.span,

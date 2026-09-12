@@ -1,0 +1,21 @@
+store App {
+  state actions : List<String> = ["Rename", "Duplicate", "Delete"]
+  state note : String = "nothing chosen"
+  state last : Int = -1
+
+  fn pick(i: Int) {
+    last = i
+    note = "chose #{i}"
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text { text: "#{App.note}, last #{App.last}"; fontSize: 16.0 }
+    MenuButton { text: "Actions"; options: App.actions; onSelect: App.pick(index) }
+    MenuButton { text: "More"; options: ["Export", "Print"]; onSelect: { App.note = "more #{index}" } }
+  }
+}

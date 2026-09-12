@@ -11178,6 +11178,36 @@ class Translator:
                     props.append(f"onSelect: {h}")
                 return [f"{pad}{tag} {{ {'; '.join(props)} }}"]
 
+        # A button that opens a short menu: a chooser with no current
+        # value, so the control shows its own label and the options are
+        # data the app holds. `on_select` takes the chosen index, the
+        # way every chooser's handler does, which is what lets a script
+        # pick from a menu with the step it already had.
+        if self._is_ui(node.func, "menu_button"):
+            if not node.args:
+                raise Untranslatable(node, "menu_button() needs its label")
+            options = node.args[1] if len(node.args) > 1 else kw.get("options")
+            if options is None:
+                raise Untranslatable(
+                    node, "menu_button() needs its options — the list of items it offers"
+                )
+            for k in kw:
+                if k not in ("options", "on_select"):
+                    raise Untranslatable(kw[k], f"menu_button() does not take `{k}=`")
+            props = [
+                f"text: {self._text_value(node.args[0])}",
+                f"options: {list_read(options, 'options=')}",
+            ]
+            if "on_select" in kw:
+                h = self.handler(kw["on_select"], takes_text=True, implicit=("index", "Int"))
+                if isinstance(h, tuple):
+                    lines = [f"{pad}MenuButton {{"] + [f"{pad}  {p}" for p in props]
+                    lines += [f"{pad}  onSelect: {{"] + [f"{pad}    {ln}" for ln in h[1]]
+                    lines += [f"{pad}  }}", f"{pad}}}"]
+                    return lines
+                props.append(f"onSelect: {h}")
+            return [f"{pad}MenuButton {{ {'; '.join(props)} }}"]
+
         # Two panes and a divider the user can drag. `ratio=` follows
         # the slider's `value=` rule with a different gesture — a Float
         # read, because a literal could never reflect a divider someone

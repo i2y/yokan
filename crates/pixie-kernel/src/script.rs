@@ -160,9 +160,11 @@ fn split_steps(script: &str) -> Vec<String> {
 /// fraction's own `[0, 1]`), snap it to the nearest step multiple
 /// counted from min, run `onChange`) ·
 /// `select[@n]:<label>` (the n-th chooser — Select / RadioGroup /
-/// TabBar / Segmented / Table, counted together — picks the option with exactly
-/// this text; a Table's options are its rows' first cells, so the
-/// step picks a ROW and runs `onSelect` with its index) ·
+/// TabBar / Segmented / MenuButton / Table / a ListView with
+/// `onSelect`, counted together — picks the option with exactly
+/// this text; a Table's options are its rows' first cells and a
+/// list's are what its rows SAY, so the step picks a ROW and runs
+/// `onSelect` with its index) ·
 /// `click:<column>` on a sorting Table (a header label matches like a
 /// button and runs `onSort` with the column's index) ·
 /// any of those verbs on a target inside a `Disabled` rider
@@ -568,7 +570,7 @@ pub fn run_parts<C: Component>(
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| crate::script_refusal!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table / a ListView with onSelect)"));
+                .unwrap_or_else(|| crate::script_refusal!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / MenuButton / Table / a ListView with onSelect)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)
