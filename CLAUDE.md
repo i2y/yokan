@@ -92,7 +92,10 @@ the same change.
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast. (On Windows the same rule
   reads `%LOCALAPPDATA%\pixie\target`, because there is no `HOME`;
-  pixie-cli, the gate, the justfile and the sweep each compute it.)
+  pixie-cli, the gate, the justfile and the sweep each compute it when
+  nobody has set one, and each yields to the one you set — a tree of
+  your own costs a single dependency build and is incremental after
+  that.)
 - Regenerating `.rpi` bindings (rpi-gen work, `yokan add`) needs a
   nightly toolchain with the `rust-docs-json` component; ordinary
   builds and the gates do not.

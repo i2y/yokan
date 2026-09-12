@@ -3164,3 +3164,29 @@ refuses a second child by name. The panel it opens is the Select's,
 lifted into one function: a chooser opens its options under a
 rectangle or at a point, and those are the same panel with a different
 anchor.
+
+## The target dir a caller asks for (2026-09-12)
+
+`pixie build` computed the shared target dir from `$HOME` and set it on
+every generated crate's cargo run, overwriting whatever the caller had
+exported. The shared tree is the right DEFAULT — it is what compiles
+the engine once per machine instead of once per app — but it was being
+applied as a rule, and cargo's rule is that `CARGO_TARGET_DIR` belongs
+to whoever set it.
+
+So a variable that is set now wins, made absolute first: the generated
+crate's cargo runs from that crate's own directory, so a relative path
+would otherwise land beside the generated crate rather than where the
+caller meant. Nothing in this repository changes shape, because the
+justfile, the gate and the Windows job all export the same path the
+fallback computes. What changes is for someone outside it: a person who
+keeps one tree for all their Rust work, who sends builds to another
+disk, or who runs where `$HOME` is not the place now gets what they
+asked for instead of a second multi-gigabyte tree they did not.
+
+A tree of one's own costs one dependency build — measured here at about
+a minute and under 2 GB, because generated crates build with
+`debug = 0` — and is incremental after that. The two halves used to
+disagree, which is how this was found: the gate already honoured the
+variable for the workspace's own crates while the app built beside it
+went somewhere else.

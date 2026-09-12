@@ -4739,7 +4739,9 @@ fn closed_chooser<C: Component>(
     let key = pass.path.clone();
     pass.seen.push(key.clone());
     let flag = selects.entry(key).or_default().clone();
-    let (open, at, win_h) = flag.get();
+    // The window's height rides in the cell too, but the panel is what
+    // reads it, and the panel is `chooser_overlay`'s now.
+    let (open, at, _) = flag.get();
     // Verification hook: `PIXIE_DEBUG_OPEN_SELECTS=1` renders
     // every Select open without a click, so a screenshot can
     // prove the anchoring. The first frame has no recorded

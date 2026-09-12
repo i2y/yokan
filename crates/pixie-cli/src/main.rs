@@ -32,12 +32,32 @@ fn usage() -> ExitCode {
 /// kernel today, the engine tomorrow) compile once per machine instead of
 /// once per app.
 ///
-/// The place a machine keeps caches is the machine's own answer:
-/// `$HOME/.cache` where there is a `HOME`, and `%LOCALAPPDATA%` on
-/// Windows, which has no `HOME` and keeps per-user caches there. The
+/// A `CARGO_TARGET_DIR` the caller SET wins, because that is cargo's own
+/// rule and the way a CI cache, a build sent to another disk, or a
+/// checkout with a tree of its own says where things go. It is made
+/// absolute here: the generated crate's cargo runs from that crate's
+/// directory, so a relative path would otherwise land beside the
+/// generated crate rather than where the caller meant. A tree of one's
+/// own costs a full dependency build the first time (measured here: a
+/// minute and under 2 GB, because generated crates build with
+/// `debug = 0`), which is the caller's business to decide.
+///
+/// Otherwise the place a machine keeps caches is the machine's own
+/// answer: `$HOME/.cache` where there is a `HOME`, and `%LOCALAPPDATA%`
+/// on Windows, which has no `HOME` and keeps per-user caches there. The
 /// justfile and `yokan_gate.py` read the same rule, so a `cargo`
 /// invocation and a generated app build into one directory.
 fn shared_target_dir() -> Option<PathBuf> {
+    if let Some(asked) = std::env::var_os("CARGO_TARGET_DIR").filter(|d| !d.is_empty()) {
+        let dir = PathBuf::from(asked);
+        return Some(if dir.is_absolute() {
+            dir
+        } else {
+            std::env::current_dir()
+                .map(|cwd| cwd.join(&dir))
+                .unwrap_or(dir)
+        });
+    }
     if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
         return Some(PathBuf::from(home).join(".cache").join("pixie").join("target"));
     }
