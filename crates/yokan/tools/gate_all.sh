@@ -114,6 +114,10 @@ gate bytes   "$PY" yokan_gate.py gate demo/bytes.py --script "input:hello there,
 # `now` step renders what the zone says rather than the clock, which
 # is the part two runs cannot share.
 gate zones   "$PY" yokan_gate.py gate demo/zones.py --script "click:winter,dump,click:difference,dump,click:now,dump,click:summer,dump"
+# A message that closes itself: the countdown rides the kernel's own
+# clock, so `advance:` is what proves it — no new verb, and no tier
+# able to disagree about when a second and a half passed.
+gate toast   "$PY" yokan_gate.py gate demo/toast.py --script "dump,click:dismiss,click:save,dump,advance:1000,dump,advance:500,dump"
 gate pyjob   "$PY" yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
 gate stdlib  "$PY" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   "$PY" yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
@@ -156,7 +160,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
     pkgapp) continue;;
-    bytes|zones) continue;;
+    bytes|zones|toast) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;
