@@ -504,6 +504,10 @@ class Untranslatable(Exception):
 
     def __init__(self, node, msg):
         self.msg = msg
+        # The node itself, kept so `check` can ask what this refusal
+        # was reading — a read of something whose declaration was
+        # already refused is not a refusal of its own.
+        self.node = node
         self.file = getattr(node, "_yokan_file", None)
         self.line = getattr(node, "lineno", None)
         self.col = getattr(node, "col_offset", None)
@@ -531,6 +535,41 @@ class Untranslatable(Exception):
         src = lines[self.line - 1]
         caret = " " * (self.col or 0) + "^"
         return f"{head}\n    {src}\n    {caret}"
+
+
+class Refused(Exception):
+    """Every refusal `check` found, not just the first.
+
+    A compiler that stops at the first one costs its reader a round
+    trip per refusal, and the reader here is often an agent, for whom
+    the round trip is the expensive part rather than the 0.09 seconds.
+    So `check` keeps going: each module-level statement and each line
+    of the view is taken on its own, and a refusal in one does not
+    stop the next. Everything else still stops at the first, because a
+    translation that continued would emit code for a program the
+    dialect does not take.
+    """
+
+    def __init__(self, items, unchecked=()):
+        # In the file's order, not the order the translator happened
+        # to reach them: a view is translated after the declarations
+        # and the handlers after the view, and a reader works down the
+        # page.
+        self.items = sorted(items, key=lambda e: (e.file or "", e.line or 0, e.col or 0))
+        self.unchecked = list(unchecked)
+        super().__init__(f"{len(self.items)} refusals")
+
+    def render(self) -> str:
+        out = [e.render() for e in self.items]
+        if self.unchecked:
+            names = sorted({n for _node, ns in self.unchecked for n in ns})
+            what = ", ".join(f"`{n}`" for n in names)
+            n = len(self.unchecked)
+            out.append(
+                f"\n{n} more statement{'' if n == 1 else 's'} could not be checked: "
+                f"{what} above did not translate, so what reads it was not read."
+            )
+        return "\n".join(out)
 
 
 def esc(s: str) -> str:
@@ -718,6 +757,10 @@ class Translator:
         self.models = {}               # @ui.model -> {"fields", "methods", "impls"}
         self.model_refs = {}           # model -> [(field, target model, node)], strong only
         self.warnings = []             # advisories: translated, but worth changing
+        self.collect = False           # `check`: keep going and list them all
+        self.refusals = []             # what was refused, when collecting
+        self.failed = set()            # names whose declaration was refused
+        self.unchecked = []            # (node, names) — read a name that failed
         self.model_instances = {}      # module-level `x = Model()` -> model name
         self.protocols = {}            # Protocol class -> [(method, params, ret)]
         self.replace_name = None       # `from dataclasses import replace` binding
@@ -3112,6 +3155,45 @@ class Translator:
         if self.state_node is not None and self.cells:
             raise Untranslatable(self.tree, "declare state with `State` — a `run(state={...})` dict alongside it is not in the dialect")
 
+    def _refuse(self, e: "Untranslatable", node=None) -> None:
+        """Write a refusal down and carry on. Only `check` gets here:
+        every other mode stops at the first one, because a translation
+        that continued past a refusal would emit code for a program
+        the dialect does not take.
+
+        A statement that names something (a store, a value class, a
+        def) is remembered as failed, so the reads of that name later
+        in the file are reported as unchecked rather than as refusals
+        of their own — the second message would be about a declaration
+        that never happened, not about the code that reads it.
+        """
+        # Something whose declaration was already refused explains
+        # this one: `Cart.total` reads as "not in the dialect here"
+        # because `Cart` never became a store, and saying so would
+        # send a reader to the wrong line. It goes on the unchecked
+        # list instead, which the report says out loud.
+        blame = e.node if isinstance(e.node, ast.AST) else node
+        if blame is not None and self.failed:
+            touched = sorted(
+                {n.id for n in ast.walk(blame)
+                 if isinstance(n, ast.Name) and n.id in self.failed}
+            )
+            if touched:
+                self.unchecked.append((blame, touched))
+                return
+        # A handler two buttons share is translated twice, and its
+        # refusal is one refusal.
+        seen = (e.file, e.line, e.col, e.msg)
+        if any((x.file, x.line, x.col, x.msg) == seen for x in self.refusals):
+            return
+        self.refusals.append(e)
+        name = getattr(node, "name", None)
+        if name is None and isinstance(node, (ast.Assign, ast.AnnAssign)):
+            t = node.targets[0] if isinstance(node, ast.Assign) else node.target
+            name = t.id if isinstance(t, ast.Name) else None
+        if name:
+            self.failed.add(name)
+
     def _scan_body(self, body, entry: bool):
         for node in body:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -3122,234 +3204,248 @@ class Translator:
             ):
                 self.model_names.add(node.name)
         for node in body:
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                continue
-            elif isinstance(node, ast.FunctionDef) and any(
-                self._is_deco(d, "py") for d in node.decorator_list
+            # One statement at a time, so a refusal has a unit to
+            # belong to: `check` keeps it and reads the next.
+            try:
+                self._scan_node(node, entry)
+            except Untranslatable as e:
+                if not self.collect:
+                    raise
+                self._refuse(e, node)
+
+    def _scan_node(self, node, entry: bool) -> None:
+        """One module-level statement, taken. A refusal raised in
+        here belongs to THIS statement, which is what lets `check`
+        write it down and go on to the next one."""
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            return
+        elif isinstance(node, ast.FunctionDef) and any(
+            self._is_deco(d, "py") for d in node.decorator_list
+        ):
+            self._take_escape(node)
+        elif isinstance(node, ast.FunctionDef):
+            self.defs[node.name] = node
+            self.defs[node.name] = self._apply_decorators(node)
+            if any(
+                self._is_ui(d, "component") for d in node.decorator_list
             ):
-                self._take_escape(node)
-            elif isinstance(node, ast.FunctionDef):
-                self.defs[node.name] = node
-                self.defs[node.name] = self._apply_decorators(node)
-                if any(
-                    self._is_ui(d, "component") for d in node.decorator_list
-                ):
+                self.comp_defs.add(node.name)
+            for d in node.decorator_list:
+                if isinstance(d, ast.Call) and self._is_ui(d.func, "component"):
                     self.comp_defs.add(node.name)
-                for d in node.decorator_list:
-                    if isinstance(d, ast.Call) and self._is_ui(d.func, "component"):
-                        self.comp_defs.add(node.name)
-                        if any(
-                            k.arg == "slots"
-                            and isinstance(k.value, ast.Constant)
-                            and k.value.value is True
-                            for k in d.keywords
-                        ):
-                            self.comp_slotted.add(node.name)
-            elif isinstance(node, ast.ClassDef) and any(
-                (
-                    isinstance(d, ast.Call)
-                    and isinstance(d.func, ast.Name)
-                    and d.func.id in self.dataclass_names
-                    and any(k.arg == "frozen" and isinstance(k.value, ast.Constant) and k.value.value is True for k in d.keywords)
-                )
-                or self._is_ui(d, "value")
-                for d in node.decorator_list
-            ):
-                if any(
-                    (isinstance(b, ast.Name) and b.id in self.enum_bases)
-                    or (isinstance(b, ast.Attribute) and b.attr == "Enum")
-                    for b in node.bases
-                ):
-                    # `@value class X(Enum)`: the crate-enum twin —
-                    # the decorator registers it for the interpreted
-                    # run; here it is an enum like any other.
-                    members = [
-                        st.targets[0].id
-                        for st in node.body
-                        if isinstance(st, ast.Assign)
-                        and len(st.targets) == 1
-                        and isinstance(st.targets[0], ast.Name)
-                    ]
-                    if not members:
-                        raise Untranslatable(node, "an enum needs at least one member")
-                    self.enums[node.name] = members
-                    self.enum_values[node.name] = self._enum_values(node)
-                else:
-                    self._take_struct(node)
-            elif isinstance(node, ast.ClassDef) and any(
-                (isinstance(d, ast.Name) and d.id in self.dataclass_names)
-                or (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id in self.dataclass_names)
-                for d in node.decorator_list
-            ):
-                self.unfrozen.add(node.name)
-            elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
-                parts = []
-                def _walk_union(x):
-                    if isinstance(x, ast.BinOp) and isinstance(x.op, ast.BitOr):
-                        _walk_union(x.left)
-                        _walk_union(x.right)
-                    elif isinstance(x, ast.Name) and x.id in self.structs:
-                        parts.append(x.id)
-                    else:
-                        raise Untranslatable(x, "a `type` alias joins value classes into a sum type (`type Shape = Circle | Rect`)")
-                _walk_union(node.value)
-                uname = node.name.id
-                for p2 in parts:
-                    if p2 in self.union_of:
-                        raise Untranslatable(node, f"`{p2}` already belongs to the sum type {self.union_of[p2]}")
-                    for _f, _t, dflt in self.structs[p2]:
-                        if dflt is not None:
-                            raise Untranslatable(node, f"the fields of variant `{p2}` take no defaults — each arm and constructor names every field")
-                    self.union_of[p2] = uname
-                self.unions[uname] = parts
-            elif isinstance(node, ast.ClassDef) and any(
+                    if any(
+                        k.arg == "slots"
+                        and isinstance(k.value, ast.Constant)
+                        and k.value.value is True
+                        for k in d.keywords
+                    ):
+                        self.comp_slotted.add(node.name)
+        elif isinstance(node, ast.ClassDef) and any(
+            (
+                isinstance(d, ast.Call)
+                and isinstance(d.func, ast.Name)
+                and d.func.id in self.dataclass_names
+                and any(k.arg == "frozen" and isinstance(k.value, ast.Constant) and k.value.value is True for k in d.keywords)
+            )
+            or self._is_ui(d, "value")
+            for d in node.decorator_list
+        ):
+            if any(
                 (isinstance(b, ast.Name) and b.id in self.enum_bases)
                 or (isinstance(b, ast.Attribute) and b.attr == "Enum")
                 for b in node.bases
             ):
-                members = []
-                for st in node.body:
-                    if isinstance(st, ast.Assign) and len(st.targets) == 1 and isinstance(st.targets[0], ast.Name):
-                        members.append(st.targets[0].id)
-                    elif isinstance(st, (ast.Pass, ast.Expr)):
-                        continue
-                    else:
-                        raise Untranslatable(st, "an Enum body holds members only (`NAME = auto()`, `NAME = 1`) — methods on an Enum are not in the dialect yet")
+                # `@value class X(Enum)`: the crate-enum twin —
+                # the decorator registers it for the interpreted
+                # run; here it is an enum like any other.
+                members = [
+                    st.targets[0].id
+                    for st in node.body
+                    if isinstance(st, ast.Assign)
+                    and len(st.targets) == 1
+                    and isinstance(st.targets[0], ast.Name)
+                ]
                 if not members:
                     raise Untranslatable(node, "an enum needs at least one member")
                 self.enums[node.name] = members
                 self.enum_values[node.name] = self._enum_values(node)
-            elif isinstance(node, ast.ClassDef) and any(
-                isinstance(b, ast.Name) and b.id in self.protocol_names for b in node.bases
-            ):
-                self._take_protocol(node)
-            elif isinstance(node, ast.ClassDef) and any(
-                self._is_deco(d, "store") for d in node.decorator_list
-            ):
-                self._take_store(node)
-            elif isinstance(node, ast.ClassDef) and any(
-                self._is_deco(d, "model")
-                for d in node.decorator_list
-            ):
-                self._take_model(node)
-            elif (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "style")
-            ):
-                self._take_style(node.targets[0].id, node.value)
-            elif (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.BinOp)
-                and isinstance(node.value.op, ast.BitOr)
-                and isinstance(node.targets[0], ast.Name)
-                and any(isinstance(x, ast.Name) and x.id in self.styles for x in [node.value.left])
-            ):
-                self._take_style_merge(node.targets[0].id, node.value)
-            elif (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Call)
-                and isinstance(node.value.func, ast.Name)
-                and node.value.func.id in self.models
-            ):
-                call = node.value
-                if call.args or call.keywords:
-                    raise Untranslatable(
-                        call, "a model is constructed with its defaults (`Node()`) — constructor arguments are not in the dialect yet; set fields in a handler"
-                    )
-                self.model_instances[node.targets[0].id] = call.func.id
-            elif isinstance(node, ast.AnnAssign) and self._is_state_call(node.value):
-                if not isinstance(node.target, ast.Name):
-                    raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
-                if node.target.id in self.cells:
-                    raise Untranslatable(node, f"state `{node.target.id}` is declared in two modules — rename one")
-                self._check_name(node.target, node.target.id, "state")
-                field = self._cell_field(node.value, node.annotation)
-                self.state[node.target.id] = field
-                self.cells[node.target.id] = field[0]
-            elif isinstance(node, ast.Assign) and self._is_state_call(node.value):
-                if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
-                    raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
-                self._check_name(node.targets[0], node.targets[0].id, "state")
-                field = self._cell_field(node.value, None)
-                self.state[node.targets[0].id] = field
-                self.cells[node.targets[0].id] = field[0]
-            elif isinstance(node, ast.If) and self._is_main_guard(node):
-                # An imported module's guard body runs in neither run
-                # (its __name__ is never "__main__"), so only the
-                # entry's guard is read.
-                if entry:
-                    self._scan_main_guard(node)
-            elif isinstance(node, ast.If) and self._is_type_checking_guard(node):
-                continue   # dead at runtime in both runs
-            elif (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "every")
-            ):
-                # A timer is a declaration: it says the app ticks, and
-                # both runs start it when the app starts.
-                self._take_timer(node.value)
-            elif (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "shortcut")
-            ):
-                # A shortcut is a declaration too: the chord and the
-                # handler, bound when the app starts.
-                self._take_shortcut(node.value)
-            elif (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "on_key")
-            ):
-                self._take_on_key(node.value)
-            elif (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "menu_item")
-            ):
-                self._take_menu_item(node.value)
-            elif (
-                isinstance(node, ast.Expr)
-                and isinstance(node.value, ast.Call)
-                and self._is_ui(node.value.func, "on_file_drop")
-            ):
-                self._take_on_drop(node.value)
-            elif (
-                isinstance(node, (ast.Assign, ast.AnnAssign))
-                and node.value is not None
-                and self._zone_call(node.value) is not None
-            ):
-                # A zone is a name for a key. Nothing runs: the key is
-                # read while the app translates, and the statics take
-                # it where a zone decides the answer.
-                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
-                    if isinstance(t, ast.Name):
-                        self.zones[t.id] = self._zone_call(node.value)
-            elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
-                # A literal constant is a declaration: nothing runs.
-                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
-                    if isinstance(t, ast.Name):
-                        self.consts[t.id] = node.value
-            elif isinstance(node, ast.AnnAssign) and node.value is None:
-                continue   # a bare annotation declares nothing that runs
-            elif isinstance(node, ast.ClassDef):
-                continue   # a plain class: declared here, refused where it is used
-            elif isinstance(node, ast.Pass):
-                continue
-            elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
-                continue   # docstring
-            elif isinstance(node, ast.Expr) and self._is_sys_path_call(node.value):
-                continue   # import plumbing (`sys.path.insert(0, …)`), effect-free for the app
             else:
-                self._refuse_module_stmt(node, under_guard=False)
+                self._take_struct(node)
+        elif isinstance(node, ast.ClassDef) and any(
+            (isinstance(d, ast.Name) and d.id in self.dataclass_names)
+            or (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id in self.dataclass_names)
+            for d in node.decorator_list
+        ):
+            self.unfrozen.add(node.name)
+        elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+            parts = []
+            def _walk_union(x):
+                if isinstance(x, ast.BinOp) and isinstance(x.op, ast.BitOr):
+                    _walk_union(x.left)
+                    _walk_union(x.right)
+                elif isinstance(x, ast.Name) and x.id in self.structs:
+                    parts.append(x.id)
+                else:
+                    raise Untranslatable(x, "a `type` alias joins value classes into a sum type (`type Shape = Circle | Rect`)")
+            _walk_union(node.value)
+            uname = node.name.id
+            for p2 in parts:
+                if p2 in self.union_of:
+                    raise Untranslatable(node, f"`{p2}` already belongs to the sum type {self.union_of[p2]}")
+                for _f, _t, dflt in self.structs[p2]:
+                    if dflt is not None:
+                        raise Untranslatable(node, f"the fields of variant `{p2}` take no defaults — each arm and constructor names every field")
+                self.union_of[p2] = uname
+            self.unions[uname] = parts
+        elif isinstance(node, ast.ClassDef) and any(
+            (isinstance(b, ast.Name) and b.id in self.enum_bases)
+            or (isinstance(b, ast.Attribute) and b.attr == "Enum")
+            for b in node.bases
+        ):
+            members = []
+            for st in node.body:
+                if isinstance(st, ast.Assign) and len(st.targets) == 1 and isinstance(st.targets[0], ast.Name):
+                    members.append(st.targets[0].id)
+                elif isinstance(st, (ast.Pass, ast.Expr)):
+                    continue
+                else:
+                    raise Untranslatable(st, "an Enum body holds members only (`NAME = auto()`, `NAME = 1`) — methods on an Enum are not in the dialect yet")
+            if not members:
+                raise Untranslatable(node, "an enum needs at least one member")
+            self.enums[node.name] = members
+            self.enum_values[node.name] = self._enum_values(node)
+        elif isinstance(node, ast.ClassDef) and any(
+            isinstance(b, ast.Name) and b.id in self.protocol_names for b in node.bases
+        ):
+            self._take_protocol(node)
+        elif isinstance(node, ast.ClassDef) and any(
+            self._is_deco(d, "store") for d in node.decorator_list
+        ):
+            self._take_store(node)
+        elif isinstance(node, ast.ClassDef) and any(
+            self._is_deco(d, "model")
+            for d in node.decorator_list
+        ):
+            self._take_model(node)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "style")
+        ):
+            self._take_style(node.targets[0].id, node.value)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.BinOp)
+            and isinstance(node.value.op, ast.BitOr)
+            and isinstance(node.targets[0], ast.Name)
+            and any(isinstance(x, ast.Name) and x.id in self.styles for x in [node.value.left])
+        ):
+            self._take_style_merge(node.targets[0].id, node.value)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id in self.models
+        ):
+            call = node.value
+            if call.args or call.keywords:
+                raise Untranslatable(
+                    call, "a model is constructed with its defaults (`Node()`) — constructor arguments are not in the dialect yet; set fields in a handler"
+                )
+            self.model_instances[node.targets[0].id] = call.func.id
+        elif isinstance(node, ast.AnnAssign) and self._is_state_call(node.value):
+            if not isinstance(node.target, ast.Name):
+                raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
+            if node.target.id in self.cells:
+                raise Untranslatable(node, f"state `{node.target.id}` is declared in two modules — rename one")
+            self._check_name(node.target, node.target.id, "state")
+            field = self._cell_field(node.value, node.annotation)
+            self.state[node.target.id] = field
+            self.cells[node.target.id] = field[0]
+        elif isinstance(node, ast.Assign) and self._is_state_call(node.value):
+            if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                raise Untranslatable(node, "a State is declared as a module-level name (`count: State[int] = State(0)`)")
+            self._check_name(node.targets[0], node.targets[0].id, "state")
+            field = self._cell_field(node.value, None)
+            self.state[node.targets[0].id] = field
+            self.cells[node.targets[0].id] = field[0]
+        elif isinstance(node, ast.If) and self._is_main_guard(node):
+            # An imported module's guard body runs in neither run
+            # (its __name__ is never "__main__"), so only the
+            # entry's guard is read.
+            if entry:
+                self._scan_main_guard(node)
+        elif isinstance(node, ast.If) and self._is_type_checking_guard(node):
+            return   # dead at runtime in both runs
+        elif (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "every")
+        ):
+            # A timer is a declaration: it says the app ticks, and
+            # both runs start it when the app starts.
+            self._take_timer(node.value)
+        elif (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "shortcut")
+        ):
+            # A shortcut is a declaration too: the chord and the
+            # handler, bound when the app starts.
+            self._take_shortcut(node.value)
+        elif (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "on_key")
+        ):
+            self._take_on_key(node.value)
+        elif (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "menu_item")
+        ):
+            self._take_menu_item(node.value)
+        elif (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and self._is_ui(node.value.func, "on_file_drop")
+        ):
+            self._take_on_drop(node.value)
+        elif (
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and node.value is not None
+            and self._zone_call(node.value) is not None
+        ):
+            # A zone is a name for a key. Nothing runs: the key is
+            # read while the app translates, and the statics take
+            # it where a zone decides the answer.
+            for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                if isinstance(t, ast.Name):
+                    self.zones[t.id] = self._zone_call(node.value)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
+            # A literal constant is a declaration: nothing runs.
+            for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                if isinstance(t, ast.Name):
+                    self.consts[t.id] = node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is None:
+            return   # a bare annotation declares nothing that runs
+        elif isinstance(node, ast.ClassDef):
+            return   # a plain class: declared here, refused where it is used
+        elif isinstance(node, ast.Pass):
+            return
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            return   # docstring
+        elif isinstance(node, ast.Expr) and self._is_sys_path_call(node.value):
+            return   # import plumbing (`sys.path.insert(0, …)`), effect-free for the app
+        else:
+            self._refuse_module_stmt(node, under_guard=False)
+
 
     # Module level is declarations. The module runs once per import in
     # CPython, again on every live reload, and never in the compiled
@@ -11523,88 +11619,101 @@ class Translator:
     def _block_stmts(self, stmts, indent: int) -> list[str]:
         lines = []
         for stmt in stmts:
-            if isinstance(stmt, ast.With):
-                lines += self.with_element(stmt, indent)
-            elif (
-                isinstance(stmt, ast.Expr)
-                and isinstance(stmt.value, ast.Call)
-                and self._is_ui(stmt.value.func, "slot")
-            ):
-                if not self.in_slotted_comp:
-                    raise Untranslatable(stmt, "slot() lives inside a @component(slots=True) body")
-                lines.append("  " * indent + "Slot { }")
-            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                name = self._ui_name(stmt.value.func)
-                if name in self.CANVAS_OPS and not self.in_canvas:
-                    raise Untranslatable(
-                        stmt.value,
-                        f"`{name}()` paints on a canvas — put it inside "
-                        "`with canvas(width, height, palette=…):`",
-                    )
-                if self.in_canvas and name not in self.CANVAS_OPS:
-                    raise Untranslatable(
-                        stmt.value,
-                        "a canvas holds drawing commands, not elements — pixel, line, "
-                        "rect, rect_outline, circle, circle_outline, triangle, "
-                        "triangle_outline, sprite and pixel_text",
-                    )
-                if self.in_canvas:
-                    lines += self.canvas_op(stmt.value, indent)
-                else:
-                    lines += self.element(stmt.value, indent)
-            elif isinstance(stmt, ast.If):
-                lines += self._if_lines(stmt, indent)
-            elif isinstance(stmt, ast.Match) and (
-                (c0 := self._cell_read(stmt.subject)) is not None
-                and self._ty(c0) in self.unions
-            ):
-                pad = "  " * indent
-                uname = self._ty(c0)
-                lines.append(f"{pad}case App.{c0} {{")
-                for case in stmt.cases:
-                    if case.guard is not None:
-                        raise Untranslatable(case.pattern, "a match guard (`case X if cond:`) is not in the dialect yet — test the condition inside the arm")
-                    arm, binds = self._union_arm(case.pattern, uname)
-                    lines.append(f"{pad}  {arm} {{")
-                    for b, t in binds:
-                        self.view_bindings[b] = t
-                    lines += self._block_stmts(case.body, indent + 2)
-                    for b, _t in binds:
-                        self.view_bindings.pop(b, None)
-                    lines.append(f"{pad}  }}")
-                lines.append(f"{pad}}}")
-            elif isinstance(stmt, ast.Match):
-                c = self._cell_read(stmt.subject)
-                if c is None or self._ty(c) not in self.enums:
-                    raise Untranslatable(stmt.subject, "match takes an Enum or sum-type state or field — matching on int or str literals is not in the dialect yet")
-                pad = "  " * indent
-                lines.append(f"{pad}case App.{c} {{")
-                for case in stmt.cases:
-                    if case.guard is not None:
-                        raise Untranslatable(case.pattern, "a match guard (`case X if cond:`) is not in the dialect yet — test the condition inside the arm")
-                    p = case.pattern
-                    if (
-                        isinstance(p, ast.MatchValue)
-                        and isinstance(p.value, ast.Attribute)
-                        and isinstance(p.value.value, ast.Name)
-                        and p.value.value.id == self._ty(c)
-                    ):
-                        lines.append(f"{pad}  when {p.value.attr} {{")
-                    elif isinstance(p, ast.MatchAs) and p.pattern is None and p.name is None:
-                        lines.append(f"{pad}  when _ {{")
-                    else:
-                        raise Untranslatable(p, "a match arm is `Mood.MEMBER` or `_` — `|` patterns and literals are not in the dialect yet")
-                    lines += self._block_stmts(case.body, indent + 2)
-                    lines.append(f"{pad}  }}")
-                lines.append(f"{pad}}}")
-            elif isinstance(stmt, ast.For):
-                lines += self._view_for(stmt, indent)
-            elif isinstance(stmt, ast.Pass):
-                continue
-            else:
+            # One element at a time, for the same reason the scan takes
+            # one statement at a time: a refusal here is this line's,
+            # and `check` reads the next line rather than stopping.
+            try:
+                lines += self._block_stmt(stmt, indent)
+            except Untranslatable as e:
+                if not self.collect:
+                    raise
+                self._refuse(e, stmt)
+        return lines
+
+    def _block_stmt(self, stmt, indent: int) -> list[str]:
+        lines = []
+        if isinstance(stmt, ast.With):
+            lines += self.with_element(stmt, indent)
+        elif (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Call)
+            and self._is_ui(stmt.value.func, "slot")
+        ):
+            if not self.in_slotted_comp:
+                raise Untranslatable(stmt, "slot() lives inside a @component(slots=True) body")
+            lines.append("  " * indent + "Slot { }")
+        elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+            name = self._ui_name(stmt.value.func)
+            if name in self.CANVAS_OPS and not self.in_canvas:
                 raise Untranslatable(
-                    stmt, "a `with` block holds element calls, nested `with` blocks, `for`, `if`/`elif`/`else` and `match` — a local is not in the dialect in views (hold it in a State or a store field)"
+                    stmt.value,
+                    f"`{name}()` paints on a canvas — put it inside "
+                    "`with canvas(width, height, palette=…):`",
                 )
+            if self.in_canvas and name not in self.CANVAS_OPS:
+                raise Untranslatable(
+                    stmt.value,
+                    "a canvas holds drawing commands, not elements — pixel, line, "
+                    "rect, rect_outline, circle, circle_outline, triangle, "
+                    "triangle_outline, sprite and pixel_text",
+                )
+            if self.in_canvas:
+                lines += self.canvas_op(stmt.value, indent)
+            else:
+                lines += self.element(stmt.value, indent)
+        elif isinstance(stmt, ast.If):
+            lines += self._if_lines(stmt, indent)
+        elif isinstance(stmt, ast.Match) and (
+            (c0 := self._cell_read(stmt.subject)) is not None
+            and self._ty(c0) in self.unions
+        ):
+            pad = "  " * indent
+            uname = self._ty(c0)
+            lines.append(f"{pad}case App.{c0} {{")
+            for case in stmt.cases:
+                if case.guard is not None:
+                    raise Untranslatable(case.pattern, "a match guard (`case X if cond:`) is not in the dialect yet — test the condition inside the arm")
+                arm, binds = self._union_arm(case.pattern, uname)
+                lines.append(f"{pad}  {arm} {{")
+                for b, t in binds:
+                    self.view_bindings[b] = t
+                lines += self._block_stmts(case.body, indent + 2)
+                for b, _t in binds:
+                    self.view_bindings.pop(b, None)
+                lines.append(f"{pad}  }}")
+            lines.append(f"{pad}}}")
+        elif isinstance(stmt, ast.Match):
+            c = self._cell_read(stmt.subject)
+            if c is None or self._ty(c) not in self.enums:
+                raise Untranslatable(stmt.subject, "match takes an Enum or sum-type state or field — matching on int or str literals is not in the dialect yet")
+            pad = "  " * indent
+            lines.append(f"{pad}case App.{c} {{")
+            for case in stmt.cases:
+                if case.guard is not None:
+                    raise Untranslatable(case.pattern, "a match guard (`case X if cond:`) is not in the dialect yet — test the condition inside the arm")
+                p = case.pattern
+                if (
+                    isinstance(p, ast.MatchValue)
+                    and isinstance(p.value, ast.Attribute)
+                    and isinstance(p.value.value, ast.Name)
+                    and p.value.value.id == self._ty(c)
+                ):
+                    lines.append(f"{pad}  when {p.value.attr} {{")
+                elif isinstance(p, ast.MatchAs) and p.pattern is None and p.name is None:
+                    lines.append(f"{pad}  when _ {{")
+                else:
+                    raise Untranslatable(p, "a match arm is `Mood.MEMBER` or `_` — `|` patterns and literals are not in the dialect yet")
+                lines += self._block_stmts(case.body, indent + 2)
+                lines.append(f"{pad}  }}")
+            lines.append(f"{pad}}}")
+        elif isinstance(stmt, ast.For):
+            lines += self._view_for(stmt, indent)
+        elif isinstance(stmt, ast.Pass):
+            return lines
+        else:
+            raise Untranslatable(
+                stmt, "a `with` block holds element calls, nested `with` blocks, `for`, `if`/`elif`/`else` and `match` — a local is not in the dialect in views (hold it in a State or a store field)"
+            )
         return lines
 
     def _view_for(self, stmt: ast.For, indent: int) -> list[str]:
@@ -12935,13 +13044,22 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
     return built
 
 
-def translate_file(path: str) -> tuple[str, "Translator"]:
+def translate_file(path: str, collect: bool = False) -> tuple[str, "Translator"]:
+    """The app as `.pix`, and the translator that made it.
+
+    `collect` is `check`'s: the translator keeps going after a refusal
+    and the refusals come back together, as `Refused`. Nothing else
+    passes it, because what follows a refusal is not a program."""
     modules = _local_modules(path)   # parses (and stamps) the entry too
     tr = Translator(parse_source(path), modules)
+    tr.collect = collect
     decls = app_crate_decls(path)
     if decls:
         tr.crate_info = prepare_crates(path, decls)
-    return tr.translate(), tr
+    pix = tr.translate()
+    if tr.refusals:
+        raise Refused(tr.refusals, tr.unchecked)
+    return pix, tr
 
 
 def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
@@ -14412,13 +14530,20 @@ def main():
         return
 
     try:
-        pix, tr = translate_file(args.app)
+        # `check` asks for every refusal; the modes that go on to
+        # compile stop at the first, because what follows one is not a
+        # program.
+        pix, tr = translate_file(args.app, collect=args.mode == "check")
     except SyntaxError as e:
         rel = os.path.relpath(e.filename or args.app)
         out = [f"{rel if not rel.startswith('..') else e.filename}:{e.lineno}:{e.offset or 1}: {e.msg}"]
         if e.text:
             out += [f"    {e.text.rstrip()}", "    " + " " * max((e.offset or 1) - 1, 0) + "^"]
         sys.exit("\n".join(out))
+    except Refused as e:
+        n = len(e.items)
+        print(e.render(), file=sys.stderr)
+        sys.exit(f"\n{n} refusal{'' if n == 1 else 's'}")
     except Untranslatable as e:
         sys.exit(e.render() if e.file else f"{args.app}: {e.render()}")
     except ValueError as e:

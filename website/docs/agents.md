@@ -21,7 +21,8 @@ app.py:8:17: not in the dialect — rect()'s `y` is a whole number of pixels —
                 ^
 ```
 
-It reads every module the app imports, prints the first refusal in `file:line:col` form with the line under it, and says nothing at all when the app is inside the dialect.
+It reads every module the app imports, prints every refusal it can find in `file:line:col` form with the line under it, and says nothing at all when the app is inside the dialect.
+One run answers the whole file, which is the round trip an agent would otherwise pay per refusal.
 No compiler is started, so the answer comes back in about a second.
 
 The refusal names what to write instead.

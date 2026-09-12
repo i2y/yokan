@@ -20,8 +20,12 @@ mypy には、クラスデコレータによる型の変換を適用しないと
 
 型チェッカーが見るのは Python の型です。
 この形をコンパイラが受け取れるかどうかは、`yokan check app.py` が答えます。
-アプリが import するモジュールをすべて調べ、最初の拒否を `ファイル:行:列` の形で示します。
+アプリが import するモジュールをすべて調べ、見つかった拒否を全部 `ファイル:行:列` の形で示します。
 断るところがなければ何も言いません。
+モジュール直下の文とビューの各行を、それぞれ独立に調べます。
+一度の実行でファイル全体の答えが返るので、次の一つのために往復し直す必要はありません。
+宣言そのものを断られたものを読んでいる文は、拒否ではなく「調べられなかった」として数えます。
+そこで出るメッセージは、起きなかった宣言についてのものであって、それを読んでいる行についてのものではないからです。
 コンパイラを起動しないので、編集しながら何度でも回せます。
 
 `check` は警告も出します。
@@ -46,6 +50,59 @@ app.py:37:9: warning — these assignments make a reference cycle: b.parent → 
 型だけでは、リストや木と輪の区別がつかないからです。
 
 `--strict` を付けると、警告が失敗になります。
+
+## エディタ
+
+エディタが走らせるのは `yokan check` です。
+Yokan のほかに入れるものはありません。
+`file:line:col: message` と、その行とキャレットを出し、方言の内側なら何も言わず、所要はおよそ 0.1 秒です。
+見つかった拒否は最初の一つではなく全部を報告するので、一度の実行でファイル全体の答えが返ります。
+
+Vim と Neovim は設定二つで、拒否が quickfix に入ります。
+
+```vim
+setlocal makeprg=yokan\ check\ %
+setlocal errorformat=%f:%l:%c:\ %m
+autocmd BufWritePost *.py silent make! | redraw!
+```
+
+`:copen` で一覧、`:cnext` で順に移動し、どの項目もファイルのその桁を開きます。
+
+VS Code は problem matcher で同じ形を読みます。
+`.vscode/tasks.json` に次を置きます。
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "yokan check",
+      "type": "shell",
+      "command": "yokan check ${file}",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": {
+        "owner": "yokan",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+): (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}
+```
+
+拒否は問題パネルに、それが指す行に付いて出ます。
+VS Code にはタスクを保存時に走らせる仕組みが標準では無いので、これはキー割り当てかコマンドパレットから呼ぶことになります。
+保存を見張る拡張を入れれば、保存のたびに走ります。
+
+ほかのエディタも同じです。
+`check` がこの形を出しているのは、これがコンパイラが四十年出してきた形だからです。
+チェックアウトの中では、コマンドが `uv run yokan_gate.py check <ファイル>` に変わるだけです。
 
 ## テスト
 

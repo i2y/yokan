@@ -342,6 +342,8 @@ It reports the first refusal, not all of them. Enumerating one per
 def would mean treating a refused def as opaque at its call sites
 and continuing the pass, which is a translator change, not a CLI
 one; the cheap version is honest about stopping where it stops.
+(That translator change was made later — see "Every refusal, not the
+first" below.)
 
 A refusal also stopped saying "not in the dialect" twice. The
 rendered head names the location and the category, and most messages
@@ -2858,3 +2860,42 @@ and a workflow that runs the tests on every push and the gate behind
 a cache. A scaffold that only writes the app teaches that a desktop
 app is a file; the thing worth teaching is that it is a file, a way to
 drive it, and a run that proves the binary agrees.
+
+## Every refusal, not the first (2026-09-12)
+
+`check` reported one refusal and stopped. The reason it stopped was
+recorded when it was written: enumerating means treating a refused
+unit as opaque and continuing the pass, which is translator work.
+That work is done now, and the reason for doing it is who reads the
+answer. An agent pays a round trip per refusal, and the round trip
+costs more than the tenth of a second the check takes; ten refusals
+should be one answer, not ten conversations.
+
+The unit is the statement. Each module-level statement is taken on
+its own, and so is each line of a view, so a refusal belongs to
+something and the next thing is still read. That is the granularity
+the translator can offer honestly: two refusals inside one handler
+are still one refusal, because what follows the first one inside a
+body was never translated.
+
+**What is NOT reported matters as much.** A line that reads something
+whose own declaration was refused would produce a second message
+about a declaration that never happened — `Cart.total` reads as "not
+in the dialect here" because `Cart` never became a store, and a
+reader sent to that line would be sent to the wrong one. The refusal
+carries the node it was raised on, so a refusal whose expression
+mentions a name that already failed is counted as UNCHECKED instead,
+and the report says how many and which name. A compiler that invents
+its second error teaches its reader to stop reading after the first.
+
+Only `check` collects. Everything that goes on to compile stops at
+the first refusal, because what follows one is not a program.
+
+**Editors need no extension.** The output shape was chosen so that
+editors and terminals already parse it, and that turned out to be the
+whole integration: two settings put the refusals in Vim's quickfix
+list, and a problem matcher puts them in VS Code's Problems panel.
+Both are in the tour. A VS Code extension was considered and dropped:
+the people and agents this is for read the text directly, and an
+extension would be a second place for the command's invocation rules
+to live and drift.

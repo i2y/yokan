@@ -18,7 +18,9 @@ Under mypy, `@store` method calls are therefore misreported as "self is not pass
 We recommend pyright for checking.
 
 A type checker knows Python's types, not the dialect's boundary.
-`yokan check app.py` answers that half: it checks every module the app imports, prints the first refusal in the `file:line:col` form, and says nothing when the app is inside the dialect.
+`yokan check app.py` answers that half: it checks every module the app imports, prints every refusal it can find in the `file:line:col` form, and says nothing when the app is inside the dialect.
+Each module-level statement and each line of the view is checked on its own, so one run answers the whole file rather than sending you round again for the next one.
+A statement that reads something whose own declaration was refused is counted as unchecked instead — the message would be about the declaration that never happened, not about the line that reads it.
 No compiler is started, so it is the check to run while editing.
 
 `check` also warns.
@@ -41,6 +43,56 @@ The other is a handler that writes the round trip (`a.kid = b`, then `b.parent =
 The second catches a model that references its own class, where the types alone cannot tell a ring from a list or a tree.
 
 `--strict` turns a warning into a failure.
+
+## Editors
+
+`yokan check` is what an editor runs, and it needs nothing installed beyond Yokan itself.
+It prints `file:line:col: message` and the line with a caret under it, says nothing when the app is inside the dialect, and takes about a tenth of a second.
+It reports every refusal it can find rather than the first, so one run answers the whole file.
+
+Vim and Neovim need two settings and put the refusals in the quickfix list:
+
+```vim
+setlocal makeprg=yokan\ check\ %
+setlocal errorformat=%f:%l:%c:\ %m
+autocmd BufWritePost *.py silent make! | redraw!
+```
+
+`:copen` lists them, `:cnext` walks them, and each entry opens the file at the column.
+
+VS Code reads the same shape through a problem matcher.
+In `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "yokan check",
+      "type": "shell",
+      "command": "yokan check ${file}",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": {
+        "owner": "yokan",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+): (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}
+```
+
+The refusals then land in the Problems panel, on the lines they are about.
+VS Code has no built-in way to run a task on save, so this is a key binding or the command palette unless you add an extension that watches for saves.
+
+Any other editor takes it the same way: the format is the one compilers have printed for forty years, which is why `check` prints it.
+Inside a checkout the command is `uv run yokan_gate.py check <file>` instead, and nothing else changes.
 
 ## Testing
 

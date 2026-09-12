@@ -14,9 +14,11 @@ interaction script against both runs and byte-compares the screens.
 What the subset cannot take is refused when you check, translate or
 build, with a message saying what and why — behavior never changes
 silently. `yokan check
-app.py` is the fast one: it prints the first refusal as
-`file:line:col: …` and says nothing when the app is inside the
-dialect. The closing section
+app.py` is the fast one: it prints every refusal it can find as
+`file:line:col: …`, one per module-level statement and per line of
+the view, and says nothing when the app is inside the dialect. A line
+that reads something whose declaration was refused is counted as
+unchecked rather than refused twice. The closing section
 lists what is refused and why; write inside that boundary from the
 start instead of discovering it at build time.
 
