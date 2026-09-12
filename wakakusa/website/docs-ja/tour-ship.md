@@ -21,6 +21,7 @@
 | `menu:<item>` | メニュー項目を選ぶ |
 | `file:<path>` | ファイルダイアログの答え |
 | `drop:<path>` | ウィンドウにファイルを落とす |
+| `hover:<i>` / `hover:` | チャートの i 番目の点にポインタを載せる（n 番目のチャートなら `hover@n:<i>`）、外す |
 | `advance:<ms>` | 時計を進める |
 | `theme:dark` / `theme:light` | 配色を切り替える |
 | `dump` | 要素のツリーを出力する |

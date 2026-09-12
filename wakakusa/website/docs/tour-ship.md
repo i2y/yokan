@@ -21,6 +21,7 @@ it with the steps, and prints what the steps asked for.
 | `menu:<item>` | pick a menu item |
 | `file:<path>` | answer a file dialog |
 | `drop:<path>` | a file dragged onto the window |
+| `hover:<i>` / `hover:` | the pointer on a chart's i-th point (`hover@n:<i>` for the n-th chart), and the pointer leaving |
 | `advance:<ms>` | move the clock |
 | `theme:dark` / `theme:light` | switch the palette |
 | `dump` | print the element tree |

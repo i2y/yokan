@@ -18,6 +18,8 @@ key:<chord>        a keystroke bound to a shortcut
 keydown:<key> / keyup:<key>    hold a key down, let it up
 menu:<item>        pick a menu item    file:<path>   answer a dialog
 drop:<path>        a file dragged onto the window
+hover:<i>          the pointer on a chart's i-th point (hover@n:<i> for the n-th chart)
+hover:             the pointer leaves it
 advance:<ms>       move the clock      theme:dark|light
 dump               print the tree      a11y   print what a reader reads
 ```

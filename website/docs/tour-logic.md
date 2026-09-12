@@ -174,6 +174,8 @@ line_chart(series=Traffic.lines, colors=["accent", "#f38ba8"], axis=True)
 
 The range spans the data and always contains zero, so a negative value hangs below the zero line; `min=` / `max=` pin it instead.
 `axis=True` adds tick labels and gridlines.
+Moving the pointer over a chart shows the value under it: the bar's or the sample's label (`#3` when the chart has no labels) and one number per series.
+A script puts the pointer there with `hover:<i>` (the i-th point; `hover@n:<i>` for the n-th chart, bar and line charts counted together) and takes it away with `hover:`, and the dump then carries the readout — so what a person sees on hover is checked the way a click is.
 `series=` takes a `list[list[float]]` field for several lines or bar groups, `colors=` names one color per series, and `color=` colors a single series (`demo/charts.py`).
 `progress(value)` fills a track: `width=` / `height=` size it, `label=` captions it, and `indeterminate=True` sweeps a segment instead, for work with no known length.
 

@@ -297,7 +297,9 @@ compiled run does an in-place push), `items.set([])` clears,
 `len(items())` counts, `items[0] = v` writes one slot, and a
 literal `xs[-1]` reads from the back. Charts draw lists of float or
 int: `line_chart(values(), height=120.0)`, `bar_chart(data,
-labels=names, height=100.0)`. `list_view(len(items()), row,
+labels=names, height=100.0)`; the pointer over a chart shows the
+value under it, and a script hovers with `hover:<i>` (the dump
+carries the readout). `list_view(len(items()), row,
 item_height=22.0, height=200.0)` is virtualized — `row(i)` runs
 only for visible rows and returns `text(items()[i])`; `grow=1.0`
 fills the parent instead of `height=`.
@@ -729,7 +731,9 @@ the harness that reads it is pixie's.
 Steps: `click[@n]:<label>`, `input[@n]:<text>`, `submit[@n]`,
 `slide[@n]:<value>`, `select[@n]:<label>`, `key:<chord>`,
 `keydown:<key>` / `keyup:<key>`, `menu:<item>`, `file:<path>`,
-`drop:<path>`, `advance:<ms>`, `theme:light|dark`, `a11y`, `mem`,
+`drop:<path>`, `hover[@n]:<i>` (the pointer on a chart's i-th
+point; `hover:` moves it away, and the dump carries the readout),
+`advance:<ms>`, `theme:light|dark`, `a11y`, `mem`,
 `dump`. `@n` picks the n-th
 match in tree order; `dump` prints the screen mid-script; a comma
 in text is `\,`.

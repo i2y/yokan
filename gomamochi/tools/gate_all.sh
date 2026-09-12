@@ -75,7 +75,7 @@ gate shooter ./bin/gomamochi gate demo/shooter.go --script "advance:34,advance:3
 # The rest of the vocabulary and the app's shape, in the order the
 # other languages' sweeps drive them.
 gate control ./bin/gomamochi gate demo/control.go --script "click:pick 1,dump,click:hint,click:tab 2,dump"
-gate charts  ./bin/gomamochi gate demo/charts.go --script "click:next month,dump,click:next month"
+gate charts  ./bin/gomamochi gate demo/charts.go --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
 gate quantities ./bin/gomamochi gate demo/quantities.go --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
 gate table   ./bin/gomamochi gate demo/table.go --script "click:refresh,dump,click:refresh"
 gate mixer   ./bin/gomamochi gate demo/mixer.go --script "click:+1,click:mute,dump,input:live set,dump"

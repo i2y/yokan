@@ -59,6 +59,7 @@ pub mod clipboard;
 pub mod dialog;
 pub mod drop;
 pub mod frames;
+pub mod hover;
 pub mod keys;
 pub mod menu;
 pub mod progress;
@@ -1957,6 +1958,32 @@ pub struct LazyRows {
     pub build: Rc<dyn Fn(&World, std::ops::Range<usize>) -> Vec<Element>>,
 }
 
+thread_local! {
+    /// How many charts `dump` has passed so far: the ordinal the
+    /// script's `hover[@n]:` names, counted the way `find_chart_nth`
+    /// counts.
+    static DUMP_CHARTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The `dump()` tail a hovered chart adds: the point the pointer is
+/// on and the readout the window draws for it. Nothing when the
+/// pointer is elsewhere, so a chart nobody hovers dumps as it always
+/// has.
+fn chart_hover(w: &World, data: &List<f64>, labels: &List<Str>, series: &List<List<f64>>) -> String {
+    let n = DUMP_CHARTS.with(|c| {
+        let n = c.get();
+        c.set(n + 1);
+        n
+    });
+    match crate::hover::point_of(w, n) {
+        Some(i) if i < crate::hover::points(data, series) => format!(
+            " hover={i} readout={:?}",
+            crate::hover::chart_readout(data, labels, series, i)
+        ),
+        _ => String::new(),
+    }
+}
+
 /// The `dump()` tail a chart's explicit sizing adds. Empty while both
 /// axes are unset (`0.0`), so demos that never touched them compare
 /// byte-identically across releases and tiers.
@@ -2152,7 +2179,16 @@ impl Element {
     /// Render the tree for headless scripts and the tier gate. Takes
     /// the World so lazy ListView rows can be materialized in full —
     /// verification never sees less than the eager tree would show.
+    /// The element tree as text: the bytes a gate compares. Charts
+    /// are counted on the way down, because the pointer a script put
+    /// on one (`hover:`) is kept by ordinal — the n-th chart in tree
+    /// order — and the readout it shows is part of the picture.
     pub fn dump(&self, w: &World) -> String {
+        DUMP_CHARTS.with(|c| c.set(0));
+        self.dump_in(w)
+    }
+
+    fn dump_in(&self, w: &World) -> String {
         match self {
             // Style props join the parenthesized group only when set
             // (ListView's rule), so unstyled demos dump byte-identically
@@ -2311,7 +2347,7 @@ impl Element {
                 } else {
                     "Row"
                 };
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 let mut props: Vec<String> = Vec::new();
                 if *spacing >= 0.0 {
                     props.push(format!("spacing={spacing}"));
@@ -2344,7 +2380,7 @@ impl Element {
                 border_color,
                 children,
             } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 // `columns` is required, so it always leads the group;
                 // the shared style props follow Column's join rule.
                 let mut props: Vec<String> = vec![format!("columns={columns}")];
@@ -2367,15 +2403,15 @@ impl Element {
                 format!("Grid({})[{}]", props.join(", "), inner.join(", "))
             }
             Element::Themed { theme, children } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Themed({theme})[{}]", inner.join(", "))
             }
             Element::Tooltip { text, children } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Tooltip({text})[{}]", inner.join(", "))
             }
             Element::Disabled { children } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Disabled[{}]", inner.join(", "))
             }
             // Each side joins only when set (the `GridCell` rule): a
@@ -2388,7 +2424,7 @@ impl Element {
                 max_width,
                 children,
             } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 let mut props: Vec<String> = Vec::new();
                 if *width != 0.0 {
                     props.push(format!("width={width}"));
@@ -2413,7 +2449,7 @@ impl Element {
                 label,
                 children,
             } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 let mut props: Vec<String> = Vec::new();
                 if !role.as_str().is_empty() {
                     props.push(format!("role={role}"));
@@ -2431,7 +2467,7 @@ impl Element {
                 opacity,
                 children,
             } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 let mut props: Vec<String> = vec![format!("{duration}ms"), easing.name().into()];
                 if *enter {
                     props.push("enter".into());
@@ -2452,7 +2488,7 @@ impl Element {
                 row_span,
                 children,
             } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 let mut props: Vec<String> = Vec::new();
                 if *col_span != 1 {
                     props.push(format!("colSpan={col_span}"));
@@ -2467,7 +2503,7 @@ impl Element {
                 }
             }
             Element::Stack(cs) => {
-                let inner: Vec<String> = cs.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = cs.iter().map(|c| c.dump_in(w)).collect();
                 format!("Stack[{}]", inner.join(", "))
             }
             Element::ListView {
@@ -2478,9 +2514,9 @@ impl Element {
                 children,
                 lazy,
             } => {
-                let mut inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let mut inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 if let Some(rows) = lazy {
-                    inner.extend((rows.build)(w, 0..rows.len).iter().map(|c| c.dump(w)));
+                    inner.extend((rows.build)(w, 0..rows.len).iter().map(|c| c.dump_in(w)));
                 }
                 // A plain list keeps the bare `ListView[..]` rendering:
                 // the container props only enter the dump once they are
@@ -2504,7 +2540,7 @@ impl Element {
                 }
             }
             Element::ScrollView { height, children } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 if *height == 0.0 {
                     format!("ScrollView[{}]", inner.join(", "))
                 } else {
@@ -2512,7 +2548,7 @@ impl Element {
                 }
             }
             Element::HScrollView(cs) => {
-                let inner: Vec<String> = cs.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = cs.iter().map(|c| c.dump_in(w)).collect();
                 format!("HScrollView[{}]", inner.join(", "))
             }
             Element::Image {
@@ -2526,11 +2562,11 @@ impl Element {
                 height,
             } => format!("Svg({source} {width}x{height})"),
             Element::DataTable(cs) => {
-                let inner: Vec<String> = cs.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = cs.iter().map(|c| c.dump_in(w)).collect();
                 format!("DataTable[{}]", inner.join(", "))
             }
             Element::Modal { open, children } => {
-                let inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Modal({open})[{}]", inner.join(", "))
             }
             // The data drives every painted bar/point, so the dump
@@ -2550,8 +2586,9 @@ impl Element {
                 series,
                 colors,
             } => format!(
-                "BarChart({data:?} {labels:?}{})",
-                chart_props(*width, *height, *min, *max, *axis, color, series, colors)
+                "BarChart({data:?} {labels:?}{}{})",
+                chart_props(*width, *height, *min, *max, *axis, color, series, colors),
+                chart_hover(w, data, labels, series)
             ),
             Element::LineChart {
                 data,
@@ -2565,8 +2602,9 @@ impl Element {
                 series,
                 colors,
             } => format!(
-                "LineChart({data:?} {labels:?}{})",
-                chart_props(*width, *height, *min, *max, *axis, color, series, colors)
+                "LineChart({data:?} {labels:?}{}{})",
+                chart_props(*width, *height, *min, *max, *axis, color, series, colors),
+                chart_hover(w, data, labels, series)
             ),
             Element::ProgressBar {
                 value,
@@ -2811,9 +2849,9 @@ impl Element {
                 lazy,
                 ..
             } => {
-                let mut inner: Vec<String> = children.iter().map(|c| c.dump(w)).collect();
+                let mut inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 if let Some(rows) = lazy {
-                    inner.extend((rows.build)(w, 0..rows.len).iter().map(|c| c.dump(w)));
+                    inner.extend((rows.build)(w, 0..rows.len).iter().map(|c| c.dump_in(w)));
                 }
                 let cols: Vec<String> = columns.iter().map(|c| c.as_str().to_string()).collect();
                 let mut props = format!("[{}]", cols.join(", "));
@@ -3236,6 +3274,56 @@ impl Element {
     /// its (min, max, step, on_change) tuple — `find_input`'s shape,
     /// one widget over.
     #[allow(clippy::type_complexity)]
+    /// The n-th chart in tree order — BarChart and LineChart counted
+    /// together, the way `hover[@n]:` names one — as the number of
+    /// points it plots, so a script's point index can be checked.
+    /// Counted the way `dump` counts, lazily built rows included, so
+    /// the ordinal a script writes is the one the dump reads.
+    pub fn find_chart_nth(&self, w: &World, n: usize) -> Option<usize> {
+        fn walk(el: &Element, w: &World, seen: &mut usize, n: usize) -> Option<usize> {
+            match el {
+                Element::BarChart { data, series, .. } | Element::LineChart { data, series, .. } => {
+                    if *seen == n {
+                        return Some(crate::hover::points(data, series));
+                    }
+                    *seen += 1;
+                    None
+                }
+                Element::Disabled { children: cs }
+                | Element::Column { children: cs, .. }
+                | Element::Row { children: cs, .. }
+                | Element::Grid { children: cs, .. }
+                | Element::GridCell { children: cs, .. }
+                | Element::Anim { children: cs, .. }
+                | Element::Semantics { children: cs, .. }
+                | Element::Tooltip { children: cs, .. }
+                | Element::Sized { children: cs, .. }
+                | Element::Themed { children: cs, .. }
+                | Element::Stack(cs)
+                | Element::ScrollView { children: cs, .. }
+                | Element::HScrollView(cs)
+                | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n)),
+                Element::ListView { children, lazy, .. }
+                | Element::Table { children, lazy, .. } => {
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n)) {
+                        return Some(hit);
+                    }
+                    lazy.as_ref().and_then(|rows| {
+                        (rows.build)(w, 0..rows.len)
+                            .iter()
+                            .find_map(|c| walk(c, w, seen, n))
+                    })
+                }
+                Element::Modal { children, .. } => {
+                    children.iter().find_map(|c| walk(c, w, seen, n))
+                }
+                _ => None,
+            }
+        }
+        let mut seen = 0;
+        walk(self, w, &mut seen, n)
+    }
+
     pub fn find_slider(
         &self,
         w: &World,

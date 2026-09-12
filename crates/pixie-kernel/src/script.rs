@@ -143,6 +143,9 @@ fn split_steps(script: &str) -> Vec<String> {
 /// `menu:<item>` (pick a menu item by name) ·
 /// `file:<path>` (the answer the next file dialog gets) ·
 /// `drop:<path>` (a file dragged onto the window) ·
+/// `hover[@n]:<i>` (the pointer on the i-th point of the n-th chart —
+/// BarChart and LineChart counted together — and `hover:` for the
+/// pointer leaving; the dump then carries the chart's readout) ·
 /// `advance:<ms>` · `theme:<light|dark>` · `a11y` ·
 /// `mem` · `dump` (the element tree HERE — the run's own start and
 /// end are printed by the caller, so a script that only drives is
@@ -384,6 +387,44 @@ pub fn run<C: Component>(
             });
             if !matches!(picked, Some(true)) {
                 crate::script_refusal!("no menu item `{name}`");
+            }
+        } else if let Some(rest) = step.strip_prefix("hover") {
+            // The pointer over a chart. `hover[@n]:<i>` puts it on the
+            // i-th point of the n-th chart (BarChart and LineChart
+            // counted together in tree order, default 0), and `hover:`
+            // takes it away. A window reads the mouse; a script says
+            // where the pointer is, and the dump carries the readout
+            // the chart shows for that point — so what a person sees
+            // on hover is a checked output, not a courtesy of the
+            // window. Nothing rebuilds: the pointer is not app state.
+            let (n, target) = if let Some(r) = rest.strip_prefix('@') {
+                let (a, b) = r
+                    .split_once(':')
+                    .unwrap_or_else(|| crate::script_refusal!("bad hover step `{step}`"));
+                let ix: usize = a
+                    .parse()
+                    .unwrap_or_else(|_| crate::script_refusal!("bad hover index `{step}`"));
+                (ix, b)
+            } else if let Some(t) = rest.strip_prefix(':') {
+                (0usize, t)
+            } else {
+                crate::script_refusal!("unknown script step `{step}`");
+            };
+            if target.is_empty() {
+                rt.with(|w: &mut World| crate::hover::clear(w));
+            } else {
+                let i: usize = target.parse().unwrap_or_else(|_| {
+                    crate::script_refusal!(
+                        "bad hover point `{step}` — a point's index, or nothing for the pointer leaving"
+                    )
+                });
+                let points = rt
+                    .with(|w| tree.find_chart_nth(w, n))
+                    .unwrap_or_else(|| crate::script_refusal!("no chart #{n} (BarChart / LineChart)"));
+                if i >= points {
+                    crate::script_refusal!("chart #{n} has {points} point(s), so there is no #{i}");
+                }
+                rt.with(|w: &mut World| crate::hover::set(w, n, i));
             }
         } else if let Some(rest) = step.strip_prefix("submit") {
             let n: usize = if let Some(r) = rest.strip_prefix('@') {

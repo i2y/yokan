@@ -124,7 +124,7 @@ Yokan のアプリはどれもこれを読みます。
 名前が Yokan ではないのは、これを読む仕組みが Yokan のものではないからです。
 Yokan が土台にしている [pixie](https://github.com/i2y/yokan/blob/main/docs/PIXIE.md) のもので、あちらでも同じ綴りです。
 
-ステップの語彙は `click[@n]:<ラベル>`（ボタン、リンク、表の列見出し）、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`（選択肢のある要素の項目、または表の行を先頭セルで）、`key:<chord>`、`keydown:<キー>` と `keyup:<キー>`、`menu:<項目>`、`file:<path>`、`drop:<path>`、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump` です。
+ステップの語彙は `click[@n]:<ラベル>`（ボタン、リンク、表の列見出し）、`input[@n]:<テキスト>`、`submit[@n]`、`slide[@n]:<値>`、`select[@n]:<ラベル>`（選択肢のある要素の項目、または表の行を先頭セルで）、`key:<chord>`、`keydown:<キー>` と `keyup:<キー>`、`menu:<項目>`、`file:<path>`、`drop:<path>`、`hover[@n]:<i>`（チャートの i 番目の点にポインタを載せる。`hover:` で外す）、`advance:<ms>`、`theme:light|dark`、`a11y`、`mem`、`dump` です。
 `@n` はツリー順で n 番目の一致を選ぶので、同じラベルのボタンが並ぶ行にも届きます（0 から数えるので、`click@2:削除` は三つ目）。
 `dump` はその時点の画面を出力するので、最初と最後だけでなく途中の状態も検査できます。
 テキストに含めるカンマは `\,` と書きます（`input:hello\, world`）。
@@ -293,7 +293,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal`、`hashlib`、`base64`、`zoneinfo` です。
 - **新しい要素の周辺**。
   表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。
-  チャートにはホバーでの読み取りと凡例がありません。
+  チャートには凡例がありません。
   `select` はキーボードで操作できません。
   ツールチップの表示は、スクリプトからホバーで確かめられません（文字列自体はダンプに出ます）。
   いずれも、ヘッドレスの検証にまだ無いステップを待っています。

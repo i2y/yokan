@@ -432,6 +432,12 @@ BarChart(profit).Labels(months...).Axis(true).Height(150)
 LineChart(nil).Series([][]float64{requests, errors}).Colors("accent", "#f38ba8").Max(90).Height(150)
 ```
 
+Moving the pointer over a chart shows the value under it: the bar's
+or the sample's label and one number per series. A script puts the
+pointer there with `hover:<i>` and takes it away with `hover:`, and
+the dump carries the readout, so what a person sees on hover is
+checked the way a click is.
+
 ## Maps
 
 A map is a field like any other: read a key with the second result,
@@ -1026,6 +1032,8 @@ key:<chord>        a keystroke bound to a shortcut
 keydown:<key> / keyup:<key>    hold a key down, let it up
 menu:<item>        pick a menu item    file:<path>   answer a dialog
 drop:<path>        a file dragged onto the window
+hover:<i>          the pointer on a chart's i-th point (hover@n:<i> for the n-th chart)
+hover:             the pointer leaves it
 advance:<ms>       move the clock      theme:dark|light
 dump               print the tree      a11y   print what a reader reads
 ```

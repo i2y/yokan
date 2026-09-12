@@ -268,6 +268,11 @@ BarChart(profit).Labels(months...).Axis(true).Height(150)
 LineChart(nil).Series([][]float64{requests, errors}).Colors("accent", "#f38ba8").Max(90).Height(150)
 ```
 
+チャートにポインタを載せると、その下の値が読めます。
+棒や点のラベルと、系列ごとの数値です。
+スクリプトでは `hover:<i>` でポインタを載せ、`hover:` で外します。
+ダンプにその読み取りが載るので、ホバーで見えるものもクリックと同じように確かめられます。
+
 
 ## マップ
 

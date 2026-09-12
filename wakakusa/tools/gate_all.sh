@@ -53,7 +53,7 @@ gate forms   ./bin/wakakusa gate demo/forms.rb --script "click:Dark mode,slide:7
 gate layout  ./bin/wakakusa gate demo/layout.rb --script "click:ping"
 gate labels  ./bin/wakakusa gate demo/labels.rb --script "dump,click:save,dump"
 gate badges  ./bin/wakakusa gate demo/badges.rb --script "click:flip,dump,click:flip"
-gate charts  ./bin/wakakusa gate demo/charts.rb --script "click:next month,dump,click:next month"
+gate charts  ./bin/wakakusa gate demo/charts.rb --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
 gate quantities ./bin/wakakusa gate demo/quantities.rb --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
 gate table   ./bin/wakakusa gate demo/table.rb --script "click:refresh,dump,click:refresh"
 gate todo    ./bin/wakakusa gate demo/todo.rb --script "input:eggs,submit,dump,click:done,dump"

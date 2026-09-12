@@ -419,6 +419,11 @@ BarChart(profit).Labels(months...).Axis(true).Height(150)
 LineChart(nil).Series([][]float64{requests, errors}).Colors("accent", "#f38ba8").Max(90).Height(150)
 ```
 
+チャートにポインタを載せると、その下の値が読めます。
+棒や点のラベルと、系列ごとの数値です。
+スクリプトでは `hover:<i>` でポインタを載せ、`hover:` で外します。
+ダンプにその読み取りが載るので、ホバーで見えるものもクリックと同じように確かめられます。
+
 ## マップ
 
 マップも、ほかと変わらないフィールドです。
@@ -1009,6 +1014,8 @@ key:<chord>        Shortcut に結ばれた打鍵
 keydown:<key> / keyup:<key>    キーを押したままにする、離す
 menu:<item>        メニュー項目を選ぶ  file:<path>   ダイアログの答え
 drop:<path>        ウィンドウにファイルを落とす
+hover:<i>          チャートの i 番目の点にポインタを載せる（n 番目のチャートなら hover@n:<i>）
+hover:             ポインタを外す
 advance:<ms>       時計を進める        theme:dark|light
 dump               ツリーを出力            a11y   読み上げが読むものを出力
 ```

@@ -18,6 +18,8 @@ key:<chord>        shortcut に結ばれた打鍵
 keydown:<key> / keyup:<key>    キーを押したままにする、離す
 menu:<item>        メニュー項目を選ぶ  file:<path>   ダイアログの答え
 drop:<path>        ウィンドウにファイルを落とす
+hover:<i>          チャートの i 番目の点にポインタを載せる（n 番目のチャートなら hover@n:<i>）
+hover:             ポインタを外す
 advance:<ms>       時計を進める        theme:dark|light
 dump               ツリーを出力            a11y   読み上げが読むものを出力
 ```

@@ -196,6 +196,12 @@ while the screen is being drawn, so it reads state and never writes it,
 and the only index it may use is its own: an index a view cannot prove
 is inside the list is refused, and worked out in a handler instead.
 
+Moving the pointer over a chart shows the value under it: the bar's
+or the sample's label and one number per series. A script puts the
+pointer there with `hover:<i>` and takes it away with `hover:`, and
+the dump carries the readout, so what a person sees on hover is
+checked the way a click is.
+
 
 ## Hashes
 

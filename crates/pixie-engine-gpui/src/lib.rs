@@ -53,8 +53,8 @@ use std::time::Duration;
 
 use gpui::{
     App, BoxShadow, Bounds, Context, DispatchPhase, Entity, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, PathBuilder, Pixels, ScrollHandle, SharedString,
-    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, canvas, deferred, div,
+    MouseMoveEvent, MouseUpEvent, PathBuilder, Pixels, ScrollHandle, SharedString, TextAlign,
+    TextRun, TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, canvas, deferred, div,
     fill, hsla, point, prelude::*, px, relative, rgb, rgba, size,
 };
 use futures::FutureExt as _;
@@ -85,6 +85,11 @@ struct Root<C: Component> {
     /// control (taffy absolute resolves against the direct parent,
     /// so the overlay cannot inherit them by position).
     selects: HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    /// The point under the pointer in each chart, keyed by element
+    /// path — the `selects` rule applied to an index, GC'd by the
+    /// same pass. What the readout shows for it is the kernel's
+    /// text, so the window and a headless dump say one number.
+    charts: HashMap<Vec<usize>, ChartHover>,
     /// What the canvases in this window keep between frames: each
     /// one's last rasterized image, keyed by element path (the
     /// `scrolls` rule, GC'd by the same pass), and the sprite sheets
@@ -391,6 +396,14 @@ impl gpui::ImageCache for PixieImageCache {
 /// the Root entity because the mouse handlers that touch them are
 /// registered during paint and must not re-enter the render that
 /// created them.
+/// What a chart keeps between frames: the index of the point under
+/// the pointer, or none. An `Rc<Cell<..>>` for the reason the
+/// scrollbar's `hover` is one — the window-wide mouse listener that
+/// writes it is registered during paint, after the render walk that
+/// looked the cell up has returned. The headless run's pointer is the
+/// kernel's own (`hover:` in a script); this one is the mouse.
+type ChartHover = Rc<Cell<Option<usize>>>;
+
 #[derive(Clone, Default)]
 struct ScrollState {
     handle: ScrollHandle,
@@ -1092,6 +1105,7 @@ impl<C: Component> Render for Root<C> {
             &mut self.inputs,
             &mut self.scrolls,
             &mut self.selects,
+            &mut self.charts,
             &self.canvases,
             Slot::Flow,
             Sem::default(),
@@ -1107,6 +1121,7 @@ impl<C: Component> Render for Root<C> {
         self.inputs.retain(|k, _| live(k));
         self.scrolls.retain(|k, _| live(k));
         self.selects.retain(|k, _| live(k));
+        self.charts.retain(|k, _| live(k));
         // A canvas that left the tree takes its image with it — and
         // the atlas tile with it, which is why the images are held at
         // all rather than rebuilt every frame.
@@ -1705,6 +1720,7 @@ fn render_el<C: Component>(
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    charts: &mut HashMap<Vec<usize>, ChartHover>,
     // Every canvas's last frame and the sprite sheets they have
     // decoded. Shared rather than threaded by value because the paint
     // callback that rasterizes runs after this walk has returned.
@@ -1715,7 +1731,7 @@ fn render_el<C: Component>(
     cx: &mut Context<Root<C>>,
 ) -> gpui::AnyElement {
     stacker::maybe_grow(RENDER_RED_ZONE, RENDER_STACK, || {
-        render_el_in(el, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx)
+        render_el_in(el, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx)
     })
 }
 
@@ -1728,6 +1744,7 @@ fn render_el_in<C: Component>(
     // A Select's open-popover flag, keyed by element path like
     // `scrolls` and GC'd by the same pass rule.
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    charts: &mut HashMap<Vec<usize>, ChartHover>,
     canvases: &Rc<RefCell<CanvasState>>,
     slot: Slot,
     // Authored accessibility overrides from an enclosing
@@ -1990,7 +2007,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -2017,7 +2034,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Row, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -2058,7 +2075,7 @@ fn render_el_in<C: Component>(
             }
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Grid, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Grid, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -2074,7 +2091,7 @@ fn render_el_in<C: Component>(
             };
             let th = pixie_kernel::theme::by_name(theme.as_str()).unwrap_or(th);
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx);
             pass.path.pop();
             rendered
         }
@@ -2094,7 +2111,7 @@ fn render_el_in<C: Component>(
                 label: (!label.as_str().is_empty()).then_some(label),
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx);
             pass.path.pop();
             rendered
         }
@@ -2105,7 +2122,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx);
             pass.path.pop();
             let label: SharedString = text.as_str().to_string().into();
             let (grow, basis) = child_flex(child);
@@ -2150,7 +2167,7 @@ fn render_el_in<C: Component>(
             let was = pass.disabled;
             pass.disabled = true;
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx);
             pass.path.pop();
             pass.disabled = was;
             let d = wrapper_flex(
@@ -2193,7 +2210,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, Slot::Flow, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, sem, th, cx);
             pass.path.pop();
             let claim = if *width > 0.0 { Slot::Flow } else { slot };
             let mut d = wrapper_flex(div().flex().flex_col(), child, claim);
@@ -2223,7 +2240,7 @@ fn render_el_in<C: Component>(
                 return div().into_any_element();
             };
             pass.path.push(0);
-            let rendered = render_el(child, pass, inputs, scrolls, selects, canvases, slot, sem, th, cx);
+            let rendered = render_el(child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx);
             pass.path.pop();
             if *opacity >= 1.0 {
                 return rendered;
@@ -2256,7 +2273,7 @@ fn render_el_in<C: Component>(
             // grid slot: one element in, the spans applied out.
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                d = d.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Grid, Sem::default(), th, cx));
+                d = d.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Grid, Sem::default(), th, cx));
                 pass.path.pop();
             }
             d.into_any_element()
@@ -2277,7 +2294,7 @@ fn render_el_in<C: Component>(
             let mut d = div().relative();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 d = d.child(if i == 0 {
                     rendered
@@ -2351,6 +2368,7 @@ fn render_el_in<C: Component>(
                                     &mut this.inputs,
                                     &mut this.scrolls,
                                     &mut this.selects,
+                                    &mut this.charts,
                                     &this.canvases,
                                     Slot::Flow,
                                     Sem::default(),
@@ -2405,7 +2423,7 @@ fn render_el_in<C: Component>(
             let mut rows: Vec<gpui::AnyElement> = Vec::new();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 rows.push(if *item_height > 0.0 {
                     // `flex_none` so the clipped viewport cannot squash
@@ -2473,7 +2491,7 @@ fn render_el_in<C: Component>(
             let mut inner = div().flex().flex_col().gap_2();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
+                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             div()
@@ -2516,7 +2534,7 @@ fn render_el_in<C: Component>(
             let mut inner = div().flex().flex_row().flex_none().gap_2().items_center();
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx));
+                inner = inner.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Row, Sem::default(), th, cx));
                 pass.path.pop();
             }
             div()
@@ -2629,7 +2647,7 @@ fn render_el_in<C: Component>(
             let mut data_row_ix = 0usize;
             for (i, c) in children.iter().enumerate() {
                 pass.path.push(i);
-                let rendered = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
+                let rendered = render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
                 let wrapped = if matches!(c, Element::Row { .. }) {
                     if !header_seen {
@@ -2688,7 +2706,7 @@ fn render_el_in<C: Component>(
                 // children key on their index in `children`, so a
                 // TextField keeps its editor across open/close.
                 pass.path.push(i);
-                surface = surface.child(render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx));
+                surface = surface.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
             // `deferred` paints after every sibling, so the overlay
@@ -2735,9 +2753,11 @@ fn render_el_in<C: Component>(
             let hues = chart_colors(series, color, colors, sets.len(), th);
             let range = chart_range(&sets, *min, *max);
             let (grid, want_axis) = (rgb(th.border), *axis);
+            let hover = chart_hover_state(charts, pass);
+            let readouts = chart_readouts(data, labels, series, n);
             let plot = canvas(
                 |_, _, _| (),
-                move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
+                move |bounds: Bounds<Pixels>, _, window: &mut Window, cx: &mut App| {
                     let Some((lo, hi)) = range else {
                         return;
                     };
@@ -2761,6 +2781,15 @@ fn render_el_in<C: Component>(
                     }
                     let base = y_of(0.0);
                     let slot = w / n as f32;
+                    // The slot under the pointer, tinted under the bars
+                    // so the bars themselves stay on top.
+                    let over = hover.get().filter(|i| *i < n);
+                    if let Some(i) = over {
+                        window.paint_quad(fill(
+                            Bounds::new(point(px(x0 + slot * i as f32), px(y0)), size(px(slot), px(h))),
+                            CHART_HOVER_TINT,
+                        ));
+                    }
                     // 2px between slots, then the slot is shared by the
                     // series; a bar never collapses below 1px. One
                     // series reproduces the original `slot - 2` bar.
@@ -2785,6 +2814,14 @@ fn render_el_in<C: Component>(
                             );
                         }
                     }
+                    if let Some(i) = over {
+                        chart_readout_at(window, cx, th, &readouts[i], x0 + slot * (i as f32 + 0.5), x0, w, y0);
+                    }
+                    // The pointer maps to a slot: whichever bar's cell
+                    // it is in.
+                    chart_pointer(window, bounds, hover.clone(), move |x| {
+                        ((x - x0) / slot).floor().clamp(0.0, (n - 1) as f32) as usize
+                    });
                 },
             );
             chart_box(
@@ -2815,9 +2852,11 @@ fn render_el_in<C: Component>(
             let hues = chart_colors(series, color, colors, sets.len(), th);
             let range = chart_range(&sets, *min, *max);
             let (grid, want_axis) = (rgb(th.border), *axis);
+            let hover = chart_hover_state(charts, pass);
+            let readouts = chart_readouts(data, labels, series, n_samples);
             let plot = canvas(
                 |_, _, _| (),
-                move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
+                move |bounds: Bounds<Pixels>, _, window: &mut Window, cx: &mut App| {
                     let Some((lo, hi)) = range else {
                         return;
                     };
@@ -2832,18 +2871,29 @@ fn render_el_in<C: Component>(
                             ));
                         }
                     }
+                    // A lone sample sits in the middle; otherwise the
+                    // samples span the full width, first to last. Every
+                    // series shares the x of its i-th sample with the
+                    // others, which is what lets one pointer x pick one
+                    // index for all of them.
+                    let x_at = move |i: usize, n: usize| {
+                        if n <= 1 {
+                            x0 + w / 2.0
+                        } else {
+                            x0 + w * i as f32 / (n - 1) as f32
+                        }
+                    };
+                    let over = hover.get().filter(|i| *i < n_samples);
+                    if let Some(i) = over {
+                        // A guide down the hovered sample, under the lines.
+                        window.paint_quad(fill(
+                            Bounds::new(point(px(x_at(i, n_samples)), px(y0)), size(px(1.), px(h))),
+                            CHART_HOVER_GUIDE,
+                        ));
+                    }
                     for (s, values) in sets.iter().enumerate() {
                         let n = values.len();
-                        // A lone sample sits in the middle; otherwise the
-                        // samples span the full width, first to last.
-                        let at = |i: usize| {
-                            let x = if n == 1 {
-                                x0 + w / 2.0
-                            } else {
-                                x0 + w * i as f32 / (n - 1) as f32
-                            };
-                            point(px(x), px(y_of(values[i])))
-                        };
+                        let at = |i: usize| point(px(x_at(i, n)), px(y_of(values[i])));
                         if n >= 2 {
                             let mut pb = PathBuilder::stroke(px(2.));
                             pb.move_to(at(0));
@@ -2858,19 +2908,34 @@ fn render_el_in<C: Component>(
                             }
                         }
                         // Dots mark every sample — and are the whole chart
-                        // when there is only one.
+                        // when there is only one. The hovered one is
+                        // drawn larger.
                         for i in 0..n {
                             let c = at(i);
-                            let origin = point(c.x - px(2.5), c.y - px(2.5));
+                            let r = if over == Some(i) { 4.0 } else { 2.5 };
+                            let origin = point(c.x - px(r), c.y - px(r));
                             window.paint_quad(
                                 fill(
-                                    Bounds::new(origin, size(px(5.), px(5.))),
+                                    Bounds::new(origin, size(px(r * 2.0), px(r * 2.0))),
                                     hues[s],
                                 )
-                                .corner_radii(px(2.5)),
+                                .corner_radii(px(r)),
                             );
                         }
                     }
+                    if let Some(i) = over {
+                        chart_readout_at(window, cx, th, &readouts[i], x_at(i, n_samples), x0, w, y0);
+                    }
+                    // The pointer maps to the nearest sample.
+                    chart_pointer(window, bounds, hover.clone(), move |x| {
+                        if n_samples <= 1 {
+                            0
+                        } else {
+                            (((x - x0) / w) * (n_samples - 1) as f32)
+                                .round()
+                                .clamp(0.0, (n_samples - 1) as f32) as usize
+                        }
+                    });
                 },
             );
             chart_box(
@@ -3738,6 +3803,7 @@ fn render_el_in<C: Component>(
                                     &mut this.inputs,
                                     &mut this.scrolls,
                                     &mut this.selects,
+                                    &mut this.charts,
                                     &this.canvases,
                                     th,
                                     cx,
@@ -3780,7 +3846,7 @@ fn render_el_in<C: Component>(
             for (i, row) in children.iter().enumerate() {
                 pass.path.push(i);
                 let e = render_table_row(
-                    row, i, widths, ncol, *selected, on_select, ih, pass, inputs, scrolls, selects, canvases, th, cx,
+                    row, i, widths, ncol, *selected, on_select, ih, pass, inputs, scrolls, selects, charts, canvases, th, cx,
                 );
                 pass.path.pop();
                 rows.push(if ih > 0.0 {
@@ -4060,6 +4126,7 @@ fn render_table_row<C: Component>(
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    charts: &mut HashMap<Vec<usize>, ChartHover>,
     canvases: &Rc<RefCell<CanvasState>>,
     th: &'static Theme,
     cx: &mut Context<Root<C>>,
@@ -4069,7 +4136,7 @@ fn render_table_row<C: Component>(
         Element::Row { children, .. } => {
             for (j, c) in children.iter().enumerate().take(ncol) {
                 pass.path.push(j);
-                let e = render_el(c, pass, inputs, scrolls, selects, canvases, Slot::Row, Sem::default(), th, cx);
+                let e = render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Row, Sem::default(), th, cx);
                 pass.path.pop();
                 cells.push(table_track(div(), widths, j).child(e).into_any_element());
             }
@@ -4078,7 +4145,7 @@ fn render_table_row<C: Component>(
             }
         }
         other => {
-            let e = render_el(other, pass, inputs, scrolls, selects, canvases, Slot::Flow, Sem::default(), th, cx);
+            let e = render_el(other, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx);
             cells.push(
                 div()
                     .flex_grow(1.)
@@ -4325,6 +4392,107 @@ fn chart_ticks(lo: f32, hi: f32) -> Vec<f32> {
 /// ordinary text divs in a gutter beside the plot, like the bottom
 /// labels; only the plot itself (gridlines included) is custom-painted.
 #[allow(clippy::too_many_arguments)]
+/// The tint under a bar chart's hovered slot and the guide down a
+/// line chart's hovered sample: mid-gray at a low alpha, so one value
+/// reads on the dark panel and on the light one.
+const CHART_HOVER_TINT: gpui::Hsla = gpui::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 0.16 };
+const CHART_HOVER_GUIDE: gpui::Hsla = gpui::Hsla { h: 0.0, s: 0.0, l: 0.5, a: 0.5 };
+
+/// Create-or-reuse the hover cell for the chart at `pass.path` and
+/// mark that path live for this pass's GC — `scroll_state`, one map
+/// over.
+fn chart_hover_state(charts: &mut HashMap<Vec<usize>, ChartHover>, pass: &mut RenderPass) -> ChartHover {
+    let key = pass.path.clone();
+    pass.seen.push(key.clone());
+    charts.entry(key).or_default().clone()
+}
+
+/// The readout for every point, formatted once per render by the
+/// kernel — the same function the dump calls for a scripted hover,
+/// so the text under the mouse and the text in the dump are one.
+fn chart_readouts(data: &List<f64>, labels: &List<Str>, series: &List<List<f64>>, n: usize) -> Vec<String> {
+    (0..n)
+        .map(|i| pixie_kernel::hover::chart_readout(data, labels, series, i))
+        .collect()
+}
+
+/// The window-wide mouse listener a chart's paint registers, in the
+/// scrollbar's shape: a `div().on_mouse_move` fires only while
+/// hovered, and the readout has to go away when the pointer leaves.
+/// `index_at` maps a pointer x to a point; the cell holds what the
+/// chart shows, and only a change repaints.
+fn chart_pointer(
+    window: &mut Window,
+    bounds: Bounds<Pixels>,
+    hover: ChartHover,
+    index_at: impl Fn(f32) -> usize + 'static,
+) {
+    window.on_mouse_event(move |ev: &MouseMoveEvent, phase, window, _: &mut App| {
+        if phase != DispatchPhase::Bubble {
+            return;
+        }
+        let next = if bounds.contains(&ev.position) {
+            Some(index_at(ev.position.x.as_f32()))
+        } else {
+            None
+        };
+        if hover.replace(next) != next {
+            window.refresh();
+        }
+    });
+}
+
+/// The readout box: the kernel's text for the point, on a small
+/// panel just inside the plot's top edge, centered on `x` and kept
+/// inside the plot's width so it never leaves the frame.
+#[allow(clippy::too_many_arguments)]
+fn chart_readout_at(
+    window: &mut Window,
+    cx: &mut App,
+    th: &'static Theme,
+    text: &str,
+    x: f32,
+    x0: f32,
+    w: f32,
+    y0: f32,
+) {
+    let run = TextRun {
+        len: text.len(),
+        font: window.text_style().font(),
+        color: rgb(th.text).into(),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    let line = window
+        .text_system()
+        .shape_line(SharedString::from(text.to_string()), px(11.), &[run], None);
+    let (pad_x, pad_y, line_h) = (6.0f32, 3.0f32, 14.0f32);
+    let bw = line.width.as_f32() + pad_x * 2.0;
+    let bh = line_h + pad_y * 2.0;
+    let left = (x - bw / 2.0).clamp(x0, (x0 + w - bw).max(x0));
+    let top = y0 + 4.0;
+    window.paint_quad(
+        fill(Bounds::new(point(px(left), px(top)), size(px(bw), px(bh))), rgb(th.border))
+            .corner_radii(px(4.)),
+    );
+    window.paint_quad(
+        fill(
+            Bounds::new(point(px(left + 1.0), px(top + 1.0)), size(px(bw - 2.0), px(bh - 2.0))),
+            rgb(th.surface),
+        )
+        .corner_radii(px(3.)),
+    );
+    let _ = line.paint(
+        point(px(left + pad_x), px(top + pad_y)),
+        px(line_h),
+        TextAlign::Left,
+        None,
+        window,
+        cx,
+    );
+}
+
 fn chart_box(
     plot: gpui::AnyElement,
     labels: &List<Str>,
@@ -4723,6 +4891,7 @@ pub fn run_app<C: Component>(
                         inputs: HashMap::new(),
                         scrolls: HashMap::new(),
                         selects: HashMap::new(),
+                        charts: HashMap::new(),
                         canvases: Rc::new(RefCell::new(CanvasState::default())),
                         pumping: false,
                         images,

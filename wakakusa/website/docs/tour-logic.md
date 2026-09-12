@@ -220,6 +220,12 @@ draws the tick labels and a faint gridline at each. `series:` takes one
 list per line or per group, with `colors:` one color each —
 `demo/charts.rb` is both of those on one screen.
 
+Moving the pointer over a chart shows the value under it: the bar's
+or the sample's label and one number per series. A script puts the
+pointer there with `hover:<i>` and takes it away with `hover:`, and
+the dump carries the readout, so what a person sees on hover is
+checked the way a click is.
+
 ## Where next
 
 - [The canvas and the keyboard](tour-canvas.md) — the drawing surface,

@@ -2521,3 +2521,29 @@ a dict, and only a document that does not parse fails.
 One manifest, so the rows reached the other languages by regeneration:
 the C face's arms, Rakugan's manifest and binding door, Gomamochi's row
 numbers. Nothing in the translators changed.
+
+## A chart's readout is a checked output (2026-09-12)
+
+Charts had no hover readout, and the tour said why: the headless run
+had no verb for a pointer, and what the harness cannot drive is not
+checked, so it was not added. The reason was the harness, not the
+drawing, and the harness is the place it was fixed.
+
+`hover[@n]:<i>` puts the pointer on the i-th point of the n-th chart —
+bar and line charts counted together in tree order, the way the other
+verbs count — and `hover:` takes it away. The pointer is the kernel's
+state, not the element's: an element is rebuilt from the view on every
+change, and the pointer does not move when the data does. The dump then
+carries `hover=i readout="…"` on that chart, and the readout's text is
+one kernel function — the point's label, or `#i` without labels, then
+one value per series in the float text the dump already prints — which
+the engine calls too, so the box under the mouse and the line in the
+dump say one number.
+
+In a window the engine reads the mouse the way the scrollbar does: a
+window-wide listener registered during paint, because a div's own
+mouse-move fires only while hovered and the readout has to go away when
+the pointer leaves. A bar chart tints the hovered slot; a line chart
+draws a guide down the sample and grows its dots. A chart nobody hovers
+dumps exactly as it did, so no existing gate moved. The legend is still
+missing.

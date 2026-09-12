@@ -339,6 +339,12 @@ while the screen is being drawn, so it reads state and never writes it,
 and the only index it may use is its own: an index a view cannot prove
 is inside the list is refused, and worked out in a handler instead.
 
+Moving the pointer over a chart shows the value under it: the bar's
+or the sample's label and one number per series. A script puts the
+pointer there with `hover:<i>` and takes it away with `hover:`, and
+the dump carries the readout, so what a person sees on hover is
+checked the way a click is.
+
 ## Hashes
 
 A hash on the app is read with a fallback, always:
@@ -1045,6 +1051,8 @@ key:<chord>        a keystroke bound to a shortcut
 keydown:<key> / keyup:<key>    hold a key down, let it up
 menu:<item>        pick a menu item    file:<path>   answer a dialog
 drop:<path>        a file dragged onto the window
+hover:<i>          the pointer on a chart's i-th point (hover@n:<i> for the n-th chart)
+hover:             the pointer leaves it
 advance:<ms>       move the clock      theme:dark|light
 dump               print the tree      a11y   print what a reader reads
 ```

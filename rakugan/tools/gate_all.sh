@@ -83,7 +83,7 @@ gate quantities ./bin/rakugan gate demo/quantities.pl --script "input@0:3,input@
 gate shared  ./bin/rakugan gate demo/shared.pl --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
 gate lookup  ./bin/rakugan gate demo/lookup.pl --script "click:apple,dump,click:cherry,dump,click:miss,dump"
 gate table   ./bin/rakugan gate demo/table.pl --script "click:refresh,dump,click:refresh"
-gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,click:next month"
+gate charts  ./bin/rakugan gate demo/charts.pl --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
 gate files   ./bin/rakugan gate demo/files.pl --script "click:save,click:append,click:load,click:list,dump,click:measure,dump,click:data dir,dump,click:remove,dump"
 gate dbnotes ./bin/rakugan gate demo/dbnotes.pl --fresh demo/.gate/notes.db --script "click:setup,click:load,dump"
 gate ledger  ./bin/rakugan gate demo/ledger.pl --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"

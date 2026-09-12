@@ -454,7 +454,9 @@ fn tiers_agree_on_every_demo() {
             "examples/biglist/biglist.pix",
             "click:fill,click:fill,click:clear,click:fill",
         ),
-        ("examples/charts/charts.pix", "click:load,click:spike"),
+        // `hover:` puts the pointer on a point; the dump carries the
+        // readout, so both tiers are held to one text for it.
+        ("examples/charts/charts.pix", "click:load,click:spike,hover:1,dump,hover@3:2,dump,hover:"),
         ("examples/styles/styles.pix", "click:7,click:theme"),
         ("examples/pkg/src/main.pix", "click:go"),
         ("examples/http/http.pix", "click:hit"),

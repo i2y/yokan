@@ -277,6 +277,12 @@ BarChart(profit).Labels(months...).Axis(true).Height(150)
 LineChart(nil).Series([][]float64{requests, errors}).Colors("accent", "#f38ba8").Max(90).Height(150)
 ```
 
+Moving the pointer over a chart shows the value under it: the bar's
+or the sample's label and one number per series. A script puts the
+pointer there with `hover:<i>` and takes it away with `hover:`, and
+the dump carries the readout, so what a person sees on hover is
+checked the way a click is.
+
 
 ## Maps
 

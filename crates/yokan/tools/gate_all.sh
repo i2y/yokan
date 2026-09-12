@@ -36,7 +36,7 @@ gate loading python3 yokan_gate.py gate demo/loading.py --script "click:step,cli
 gate labels  python3 yokan_gate.py gate demo/labels.py --script "dump,click:save,dump"
 gate badges  python3 yokan_gate.py gate demo/badges.py --script "click:flip,dump,click:flip"
 gate quantities python3 yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
-gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,click:next month"
+gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
 # The canvas, and the keyboard as a device: the frame is in the dump one
 # command per line, and the keys steer the ball through the tick.
 gate canvas  python3 yokan_gate.py gate demo/canvas.py --script "click:seed,dump,keydown:left,advance:50,advance:50,keyup:left,dump,keydown:space,advance:50,advance:50,keyup:space,advance:50"
