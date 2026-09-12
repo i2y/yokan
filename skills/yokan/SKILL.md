@@ -528,7 +528,10 @@ runs; the shipped binary needs no Python. Call it from handlers only.
 - **fs**: `read_text` / `write_text` / `append_text` / `exists` /
   `read_text_or` / `list_dir` (sorted names) / `make_dir` /
   `remove` / `app_dir(name)` (this app's own directory, created if
-  it is missing)
+  it is missing) / `size` (bytes) / `modified_ms` (the milliseconds
+  `clock.format_ms` reads) / `is_dir` / `read_text_from(path,
+  offset)` (from a byte offset to the end — the rest of a file a
+  read already reached the end of; at or past the end answers `""`)
 - **sqlite**: `exec(path, sql) -> int` / `query_text(path, sql) ->
   list[str]` (column 0 as text; `ORDER BY` for determinism) /
   `query_rows` (every column, `list[list[str]]`) / `query_int` /
@@ -835,8 +838,8 @@ reason.
   carried yet, which is why `re.findall` refuses a pattern with two
   groups or more.
 - `@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals.
-- Standard library: reading a time back from text, file metadata
-  and copy/rename, streaming or binary downloads, nested json
+- Standard library: reading a time back from text, copying or
+  renaming a file, streaming or binary downloads, nested json
   writing (a value inside a written dict or list is a scalar).
 - A second window: one app, one window (the engine's window root
   takes a single view, and a headless dump is that one tree).

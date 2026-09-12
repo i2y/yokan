@@ -20,6 +20,13 @@ class Fs {
   static fn tryAppDir(name: String) !String @rust("yokan_stdlib::fs_app_dir_result")
   static fn openDialog(title: String) String @rust("yokan_stdlib::fs_open_dialog")
   static fn saveDialog(name: String) String @rust("yokan_stdlib::fs_save_dialog")
+  static fn size(path: String) Int @rust("yokan_stdlib::fs_size")
+  static fn trySize(path: String) !Int @rust("yokan_stdlib::fs_size_result")
+  static fn modifiedMs(path: String) Int @rust("yokan_stdlib::fs_modified_ms")
+  static fn tryModifiedMs(path: String) !Int @rust("yokan_stdlib::fs_modified_ms_result")
+  static fn isDir(path: String) Bool @rust("yokan_stdlib::fs_is_dir")
+  static fn readTextFrom(path: String, offset: Int) String @rust("yokan_stdlib::fs_read_text_from")
+  static fn tryReadTextFrom(path: String, offset: Int) !String @rust("yokan_stdlib::fs_read_text_from_result")
 }
 
 class Sqlite {
@@ -159,6 +166,8 @@ class Jsondoc {
   static fn tryLength(src: String, path: String) !Int @rust("yokan_stdlib::json_length_result")
   static fn has(src: String, path: String) Bool @rust("yokan_stdlib::json_has")
   static fn tryHas(src: String, path: String) !Bool @rust("yokan_stdlib::json_has_result")
+  static fn getTexts(src: String, paths: List<String>, default: String) List<String> @rust("yokan_stdlib::json_get_texts")
+  static fn tryGetTexts(src: String, paths: List<String>, default: String) !List<String> @rust("yokan_stdlib::json_get_texts_result")
 }
 
 class Json {

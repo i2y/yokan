@@ -56,11 +56,11 @@ Nothing declares these, so each one was written into a handler the way an app wo
 
 [1] not in the dialect here — expressions are state reads, fields, locals, literals, arithmetic, comparisons, helper calls and method calls
 
-## `fs` — Yokan's own, 11 functions
+## `fs` — Yokan's own, 15 functions
 
 Python has no module of this name, so there is nothing to measure against — Yokan has all of them.
 
-- `app_dir`, `append_text`, `exists`, `list_dir`, `make_dir`, `open_dialog`, `read_text`, `read_text_or`, `remove`, `save_dialog`, `write_text`
+- `app_dir`, `append_text`, `exists`, `is_dir`, `list_dir`, `make_dir`, `modified_ms`, `open_dialog`, `read_text`, `read_text_from`, `read_text_or`, `remove`, `save_dialog`, `size`, `write_text`
 
 ## `sqlite` — Yokan's own, 7 functions
 
@@ -172,11 +172,11 @@ Python has no module of this name, so there is nothing to measure against — Yo
 | `trunc` | ✓ |  |
 | `ulp` | ✓ |  |
 
-## `jsondoc` — Yokan's own, 6 functions
+## `jsondoc` — Yokan's own, 7 functions
 
 Python has no module of this name, so there is nothing to measure against — Yokan has all of them.
 
-- `get_bool`, `get_float`, `get_int`, `get_text`, `has`, `length`
+- `get_bool`, `get_float`, `get_int`, `get_text`, `get_texts`, `has`, `length`
 
 ## `json` — 1 of Python's 5
 

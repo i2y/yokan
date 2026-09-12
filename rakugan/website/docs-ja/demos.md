@@ -2585,6 +2585,9 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
         field $wrote   = 0;
         field @names   = empty(Str);
         field $ready   = false;
+        field $size    = 0;
+        field $in_dir  = false;
+        field $tail    = "";
 
         method save {
             fs_make_dir($dir);
@@ -2613,6 +2616,15 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
             $ready = fs_exists($path);
         }
 
+        # What the file is without reading it, and the rest of it after
+        # the first write: the follower's read, from where it stopped
+        # rather than from the top.
+        method measure {
+            $size   = fs_size($note);
+            $in_dir = fs_is_dir($dir);
+            $tail   = fs_read_text_from($note, $wrote);
+        }
+
         method entry :Sig(Int) ($i) {
             return text($names[$i]);
         }
@@ -2625,6 +2637,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
                 list_view(scalar @names, sub ($i) { $self->entry($i) },
                           item_height => 20, height => 44),
                 text("data dir ready: $ready"),
+                text("size: $size bytes, dir: $in_dir, rest: '$tail'"),
                 row(
                     button("save",     on_click => sub { $self->save }),
                     button("append",   on_click => sub { $self->add_line }),
@@ -2632,6 +2645,7 @@ $ ./tools/gate_all.sh                   # すべてのデモをまとめてゲ�
                     button("list",     on_click => sub { $self->listing }),
                     button("data dir", on_click => sub { $self->data_dir }),
                     button("remove",   on_click => sub { $self->clean }),
+                    button("measure",  on_click => sub { $self->measure }),
                     spacing => 6,
                 ),
                 spacing => 8,

@@ -40,10 +40,10 @@ func SqliteExec(path string, sql string, params ...string) (out int) {
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			out = int(door.StdCall(17))
+			out = int(door.StdCall(21))
 			return
 		}
-		out = int(door.StdCall(12))
+		out = int(door.StdCall(16))
 	})
 	return
 }
@@ -56,11 +56,11 @@ func SqliteQueryText(path string, sql string, params ...string) (out []string) {
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			door.StdCall(18)
+			door.StdCall(22)
 			out = door.StdList()
 			return
 		}
-		door.StdCall(13)
+		door.StdCall(17)
 		out = door.StdList()
 	})
 	return
@@ -74,10 +74,10 @@ func SqliteQueryInt(path string, sql string, params ...string) (out int) {
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			out = int(door.StdCall(19))
+			out = int(door.StdCall(23))
 			return
 		}
-		out = int(door.StdCall(14))
+		out = int(door.StdCall(18))
 	})
 	return
 }
@@ -91,10 +91,10 @@ func SqliteQueryIntOr(path string, sql string, fallback int, params ...string) (
 		door.StdArgInt(int64(fallback))
 		if len(params) > 0 {
 			door.StdArgList(params)
-			out = int(door.StdCall(20))
+			out = int(door.StdCall(24))
 			return
 		}
-		out = int(door.StdCall(15))
+		out = int(door.StdCall(19))
 	})
 	return
 }
@@ -107,11 +107,11 @@ func SqliteQueryTextOr(path string, sql string, params ...string) (out []string)
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			door.StdCall(21)
+			door.StdCall(25)
 			out = door.StdList()
 			return
 		}
-		door.StdCall(16)
+		door.StdCall(20)
 		out = door.StdList()
 	})
 	return
@@ -125,11 +125,11 @@ func SqliteQueryRows(path string, sql string, params ...string) (out [][]string)
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			door.StdCall(23)
+			door.StdCall(27)
 			out = door.StdRows()
 			return
 		}
-		door.StdCall(22)
+		door.StdCall(26)
 		out = door.StdRows()
 	})
 	return
@@ -143,11 +143,11 @@ func SqliteQueryRowsOr(path string, sql string, params ...string) (out [][]strin
 		door.StdArgStr(sql)
 		if len(params) > 0 {
 			door.StdArgList(params)
-			door.StdCall(25)
+			door.StdCall(29)
 			out = door.StdRows()
 			return
 		}
-		door.StdCall(24)
+		door.StdCall(28)
 		out = door.StdRows()
 	})
 	return
@@ -158,7 +158,7 @@ func ClipboardSetText(text string) (out int) {
 	door.Std(func() {
 		door.StdReset()
 		door.StdArgStr(text)
-		out = int(door.StdCall(26))
+		out = int(door.StdCall(30))
 	})
 	return
 }
@@ -167,7 +167,7 @@ func ClipboardSetText(text string) (out int) {
 func ClipboardGetText() (out string) {
 	door.Std(func() {
 		door.StdReset()
-		door.StdCall(27)
+		door.StdCall(31)
 		out = door.StdText()
 	})
 	return
@@ -179,7 +179,7 @@ func AudioPlay(path string, volume float64) (out int) {
 		door.StdReset()
 		door.StdArgStr(path)
 		door.StdArgNum(volume)
-		out = int(door.StdCall(32))
+		out = int(door.StdCall(36))
 	})
 	return
 }
@@ -188,7 +188,7 @@ func AudioPlay(path string, volume float64) (out int) {
 func AudioStop() (out int) {
 	door.Std(func() {
 		door.StdReset()
-		out = int(door.StdCall(33))
+		out = int(door.StdCall(37))
 	})
 	return
 }
@@ -199,6 +199,6 @@ func NotifySend(title string, body string) {
 		door.StdReset()
 		door.StdArgStr(title)
 		door.StdArgStr(body)
-		door.StdCall(34)
+		door.StdCall(38)
 	})
 }

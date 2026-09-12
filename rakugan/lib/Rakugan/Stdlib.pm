@@ -91,6 +91,18 @@ sub fs_open_dialog { Rakugan::Stdlib::dispatch('fs_open_dialog', @_) }
 # `fs.save_dialog` in the manifest: (name).
 sub fs_save_dialog { Rakugan::Stdlib::dispatch('fs_save_dialog', @_) }
 
+# `fs.size` in the manifest: (path).
+sub fs_size { Rakugan::Stdlib::dispatch('fs_size', @_) }
+
+# `fs.modified_ms` in the manifest: (path).
+sub fs_modified_ms { Rakugan::Stdlib::dispatch('fs_modified_ms', @_) }
+
+# `fs.is_dir` in the manifest: (path).
+sub fs_is_dir { Rakugan::Stdlib::dispatch('fs_is_dir', @_) }
+
+# `fs.read_text_from` in the manifest: (path, offset).
+sub fs_read_text_from { Rakugan::Stdlib::dispatch('fs_read_text_from', @_) }
+
 # `sqlite.exec` in the manifest: (path, sql) or (path, sql, params).
 sub sqlite_exec { Rakugan::Stdlib::dispatch('sqlite_exec', @_) }
 
@@ -168,6 +180,9 @@ sub jsondoc_length { Rakugan::Stdlib::dispatch('jsondoc_length', @_) }
 
 # `jsondoc.has` in the manifest: (src, path).
 sub jsondoc_has { Rakugan::Stdlib::dispatch('jsondoc_has', @_) }
+
+# `jsondoc.get_texts` in the manifest: (src, paths, default).
+sub jsondoc_get_texts { Rakugan::Stdlib::dispatch('jsondoc_get_texts', @_) }
 
 # `strings.to_int` in the manifest: (s, default).
 sub strings_to_int { Rakugan::Stdlib::dispatch('strings_to_int', @_) }

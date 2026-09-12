@@ -40,6 +40,12 @@ rows = [
   { py = "app_dir", fn = "appDir", params = "name: String", ret = "String", rust = "fs_app_dir", flags = "try" },
   { py = "open_dialog", fn = "openDialog", params = "title: String", ret = "String", rust = "fs_open_dialog" },
   { py = "save_dialog", fn = "saveDialog", params = "name: String", ret = "String", rust = "fs_save_dialog" },
+  # What a file is without reading it, and the rest of one a read
+  # already reached the end of: what following a growing file asks.
+  { py = "size", fn = "size", params = "path: String", ret = "Int", rust = "fs_size", flags = "try" },
+  { py = "modified_ms", fn = "modifiedMs", params = "path: String", ret = "Int", rust = "fs_modified_ms", flags = "try" },
+  { py = "is_dir", fn = "isDir", params = "path: String", ret = "Bool", rust = "fs_is_dir" },
+  { py = "read_text_from", fn = "readTextFrom", params = "path: String, offset: Int", ret = "String", rust = "fs_read_text_from", flags = "try" },
 ]
 
 [[group]]
@@ -212,6 +218,10 @@ rows = [
   { py = "get_bool", fn = "getBool", params = "src: String, path: String", ret = "Bool", rust = "json_get_bool", flags = "pure try" },
   { py = "length", fn = "length", params = "src: String, path: String", ret = "Int", rust = "json_length", flags = "pure try" },
   { py = "has", fn = "has", params = "src: String, path: String", ret = "Bool", rust = "json_has", flags = "pure try" },
+  # Several paths for one parse, each as text; `default` where a
+  # path finds nothing. A line of a log has many fields and not
+  # always the same ones, and this is the read that takes it apart.
+  { py = "get_texts", fn = "getTexts", params = "src: String, paths: List<String>, default: String", ret = "List<String>", rust = "json_get_texts", flags = "pure try" },
 ]
 
 # Python's `json.dumps`. The pieces compose — a value renders

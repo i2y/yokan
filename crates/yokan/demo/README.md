@@ -156,7 +156,7 @@ shows a finished transcript — its launch state is an empty table.
 #### keys — shortcuts, keys, the clipboard and the menu bar: `shortcut("cmd+s", save)`, `on_key(typed)`, `clipboard.set_text` / `get_text`, `menu_item("Count", "Save", save)` — driven in a script with `key:cmd+s` and `menu:Save`
 <img src="screenshots/keys.png" width="360">
 
-#### files — yokan.fs: write, append, list a directory, remove (both runs call the same implementation)
+#### files — yokan.fs: write, append, list a directory, remove, and what a file is without reading it (its size, whether it is a directory, when it was written) and the rest of it after an offset (both runs call the same implementation)
 <img src="screenshots/files.png" width="360">
 
 #### dbnotes — yokan.sqlite: shape rows with SQL, order with ORDER BY
@@ -168,7 +168,7 @@ shows a finished transcript — its launch state is an empty table.
 #### webfetch — yokan.http: GET, headers, POST, status (an @py fixture server runs in both runs, so the gate needs no network)
 <img src="screenshots/webfetch.png" width="360">
 
-#### reader — an http + jsondoc feed reader
+#### reader — an http + jsondoc feed reader: every field of every item read in one parse with `jsondoc.get_texts`
 <img src="screenshots/reader.png" width="360">
 
 #### stdlib — Python's `math`, `random`, `statistics`, `json`, `datetime`, `time`, `re`, `collections` and `itertools`, and Yokan's jsondoc and clock

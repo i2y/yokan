@@ -82,14 +82,14 @@ Python の名前を名乗ることが、CPython の答えに合わせるとい�
 JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
-- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）
+- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）/ `size`（ファイルの長さ。バイト数）/ `modified_ms`（最後に書かれた時刻。`clock.format_ms` が読むミリ秒）/ `is_dir` / `read_text_from(path, offset)`（バイト位置から末尾までの文字列。一度末尾まで読んだファイルの続きで、伸びていくログを先頭から読み直さずに追いかける読み方。末尾かその先を指せば `""` を返す）
   それと、プラットフォーム自身のダイアログを開く `open_dialog(title)` と `save_dialog(name)`。
   返るのはパスで、取り消されたときは `""` です。
   ダイアログは人を待つので `task(...)` の中で呼びます。
   検証スクリプトでは、`file:<path>` がこのダイアログに答えます。
 - **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
 - **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒単位の制限時間、`post_text` は第三引数に content type を取る）
-- **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。
+- **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。`get_texts(src, paths, default)` はその読みを一回の解析でまとめて行います。パスのリストを渡すと文字列のリストが返り（数値と真偽値は JSON が書く形、リストとマップはその JSON）、パスの先に何もなければ `default` になります。ログの一行を分解する読み方で、レコードが毎回すべての項目を持つとは限らないからです。
   Python の `json` に、同じ読み方はありません。
   書き出しは Python の `json.dumps` です
 - **clock**：`format_ms(ms, "%Y-%m-%d")`（UTC。検証スクリプトでは固定の ms を渡す）、`format_local_ms(ms, fmt)`（この機械のタイムゾーン。両方の実行が同じタイムゾーンデータベースを読む）、`local_offset_minutes(ms)`。

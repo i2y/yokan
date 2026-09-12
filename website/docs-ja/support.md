@@ -59,12 +59,12 @@
 
 [1] not in the dialect here — expressions are state reads, fields, locals, literals, arithmetic, comparisons, helper calls and method calls
 
-## `fs` — Yokan 独自、11 個
+## `fs` — Yokan 独自、15 個
 
 Python に同じ名前のモジュールはないので、比べる相手がありません。
 以下はすべて Yokan にあります。
 
-- `app_dir`, `append_text`, `exists`, `list_dir`, `make_dir`, `open_dialog`, `read_text`, `read_text_or`, `remove`, `save_dialog`, `write_text`
+- `app_dir`, `append_text`, `exists`, `is_dir`, `list_dir`, `make_dir`, `modified_ms`, `open_dialog`, `read_text`, `read_text_from`, `read_text_or`, `remove`, `save_dialog`, `size`, `write_text`
 
 ## `sqlite` — Yokan 独自、7 個
 
@@ -181,12 +181,12 @@ Python に同じ名前のモジュールはないので、比べる相手があ�
 | `trunc` | ✓ |  |
 | `ulp` | ✓ |  |
 
-## `jsondoc` — Yokan 独自、6 個
+## `jsondoc` — Yokan 独自、7 個
 
 Python に同じ名前のモジュールはないので、比べる相手がありません。
 以下はすべて Yokan にあります。
 
-- `get_bool`, `get_float`, `get_int`, `get_text`, `has`, `length`
+- `get_bool`, `get_float`, `get_int`, `get_text`, `get_texts`, `has`, `length`
 
 ## `json` — Python の 5 個のうち 1 個
 

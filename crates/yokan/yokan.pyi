@@ -592,6 +592,20 @@ class fs:
     # The names in a directory, sorted.
     @staticmethod
     def list_dir(path: str) -> list[str]: ...
+    # A file's length in bytes, from its metadata.
+    @staticmethod
+    def size(path: str) -> int: ...
+    # When it was last written, in milliseconds since the Unix epoch
+    # — the unit `clock.format_ms` reads.
+    @staticmethod
+    def modified_ms(path: str) -> int: ...
+    @staticmethod
+    def is_dir(path: str) -> bool: ...
+    # The text from a byte offset to the end: the rest of a file a
+    # read already reached the end of once. At or past the end
+    # answers "".
+    @staticmethod
+    def read_text_from(path: str, offset: int) -> str: ...
     @staticmethod
     def make_dir(path: str) -> int: ...
     @staticmethod
@@ -728,6 +742,12 @@ class jsondoc:
     def length(src: str, path: str) -> int: ...
     @staticmethod
     def has(src: str, path: str) -> bool: ...
+    # Several paths for one parse: each value as text (a number or a
+    # bool as JSON writes it, a list or a map as its JSON), and
+    # `default` where a path finds nothing. Only a document that
+    # does not parse raises.
+    @staticmethod
+    def get_texts(src: str, paths: list[str], default: str) -> list[str]: ...
 
 # The machine's own zone, which Python's `time` reaches only through
 # `localtime` and a struct. Reading the clock itself is Python's

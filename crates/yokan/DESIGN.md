@@ -2489,3 +2489,35 @@ a Rust abort and a register dump; it now reads the checked call and
 raises the failure as a Go panic carrying the library's message. The
 handler's guard says it on one line and stops the app, as before, and a
 `recover` in the app receives it, which nothing could before.
+
+## What a file is, and the rest of it (2026-09-12)
+
+An app that follows a growing file — a log an agent writes while it
+works — asked the library four things it could not answer: how long a
+file is, when it was written, whether a path is a directory, and the
+text after the point a read already reached. The tour listed the first
+two as refused, and the fourth had no spelling at all, so a follower
+had to read the whole file again on every tick.
+
+Four rows in `fs`: `size`, `modified_ms`, `is_dir` and
+`read_text_from(path, offset)`. The time is milliseconds since the
+epoch because that is the unit `clock.format_ms` reads, so a time on
+disk reaches the screen without a conversion in between. The read from
+an offset answers `""` at or past the end, the way a read after a seek
+does, and fails on a negative offset or one that splits a character,
+the way `read_text` fails on text that is not UTF-8. Copying and
+renaming stay out.
+
+The same app asked `jsondoc` for many fields of one line, and every
+path read parsed the line again. `get_texts(src, paths, default)` is
+several reads for one parse: a list of paths in, a list of texts out —
+a number or a bool the way JSON writes it, a list or a map as its JSON —
+and `default` where a path finds nothing. That last part is a decision:
+a line of a log does not always carry every field, and asking `has`
+first would have been a parse per question. So the caller says what a
+missing field means, the rule `.get(key, default)` already follows for
+a dict, and only a document that does not parse fails.
+
+One manifest, so the rows reached the other languages by regeneration:
+the C face's arms, Rakugan's manifest and binding door, Gomamochi's row
+numbers. Nothing in the translators changed.

@@ -846,6 +846,54 @@ pub fn json_has(src: &str, path: &str) -> bool {
     }
 }
 
+/// Several reads for one parse. Each path answers its value as text:
+/// a string as itself, a number or a bool the way JSON writes it, a
+/// list or a map as its JSON — and `default` where the path finds
+/// nothing (a missing key, an index past the end, a null). Only a
+/// document that does not parse fails; a record that lacks a field
+/// is the ordinary case for a line of a log, and the caller said
+/// what that means. One parse serves every path, which is what
+/// makes a document of many fields cheap to take apart.
+pub fn json_get_texts_result(
+    src: &str,
+    paths: Vec<String>,
+    default: &str,
+) -> std::io::Result<Vec<String>> {
+    let doc: serde_json::Value = serde_json::from_str(src)
+        .map_err(|e| json_err(format!("json: invalid document: {e}")))?;
+    Ok(paths
+        .iter()
+        .map(|path| {
+            let mut v = &doc;
+            if !path.is_empty() {
+                for seg in path.split('.') {
+                    let next = match (v, seg.parse::<usize>()) {
+                        (serde_json::Value::Array(xs), Ok(i)) => xs.get(i),
+                        (serde_json::Value::Object(m), _) => m.get(seg),
+                        _ => None,
+                    };
+                    match next {
+                        Some(x) => v = x,
+                        None => return default.to_string(),
+                    }
+                }
+            }
+            match v {
+                serde_json::Value::Null => default.to_string(),
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            }
+        })
+        .collect())
+}
+
+pub fn json_get_texts(src: &str, paths: Vec<String>, default: &str) -> Vec<String> {
+    match json_get_texts_result(src, paths, default) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
 // ---- time -----------------------------------------------------------
 
 /// Python's `time`, as a twin. There is nothing for a ground-truth
@@ -3783,6 +3831,81 @@ pub fn fs_app_dir_result(name: &str) -> std::io::Result<String> {
 
 pub fn fs_app_dir(name: &str) -> String {
     match fs_app_dir_result(name) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+// ---- fs: what a file is, and reading on from where a read stopped ---
+
+/// A file's length in bytes, read from its metadata rather than by
+/// reading it — what a follower of a growing file asks before it
+/// asks for the rest.
+pub fn fs_size_result(path: &str) -> std::io::Result<i64> {
+    std::fs::metadata(path)
+        .map(|m| m.len() as i64)
+        .map_err(|e| std::io::Error::other(format!("fs.size {path}: {e}")))
+}
+
+pub fn fs_size(path: &str) -> i64 {
+    match fs_size_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// When a file was last written, in milliseconds since the Unix
+/// epoch — the unit `clock.format_ms` reads, so a time on disk goes
+/// to the screen without a conversion in between.
+pub fn fs_modified_ms_result(path: &str) -> std::io::Result<i64> {
+    let md = std::fs::metadata(path)
+        .map_err(|e| std::io::Error::other(format!("fs.modified_ms {path}: {e}")))?;
+    let t = md
+        .modified()
+        .map_err(|e| std::io::Error::other(format!("fs.modified_ms {path}: {e}")))?;
+    Ok(match t.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(e) => -(e.duration().as_millis() as i64),
+    })
+}
+
+pub fn fs_modified_ms(path: &str) -> i64 {
+    match fs_modified_ms_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// Whether the path is a directory; a path that is not there is not.
+pub fn fs_is_dir(path: &str) -> bool {
+    std::path::Path::new(path).is_dir()
+}
+
+/// The text from byte `offset` to the end of the file: the rest of a
+/// file a read already reached the end of once, which is how a
+/// growing log is followed without being read again from the top.
+/// An offset at or past the end answers "", the way a read after a
+/// seek does; a negative one, or one that splits a character, fails
+/// with the reason, as `read_text` fails on text that is not UTF-8.
+pub fn fs_read_text_from_result(path: &str, offset: i64) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    if offset < 0 {
+        return Err(std::io::Error::other(format!(
+            "fs.read_text_from {path}: offset {offset} is negative"
+        )));
+    }
+    let mut f = std::fs::File::open(path)
+        .map_err(|e| std::io::Error::other(format!("fs.read_text_from {path}: {e}")))?;
+    f.seek(SeekFrom::Start(offset as u64))
+        .map_err(|e| std::io::Error::other(format!("fs.read_text_from {path}: {e}")))?;
+    let mut out = String::new();
+    f.read_to_string(&mut out)
+        .map_err(|e| std::io::Error::other(format!("fs.read_text_from {path}: {e}")))?;
+    Ok(out)
+}
+
+pub fn fs_read_text_from(path: &str, offset: i64) -> String {
+    match fs_read_text_from_result(path, offset) {
         Ok(v) => v,
         Err(e) => panic!("{e}"),
     }

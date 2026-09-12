@@ -4412,7 +4412,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### files — yokan.fs。書く、足す、ディレクトリを並べる、消す（両実行が同じ実装を呼ぶ）
+#### files — yokan.fs。書く、足す、ディレクトリを並べる、消す。読まずにファイルの様子を知る（長さ、ディレクトリかどうか、書かれた時刻）と、位置を指して続きを読む（両実行が同じ実装を呼ぶ）
 <img src="images/demos/files.png" width="360">
 
 <!-- source -->
@@ -4428,9 +4428,15 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     app is here too — make a directory, append to a file, list what is
     in it, remove one — and `fs.app_dir(name)` answers the directory
     this app may keep its own files in, created if it is not there yet.
+    What a file IS comes without reading it: `fs.size`, `fs.is_dir`,
+    and `fs.modified_ms`, in the unit `clock.format_ms` reads. And
+    `fs.read_text_from(path, offset)` answers the rest of a file a read
+    already reached the end of once, which is how a growing log is
+    followed without reading it again from the top.
     """
     import os
     import sys
+    import time
 
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -4444,6 +4450,15 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     wrote: State[int] = State(0)
     names: State[list[str]] = State([])
     ready: State[bool] = State(False)
+    size: State[int] = State(0)
+    in_dir: State[bool] = State(False)
+    fresh: State[bool] = State(False)
+    tail: State[str] = State("")
+    started: State[float] = State(0.0)
+
+
+    def boot():
+        started.set(time.time())
 
 
     def save():
@@ -4473,6 +4488,27 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
         ready.set(fs.exists(fs.app_dir("yokan-files-demo")))
 
 
+    def measure():
+        # what the file is, without reading it: its length, whether the
+        # path is a directory, and whether it was written since the app
+        # started (a second of slack for a file system that keeps whole
+        # seconds)
+        size.set(fs.size(NOTE))
+        in_dir.set(fs.is_dir(DIR))
+        at = fs.modified_ms(NOTE)
+        since = int(started() * 1000.0) - 2000
+        if at >= since:
+            fresh.set(True)
+        else:
+            fresh.set(False)
+
+
+    def rest():
+        # the rest of the file after the first write — the follower's
+        # read: from where it stopped, not from the top
+        tail.set(fs.read_text_from(NOTE, wrote()))
+
+
     def entry(i):
         return text(names()[i])
 
@@ -4484,6 +4520,8 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
             text(f"in {DIR}: {len(names())} file(s)")
             list_view(len(names()), entry, item_height=20.0, height=44.0)
             text(f"data dir ready: {ready()}")
+            text(f"size: {size()} bytes, dir: {in_dir()}, written since start: {fresh()}")
+            text(f"rest after the first write: '{tail()}'")
             with row(spacing=6):
                 button("save", on_click=save)
                 button("append", on_click=add_line)
@@ -4492,10 +4530,12 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
             with row(spacing=6):
                 button("remove", on_click=clean)
                 button("data dir", on_click=data_dir)
+                button("measure", on_click=measure)
+                button("rest", on_click=rest)
 
 
     if __name__ == "__main__":
-        run(view, title="files")
+        run(view, title="files", on_start=boot)
     ```
 <!-- source -->
 
@@ -4802,7 +4842,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
-#### reader — http + jsondoc のフィードリーダー
+#### reader — http + jsondoc のフィードリーダー。全項目の全欄を `jsondoc.get_texts` の一回の解析で読む
 <img src="images/demos/reader.png" width="360">
 
 <!-- source -->
@@ -4813,9 +4853,10 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     # requires-python = ">=3.14"
     # ///
     """A feed reader: http + json over a realistic nested payload. The
-    fixture is an @py escape serving JSON in BOTH tiers, the parse
-    loop builds rows with dynamic paths (f"items.{i}.title"), and the
-    list renders through the virtualized list_view.
+    fixture is an @py escape serving JSON in BOTH tiers, the paths are
+    built per item (f"items.{i}.title") and read in ONE parse with
+    `jsondoc.get_texts`, and the list renders through the virtualized
+    list_view.
     """
     import os
     import sys
@@ -4833,7 +4874,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
         store,
         text,
     )
-    from yokan import http, jsondoc  # noqa: E402
+    from yokan import http, jsondoc, strings  # noqa: E402
 
 
     @py
@@ -4873,11 +4914,18 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
         total_points: int = 0
 
         def refresh(self, src: str) -> None:
+            n = jsondoc.length(src, "items")
+            paths: list[str] = []
+            for i in range(n):
+                paths = paths + [f"items.{i}.title", f"items.{i}.points"]
+            # every field of every item, in one parse of the document;
+            # a number comes back as its text, so it is read as one here
+            cells = jsondoc.get_texts(src, paths, "")
             self.rows = []
             self.total_points = 0
-            for i in range(jsondoc.length(src, "items")):
-                self.rows = self.rows + [jsondoc.get_text(src, f"items.{i}.title")]
-                self.total_points += jsondoc.get_int(src, f"items.{i}.points")
+            for i in range(n):
+                self.rows = self.rows + [cells[2 * i]]
+                self.total_points += strings.to_int(cells[2 * i + 1], 0)
 
 
     def start():
@@ -6136,8 +6184,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     """yokan demo: real CPython + numpy driving pixie's gpui engine.
 
     Build the module, then run:
-        cargo build -p yokan --release --features extension-module
-        cp <target>/release/libyokan.dylib crates/yokan/yokan.so
+        just dev-so
         uv run crates/yokan/demo/app.py
 
     While it runs, edit view() below and save — the window updates in

@@ -63,7 +63,8 @@ gate pyops   python3 yokan_gate.py gate demo/pyops.py --script "click:crunch,cli
 # makes "every report is heard" a checked claim.
 gate pyjob   python3 yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
 gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
-gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:data dir,dump,click:remove,dump"
+gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
+gate reader  python3 yokan_gate.py gate demo/reader.py --script "click:start,click:fetch,dump"
 gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
 # Fixture- and dependency-carrying gates.
 gate rustcrate python3 yokan_gate.py gate demo/rustcrate.py --script "click:run"
@@ -89,7 +90,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob) continue;;
+    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;

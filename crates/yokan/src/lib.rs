@@ -2718,6 +2718,10 @@ fn py_json_length(py: Python<'_>, src: &str, path: &str) -> PyResult<i64> {
 fn py_json_has(py: Python<'_>, src: &str, path: &str) -> PyResult<bool> {
     py.detach(|| yokan_stdlib::json_has_result(src, path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
+#[pyfunction] #[pyo3(name = "get_texts")]
+fn py_json_get_texts(py: Python<'_>, src: &str, paths: Vec<String>, default: &str) -> PyResult<Vec<String>> {
+    py.detach(|| yokan_stdlib::json_get_texts_result(src, paths, default)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
 
 #[pyfunction] #[pyo3(name = "to_int")]
 fn py_strings_to_int(s: &str, default: i64) -> i64 {
@@ -2887,6 +2891,26 @@ fn py_fs_app_dir(py: Python<'_>, name: &str) -> PyResult<String> {
     py.detach(|| yokan_stdlib::fs_app_dir_result(name)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+#[pyfunction] #[pyo3(name = "size")]
+fn py_fs_size(py: Python<'_>, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_size_result(path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction] #[pyo3(name = "modified_ms")]
+fn py_fs_modified_ms(py: Python<'_>, path: &str) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_modified_ms_result(path)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction] #[pyo3(name = "is_dir")]
+fn py_fs_is_dir(py: Python<'_>, path: &str) -> bool {
+    py.detach(|| yokan_stdlib::fs_is_dir(path))
+}
+
+#[pyfunction] #[pyo3(name = "read_text_from")]
+fn py_fs_read_text_from(py: Python<'_>, path: &str, offset: i64) -> PyResult<String> {
+    py.detach(|| yokan_stdlib::fs_read_text_from_result(path, offset)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 /// `json.dumps(v)` — the door reads the value's type at run time, the
 /// translator reads it from the annotation; both land on the same
 /// stdlib writer, which is what makes the two runs print one string.
@@ -3032,6 +3056,10 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fs.add_function(wrap_pyfunction!(py_fs_app_dir, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_open_dialog, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_save_dialog, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_size, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_modified_ms, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_is_dir, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_read_text_from, &fs)?)?;
     m.add_submodule(&fs)?;
     let sqlite = PyModule::new(m.py(), "sqlite")?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_exec, &sqlite)?)?;
@@ -3059,6 +3087,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jsonm.add_function(wrap_pyfunction!(py_json_get_bool, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_length, &jsonm)?)?;
     jsonm.add_function(wrap_pyfunction!(py_json_has, &jsonm)?)?;
+    jsonm.add_function(wrap_pyfunction!(py_json_get_texts, &jsonm)?)?;
     m.add_submodule(&jsonm)?;
     let notifym = PyModule::new(m.py(), "notify")?;
     notifym.add_function(wrap_pyfunction!(py_notify_send, &notifym)?)?;

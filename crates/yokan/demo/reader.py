@@ -2,9 +2,10 @@
 # requires-python = ">=3.14"
 # ///
 """A feed reader: http + json over a realistic nested payload. The
-fixture is an @py escape serving JSON in BOTH tiers, the parse
-loop builds rows with dynamic paths (f"items.{i}.title"), and the
-list renders through the virtualized list_view.
+fixture is an @py escape serving JSON in BOTH tiers, the paths are
+built per item (f"items.{i}.title") and read in ONE parse with
+`jsondoc.get_texts`, and the list renders through the virtualized
+list_view.
 """
 import os
 import sys
@@ -22,7 +23,7 @@ from yokan import (
     store,
     text,
 )
-from yokan import http, jsondoc  # noqa: E402
+from yokan import http, jsondoc, strings  # noqa: E402
 
 
 @py
@@ -62,11 +63,18 @@ class Feed:
     total_points: int = 0
 
     def refresh(self, src: str) -> None:
+        n = jsondoc.length(src, "items")
+        paths: list[str] = []
+        for i in range(n):
+            paths = paths + [f"items.{i}.title", f"items.{i}.points"]
+        # every field of every item, in one parse of the document;
+        # a number comes back as its text, so it is read as one here
+        cells = jsondoc.get_texts(src, paths, "")
         self.rows = []
         self.total_points = 0
-        for i in range(jsondoc.length(src, "items")):
-            self.rows = self.rows + [jsondoc.get_text(src, f"items.{i}.title")]
-            self.total_points += jsondoc.get_int(src, f"items.{i}.points")
+        for i in range(n):
+            self.rows = self.rows + [cells[2 * i]]
+            self.total_points += strings.to_int(cells[2 * i + 1], 0)
 
 
 def start():

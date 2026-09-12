@@ -75,12 +75,15 @@ run(Stats->new, title => "stats");
     fs_list_dir($dir);                 fs_make_dir($dir);
     fs_append_text($path, $more);      fs_remove($path);
     fs_app_dir("myapp");
+    fs_size($path);                    fs_is_dir($dir);
+    fs_modified_ms($path);             fs_read_text_from($path, $offset);
 
     http_get_text($url);               http_get_text_or($url, "");
     http_post_text($url, $body);       http_status($url);
 
     jsondoc_get_text($doc, "user.name");   jsondoc_get_int($doc, "items.0.qty");
     jsondoc_length($doc, "items");         jsondoc_has($doc, "user.email");
+    jsondoc_get_texts($doc, ["user.name", "items.0.qty"], "");
 
     strings_to_int($s);                strings_to_float($s);
     clock_format_ms($ms, "%Y-%m-%d");  clock_local_offset_minutes();

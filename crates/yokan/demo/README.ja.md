@@ -152,7 +152,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### keys — ショートカット、キー、クリップボード、メニューバー：`shortcut("cmd+s", save)`、`on_key(typed)`、`clipboard.set_text` / `get_text`、`menu_item("Count", "Save", save)` を使い、スクリプトからは `key:cmd+s` と `menu:Save` で動かす
 <img src="screenshots/keys.png" width="360">
 
-#### files — yokan.fs。書く、足す、ディレクトリを並べる、消す（両実行が同じ実装を呼ぶ）
+#### files — yokan.fs。書く、足す、ディレクトリを並べる、消す。読まずにファイルの様子を知る（長さ、ディレクトリかどうか、書かれた時刻）と、位置を指して続きを読む（両実行が同じ実装を呼ぶ）
 <img src="screenshots/files.png" width="360">
 
 #### dbnotes — yokan.sqlite。行の形は SQL で決め、並び順は ORDER BY で決める
@@ -164,7 +164,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### webfetch — yokan.http。GET、ヘッダ、POST、ステータス（@py のフィクスチャサーバを両実行に立てるので、ゲートはネットワーク不要）
 <img src="screenshots/webfetch.png" width="360">
 
-#### reader — http + jsondoc のフィードリーダー
+#### reader — http + jsondoc のフィードリーダー。全項目の全欄を `jsondoc.get_texts` の一回の解析で読む
 <img src="screenshots/reader.png" width="360">
 
 #### stdlib — Python の `math`、`random`、`statistics`、`json`、`datetime`、`time`、`re`、`collections`、`itertools` と、Yokan の jsondoc、clock
