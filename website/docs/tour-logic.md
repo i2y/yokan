@@ -111,6 +111,7 @@ def offset() -> None:
 def doubled() -> None:
     twice: Callable[[int], int] = lambda x: x * 2  # a local
     total.set(sum(list(map(twice, xs()))))         # `map` calls one
+    xs.set(sorted(xs(), key=twice))                # and so does `key=`
 ```
 
 **A closure captures by value, where it is made.** `base` above is the

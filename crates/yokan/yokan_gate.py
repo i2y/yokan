@@ -6444,10 +6444,14 @@ class Translator:
             ast.fix_missing_locations(plain)
             code = self._list_builtin(plain, ctx, param)
             return f"({code}).reversed()" if rev == "true" else code
-        if isinstance(kw_key, ast.Name) and kw_key.id in self.defs:
-            # A named helper as the key. It is called on each element,
-            # which is what the lambda spelling does too, so the two
-            # take the same road from here.
+        if isinstance(kw_key, ast.Name) and (
+            kw_key.id in self.defs or kw_key.id in self.closure_locals
+        ):
+            # A named helper, or a local holding a function value, as
+            # the key. Either is called on each element, which is what
+            # the lambda spelling does too, so all three take the same
+            # road from here: the keys are built once and the list is
+            # ordered by them.
             arg = ast.Name(id="__key_e", ctx=ast.Load())
             kw_key = ast.Lambda(
                 args=ast.arguments(
@@ -6469,8 +6473,8 @@ class Translator:
         ):
             raise Untranslatable(
                 kw_key,
-                "`key=` is a lambda of one element (`key=lambda p: p.x`), or the name of a "
-                "helper that takes one",
+                "`key=` is a lambda of one element (`key=lambda p: p.x`), a helper's name, "
+                "or a local holding a function value",
             )
         if ctx != "store" or self.pre_lines is None:
             raise Untranslatable(

@@ -75,7 +75,7 @@ gate pyops   "$PY" yokan_gate.py gate demo/pyops.py --script "click:crunch,click
 # Functions as values: a lambda in a local, a nested def that captures,
 # a callback field armed and swapped, a closure handed to a method, and
 # `map` over one. Every number on the screen is a closure's answer.
-gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,dump,click:harder,click:advance,dump,click:through,dump,click:offset,dump,click:double,dump,click:counted,dump,click:reset,dump"
+gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,dump,click:harder,click:advance,dump,click:through,dump,click:offset,dump,click:double,dump,click:counted,dump,click:ordered,dump,click:reset,dump"
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what

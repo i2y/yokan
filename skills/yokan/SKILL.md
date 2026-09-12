@@ -412,7 +412,8 @@ control flow:
 
 A function is also a VALUE, typed with `Callable`: a lambda in an
 annotated local, a nested def, a callback field on a store, a
-parameter another function declares, the function `map` calls. The
+parameter another function declares, the function `map` or `key=`
+calls. The
 annotation is what the compiled closure is built from — types are
 never read off the body, so a lambda always goes somewhere that
 declares one.

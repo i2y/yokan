@@ -1947,7 +1947,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
     """Functions as values, gated: a lambda held in an annotated local, a
     nested def that captures a local, a `Callable` field a store is armed
     with and swapped later, a closure handed to a method that declares
-    one, and `map` over a function value.
+    one, `map` over a function value and a function value as a sort key.
 
     Captures are by value, taken where the closure is made, and the two
     places Python's variable capture would disagree are refused by name:
@@ -2012,6 +2012,14 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
         Pipeline.n = add(10)
 
 
+    def ordered() -> None:
+        # A function value as a sort key: the keys are built once, and the
+        # list comes back in their order.
+        down: Callable[[int], int] = lambda x: -x
+        xs.set(sorted(xs(), key=down))
+        mapped.set(xs()[0])
+
+
     def counted() -> None:
         # A closure made inside a loop and called there: both runs read
         # the same value, so it is allowed.
@@ -2035,6 +2043,7 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
                 button("offset", on_click=offset)
                 button("double", on_click=double_all)
                 button("counted", on_click=counted)
+                button("ordered", on_click=ordered)
                 button("reset", on_click=Pipeline.reset)
 
 

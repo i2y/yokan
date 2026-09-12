@@ -469,6 +469,7 @@ def offset() -> None:
 def doubled() -> None:
     twice: Callable[[int], int] = lambda x: x * 2  # ローカル変数
     total.set(sum(list(map(twice, xs()))))         # map が呼び出す
+    xs.set(sorted(xs(), key=twice))                # key= も呼び出す
 ```
 
 **クロージャは、作られた場所で値を捕まえます。**
