@@ -1263,6 +1263,20 @@ element_fn! {
     }
 }
 
+/// A handler that takes nothing — `on_close` is the only one so far.
+/// The typed twins below hand the new value over; this one only says
+/// that something happened.
+fn action_listener(cb: Py<PyAny>) -> Listener {
+    Rc::new(move |w: &mut World| {
+        Python::attach(|py| {
+            if let Err(e) = cb.call0(py) {
+                e.print(py);
+            }
+        });
+        after_py_callback(w);
+    })
+}
+
 fn text_listener(cb: Py<PyAny>) -> TextListener {
     Rc::new(move |w: &mut World, s: Str| {
         Python::attach(|py| {
@@ -1482,6 +1496,26 @@ element_fn! {
             options: str_list(options),
             selected,
             on_select: on_change.map(int_listener),
+        }
+    }
+}
+
+element_fn! {
+    /// A transient message over the app, hoisted to the bottom of the
+    /// window. Presence is openness, the way it is for `modal`: an
+    /// `open=` kwarg is what a `if` around the call already says, and
+    /// the translator refuses it for the same reason. A positive
+    /// `duration_ms` closes it by calling `on_close` — the flag the
+    /// `if` reads is the app's, so closing is asking, never writing.
+    toast
+    (message, duration_ms=0.0, on_close=None,)
+    [message: String, duration_ms: f64, on_close: Option<Py<PyAny>>,]
+    {
+        Element::Toast {
+            message: Str::from(message),
+            open: true,
+            duration_ms,
+            on_close: on_close.map(action_listener),
         }
     }
 }
@@ -3035,6 +3069,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(h_scroll_view, m)?)?;
     m.add_function(wrap_pyfunction!(data_table, m)?)?;
     m.add_function(wrap_pyfunction!(modal, m)?)?;
+    m.add_function(wrap_pyfunction!(toast, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(svg, m)?)?;
     m.add_function(wrap_pyfunction!(bar_chart, m)?)?;

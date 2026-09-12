@@ -67,6 +67,7 @@ pub mod quit;
 pub mod script;
 pub mod theme;
 pub mod timer;
+pub mod toast;
 pub use anim::Easing;
 
 pub type SignalId = u32;
@@ -1611,6 +1612,29 @@ pub enum Element {
         selected: i64,
         on_select: Option<IntListener>,
     },
+    /// A transient message over the app, hoisted to the BOTTOM of the
+    /// window the way `Modal` is hoisted to its middle: it escapes
+    /// whatever container declared it, because a toast belongs to the
+    /// window rather than to the row it was written in.
+    ///
+    /// `open` follows Modal's rule — optional in the source, true when
+    /// absent, so a view that spells visibility with `if` never writes
+    /// it. A `duration_ms` of zero (or less) means "until the app
+    /// takes it away"; anything positive is a countdown on the SAME
+    /// clock animation reads (`anim::now`), armed by `toast::settle`
+    /// and fired by `timer::fire_due`. So a headless script stands the toast up,
+    /// says `advance:1500`, and sees `on_close` run — no new verb, and
+    /// both tiers agree because the clock is an input, not a wall.
+    ///
+    /// Closing itself means CALLING `on_close`, never mutating `open`:
+    /// the flag is the app's, and a widget that quietly rewrote a
+    /// bound value would be lying to the view that produced it.
+    Toast {
+        message: Str,
+        open: bool,
+        duration_ms: f64,
+        on_close: Option<Listener>,
+    },
     /// Two panes with a divider the user can drag.
     ///
     /// `ratio` is the share of the split's main axis the FIRST pane
@@ -2729,6 +2753,23 @@ impl Element {
                     options.iter().map(|o| o.as_str().to_string()).collect();
                 format!("Segmented(selected={selected})[{}]", inner.join(", "))
             }
+            // `open` always prints, the way Modal's does: whether the
+            // message is on screen is the element's whole point, and a
+            // reader of a dump should not have to know a default to
+            // tell. `durationMs` joins only when set (the per-prop
+            // rule), so an app-dismissed toast keeps the bare shape.
+            Element::Toast {
+                message,
+                open,
+                duration_ms,
+                ..
+            } => {
+                if *duration_ms == 0.0 {
+                    format!("Toast({message}, open={open})")
+                } else {
+                    format!("Toast({message}, open={open}, durationMs={duration_ms})")
+                }
+            }
             // The bound ratio is the whole widget, so it always
             // prints — as the Slider's `value` does, and for the same
             // reason: it is what a person sees the divider standing
@@ -3612,7 +3653,15 @@ pub fn build_prepared<C: Component>(w: &mut World, view: Handle<C>) -> Element {
     // the animation store at the current clock and hands back what a
     // frame should paint. It runs here, on the kernel tree, so both
     // tiers and the headless harness get identical answers.
-    anim::settle(w, el)
+    let el = anim::settle(w, el);
+    // A `Toast` with a duration declares its own dismissal; this arms
+    // it (and drops the ones the tree no longer holds) on the same
+    // clock the line above reads. Last, so it sees the tree a frame
+    // would actually paint — a toast inside a subtree the animation
+    // pass is retaining on its way out is still on screen, and still
+    // counting.
+    toast::settle(w, &el);
+    el
 }
 
 /// Per-row component state (§8.30): one World-side seat per stateful

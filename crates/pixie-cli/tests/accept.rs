@@ -340,6 +340,8 @@ fn container_prop_allowlists_match_across_tiers() {
         "NumberField",
         "IntField",
         "Segmented",
+        "Toast",
+        "Split",
         "Nonesuch",
     ] {
         assert_eq!(
@@ -812,6 +814,19 @@ fn tiers_agree_on_every_demo() {
         (
             "examples/canvas/canvas.pix",
             "click:seed,dump,advance:100,advance:100",
+        ),
+        // The toast: a message hoisted out of the Column that declared
+        // it, and the only widget whose dismissal is a DECLARATION
+        // rather than a handler. `dismiss` closes the bound one by
+        // clearing what `open:` reads; `save` stands the second one up
+        // behind an `if`, and the clock — not a click — closes it. The
+        // first `advance:` stops short of the duration and nothing
+        // moves; the second reaches it and `onClose` runs, in both
+        // tiers, because the countdown rides `anim::now` rather than a
+        // wall clock either tier could read differently.
+        (
+            "examples/toast/toast.pix",
+            "dump,click:dismiss,click:save,dump,advance:1000,dump,advance:500,dump",
         ),
         // The split: a divider whose ratio is a bound value, driven by
         // the verb the Slider already had. `slide:` counts Sliders and

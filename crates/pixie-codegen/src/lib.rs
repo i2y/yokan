@@ -7184,6 +7184,50 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(selected, cx, "selected")?
             ))
         }
+        // The transient message over the app. `message:` is the
+        // element's whole content, so it is required; `open:` is
+        // optional and true when absent, exactly as Modal's went when
+        // `if` landed in views.
+        //
+        // `durationMs:` without `onClose:` is refused rather than
+        // quietly ignored: closing itself MEANS calling `onClose` —
+        // the flag belongs to the app and no widget rewrites a bound
+        // value — so a countdown with nothing to call is a declaration
+        // that could never do anything.
+        "Toast" => {
+            let message = element_prop(el, "message").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Toast needs `message:` (the line it shows)".into(),
+            })?;
+            let open = match element_prop(el, "open") {
+                Some(o) => lower_view_bool(o, cx, "open")?,
+                None => "true".into(),
+            };
+            let on_close = match element_prop(el, "onClose") {
+                Some(a) => format!("Some({})", lower_view_action(a, cx)?),
+                None => "None".into(),
+            };
+            let duration = match element_prop(el, "durationMs") {
+                Some(v) => {
+                    if element_prop(el, "onClose").is_none() {
+                        return err(
+                            el.span,
+                            "`durationMs:` closes the Toast by calling `onClose:` — \
+                             add one that clears what `open:` reads, or drop \
+                             `durationMs:` and take the toast away from the app"
+                                .to_string(),
+                        );
+                    }
+                    lower_view_float(v, cx, "durationMs")?
+                }
+                None => "0f64".into(),
+            };
+            Ok(format!(
+                "Element::Toast {{ message: {}, open: {open}, duration_ms: {duration}, \
+                 on_close: {on_close} }}",
+                lower_view_text(message, cx)?
+            ))
+        }
         // Two panes and a draggable divider. `ratio:` is the Slider's
         // `value:` contract with a different gesture — required, and
         // restricted to a property READ, because a literal could never
@@ -7264,7 +7308,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
                  BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
-                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented / Split / Canvas), and no \
+                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented / Toast / Split / Canvas), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),

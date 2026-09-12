@@ -4536,6 +4536,93 @@ fn segmented_requires_its_props() {
 }
 
 #[test]
+fn toast_demo_checks_and_emits() {
+    // The transient message: `message:` required, `open:` defaulting
+    // to true the way Modal's does, and a `durationMs:`/`onClose:`
+    // pair that becomes a kernel-side countdown rather than anything
+    // the app schedules.
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = "store App {\n  state up : Bool = false\n  state what : String = \"saved\"\n\n  \
+               fn done {\n    up = false\n  }\n}\n\nview Main {\n  Column {\n    \
+               Toast { message: \"#{App.what}\"; open: App.up; durationMs: 1500.0; onClose: App.done() }\n  \
+               }\n}\n";
+    let f = dir.join("toast_emit.pix");
+    std::fs::write(&f, src).unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    assert_eq!(
+        outcome.error_count(),
+        0,
+        "diagnostics: {:?}",
+        outcome.diagnostics
+    );
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    for needle in [
+        "Element::Toast { message:",
+        "open: w.singleton_ref::<App>().up(w)",
+        "duration_ms: 1500f64",
+        "on_close: Some(",
+    ] {
+        assert!(code.contains(needle), "generated code lacks `{needle}`");
+    }
+    // A bare Toast is open, and its duration is "until the app takes
+    // it away" — the same all-defaults shape Modal emits.
+    let bare = "view Main {\n  Column {\n    Toast { message: \"hi\" }\n  }\n}\n";
+    let f = dir.join("toast_bare.pix");
+    std::fs::write(&f, bare).unwrap();
+    let outcome = pixie_driver::check_file(&f).expect("driver runs");
+    let code =
+        pixie_codegen::emit_program(outcome.module.as_ref().expect("module"), outcome.binding_items, None)
+            .expect("emit succeeds");
+    assert!(
+        code.contains("open: true, duration_ms: 0f64, on_close: None"),
+        "a propless Toast should emit the open/undying defaults: {code}"
+    );
+}
+
+#[test]
+fn toast_needs_a_message_and_a_handler_to_close_with() {
+    let dir = std::env::temp_dir().join("pixie-m0-gate");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let emit_err = |name: &str, src: &str| -> String {
+        let f = dir.join(name);
+        std::fs::write(&f, src).unwrap();
+        let outcome = pixie_driver::check_file(&f).expect("driver runs");
+        pixie_codegen::emit_program(
+            outcome.module.as_ref().unwrap(),
+            outcome.binding_items,
+            None,
+        )
+        .expect_err("this toast must not emit")
+        .message
+    };
+
+    let err = emit_err(
+        "toast_no_message.pix",
+        "view Main {\n  Column {\n    Toast { }\n  }\n}\n",
+    );
+    assert!(
+        err.contains("Toast needs `message:`"),
+        "error should name the missing prop: {err}"
+    );
+
+    // A countdown with nothing to call could never do anything:
+    // closing itself MEANS calling `onClose:`, since the flag `open:`
+    // reads belongs to the app.
+    let err = emit_err(
+        "toast_duration_alone.pix",
+        "view Main {\n  Column {\n    Toast { message: \"hi\"; durationMs: 1000.0 }\n  }\n}\n",
+    );
+    assert!(
+        err.contains("`durationMs:` closes the Toast by calling `onClose:`"),
+        "error should say what a lone duration is missing: {err}"
+    );
+}
+
+#[test]
 fn split_emits_two_panes_and_a_bound_ratio() {
     // The Slider's contract with a different gesture: `ratio:` lowers
     // as a property READ and `onChange` binds the same implicit

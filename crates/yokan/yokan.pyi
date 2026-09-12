@@ -242,6 +242,18 @@ def data_table(*children: Element, **props: Unpack[SharedProps]) -> Element:
 def modal(
     *children: Element, open: bool = True, **props: Unpack[SharedProps]
 ) -> Element: ...
+def toast(
+    message: str,
+    duration_ms: float = 0.0,
+    on_close: Optional[Callable[[], Any]] = None,
+    **props: Unpack[SharedProps],
+) -> Element:
+    """A transient message over the app, shown at the bottom of the
+    window whatever container declared it. Like `modal`, it is open by
+    existing: put it behind `if showing():` rather than passing a flag.
+    A positive `duration_ms` closes it that many milliseconds later by
+    calling `on_close`, which is where the app clears what the `if`
+    reads."""
 def image(
     source: str,
     width: float = 0.0,

@@ -217,6 +217,12 @@ pub fn role_of(el: &Element) -> Option<Role> {
         // Every segment is always visible and one is always the
         // current choice — the same shape RadioGroup reports.
         Element::Segmented { .. } => Some(Role::RadioGroup),
+        // A closed toast is absent, not hidden — the Modal rule above.
+        // An open one reports as a `label`: AccessKit has a `Status`
+        // for a transient announcement, and this vocabulary has no
+        // such role yet, so `label` is what it honestly is. Its
+        // message is the name, below.
+        Element::Toast { open, .. } => open.then_some(Role::Label),
         // A Split reports nothing of its own, the way Column and Row
         // do: it is layout — two panes and a rule between them. This
         // vocabulary has no `splitter` or `separator` role, and
@@ -262,6 +268,8 @@ pub fn name_of(el: &Element) -> Str {
         Element::Segmented {
             options, selected, ..
         } => options.get(*selected).unwrap_or_else(Str::new),
+        // The message IS the toast — the way a Button's label is.
+        Element::Toast { message, .. } => message.clone(),
         _ => Str::new(),
     }
 }
