@@ -2961,3 +2961,32 @@ that matters. And a conditional expression in a String property
 refused: an `if` was a value in a text hole but not in a property
 whose value is a string, which was a gap in the lowerer rather than a
 rule about views.
+
+## A select opens where it fits (2026-09-12)
+
+Two of the three deferrals the Select anchoring entry left open.
+
+**It opens upward near the bottom edge.** A list anchored under a
+control that sits low extended past the window, and nothing could
+scroll to it. The obvious fix wants the panel's height, which nothing
+knows until it paints; pinning the panel's BOTTOM to the control's
+top needs no height at all, and the test for which way to open is the
+control's own bottom edge against the middle of the window — a list
+that fits in the upper half fits when it opens upward from the lower
+one. The inert canvas that already records the control's bounds
+records the window's height beside them, so the placement is decided
+with what one paint already knew.
+
+**A click anywhere else closes it.** gpui's `on_mouse_down_out` fires
+in the capture phase, which makes the control itself "anywhere else":
+without excluding the control's own rectangle by hand, a click on it
+would close the panel and the control's own handler would re-open it
+in the same gesture, and the list would never close by clicking the
+thing that opened it.
+
+**Keyboard operation stays deferred, with its reason.** It needs
+per-select focus state — a focus handle and the option the keyboard
+is on — which is a different cell from the one this has. And it is
+not verifiable here: a headless run never enters the engine, so no
+gate can see it, and nothing in this environment can press a key at a
+window. Shipping it would mean shipping behaviour nobody had watched.
