@@ -290,6 +290,7 @@ on_key(lambda k: last.set(k))
 ```
 
 The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `ctrl+alt+k` — and `-` reads the same as `+`.
+`cmd` is the key an app's own shortcuts hang off, and only macOS has one of its own: on Windows and Linux that key is Ctrl, so `cmd+s` and `ctrl+s` name one chord there and a script still presses it with `key:cmd+s` everywhere.
 While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
 A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
 
@@ -322,6 +323,7 @@ menu_item("File", "Clear", clear)
 ```
 
 Declaration order is menu order, the window hands the bar to the platform, and a script picks an item by name with `menu:Save`.
+Of the three platforms, only macOS draws a menu bar from it; Linux and Windows keep the declaration and show nothing, while `menu:Save` fires the handler on all three.
 
 `on_file_drop(handler)` is the same kind of declaration for a file dragged onto the window: the handler receives its path, and a script drops one with `drop:<path>`.
 

@@ -1192,7 +1192,7 @@ impl<C: Component> Render for Root<C> {
                             .detach();
                     }
                     pixie_kernel::dialog::Kind::Save => {
-                        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+                        let home = home_dir();
                         let label = req.label.clone();
                         let rx = cx.prompt_for_new_path(
                             std::path::Path::new(&home),
@@ -1317,7 +1317,7 @@ impl<C: Component> Render for Root<C> {
                         // is the platform's auto-repeat, which holds
                         // the key without pressing it again.
                         pixie_kernel::keys::set_modifiers(
-                            mods.platform,
+                            mods.secondary(),
                             mods.control,
                             mods.alt,
                             mods.shift,
@@ -1333,7 +1333,7 @@ impl<C: Component> Render for Root<C> {
                     .on_key_up(cx.listener(|_root: &mut Root<C>, ev: &gpui::KeyUpEvent, _window, _cx| {
                         let mods = &ev.keystroke.modifiers;
                         pixie_kernel::keys::set_modifiers(
-                            mods.platform,
+                            mods.secondary(),
                             mods.control,
                             mods.alt,
                             mods.shift,
@@ -1346,7 +1346,7 @@ impl<C: Component> Render for Root<C> {
                     .on_modifiers_changed(cx.listener(
                         |_root: &mut Root<C>, ev: &gpui::ModifiersChangedEvent, _window, _cx| {
                             pixie_kernel::keys::set_modifiers(
-                                ev.modifiers.platform,
+                                ev.modifiers.secondary(),
                                 ev.modifiers.control,
                                 ev.modifiers.alt,
                                 ev.modifiers.shift,
@@ -1566,25 +1566,71 @@ fn install_menus(runtime: &Runtime, cx: &mut App) {
     cx.set_menus(menus);
 }
 
+/// Where a save dialog starts when the app names no directory. Unix
+/// answers `HOME`; Windows has no such variable and names the same
+/// place `USERPROFILE`. Neither is guaranteed, so the process's own
+/// directory is the last answer rather than a panic.
+fn home_dir() -> String {
+    for name in ["HOME", "USERPROFILE"] {
+        if let Ok(v) = std::env::var(name) {
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    ".".into()
+}
+
 /// The chord a keystroke spells, in the order `keys::normalize`
 /// writes: one string on both sides of the comparison, so what a
 /// script presses and what a window presses cannot drift apart.
 fn chord_of(ks: &gpui::Keystroke) -> String {
     let m = &ks.modifiers;
+    spell_chord(
+        m.platform,
+        m.control,
+        m.alt,
+        m.shift,
+        &ks.key,
+        cfg!(target_os = "macos"),
+    )
+}
+
+/// The chord as a string, with the platform handed in rather than
+/// compiled in — the same shape `keys::normalize_where` has, so both
+/// answers can be read on one machine.
+///
+/// `separate_command_key` is macOS, where an app's own shortcuts hang
+/// off Command and Ctrl is a modifier beside it. Elsewhere Ctrl is
+/// that key, so it is what `cmd-` spells, and the Windows key — which
+/// belongs to the OS shell, not to an app — spells nothing at all.
+fn spell_chord(
+    platform: bool,
+    control: bool,
+    alt: bool,
+    shift: bool,
+    key: &str,
+    separate_command_key: bool,
+) -> String {
+    let (cmd, ctrl) = if separate_command_key {
+        (platform, control)
+    } else {
+        (control, false)
+    };
     let mut out = String::new();
-    if m.platform {
+    if cmd {
         out.push_str("cmd-");
     }
-    if m.control {
+    if ctrl {
         out.push_str("ctrl-");
     }
-    if m.alt {
+    if alt {
         out.push_str("alt-");
     }
-    if m.shift {
+    if shift {
         out.push_str("shift-");
     }
-    out.push_str(&ks.key);
+    out.push_str(key);
     out
 }
 
@@ -4732,8 +4778,12 @@ mod resolve_asset_tests {
         // cwd, real current_exe) rather than the injectable core —
         // safe under parallel test execution because the absolute-path
         // branch touches no shared process state.
-        let abs = std::path::Path::new("/tmp/pixie-resolve-asset-does-not-need-to-exist.png");
-        assert_eq!(resolve_asset(abs.to_str().unwrap()), abs.to_path_buf());
+        // The platform's own temp directory, because what counts here
+        // is that the path is ABSOLUTE, and `/tmp/x` is not one on
+        // Windows (an absolute path there carries a drive).
+        let abs = std::env::temp_dir().join("pixie-resolve-asset-does-not-need-to-exist.png");
+        assert!(abs.is_absolute());
+        assert_eq!(resolve_asset(abs.to_str().unwrap()), abs);
     }
 
     #[test]
@@ -4857,9 +4907,10 @@ pub fn run_app<C: Component>(
         install_menus(&runtime, cx);
         // From here a file dialog has a window to open in.
         pixie_kernel::dialog::windowed();
-        // cute_ui's Cmd+T: flip the theme live. Every color is read
-        // per paint, so one refresh restyles the whole window.
-        cx.bind_keys([gpui::KeyBinding::new("cmd-t", ToggleTheme, None)]);
+        // cute_ui's Cmd+T (Ctrl+T off macOS): flip the theme live.
+        // Every color is read per paint, so one refresh restyles the
+        // whole window.
+        cx.bind_keys([gpui::KeyBinding::new("secondary-t", ToggleTheme, None)]);
         cx.on_action(|_: &ToggleTheme, cx: &mut App| {
             set_theme_light(!THEME_LIGHT_ON.load(std::sync::atomic::Ordering::Relaxed));
             cx.refresh_windows();
@@ -4942,6 +4993,43 @@ pub fn run_app<C: Component>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a window presses has to spell what a script presses, on
+    /// every platform: `cmd-` is the command key on macOS and Ctrl
+    /// where there is no command key, and a keystroke never spells one
+    /// modifier twice.
+    #[test]
+    fn a_keystroke_spells_the_chord_an_app_declared() {
+        // macOS: Command and Ctrl are two keys, and both can spell.
+        assert_eq!(spell_chord(true, false, false, false, "s", true), "cmd-s");
+        assert_eq!(spell_chord(false, true, false, false, "s", true), "ctrl-s");
+        assert_eq!(
+            spell_chord(true, true, false, false, "space", true),
+            "cmd-ctrl-space"
+        );
+        // Windows and Linux: Ctrl is the key `cmd-` names, and the
+        // Windows key spells nothing.
+        assert_eq!(spell_chord(false, true, false, false, "s", false), "cmd-s");
+        assert_eq!(spell_chord(true, false, false, false, "s", false), "s");
+        assert_eq!(
+            spell_chord(false, true, true, true, "k", false),
+            "cmd-alt-shift-k"
+        );
+        // Either way, what the window spells is what the script's own
+        // `key:` step normalizes to.
+        for mac in [true, false] {
+            assert_eq!(
+                spell_chord(mac, !mac, false, true, "s", mac),
+                pixie_kernel::keys::normalize_where("shift+cmd+s", mac)
+            );
+            // Ctrl+Alt+K is pressed with the same two keys on every
+            // platform; what it is CALLED is what differs.
+            assert_eq!(
+                spell_chord(false, true, true, false, "k", mac),
+                pixie_kernel::keys::normalize_where("ctrl+alt+k", mac)
+            );
+        }
+    }
 
     /// The Spinner's arc is geometry, not an `Animation`: it must
     /// tessellate at every phase (a degenerate stroke paints nothing,

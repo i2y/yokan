@@ -1,0 +1,217 @@
+name: windows
+
+# Windows, run the only way it can be run here: nobody on this project
+# has a Windows machine, so a runner is the desktop. What that runner
+# can prove is most of it — a scripted run never enters the engine, so
+# the compiler, the kernel, the standard library, both tiers and the
+# gate itself need no display at all. What it cannot prove is the
+# window, and the last job says so out loud rather than quietly not
+# looking.
+#
+# The order is the order of trust: the workspace's own tests, then the
+# substrate's two-tier gate, then Yokan's dev module and its demos,
+# then the folder `--app` hands a user — built here and run on a
+# SECOND runner, which is the only way to find out whether it carries
+# what it needs. The wheel is the release workflow's job, beside the
+# Linux ones.
+#
+# On dispatch and on tags only. A Windows runner compiles the engine
+# from nothing (there is no target-dir cache here: a debug tree with
+# gpui in it is larger than the repository's whole cache allowance,
+# and one that evicts everything else would slow every other job), so
+# this is a deliberate run, not something every push pays for.
+
+on:
+  workflow_dispatch:
+    inputs:
+      demos:
+        description: "how many demos to gate"
+        type: choice
+        default: a few
+        options: [a few, the sweep]
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: build, test and gate
+    runs-on: windows-latest
+    # The sweep is about an hour on a runner and the engine build
+    # ahead of it another twenty minutes, so a job that is still going
+    # after three hours is stuck; the platform would let it sit for
+    # six.
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      # rustup is on the runner and reads rust-toolchain.toml itself,
+      # so the pin has one home here too. MSVC is the right host
+      # toolchain: pyo3, the bundled sqlite and DirectX all want it.
+      - name: Say which rustc this will be
+        run: rustup show
+
+      # One build tree for everything in this job — the workspace's
+      # tests, the tier gate's generated crates and every demo the
+      # sweep compiles. It is the same directory pixie-cli computes
+      # for itself on this platform (`%LOCALAPPDATA%\pixie\target`),
+      # which is what keeps the second compile from being a first one.
+      - name: One build tree, the one pixie picks for itself
+        run: echo "CARGO_TARGET_DIR=$env:LOCALAPPDATA\pixie\target" >> $env:GITHUB_ENV
+
+      # The registry, not the build tree: downloads are worth carrying
+      # between runs and object files are not (see the header).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: win-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: win-cargo-
+
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      # The interpreted run is CPython's, and the dialect asks for
+      # 3.14. `uv` fetches it; the path goes into the environment with
+      # forward slashes, because the sweep is a bash script and a
+      # backslash is an escape there.
+      - name: The Python both runs of an app start from
+        run: |
+          uv python install 3.14
+          $py = (uv python find 3.14).Trim().Replace('\', '/')
+          echo "PYTHON=$py" >> $env:GITHUB_ENV
+          echo "PYO3_PYTHON=$py" >> $env:GITHUB_ENV
+          & $py --version
+
+      # The compiler, the kernel, the standard library and the twins,
+      # including the tables CPython printed: a platform's own libm
+      # shows up here first, and the `~>` rows are the ones allowed to
+      # differ by an ulp.
+      - name: The workspace's own tests
+        run: cargo test --workspace
+
+      # The substrate's promise: every pixie example through both
+      # execution tiers, failing on any dump difference. It is where a
+      # difference between what Windows compiles and what Windows
+      # interprets would appear.
+      - name: The tier gate
+        run: cargo test -p pixie-cli -- --ignored
+
+      # `just dev-so` in two lines, because that recipe's shape is
+      # the same on every platform and its Windows names are these:
+      # cargo writes `yokan.dll` (no `lib` prefix) and Python imports
+      # it as `yokan.pyd`.
+      - name: The importable module the interpreted run uses
+        run: |
+          cargo build --release -p yokan --features extension-module
+          Copy-Item "$env:CARGO_TARGET_DIR\release\yokan.dll" crates\yokan\yokan.pyd
+
+      # The gate itself, on a handful of demos: a counter for the
+      # shape of it, keys for the chords (Ctrl is what `cmd` means
+      # here), files for the paths, and the standard library for the
+      # twins. The whole sweep is the choice on dispatch, and what a
+      # tag runs.
+      - name: A few demos through both runs
+        if: github.event_name == 'workflow_dispatch' && inputs.demos != 'the sweep'
+        shell: bash
+        working-directory: crates/yokan
+        run: |
+          set -euo pipefail
+          "$PYTHON" yokan_gate.py gate demo/counter.py --script "click:+1,dump,input:Momo"
+          "$PYTHON" yokan_gate.py gate demo/keys.py --script "click:+1,key:cmd+s,dump,menu:Clear,dump"
+          "$PYTHON" yokan_gate.py gate demo/files.py --script "click:save,click:load,dump,click:data dir,dump"
+          "$PYTHON" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:stamp,dump"
+
+      - name: Every demo, both runs
+        if: inputs.demos == 'the sweep' || startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: ./crates/yokan/tools/gate_all.sh
+
+      # `--app` on Windows is the platform's own application
+      # directory: a folder holding the .exe and the app's icon, and
+      # nothing else. Built here and run on the next job, which has
+      # never compiled anything — the only way to find out whether
+      # "nothing else" is true.
+      - name: The folder a user is handed
+        shell: bash
+        working-directory: crates/yokan
+        run: |
+          set -euo pipefail
+          "$PYTHON" yokan_gate.py build demo/counter.py --app
+          ls -l demo/dist/*/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-app
+          path: crates/yokan/demo/dist/
+
+  # The same folder on a machine that built nothing. A GitHub runner
+  # is not a bare Windows box — it has the Visual C++ runtime, and a
+  # developer's machine has more than that — so this proves the folder
+  # is self-contained as far as a runner can tell, and no further.
+  folder:
+    name: the folder runs elsewhere
+    needs: gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-app
+          path: app
+
+      - name: Drive it headless
+        run: |
+          $exe = Get-ChildItem -Path app -Recurse -Filter *.exe | Select-Object -First 1
+          Write-Host "running $($exe.FullName)"
+          $env:PIXIE_SCRIPT = 'click:+1,dump'
+          $out = & $exe.FullName
+          $out
+          if (-not ($out -match 'Text\(count: 1\)')) {
+            throw "the app did not react to the script"
+          }
+
+  # The window nobody here can open. A GitHub-hosted Windows runner
+  # has an interactive session but no GPU, so whether gpui's DirectX
+  # backend finds a device (WARP or otherwise) is the open question
+  # this job exists to answer. It is allowed to fail: what it produces
+  # either way — the screenshot, and whatever the app said — is the
+  # evidence, and the tour's closing list says which of the two
+  # happened.
+  window:
+    name: a window, if this machine can open one
+    needs: gate
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-app
+          path: app
+
+      - name: Open it and photograph the screen
+        run: |
+          $exe = Get-ChildItem -Path app -Recurse -Filter *.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -PassThru `
+                 -RedirectStandardOutput out.txt -RedirectStandardError err.txt
+          Start-Sleep -Seconds 12
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $shot = New-Object Drawing.Bitmap $screen.Width, $screen.Height
+          $g = [Drawing.Graphics]::FromImage($shot)
+          $g.CopyFromScreen($screen.X, $screen.Y, 0, 0, $shot.Size)
+          $shot.Save("$PWD\window.png", [Drawing.Imaging.ImageFormat]::Png)
+          Write-Host "the app is still running: $(-not $p.HasExited)"
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Get-Content out.txt, err.txt -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-window
+          path: |
+            window.png
+            out.txt
+            err.txt

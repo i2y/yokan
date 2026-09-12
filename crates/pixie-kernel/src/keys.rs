@@ -28,14 +28,30 @@ fn store(w: &mut World) -> crate::Handle<Keys> {
 /// One chord, written once: modifiers in a fixed order and the key
 /// last, so `cmd+shift+s`, `shift-cmd-s` and `Cmd-Shift-S` are one
 /// chord and the two sides of a comparison cannot drift apart.
+///
+/// `cmd` is the key an app's own shortcuts hang off, and only macOS
+/// has one of its own: Windows and Linux use Ctrl for the same job.
+/// So off macOS the two spellings name one key.
 pub fn normalize(chord: &str) -> String {
+    normalize_where(chord, cfg!(target_os = "macos"))
+}
+
+/// `normalize`, with the platform handed in rather than compiled in,
+/// so both answers can be read on one machine.
+///
+/// `separate_command_key` is macOS: there `cmd-s` and `ctrl-s` are two
+/// chords a user can press apart. Elsewhere one key does both jobs, so
+/// an app written either way answers Ctrl — otherwise `cmd-s` would be
+/// unpressable on Windows, or `ctrl+alt+k` would be, and which of the
+/// two broke would depend on the machine the author happened to own.
+pub fn normalize_where(chord: &str, separate_command_key: bool) -> String {
     let mut mods: Vec<&str> = Vec::new();
     let mut key = String::new();
     for part in chord.split(['-', '+']).filter(|p| !p.is_empty()) {
         let p = part.trim().to_lowercase();
         match p.as_str() {
             "cmd" | "command" | "super" | "win" | "meta" | "platform" => mods.push("cmd"),
-            "ctrl" | "control" => mods.push("ctrl"),
+            "ctrl" | "control" => mods.push(if separate_command_key { "ctrl" } else { "cmd" }),
             "alt" | "opt" | "option" => mods.push("alt"),
             "shift" => mods.push("shift"),
             _ => key = p,
@@ -177,10 +193,25 @@ pub fn release(key: &str) {
     add(&RELEASED, &key);
 }
 
+/// `cmd` and `ctrl` as the device should report them. Off macOS one
+/// key does both jobs, so both names answer together — the same
+/// folding `normalize_where` does for a chord, so a game asking
+/// `down("ctrl")` and a shortcut written `cmd-s` agree about which
+/// key that is.
+fn fold_modifiers(cmd: bool, ctrl: bool, separate_command_key: bool) -> (bool, bool) {
+    if separate_command_key {
+        (cmd, ctrl)
+    } else {
+        (cmd || ctrl, cmd || ctrl)
+    }
+}
+
 /// The modifier keys, which the platform reports as a state rather
 /// than as key events. Named like any other key, so `down("shift")`
-/// is the same question as `down("left")`.
+/// is the same question as `down("left")`. `cmd` is the key an app's
+/// shortcuts hang off: Command on macOS, Ctrl everywhere else.
 pub fn set_modifiers(cmd: bool, ctrl: bool, alt: bool, shift: bool) {
+    let (cmd, ctrl) = fold_modifiers(cmd, ctrl, cfg!(target_os = "macos"));
     for (on, name) in [
         (cmd, "cmd"),
         (ctrl, "ctrl"),
@@ -294,5 +325,45 @@ mod device_tests {
         release_all();
         assert!(!down("left") && !down("space"));
         reset();
+    }
+}
+
+#[cfg(test)]
+mod chord_tests {
+    use super::*;
+
+    #[test]
+    fn one_chord_however_it_is_written() {
+        for spelling in ["cmd+shift+s", "shift-cmd-s", "Cmd-Shift-S", " command + shift + s "] {
+            assert_eq!(normalize_where(spelling, true), "cmd-shift-s");
+        }
+    }
+
+    #[test]
+    fn macos_tells_the_two_modifier_keys_apart() {
+        assert_eq!(normalize_where("cmd-s", true), "cmd-s");
+        assert_eq!(normalize_where("ctrl-s", true), "ctrl-s");
+        assert_eq!(normalize_where("ctrl+alt+k", true), "ctrl-alt-k");
+    }
+
+    #[test]
+    fn elsewhere_ctrl_is_the_command_key() {
+        // Windows and Linux have one key for the job, so an app
+        // written either way answers the Ctrl the user presses.
+        assert_eq!(normalize_where("cmd-s", false), "cmd-s");
+        assert_eq!(normalize_where("ctrl-s", false), "cmd-s");
+        assert_eq!(normalize_where("ctrl+alt+k", false), "cmd-alt-k");
+        // And a chord naming both is still that one key.
+        assert_eq!(normalize_where("ctrl-cmd-space", false), "cmd-space");
+        assert_eq!(normalize_where("ctrl-cmd-space", true), "cmd-ctrl-space");
+    }
+
+    #[test]
+    fn the_device_folds_the_same_way() {
+        assert_eq!(fold_modifiers(true, false, true), (true, false));
+        assert_eq!(fold_modifiers(false, true, true), (false, true));
+        // Off macOS, Ctrl answers to both names and neither alone.
+        assert_eq!(fold_modifiers(false, true, false), (true, true));
+        assert_eq!(fold_modifiers(false, false, false), (false, false));
     }
 }

@@ -1215,6 +1215,7 @@ on_key(lambda k: last.set(k))
 ```
 
 The chord is spelled the way the platform spells it — `cmd+s`, `shift-tab`, `ctrl+alt+k` — and `-` reads the same as `+`.
+`cmd` is the key an app's own shortcuts hang off, and only macOS has one of its own: on Windows and Linux that key is Ctrl, so `cmd+s` and `ctrl+s` name one chord there and a script still presses it with `key:cmd+s` everywhere.
 While a text field has the caret, plain keys go on typing into it and only chords carrying cmd or ctrl reach the app.
 A headless script presses one with `key:cmd+s`, so a shortcut is a checked interaction like a click.
 
@@ -1247,6 +1248,7 @@ menu_item("File", "Clear", clear)
 ```
 
 Declaration order is menu order, the window hands the bar to the platform, and a script picks an item by name with `menu:Save`.
+Of the three platforms, only macOS draws a menu bar from it; Linux and Windows keep the declaration and show nothing, while `menu:Save` fires the handler on all three.
 
 `on_file_drop(handler)` is the same kind of declaration for a file dragged onto the window: the handler receives its path, and a script drops one with `drop:<path>`.
 
@@ -1468,6 +1470,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused, and the error says what and why.
 - **An `@py` app cannot carry its Python on Linux.** `--bundle` and `--onefile` build Apple's runtime folder — a rewritten load command, an ad-hoc signature — so on Linux they name themselves and stop. An app with no escapes is self-contained either way, and `--app` and `--appimage` package it there; one with escapes needs the host to have a Python for now.
+- **Windows.** The platform's own answers are in the tree: where a cache and an app's own directory go, the `.exe` a build produces, the folder `--app` writes there (`--bundle`, `--onefile` and `--appimage` name themselves and stop), and `cmd` meaning Ctrl. What is not there is a run: the CI job that builds, tests and gates on a Windows runner is written and has not been run, so there is no Windows wheel to install and no window anyone has looked at. The platforms you can install today are macOS and Linux.
 - All measurements are macOS/arm64. Other platforms are not measured yet.
 
 This list is updated every time a design lands.

@@ -1466,4 +1466,4 @@ silently.
   maps, lists, optionals, and `!T` returns
 - An HTTP **server** (the sketch is a declarative `service` block;
   deliberately last)
-- Linux / Windows (the engine is exercised on macOS)
+- Windows (the engine is exercised on macOS and Linux)

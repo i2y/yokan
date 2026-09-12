@@ -14,10 +14,19 @@
 # that line is a whole sentence naming what the recipe does; anything
 # else worth saying goes above it, separated by a bare `#`.
 
-export CARGO_TARGET_DIR := env_var('HOME') / '.cache/pixie/target'
+# Where a machine keeps caches is the machine's own answer: `~/.cache`
+# where there is a HOME, and `%LOCALAPPDATA%` on Windows, which has
+# none. pixie-cli's `shared_target_dir`, yokan_gate.py's `cache_root`
+# and the sweep read the same rule, so one build tree serves all four.
+# Forward slashes even on Windows: these paths are pasted into `sh`
+# recipes, where a backslash is an escape character, and every Windows
+# API takes a forward slash.
+cache := if env_var_or_default('HOME', '') != '' { env_var('HOME') / '.cache' } else { replace(env_var('LOCALAPPDATA'), '\', '/') }
+
+export CARGO_TARGET_DIR := cache / 'pixie/target'
 
 pkg := 'crates/yokan'
-wheels := env_var('HOME') / '.cache/pixie/target/wheels'
+wheels := cache / 'pixie/target/wheels'
 
 # Print this list.
 default:
@@ -29,12 +38,14 @@ default:
 # links a system libpython and the module aborts at import under uv's
 # CPython. The ad-hoc signature keeps macOS from killing it, and is
 # macOS's alone — cargo's own suffix for the same artifact differs by
-# platform, so both the name and the signing step read off `os()`.
+# platform, and so does the name Python imports it under (`.pyd` on
+# Windows, and no `lib` prefix on the artifact), so both the copy and
+# the signing step read off `os()`.
 #
 # Rebuild the importable extension module (crates/yokan/yokan.so).
 dev-so:
     cargo build --release -p yokan --features extension-module
-    cp "$CARGO_TARGET_DIR/release/libyokan.{{ if os() == 'macos' { 'dylib' } else { 'so' } }}" {{pkg}}/yokan.so
+    cp "$CARGO_TARGET_DIR/release/{{ if os() == 'macos' { 'libyokan.dylib' } else if os() == 'windows' { 'yokan.dll' } else { 'libyokan.so' } }}" {{pkg}}/yokan{{ if os() == 'windows' { '.pyd' } else { '.so' } }}
     {{ if os() == 'macos' { 'codesign -f -s - ' + pkg + '/yokan.so' } else { 'true' } }}
 
 # Prints the first refusal in file:line:col form, and nothing at all
@@ -299,11 +310,16 @@ smoke:
         run(view)
     PY
     uv venv -q -p 3.14 "$tmp/venv"
-    uv pip install -q -p "$tmp/venv/bin/python" "$whl"
-    out=$(cd "$tmp" && PIXIE_SCRIPT='click:+1,dump' ./venv/bin/python app.py)
+    # A venv's own layout, per platform: Windows puts the interpreter
+    # and the scripts in Scripts\, everyone else in bin/. One recipe
+    # smokes the wheel on every platform, so the two cannot drift.
+    bin="$tmp/venv/bin"; exe=""
+    [ -d "$tmp/venv/Scripts" ] && { bin="$tmp/venv/Scripts"; exe=".exe"; }
+    uv pip install -q -p "$bin/python$exe" "$whl"
+    out=$(cd "$tmp" && PIXIE_SCRIPT='click:+1,dump' "$bin/python$exe" app.py)
     echo "$out"
     echo "$out" | grep -q 'Text(n: 1)' || { echo "smoke FAILED: the app did not react"; exit 1; }
-    "$tmp/venv/bin/yokan" translate "$tmp/app.py" > /dev/null
+    "$bin/yokan$exe" translate "$tmp/app.py" > /dev/null
     echo "smoke OK"
 
 # Stops before the upload if the smoke run fails. The upload is the
@@ -357,3 +373,19 @@ publish-linux version:
     [ "$ok" = "y" ] || { echo "aborted"; exit 1; }
     uvx twine upload "$tmp"/*.whl
     echo "uploaded the Linux wheels for {{version}}"
+
+# The Windows wheel is the same story as the Linux ones — the module
+# carries the engine, and that engine is DirectX's — so it is built by
+# the release workflow too and arrives on the same release.
+#
+# Upload VERSION's Windows wheel from its release to PyPI.
+publish-windows version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    gh release download v{{version}} --pattern '*win_amd64.whl' --dir "$tmp"
+    ls -l "$tmp"
+    read -r -p "upload this to PyPI? [y/N] " ok
+    [ "$ok" = "y" ] || { echo "aborted"; exit 1; }
+    uvx twine upload "$tmp"/*.whl
+    echo "uploaded the Windows wheel for {{version}}"

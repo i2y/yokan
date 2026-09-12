@@ -667,9 +667,12 @@ headless script, so ticks are gate-checkable.
 way: a chord and its handler, or one handler that sees every key as
 the chord it was. The chord is spelled the way the platform spells
 it (`cmd+s`, `shift-tab`, `ctrl+alt+k`; `-` reads the same as `+`).
-While a text field has the caret, plain keys keep going into it and
-only chords carrying cmd or ctrl reach the app. A headless script
-presses one with `key:cmd+s`.
+`cmd` is the key an app's shortcuts hang off, and only macOS has one
+of its own: on Windows and Linux that key is Ctrl, so `cmd+s` and
+`ctrl+s` name one chord there. While a text field has the caret,
+plain keys keep going into it and only chords carrying cmd or ctrl
+reach the app. A headless script presses one with `key:cmd+s`, on
+every platform.
 
 `from yokan import keys` reads the keyboard as a DEVICE: `keys.down(k)`
 is "held right now", `keys.pressed(k)` "went down since the last
@@ -855,4 +858,6 @@ reason.
   `--onefile` are Apple's runtime folder. `--app` and `--appimage`
   package an escape-free app there.
 - macOS on Apple silicon is the measured platform; Linux runs the
-  same gate.
+  same gate. Windows carries the platform's own answers (`cmd` means
+  Ctrl, `--app` writes a folder) but has no wheel to install yet, and
+  no window anyone has looked at.

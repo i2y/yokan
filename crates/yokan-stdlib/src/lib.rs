@@ -3805,24 +3805,45 @@ pub fn fs_make_dir(path: &str) -> i64 {
     }
 }
 
-/// The directory an app may keep its own files in, created on the way
-/// out: `~/Library/Application Support/<name>` on macOS, and
-/// `$XDG_DATA_HOME/<name>` (default `~/.local/share/<name>`)
-/// elsewhere — each platform's own answer to the same question. One
-/// implementation, so both runs of an app land in one directory and
-/// the gate compares an app against itself, not against a path.
-pub fn fs_app_dir_result(name: &str) -> std::io::Result<String> {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let base = if cfg!(target_os = "macos") {
-        std::path::Path::new(&home)
-            .join("Library")
-            .join("Application Support")
-    } else {
-        match std::env::var("XDG_DATA_HOME") {
-            Ok(x) if !x.is_empty() => std::path::PathBuf::from(x),
-            _ => std::path::Path::new(&home).join(".local").join("share"),
+/// Where an app's own directory goes, with the platform and the
+/// environment handed in rather than read — the gate cannot catch a
+/// mistake here (both runs would be wrong the same way), so the rule
+/// is a function whose three answers can be read on one machine.
+fn app_dir_base(os: &str, get: impl Fn(&str) -> Option<String>) -> std::path::PathBuf {
+    let var = |k: &str| get(k).filter(|v| !v.is_empty());
+    // Windows keeps a user's own application data under `%APPDATA%`
+    // and has no `HOME`; `USERPROFILE` is the same place `HOME` names
+    // elsewhere, so the fallback stays one directory rather than two.
+    if os == "windows" {
+        if let Some(app_data) = var("APPDATA") {
+            return std::path::PathBuf::from(app_data);
         }
-    };
+        let home = var("USERPROFILE").unwrap_or_else(|| ".".to_string());
+        return std::path::Path::new(&home)
+            .join("AppData")
+            .join("Roaming");
+    }
+    let home = var("HOME").unwrap_or_else(|| ".".to_string());
+    if os == "macos" {
+        return std::path::Path::new(&home)
+            .join("Library")
+            .join("Application Support");
+    }
+    match var("XDG_DATA_HOME") {
+        Some(x) => std::path::PathBuf::from(x),
+        None => std::path::Path::new(&home).join(".local").join("share"),
+    }
+}
+
+/// The directory an app may keep its own files in, created on the way
+/// out: `~/Library/Application Support/<name>` on macOS,
+/// `%APPDATA%\<name>` on Windows, and `$XDG_DATA_HOME/<name>`
+/// (default `~/.local/share/<name>`) elsewhere — each platform's own
+/// answer to the same question. One implementation, so both runs of an
+/// app land in one directory and the gate compares an app against
+/// itself, not against a path.
+pub fn fs_app_dir_result(name: &str) -> std::io::Result<String> {
+    let base = app_dir_base(std::env::consts::OS, |k| std::env::var(k).ok());
     let dir = base.join(name);
     std::fs::create_dir_all(&dir)
         .map_err(|e| std::io::Error::other(format!("fs.app_dir {name}: {e}")))?;
@@ -4123,4 +4144,56 @@ pub fn fs_open_dialog(title: &str) -> String {
 
 pub fn fs_save_dialog(name: &str) -> String {
     pixie_kernel::dialog::ask(pixie_kernel::dialog::Kind::Save, name)
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::app_dir_base;
+
+    fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
+        let owned: Vec<(String, String)> =
+            pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        move |k: &str| {
+            owned
+                .iter()
+                .find(|(name, _)| name == k)
+                .map(|(_, v)| v.clone())
+        }
+    }
+
+    /// Each platform's own answer to "where does an app keep its
+    /// files", read on one machine because no run of the app can
+    /// compare them: both tiers ask the same function.
+    #[test]
+    fn every_platform_names_its_own_directory() {
+        let home = env(&[("HOME", "/u/momo"), ("USERPROFILE", r"C:\Users\Momo")]);
+        assert_eq!(
+            app_dir_base("macos", &home),
+            std::path::PathBuf::from("/u/momo/Library/Application Support")
+        );
+        assert_eq!(
+            app_dir_base("linux", &home),
+            std::path::PathBuf::from("/u/momo/.local/share")
+        );
+        assert_eq!(
+            app_dir_base("linux", env(&[("HOME", "/u/momo"), ("XDG_DATA_HOME", "/u/momo/data")])),
+            std::path::PathBuf::from("/u/momo/data")
+        );
+        assert_eq!(
+            app_dir_base("windows", env(&[("APPDATA", r"C:\Users\Momo\AppData\Roaming")])),
+            std::path::PathBuf::from(r"C:\Users\Momo\AppData\Roaming")
+        );
+        // A Windows machine with no APPDATA still lands under the
+        // profile, not in the process's own directory.
+        assert_eq!(
+            app_dir_base("windows", &home),
+            std::path::Path::new(r"C:\Users\Momo").join("AppData").join("Roaming")
+        );
+        // And nothing at all is still a directory, not a panic.
+        assert_eq!(
+            app_dir_base("windows", env(&[])),
+            std::path::Path::new(".").join("AppData").join("Roaming")
+        );
+        assert_eq!(app_dir_base("linux", env(&[])), std::path::PathBuf::from("./.local/share"));
+    }
 }

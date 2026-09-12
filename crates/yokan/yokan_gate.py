@@ -19,6 +19,7 @@ import contextlib
 import copy
 import re
 import importlib
+import importlib.machinery
 import importlib.util
 import os
 import shutil
@@ -26,6 +27,20 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# What this Python calls a plain extension module: `.so` on macOS and
+# Linux, `.pyd` on Windows. Read off the interpreter rather than
+# written down, because it is the name the interpreted run's own
+# importer will look for (`yokan.crates` in src/lib.rs reads the same
+# list).
+EXT_SUFFIX = importlib.machinery.EXTENSION_SUFFIXES[-1]
+
+# Which platform this is, for the three questions whose answer is the
+# platform's own: where a cache goes, what `--app` writes, and which
+# packaging flags name themselves and stop. A built binary's `.exe` is
+# not one of them — every path to one is read off pixie's `built:`
+# line, which already carries it.
+WINDOWS = os.name == "nt"
 
 
 REPO_URL = "https://github.com/i2y/yokan"
@@ -43,8 +58,19 @@ def wheel_version() -> str:
 
 def cache_root() -> str:
     """Everything this command keeps between runs: the checkouts it
-    fetched and the build tree they compile into."""
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    fetched and the build tree they compile into.
+
+    Where a machine keeps caches is the machine's own answer:
+    `$XDG_CACHE_HOME` or `~/.cache` where there is a home directory,
+    and `%LOCALAPPDATA%` on Windows, which keeps per-user caches there
+    and has no `HOME` at all. pixie-cli's `shared_target_dir` and the
+    justfile read the same rule, so one build tree serves the command,
+    a generated app and a plain `cargo` run."""
+    base = os.environ.get("XDG_CACHE_HOME")
+    if not base and os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA")
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), ".cache")
     return os.path.join(base, "yokan")
 
 
@@ -87,11 +113,11 @@ def fetch_repo(dest: str) -> str:
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     base = ["git", "clone", "--depth", "1", "--quiet"]
     r = subprocess.run(base + (["--branch", ref] if ref else []) + [REPO_URL, tmp],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0 and ref:
         # a version with no tag yet (a local build, a pre-release):
         # the default branch is the closest thing to it
-        r = subprocess.run(base + [REPO_URL, tmp], capture_output=True, text=True)
+        r = subprocess.run(base + [REPO_URL, tmp], capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         shutil.rmtree(tmp, ignore_errors=True)
         sys.exit(f"could not fetch {REPO_URL}:\n{r.stderr.strip()}\n"
@@ -137,7 +163,7 @@ def parse_source(path: str) -> ast.Module:
     """Parse a module and stamp every node with its file, so a
     refusal raised deep inside a flattened import can still say
     which file it came from."""
-    src = open(path).read()
+    src = open(path, encoding="utf-8").read()
     tree = ast.parse(src, filename=path)
     for n in ast.walk(tree):
         n._yokan_file = path
@@ -11010,7 +11036,7 @@ def _pep723_table(path: str):
     """The app's PEP 723 tool table, or None when there is no block."""
     import tomllib
 
-    src = open(path).read()
+    src = open(path, encoding="utf-8").read()
     m = re.search(r"(?ms)^# /// script\n(.*?)^# ///$", src)
     if not m:
         return None
@@ -11131,7 +11157,7 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
         if "path" in spec:
             crate_dir = spec["path"]
             vm = re.search(
-                r'(?m)^version\s*=\s*"([^"]+)"', open(os.path.join(crate_dir, "Cargo.toml")).read()
+                r'(?m)^version\s*=\s*"([^"]+)"', open(os.path.join(crate_dir, "Cargo.toml"), encoding="utf-8").read()
             )
             key_ver = vm.group(1) if vm else "path"
             stale = (
@@ -11144,7 +11170,7 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
             key = f"# pixie-cache-key: version={key_ver}; features={feats}; format=61"
             stale = True
             if os.path.exists(out_rpi):
-                with open(out_rpi) as f:
+                with open(out_rpi, encoding="utf-8") as f:
                     stale = f.readline().rstrip("\n") != key
         if stale:
             env = dict(os.environ)
@@ -11155,7 +11181,7 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
                 # the (possibly shared) cargo target.
                 r = subprocess.run(
                     ["cargo", "doc", "--no-deps", "--quiet"],
-                    cwd=crate_dir, env=env, capture_output=True, text=True,
+                    cwd=crate_dir, env=env, capture_output=True, text=True, encoding="utf-8",
                 )
                 doc_target = env.get("CARGO_TARGET_DIR") or os.path.join(crate_dir, "target")
             else:
@@ -11164,8 +11190,8 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
                 # scratch's OWN target so the path is deterministic.
                 scratch = os.path.join(app_dir, ".yokan", "rpi-scratch", name)
                 os.makedirs(os.path.join(scratch, "src"), exist_ok=True)
-                open(os.path.join(scratch, "src", "lib.rs"), "w").write("")
-                open(os.path.join(scratch, "Cargo.toml"), "w").write(
+                open(os.path.join(scratch, "src", "lib.rs"), "w", encoding="utf-8").write("")
+                open(os.path.join(scratch, "Cargo.toml"), "w", encoding="utf-8").write(
                     f"# Generated by yokan — rustdoc-JSON scratch for `{name}`.\n"
                     f'[package]\nname = "yokan-rpi-scratch"\nversion = "0.0.0"\nedition = "2024"\n\n'
                     f"[dependencies]\n{_crate_dep_spec(name, spec)}\n\n[workspace]\n"
@@ -11173,7 +11199,7 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
                 env.pop("CARGO_TARGET_DIR", None)
                 r = subprocess.run(
                     ["cargo", "doc", "--no-deps", "--quiet", "-p", name],
-                    cwd=scratch, env=env, capture_output=True, text=True,
+                    cwd=scratch, env=env, capture_output=True, text=True, encoding="utf-8",
                 )
                 doc_target = os.path.join(scratch, "target")
             if r.returncode != 0:
@@ -11184,15 +11210,15 @@ def prepare_crates(app_path: str, decls: dict) -> dict:
                  "--manifest-path", os.path.join(repo_dir, "Cargo.toml"), "--",
                  json_path, "--bind", f"{name.replace('-', '_')}={cls}",
                  "--out", out_rpi],
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8",
             )
             if r.returncode != 0 or not os.path.exists(out_rpi):
                 raise ValueError(f"`{name}`: binding derivation failed —\n{r.stderr.strip()}")
-            body = open(out_rpi).read()
-            open(out_rpi, "w").write(
+            body = open(out_rpi, encoding="utf-8").read()
+            open(out_rpi, "w", encoding="utf-8").write(
                 f"# pixie-cache-key: version={key_ver}; features={feats}; format=61\n" + body
             )
-        rpi_text = open(out_rpi).read()
+        rpi_text = open(out_rpi, encoding="utf-8").read()
         structs = {}
         for sm in re.finditer(
             r'struct (\w+) @rust\("([^"]+)"\) \{([^}]*)\}', rpi_text
@@ -11336,7 +11362,7 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
         ext_dir = os.path.join(app_dir, ".yokan", "ext")
         os.makedirs(os.path.join(src_dir, "src"), exist_ok=True)
         os.makedirs(ext_dir, exist_ok=True)
-        so_path = os.path.join(ext_dir, name + ".so")
+        so_path = os.path.join(ext_dir, name + EXT_SUFFIX)
         fresh = os.path.exists(so_path) and os.path.getmtime(so_path) >= os.path.getmtime(info["rpi"])
         if fresh and "path" in info["spec"]:
             fresh = os.path.getmtime(so_path) >= _tree_mtime(info["spec"]["path"])
@@ -11525,8 +11551,8 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
             "    Ok(())",
             "}",
         ]
-        open(os.path.join(src_dir, "src", "lib.rs"), "w").write("\n".join(lines) + "\n")
-        open(os.path.join(src_dir, "build.rs"), "w").write(
+        open(os.path.join(src_dir, "src", "lib.rs"), "w", encoding="utf-8").write("\n".join(lines) + "\n")
+        open(os.path.join(src_dir, "build.rs"), "w", encoding="utf-8").write(
             "fn main() {\n"
             "    // macOS: CPython symbols stay undefined in extension\n"
             "    // modules and resolve from the host process at import.\n"
@@ -11537,7 +11563,7 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
             "    }\n"
             "}\n"
         )
-        open(os.path.join(src_dir, "Cargo.toml"), "w").write(
+        open(os.path.join(src_dir, "Cargo.toml"), "w", encoding="utf-8").write(
             f'[package]\nname = "{modname}"\nversion = "0.1.0"\nedition = "2024"\n\n'
             f'[lib]\ncrate-type = ["cdylib"]\nname = "{modname}"\n\n'
             f"[dependencies]\n{_crate_dep_spec(name, info['spec'])}\n"
@@ -11551,22 +11577,29 @@ def build_shims(app_path: str, tr, names=None) -> list[str]:
         env.pop("RUSTUP_TOOLCHAIN", None)
         r = subprocess.run(
             ["cargo", "build", "--release", "--quiet"],
-            cwd=src_dir, env=env, capture_output=True, text=True,
+            cwd=src_dir, env=env, capture_output=True, text=True, encoding="utf-8",
         )
         if r.returncode != 0:
             raise ValueError(f"`{name}`: the interpreted-run door failed to build —\n{r.stderr.strip()}")
         target = env.get("CARGO_TARGET_DIR") or os.path.join(src_dir, "target")
-        dylib = os.path.join(target, "release", f"lib{modname}.dylib")
-        if not os.path.exists(dylib):
-            dylib = os.path.join(target, "release", f"lib{modname}.so")
-        shutil.copyfile(dylib, so_path)
+        # What cargo calls a cdylib, per platform: `libx.dylib`,
+        # `libx.so`, and on Windows `x.dll` with no prefix at all.
+        built_lib = next(
+            (c for c in (os.path.join(target, "release", n) for n in
+                         (f"lib{modname}.dylib", f"lib{modname}.so", f"{modname}.dll"))
+             if os.path.exists(c)),
+            None,
+        )
+        if built_lib is None:
+            raise ValueError(f"`{name}`: the door built, but no library came out of {target}/release")
+        shutil.copyfile(built_lib, so_path)
         if sys.platform == "darwin":
             subprocess.run(["codesign", "--force", "-s", "-", so_path], capture_output=True)
         import json as _json
 
         meta_path = so_path + ".meta.json"
         if ret_structs or ret_enums:
-            open(meta_path, "w").write(
+            open(meta_path, "w", encoding="utf-8").write(
                 _json.dumps({"ret_structs": ret_structs, "ret_enums": ret_enums})
             )
         elif os.path.exists(meta_path):
@@ -11591,7 +11624,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
     proj = os.path.join(gate_dir, stem)
     os.makedirs(os.path.join(proj, "src"), exist_ok=True)
     os.makedirs(os.path.join(proj, ".pixie", "rpi"), exist_ok=True)
-    open(os.path.join(proj, "src", "main.pix"), "w").write(pix)
+    open(os.path.join(proj, "src", "main.pix"), "w", encoding="utf-8").write(pix)
     crates = []
     if tr.escapes:
         os.makedirs(os.path.join(proj, "escapes", "src"), exist_ok=True)
@@ -11621,7 +11654,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         wants_audio = "audio" in tr.stdlib_mods.values()
         feats = ', features = ["audio"]' if wants_audio else ""
         crates.append(f'yokan-stdlib = {{ path = "{stdlib_dir}"{feats} }}')
-        open(os.path.join(proj, ".pixie", "rpi", "yokan-stdlib.rpi"), "w").write(
+        open(os.path.join(proj, ".pixie", "rpi", "yokan-stdlib.rpi"), "w", encoding="utf-8").write(
             stdlib_rpi(Translator.STDLIB, ("audio",) if wants_audio else ())
         )
     window = ""
@@ -11633,7 +11666,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             window += f'width = {tr.window["width"]}\nheight = {tr.window["height"]}\n'
         if "padding" in tr.window:
             window += f'padding = {tr.window["padding"]}\n'
-    open(os.path.join(proj, "pixie.toml"), "w").write(
+    open(os.path.join(proj, "pixie.toml"), "w", encoding="utf-8").write(
         f'[package]\nname = "{stem}"\nversion = "0.1.0"\n{window}\n[crates]\n' + "\n".join(crates) + "\n"
     )
     if not tr.escapes:
@@ -11676,9 +11709,9 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         rpi.append(f"  var value : {esc['ret'][0]}")
         rpi.append("  var msg : String")
         rpi.append("}")
-    open(os.path.join(proj, ".pixie", "rpi", "escapes.rpi"), "w").write("\n".join(rpi) + "\n")
+    open(os.path.join(proj, ".pixie", "rpi", "escapes.rpi"), "w", encoding="utf-8").write("\n".join(rpi) + "\n")
     kernel_dir = os.path.join(repo(), "crates", "pixie-kernel")
-    open(os.path.join(proj, "escapes", "Cargo.toml"), "w").write(
+    open(os.path.join(proj, "escapes", "Cargo.toml"), "w", encoding="utf-8").write(
         '[package]\nname = "escapes"\nversion = "0.1.0"\nedition = "2024"\n\n'
         '[dependencies]\npyo3 = { version = "0.26", features = ["auto-initialize"] }\n'
         f'pixie-kernel = {{ path = "{kernel_dir}" }}\n\n[workspace]\n'
@@ -11917,7 +11950,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
             "}",
             "",
         ]
-    open(os.path.join(proj, "escapes", "src", "lib.rs"), "w").write("\n".join(lib))
+    open(os.path.join(proj, "escapes", "src", "lib.rs"), "w", encoding="utf-8").write("\n".join(lib))
     return proj
 
 
@@ -11936,7 +11969,7 @@ def tier_b_project(
     env = cargo_env()
     if pyo3_python:
         env["PYO3_PYTHON"] = pyo3_python
-    p = subprocess.run(cmd, cwd=proj, capture_output=True, text=True, env=env)
+    p = subprocess.run(cmd, cwd=proj, capture_output=True, text=True, encoding="utf-8", env=env)
     if p.returncode != 0:
         sys.exit(f"pixie build (project) failed:\n{p.stdout}\n{p.stderr}")
     binary = None
@@ -11948,7 +11981,7 @@ def tier_b_project(
     if not run:
         return "", binary
     env = dict(os.environ, PIXIE_SCRIPT=script)
-    r = subprocess.run([binary], env=env, capture_output=True, text=True)
+    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
     return r.stdout, binary
@@ -11973,7 +12006,7 @@ def app_deps(path: str) -> list[str]:
                 out.append(str(d))
         return out
 
-    src = open(path).read()
+    src = open(path, encoding="utf-8").read()
     m = re.search(r"(?ms)^# /// script\n(.*?)^# ///$", src)
     if m:
         block = "\n".join(line[2:] if line.startswith("# ") else line[1:]
@@ -12004,7 +12037,7 @@ def find_pbs() -> tuple[str, str, str]:
     # running under `uv run --with numpy`); the /uv/python/ guard below
     # still insists on a MANAGED install, which is what PBS is.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    r = subprocess.run(["uv", "python", "find", "--system"], capture_output=True, text=True, env=env)
+    r = subprocess.run(["uv", "python", "find", "--system"], capture_output=True, text=True, encoding="utf-8", env=env)
     bin_ = r.stdout.strip()
     if r.returncode != 0 or "/uv/python/" not in bin_:
         sys.exit("--bundle needs a uv-managed python (`uv python install 3.14`)")
@@ -12058,7 +12091,7 @@ def bundle(proj: str, binary: str, stem: str, root: str, ver: str, deps: list[st
              "--python", os.path.join(root, "bin", f"python{ver}"),
              "--target", os.path.join(dist, "python", "lib", f"python{ver}", "site-packages"),
              *deps],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         )
         if r.returncode != 0:
             sys.exit(f"bundling deps {deps} failed:\n{r.stderr}")
@@ -12068,7 +12101,7 @@ def bundle(proj: str, binary: str, stem: str, root: str, ver: str, deps: list[st
         for junk in os.listdir(sp):
             if junk == "bin" or junk == "pip" or junk.startswith("pip-"):
                 shutil.rmtree(os.path.join(sp, junk), ignore_errors=True)
-    ot = subprocess.run(["otool", "-L", app], capture_output=True, text=True).stdout
+    ot = subprocess.run(["otool", "-L", app], capture_output=True, text=True, encoding="utf-8").stdout
     old = None
     for line in ot.splitlines():
         line = line.strip().split(" ")[0]
@@ -12101,7 +12134,7 @@ def make_onefile(gate_dir_proj: str, stem: str, dist: str) -> str:
         t.add(dist, arcname=".")
     stamp = hashlib.sha256(open(payload, "rb").read()).hexdigest()[:16]
 
-    open(os.path.join(onedir, "Cargo.toml"), "w").write(f"""[package]
+    open(os.path.join(onedir, "Cargo.toml"), "w", encoding="utf-8").write(f"""[package]
 name = "{stem}_onefile"
 version = "0.1.0"
 edition = "2024"
@@ -12115,7 +12148,7 @@ strip = true
 
 [workspace]
 """)
-    open(os.path.join(src, "main.rs"), "w").write(f"""//! Generated by yokan: single-file launcher for `{stem}`.
+    open(os.path.join(src, "main.rs"), "w", encoding="utf-8").write(f"""//! Generated by yokan: single-file launcher for `{stem}`.
 use std::os::unix::process::CommandExt;
 use std::{{env, fs, path::PathBuf, process::Command}};
 
@@ -12148,7 +12181,7 @@ fn main() {{
     target = os.path.expanduser("~/.cache/pixie/target")
     r = subprocess.run(
         ["cargo", "build", "-q", "--release", "--manifest-path", os.path.join(onedir, "Cargo.toml")],
-        capture_output=True, text=True, env=dict(os.environ, CARGO_TARGET_DIR=target),
+        capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, CARGO_TARGET_DIR=target),
     )
     if r.returncode != 0:
         sys.exit(f"onefile launcher build failed:\n{r.stderr}")
@@ -12177,7 +12210,7 @@ def describe_artifact(binary: str) -> str:
 def run_binary(binary: str, script: str) -> str:
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
     env["PIXIE_SCRIPT"] = script
-    r = subprocess.run([binary], env=env, capture_output=True, text=True)
+    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         sys.exit(f"bundled binary failed:\n{r.stdout}\n{r.stderr}")
     return r.stdout
@@ -12273,7 +12306,7 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
         # The gate's compiled tier is never hot-reloaded, and leaving
         # the interpreter out of the crate graph is most of the link.
         cmd.append("--no-interp")
-    p = subprocess.run(cmd, cwd=repo(), capture_output=True, text=True, env=cargo_env())
+    p = subprocess.run(cmd, cwd=repo(), capture_output=True, text=True, encoding="utf-8", env=cargo_env())
     if p.returncode != 0:
         sys.exit(f"pixie build failed:\n{p.stdout}\n{p.stderr}")
     binary = None
@@ -12285,7 +12318,7 @@ def tier_b(pix_path: str, script: str, release: bool, run: bool = True) -> tuple
     if not run:
         return "", binary
     env = dict(os.environ, PIXIE_SCRIPT=script)
-    r = subprocess.run([binary], env=env, capture_output=True, text=True)
+    r = subprocess.run([binary], env=env, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         sys.exit(f"the compiled run failed:\n{r.stdout}\n{r.stderr}")
     return r.stdout, binary
@@ -12351,7 +12384,7 @@ def make_app_bundle(app_py: str, tr, binary: str, payload_dir: str | None = None
                 icon_line = "  <key>CFBundleIconFile</key>\n  <string>icon</string>\n"
             break
 
-    open(os.path.join(root, "Contents", "Info.plist"), "w").write(
+    open(os.path.join(root, "Contents", "Info.plist"), "w", encoding="utf-8").write(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"'
         ' "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
@@ -12370,6 +12403,69 @@ def make_app_bundle(app_py: str, tr, binary: str, payload_dir: str | None = None
     )
     if sys.platform == "darwin":
         subprocess.run(["codesign", "--force", "-s", "-", root], capture_output=True)
+    return root
+
+
+# ---- Windows packaging: the folder someone is handed -----------------
+
+
+def write_ico(path: str, png: str) -> bool:
+    """Wrap a PNG in an `.ico`, which since Windows Vista is a legal
+    thing for one to contain: a six-byte directory, one sixteen-byte
+    entry, and the PNG itself. Thirty lines rather than a tool, for the
+    reason `write_icon` writes a PNG by hand — an icon should not be a
+    dependency. Answers False for a PNG an `.ico` cannot describe
+    (larger than 256 px, or not a PNG at all), and writes nothing."""
+    import struct  # noqa: PLC0415
+
+    raw = open(png, "rb").read()
+    if raw[:8] != b"\x89PNG\r\n\x1a\n" or raw[12:16] != b"IHDR":
+        return False
+    w, h = struct.unpack(">II", raw[16:24])
+    if w > 256 or h > 256 or w == 0 or h == 0:
+        return False
+    with open(path, "wb") as f:
+        f.write(struct.pack("<HHH", 0, 1, 1))
+        # 0 in a byte means 256: the format's own way of spelling the
+        # one size that does not fit in it.
+        f.write(struct.pack("<BBBBHHII", w % 256, h % 256, 0, 0, 1, 32, len(raw), 22))
+        f.write(raw)
+    return True
+
+
+def make_app_folder(app_py: str, tr, binary: str, payload_dir: str | None = None) -> str:
+    """`--app` on Windows: `dist/<Title>/`, the folder a Windows user is
+    handed. Windows has no bundle format to put an app in, so the
+    directory IS the shape: the executable, the app's own icon if it
+    brought one, and nothing else. A Rust binary needs no library of
+    its own beside it — what it does need is Windows itself and the
+    Visual C++ runtime, which every machine with a CPython on it
+    already has — and the build tree it comes out of holds every other
+    artifact this workspace has ever built, so carrying "what is next
+    to the binary" would carry the wrong things.
+
+    The icon is a file a shortcut can point at, not something the
+    executable carries; putting one inside the .exe is a resource
+    compiler's job."""
+    app_dir = os.path.dirname(os.path.abspath(app_py))
+    stem = os.path.splitext(os.path.basename(app_py))[0]
+    title = (getattr(tr, "window", None) or {}).get("title") or stem
+    safe = re.sub(r"[^A-Za-z0-9 ._-]", "", title).strip() or stem
+    root = os.path.join(app_dir, "dist", safe)
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(root)
+
+    if payload_dir:
+        shutil.copytree(payload_dir, root, dirs_exist_ok=True)
+    else:
+        shutil.copy2(binary, os.path.join(root, os.path.basename(binary)))
+
+    for cand, ready in ((os.path.join(app_dir, stem + ".ico"), True),
+                        (os.path.join(app_dir, stem + ".png"), False)):
+        if os.path.isfile(cand):
+            dest = os.path.join(root, stem + ".ico")
+            if shutil.copyfile(cand, dest) if ready else write_ico(dest, cand):
+                break
     return root
 
 
@@ -12443,7 +12539,7 @@ def bundled_libs(binary: str, carry_all: bool = False) -> list[str]:
     runtime rides along, and the skew that costs is the author's to
     accept."""
     leave = CORE_LIBS if carry_all else HOST_LIBS
-    r = subprocess.run(["ldd", binary], capture_output=True, text=True)
+    r = subprocess.run(["ldd", binary], capture_output=True, text=True, encoding="utf-8")
     out = set()
     for line in r.stdout.splitlines():
         soname, sep, rest = line.strip().partition(" => ")
@@ -12515,7 +12611,7 @@ def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None,
     else:
         write_icon(icon)
 
-    with open(os.path.join(root, f"{stem}.desktop"), "w") as f:
+    with open(os.path.join(root, f"{stem}.desktop"), "w", encoding="utf-8") as f:
         f.write(
             "[Desktop Entry]\n"
             "Type=Application\n"
@@ -12526,7 +12622,7 @@ def make_appdir(app_py: str, tr, binary: str, payload_dir: str | None = None,
             "Terminal=false\n"
         )
     run = os.path.join(root, "AppRun")
-    with open(run, "w") as f:
+    with open(run, "w", encoding="utf-8") as f:
         f.write(
             "#!/bin/sh\n"
             '# Generated by yokan. The carried libraries go ahead of the\n'
@@ -12578,7 +12674,7 @@ def make_appimage(appdir: str) -> str:
         os.remove(out)
     r = subprocess.run(
         [appimagetool(), appdir, out],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8",
         env=dict(os.environ, ARCH=arch, APPIMAGE_EXTRACT_AND_RUN="1"),
     )
     if r.returncode != 0 or not os.path.exists(out):
@@ -12626,7 +12722,7 @@ def do_add(args) -> None:
 
     # Decide the declaration's home and edit it textually.
     target, original = None, None
-    src = open(app_path).read()
+    src = open(app_path, encoding="utf-8").read()
     m = re.search(r"(?ms)^# /// script\n(.*?)^(# ///)$", src)
     if m:
         target, original = app_path, src
@@ -12641,7 +12737,7 @@ def do_add(args) -> None:
         else:
             insert = "#\n# [tool.yokan.crates]\n" + line
             edited = src[:m.start(2)] + insert + src[m.start(2):]
-        open(app_path, "w").write(edited)
+        open(app_path, "w", encoding="utf-8").write(edited)
     else:
         pp, d = None, app_dir
         while True:
@@ -12654,7 +12750,7 @@ def do_add(args) -> None:
                 break
             d = up
         if pp:
-            target, original = pp, open(pp).read()
+            target, original = pp, open(pp, encoding="utf-8").read()
             line = spec_line(os.path.dirname(pp)) + "\n"
             if re.search(r"(?m)^\[tool\.yokan\.crates\]$", original):
                 edited = re.sub(
@@ -12664,7 +12760,7 @@ def do_add(args) -> None:
                 )
             else:
                 edited = original.rstrip("\n") + "\n\n[tool.yokan.crates]\n" + line
-            open(pp, "w").write(edited)
+            open(pp, "w", encoding="utf-8").write(edited)
         else:
             target, original = app_path, src
             shebang = src.startswith("#!")
@@ -12676,7 +12772,7 @@ def do_add(args) -> None:
                 f"# {spec_line(app_dir)}\n"
                 "# ///\n"
             )
-            open(app_path, "w").write(src[:head_end] + block + src[head_end:])
+            open(app_path, "w", encoding="utf-8").write(src[:head_end] + block + src[head_end:])
 
     try:
         decls = app_crate_decls(args.app)
@@ -12693,7 +12789,7 @@ def do_add(args) -> None:
         if skipped:
             print(f"  skipped:  {', '.join(skipped)} (types outside the crossing set)")
     except (ValueError, Exception) as e:
-        open(target, "w").write(original)
+        open(target, "w", encoding="utf-8").write(original)
         sys.exit(f"add failed (declaration rolled back) — {e}")
 
 
@@ -12731,7 +12827,7 @@ def do_init(path: str) -> None:
     stem = os.path.splitext(os.path.basename(path))[0]
     parent = os.path.dirname(os.path.abspath(path))
     os.makedirs(parent, exist_ok=True)
-    open(path, "w").write(TEMPLATE.replace('title="TITLE"', f'title="{stem}"'))
+    open(path, "w", encoding="utf-8").write(TEMPLATE.replace('title="TITLE"', f'title="{stem}"'))
     steps = [
         (f"uv run {path}", "develop: CPython, live reload"),
         (f"yokan check {path}", "is it inside the dialect?"),
@@ -12748,7 +12844,7 @@ def dir_size(path: str) -> str:
     """How much a cache directory is holding, in the shell's own words."""
     if not os.path.isdir(path):
         return "empty"
-    r = subprocess.run(["du", "-sh", path], capture_output=True, text=True)
+    r = subprocess.run(["du", "-sh", path], capture_output=True, text=True, encoding="utf-8")
     return r.stdout.split()[0] if r.returncode == 0 else "?"
 
 
@@ -12765,7 +12861,7 @@ def do_version() -> None:
               f"into {cached_repo()}")
     else:
         tag = subprocess.run(["git", "-C", found, "describe", "--tags", "--always"],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, encoding="utf-8")
         at = tag.stdout.strip() if tag.returncode == 0 else "not a git checkout"
         how = "fetched" if found == cached_repo() else "yours"
         print(f"  checkout  {found} ({at}, {how})")
@@ -12789,6 +12885,17 @@ def do_clean() -> None:
 
 
 def main():
+    # A dump is text, and text here is UTF-8: an element tree carries
+    # whatever the app writes (`×` in the calculator, Japanese in a
+    # label), the compiled run prints it as UTF-8, and the two runs are
+    # compared byte for byte. Windows still hands a redirected stream
+    # the machine's own code page, which would turn one of them into
+    # mojibake and the comparison into a lie, so both streams are said
+    # out loud here. Everything this command reads or writes names the
+    # same encoding at its own call.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["init", "check", "show", "translate", "gate",
                                      "build", "sync", "add", "version", "clean"])
@@ -12894,16 +13001,29 @@ def main():
     gate_dir = os.path.join(os.path.dirname(os.path.abspath(args.app)), ".gate")
     os.makedirs(gate_dir, exist_ok=True)
     pix_path = os.path.join(gate_dir, f"{stem}.pix")
-    open(pix_path, "w").write(pix)
+    open(pix_path, "w", encoding="utf-8").write(pix)
 
     # A packaging shape belongs to its platform, and a flag that builds
     # one names the other rather than producing something nothing there
     # opens. `--bundle` rewrites a Mach-O load command and ad-hoc signs,
     # so it and the `--onefile` built on top of it stay macOS's;
-    # `--appimage` is Linux's. `--app` is on both, and means the same
-    # thing on each: the platform's own application directory.
+    # `--appimage` and `--carry-libs` are Linux's. `--app` is on all
+    # three, and means the same thing on each: the platform's own
+    # application directory.
     here = os.path.basename(args.app)
-    if sys.platform != "darwin":
+    if WINDOWS:
+        for on, flag, what in ((args.bundle, "--bundle", "ships a macOS runtime folder"),
+                               (args.onefile, "--onefile", "packs that folder into one file"),
+                               (args.appimage, "--appimage", "builds a Linux AppImage")):
+            if on:
+                sys.exit(f"{flag} {what}, and this is Windows — `yokan build {here} --app` "
+                         "writes the folder this platform hands someone, and a single-file "
+                         "shape here waits on an installer")
+        if args.carry_libs:
+            sys.exit("--carry-libs decides what a Linux package carries, and this is Windows — "
+                     f"`yokan build {here} --app` writes the folder, which carries nothing "
+                     "of the machine's")
+    elif sys.platform != "darwin":
         for on, flag, what in ((args.bundle, "--bundle", "ships a macOS runtime folder"),
                                (args.onefile, "--onefile", "packs that folder into one file")):
             if on:
@@ -12949,6 +13069,14 @@ def main():
                 approot = make_app_bundle(args.app, tr, binary, payload_dir=payload)
                 print(f"built: {approot}")
                 print("  double-clickable; the executable inside replays PIXIE_SCRIPT like any build")
+                return
+            if WINDOWS:
+                approot = make_app_folder(args.app, tr, binary, payload_dir=payload)
+                inside = sorted(os.listdir(approot))
+                what = ", ".join(inside) if len(inside) <= 6 else f"{len(inside)} files"
+                print(f"built: {approot}")
+                print(f"  the folder to hand someone ({what}); Windows and the Visual C++ "
+                      "runtime answer for what is not in it")
                 return
             appdir = make_appdir(args.app, tr, binary, payload_dir=payload,
                                  carry_libs=args.carry_libs)

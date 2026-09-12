@@ -70,10 +70,14 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("right", Right, CTX),
         KeyBinding::new("shift-left", SelectLeft, CTX),
         KeyBinding::new("shift-right", SelectRight, CTX),
-        KeyBinding::new("cmd-a", SelectAll, CTX),
-        KeyBinding::new("cmd-v", Paste, CTX),
-        KeyBinding::new("cmd-c", Copy, CTX),
-        KeyBinding::new("cmd-x", Cut, CTX),
+        // `secondary-` is gpui's own name for the key an app's
+        // shortcuts hang off: Command on macOS, Ctrl on Windows and
+        // Linux. Written `cmd-`, copy and paste would ask a Windows
+        // user for the Windows key.
+        KeyBinding::new("secondary-a", SelectAll, CTX),
+        KeyBinding::new("secondary-v", Paste, CTX),
+        KeyBinding::new("secondary-c", Copy, CTX),
+        KeyBinding::new("secondary-x", Cut, CTX),
         KeyBinding::new("home", Home, CTX),
         KeyBinding::new("end", End, CTX),
         KeyBinding::new("enter", Submit, CTX),

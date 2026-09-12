@@ -31,9 +31,18 @@ fn usage() -> ExitCode {
 /// Shared cargo target dir for every generated crate: dependencies (the
 /// kernel today, the engine tomorrow) compile once per machine instead of
 /// once per app.
+///
+/// The place a machine keeps caches is the machine's own answer:
+/// `$HOME/.cache` where there is a `HOME`, and `%LOCALAPPDATA%` on
+/// Windows, which has no `HOME` and keeps per-user caches there. The
+/// justfile and `yokan_gate.py` read the same rule, so a `cargo`
+/// invocation and a generated app build into one directory.
 fn shared_target_dir() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    Some(PathBuf::from(home).join(".cache").join("pixie").join("target"))
+    if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
+        return Some(PathBuf::from(home).join(".cache").join("pixie").join("target"));
+    }
+    let local = std::env::var_os("LOCALAPPDATA").filter(|l| !l.is_empty())?;
+    Some(PathBuf::from(local).join("pixie").join("target"))
 }
 
 fn cargo_cmd(verb: &str, manifest: &Path) -> Command {
@@ -456,7 +465,10 @@ fn build_file(
         Ok(s) if s.success() => {
             let base = shared_target_dir().unwrap_or_else(|| out.join("target"));
             let profile = if release { "release" } else { "debug" };
-            Some(base.join(profile).join(&stem))
+            // `EXE_SUFFIX` is the platform's own: empty on Unix, `.exe`
+            // on Windows. Read rather than written, so the `built:`
+            // line names a file that exists on every platform.
+            Some(base.join(profile).join(format!("{stem}{}", std::env::consts::EXE_SUFFIX)))
         }
         Ok(s) => {
             eprintln!("pixie: cargo exited with {s}");
@@ -610,7 +622,7 @@ fn cmd_watch(file: &Path) -> ExitCode {
 /// don't pay the dependency compile.
 fn cmd_install_runtime() -> ExitCode {
     let Some(base) = shared_target_dir() else {
-        eprintln!("pixie: no HOME — cannot place the shared target dir");
+        eprintln!("pixie: no HOME (nor LOCALAPPDATA) — cannot place the shared target dir");
         return ExitCode::FAILURE;
     };
     let Some(kernel) = kernel_dir() else {

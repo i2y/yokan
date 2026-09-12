@@ -2563,3 +2563,69 @@ path escaped the text for `format!` and then emitted it as a plain
 string. `lower_interp` had learned the same lesson from a JSON literal;
 the default path had not. It uses the plain escaper now, and the demo
 is in the sweep as the case.
+
+## The platform's own answers, and where Windows stands (2026-09-12)
+
+Windows is where most of the people this compiler is for already are,
+and the engine's lower half for it was in the lock file all along:
+gpui's Windows platform crate is chosen by target and needs no feature
+of ours. What was missing was everything around it — the places this
+tree assumed a Unix — and four decisions.
+
+**`cmd` is the key an app's shortcuts hang off, and only macOS has one
+of its own.** A chord written `cmd+s` means Ctrl+S on Windows and on
+Linux, and a script still presses it with `key:cmd+s`, because
+otherwise every demo's script would fork per platform. `ctrl` folds
+into that key where the two are one, so `ctrl+alt+k` stays pressable
+there as well and the keyboard-as-a-device answers both names
+together; the Windows key belongs to the OS shell and spells nothing.
+The editing bindings a text field carries and the theme flip move to
+gpui's `secondary-`, which is the same rule, and which also gives
+Linux the Ctrl its users expect where it asked for Super until now.
+
+**A packaging shape belongs to its platform.** `--app` means the
+platform's own application directory on all three: a `.app`, an
+AppDir, and on Windows a folder holding the `.exe`, the libraries
+cargo put beside it and the app's own icon as an `.ico` — a PNG inside
+an icon file, which that format has taken since Vista, written by hand
+for the reason the AppDir's icon is. `--bundle` and `--onefile` carry
+CPython in Apple's layout and `--appimage` is Linux's, so on Windows
+all three name themselves and stop; a one-file shape there waits on an
+installer being chosen. Nothing is signed: a signature wants a
+certificate.
+
+**Where a machine keeps its things is the machine's answer, in one
+function per question.** The shared build tree is `$HOME/.cache/pixie`
+and `%LOCALAPPDATA%\pixie` where there is no `HOME`; an app's own
+directory is `~/Library/Application Support`, `%APPDATA%`, or
+`$XDG_DATA_HOME`. The gate cannot catch a mistake in either, since
+both runs would be wrong the same way, so each takes the platform as
+an argument rather than compiling it in, and one test reads all three
+answers on one machine. The chord speller has the same shape, and that
+is how the first draft's bug was found: it would have dropped a
+modifier from Cmd+Ctrl+Space on macOS. Where a name already exists,
+nothing is written down at all — a built binary's `.exe` is
+`std::env::consts::EXE_SUFFIX`, the door's file name is the suffix
+this Python imports, and the tier gate now reads the path out of
+pixie's own `built:` line instead of rebuilding it.
+
+**What runs on Windows is CI's, and the tour says so.** Nobody on this
+project has a Windows machine. A scripted run never enters the engine,
+so a runner with no display can build the workspace, run the tier
+gate, gate the demos, install the wheel and drive the folder `--app`
+writes; whether it can open a window is the open question, and the job
+that tries is allowed to fail and keeps its screenshot either way.
+Until that job has run, the closing list says Windows carries the
+platform's answers and has neither a wheel to install nor a window
+anyone has looked at. The panic-containment patch the vendored macOS
+lower half carries is not vendored for Windows: it answers a crash
+seen on macOS, and there is no Windows desktop here to see one.
+
+A Windows binary stays a console program, because a dump is stdout and
+that is what the gate reads. A shipped app therefore opens a console
+window behind its own, which is not what someone double-clicking an app
+should see; the fix is the `windows_subsystem` attribute on the
+generated main, and it can only be set once the dump has a channel of
+its own to go to. That channel is the next phase's `PIXIE_DUMP`, so
+this waits for it rather than trading the gate for a tidy launch.
+

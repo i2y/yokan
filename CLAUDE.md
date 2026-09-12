@@ -69,22 +69,30 @@ the same change.
   at build time). Linux draws through Vulkan and opens its window
   on Wayland or X11, so it needs a C compiler and the development
   packages the engine links: alsa, fontconfig, freetype, xkbcommon
-  and its x11 half, xcb, and the Vulkan loader with a driver. Add
-  sqlite for `cargo test --workspace`, which builds `pixie-capi`
-  against the system one (yokan-stdlib bundles its own). The wheel
-  leaves those libraries to the machine rather than carrying them, so
-  a container that only RUNS an app still needs the runtime halves:
-  alsa-lib, fontconfig, libxcb and libxkbcommon with its x11 half. Packaging
-  follows the platform: `--app` writes a `.app` or an AppDir,
-  `--appimage` packs the AppDir, and `--bundle` / `--onefile` stay
-  macOS's — see the ledger entries for why. What a Linux package
-  leaves to the host is `HOST_LIBS` in `yokan_gate.py`, read both by
-  the AppDir packer and by the release workflow that repairs the
-  wheel, so the two agree; `--carry-libs` carries them anyway, for a
-  target machine that may not have them.
+  and its x11 half, xcb, and the Vulkan loader with a driver. No
+  sqlite: yokan-stdlib asks rusqlite for the bundled one and cargo
+  gives a crate one feature set, so the whole workspace links that
+  copy. The wheel leaves those libraries to the machine rather than
+  carrying them, so a container that only RUNS an app still needs the
+  runtime halves: alsa-lib, fontconfig, libxcb and libxkbcommon with
+  its x11 half. Packaging follows the platform: `--app` writes a
+  `.app`, an AppDir or (on Windows) a folder, `--appimage` packs the
+  AppDir, and `--bundle` / `--onefile` stay macOS's — see the ledger
+  entries for why. What a
+  Linux package leaves to the host is `HOST_LIBS` in `yokan_gate.py`,
+  read both by the AppDir packer and by the release workflow that
+  repairs the wheel, so the two agree; `--carry-libs` carries them
+  anyway, for a target machine that may not have them.
+- Windows is CI's for now: nobody here has the machine, so
+  `.github/workflows/windows.yml` builds the workspace, runs the tier
+  gate, gates the demos and drives what `--app` writes, on dispatch
+  and on tags. Nothing about it has been run yet, and no user-facing
+  page claims the platform until it has.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
-  dir, which is what keeps builds fast.
+  dir, which is what keeps builds fast. (On Windows the same rule
+  reads `%LOCALAPPDATA%\pixie\target`, because there is no `HOME`;
+  pixie-cli, the gate, the justfile and the sweep each compute it.)
 - Regenerating `.rpi` bindings (rpi-gen work, `yokan add`) needs a
   nightly toolchain with the `rust-docs-json` component; ordinary
   builds and the gates do not.
@@ -100,10 +108,11 @@ commands; the raw forms stay documented here because they are what
 the recipes run.
 
 A release has two halves, because the module carries the engine and a
-Mac cannot build Linux's: `just publish <version>` uploads macOS's
-wheel and pushes the tag, the release workflow then builds the Linux
-wheels and attaches them to that tag's release, and
-`just publish-linux <version>` puts those on PyPI.
+Mac cannot build another platform's: `just publish <version>` uploads
+macOS's wheel and pushes the tag, the release workflow then builds the
+Linux wheels (and a Windows one, unproven — see Setup) and attaches
+them to that tag's release, and `just publish-linux <version>` /
+`just publish-windows <version>` put those on PyPI.
 
 Run these from `crates/yokan/` (they also work via
 `uv run yokan_gate.py …`):
@@ -420,9 +429,10 @@ run, so neither run is a version behind.
 - Anything visual → look at it: build, launch, screenshot, read the
   screenshot. A green gate proves the two runs agree, not that the
   window looks right. Kill stale binaries first
-  (`pkill -f '/debug/<stem>'`) — most demos build to the same
-  `main` stem in the shared target and overwrite each other, so
-  build immediately before running.
+  (`pkill -f '/debug/<stem>'`, or `taskkill /f /im <stem>.exe` on
+  Windows, where a running binary cannot even be replaced) — most
+  demos build to the same `main` stem in the shared target and
+  overwrite each other, so build immediately before running.
 - Gallery screenshots (`demo/screenshots/`, mirrored under
   `website/*/images/demos/`) show the state right after launch —
   refresh them when a demo's initial screen changes. The two games

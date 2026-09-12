@@ -105,24 +105,33 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-fn shared_bin(stem: &str) -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").expect("HOME"))
-        .join(".cache/pixie/target/debug")
-        .join(stem)
+/// What `pixie build` says it built. Read rather than reconstructed:
+/// the CLI knows where the shared target dir is on this machine and
+/// what a binary is called there (`.exe` on Windows), and a test that
+/// rebuilt that knowledge would be testing its own copy of it.
+fn built_path(out: &str) -> PathBuf {
+    let line = out
+        .lines()
+        .find_map(|l| l.strip_prefix("built: "))
+        .unwrap_or_else(|| panic!("no `built:` line in pixie's output:\n{out}"));
+    PathBuf::from(line.trim())
 }
 
 /// Build one demo through the real CLI, then run its script in both
 /// tiers and return (compiled stdout, interp stdout, interp stderr).
 fn run_both(rel: &str, script: &str) -> (String, String, String) {
     let pix = repo_root().join(rel);
-    let status = Command::new(env!("CARGO_BIN_EXE_pixie"))
+    let built = Command::new(env!("CARGO_BIN_EXE_pixie"))
         .arg("build")
         .arg(&pix)
-        .status()
+        .output()
         .expect("pixie build runs");
-    assert!(status.success(), "pixie build failed for {rel}");
-    let stem = pix.file_stem().unwrap().to_str().unwrap().replace('-', "_");
-    let bin = shared_bin(&stem);
+    assert!(
+        built.status.success(),
+        "pixie build failed for {rel}:\n{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let bin = built_path(&String::from_utf8_lossy(&built.stdout));
 
     let compiled = Command::new(&bin)
         .env("PIXIE_SCRIPT", script)
@@ -372,8 +381,12 @@ fn container_prop_allowlists_match_across_tiers() {
 #[test]
 #[ignore = "compiles the demos; needs the shared pixie runtime (pixie install-runtime)"]
 fn tiers_agree_on_every_demo() {
-    // Deterministic inputs for the fs-touching scripts.
-    std::fs::write("/tmp/pixie-fetch.txt", "tier gate fixture").unwrap();
+    // Deterministic inputs for the fs-touching scripts. The example
+    // names the path (`examples/fetch/fetch.pix`), and Windows has no
+    // `/tmp`, so the directory is made before the file is written.
+    let fixture = std::path::Path::new("/tmp/pixie-fetch.txt");
+    std::fs::create_dir_all(fixture.parent().unwrap()).unwrap();
+    std::fs::write(fixture, "tier gate fixture").unwrap();
     let demos = [
         (
             "examples/counter/counter.pix",

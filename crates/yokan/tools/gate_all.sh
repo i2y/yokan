@@ -6,7 +6,21 @@
 # `env bash`, not a login shell's own: nothing here is zsh's, and
 # bash is the one interpreter both supported platforms have.
 cd "$(dirname "$0")/.." || exit 1
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/pixie/target}"
+# Windows has no HOME and keeps per-user caches under LOCALAPPDATA;
+# pixie-cli and yokan_gate.py read the same rule, so all three build
+# into one tree. (Git for Windows' bash is where this runs there.)
+if [ -z "${CARGO_TARGET_DIR:-}" ]; then
+  if [ -n "${HOME:-}" ]; then
+    CARGO_TARGET_DIR="$HOME/.cache/pixie/target"
+  else
+    CARGO_TARGET_DIR="$LOCALAPPDATA/pixie/target"
+  fi
+fi
+export CARGO_TARGET_DIR
+# The interpreter that runs the command. `python3` everywhere the
+# installer makes that name; Windows installs `python`, so the job
+# there hands one in rather than the script guessing.
+PY="${PYTHON:-python3}"
 pass=0; fail=0; failed=""
 gate() {
   local name="$1"; shift
@@ -17,30 +31,30 @@ gate() {
   fi
 }
 # Scripted gates (interaction coverage beyond the startup dump).
-gate counter python3 yokan_gate.py gate demo/counter.py --script "click:+1,dump,input:Momo\, again"
-gate forms   python3 yokan_gate.py gate demo/forms.py --script "click:Dark mode,slide:7,select:banana"
-gate postcard python3 yokan_gate.py gate demo/postcard.py --script "click:send"
-gate calc    python3 yokan_gate.py gate demo/calc.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
-gate calcgrid python3 yokan_gate.py gate demo/calcgrid.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
-gate links   python3 yokan_gate.py gate demo/links.py --script "click:build,click:peek,click:drop,click:peek"
-gate table   python3 yokan_gate.py gate demo/table.py --script "click:refresh,dump,click:refresh"
-gate transcript python3 yokan_gate.py gate demo/transcript.py --script "click:more,dump,click:copy code,click:paste,dump"
-gate tasks   python3 yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
-gate dashboard python3 yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
-gate keys    python3 yokan_gate.py gate demo/keys.py --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
-gate picker  python3 yokan_gate.py gate demo/picker.py --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
+gate counter "$PY" yokan_gate.py gate demo/counter.py --script "click:+1,dump,input:Momo\, again"
+gate forms   "$PY" yokan_gate.py gate demo/forms.py --script "click:Dark mode,slide:7,select:banana"
+gate postcard "$PY" yokan_gate.py gate demo/postcard.py --script "click:send"
+gate calc    "$PY" yokan_gate.py gate demo/calc.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate calcgrid "$PY" yokan_gate.py gate demo/calcgrid.py --script "click:7,click:×,click:6,click:=,click:%,click:±,click:C,click:1,click:2,click:.,click:5,click:÷,click:4,click:="
+gate links   "$PY" yokan_gate.py gate demo/links.py --script "click:build,click:peek,click:drop,click:peek"
+gate table   "$PY" yokan_gate.py gate demo/table.py --script "click:refresh,dump,click:refresh"
+gate transcript "$PY" yokan_gate.py gate demo/transcript.py --script "click:more,dump,click:copy code,click:paste,dump"
+gate tasks   "$PY" yokan_gate.py gate demo/tasks.py --script "click:start slow work,dump"
+gate dashboard "$PY" yokan_gate.py gate demo/dashboard.py --script "advance:1000,advance:1000,dump"
+gate keys    "$PY" yokan_gate.py gate demo/keys.py --script "click:+1,click:+1,key:cmd+s,dump,key:x,menu:Clear,dump,key:cmd+shift+c,key:cmd+shift+v,dump"
+gate picker  "$PY" yokan_gate.py gate demo/picker.py --script "file:demo/.gate/fs_probe.txt,click:open…,dump,drop:demo/.gate/fs_probe.txt,dump"
 # Wave 1 of the widget fleet (2026-09-03): each new element in its own demo.
-gate layout  python3 yokan_gate.py gate demo/layout.py --script "click:ping"
-gate about   python3 yokan_gate.py gate demo/about.py --script "click:copy link,dump,click:Website"
-gate filter  python3 yokan_gate.py gate demo/filter.py --script "select:crit,dump,select:all"
-gate loading python3 yokan_gate.py gate demo/loading.py --script "click:step,click:step,dump,click:busy"
-gate labels  python3 yokan_gate.py gate demo/labels.py --script "dump,click:save,dump"
-gate badges  python3 yokan_gate.py gate demo/badges.py --script "click:flip,dump,click:flip"
-gate quantities python3 yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
-gate charts  python3 yokan_gate.py gate demo/charts.py --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
+gate layout  "$PY" yokan_gate.py gate demo/layout.py --script "click:ping"
+gate about   "$PY" yokan_gate.py gate demo/about.py --script "click:copy link,dump,click:Website"
+gate filter  "$PY" yokan_gate.py gate demo/filter.py --script "select:crit,dump,select:all"
+gate loading "$PY" yokan_gate.py gate demo/loading.py --script "click:step,click:step,dump,click:busy"
+gate labels  "$PY" yokan_gate.py gate demo/labels.py --script "dump,click:save,dump"
+gate badges  "$PY" yokan_gate.py gate demo/badges.py --script "click:flip,dump,click:flip"
+gate quantities "$PY" yokan_gate.py gate demo/quantities.py --script "input@0:3,input@1:2.5,dump,input@0:abc,dump,input@0:500"
+gate charts  "$PY" yokan_gate.py gate demo/charts.py --script "click:next month,dump,hover:1,dump,hover@1:6,dump,hover:,click:next month"
 # The canvas, and the keyboard as a device: the frame is in the dump one
 # command per line, and the keys steer the ball through the tick.
-gate canvas  python3 yokan_gate.py gate demo/canvas.py --script "click:seed,dump,keydown:left,advance:50,advance:50,keyup:left,dump,keydown:space,advance:50,advance:50,keyup:space,advance:50"
+gate canvas  "$PY" yokan_gate.py gate demo/canvas.py --script "click:seed,dump,keydown:left,advance:50,advance:50,keyup:left,dump,keydown:space,advance:50,advance:50,keyup:space,advance:50"
 # The two ports, played frame by frame. Each script reaches the part
 # that SCORES, because a game whose score never moves has most of its
 # arithmetic unchecked: the shooter fires twelve times from the title
@@ -50,42 +64,42 @@ frame33="advance:33"
 burst="keydown:space,$frame33,keyup:space,$frame33,$frame33,$frame33,$frame33,$frame33"
 shoot="keydown:enter,$frame33,keyup:enter"
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do shoot="$shoot,$burst"; done
-gate shooter python3 yokan_gate.py gate demo/shooter.py --script "$shoot,dump,keydown:q,$frame33,keyup:q,$frame33"
+gate shooter "$PY" yokan_gate.py gate demo/shooter.py --script "$shoot,dump,keydown:q,$frame33,keyup:q,$frame33"
 fall=""
 for i in $(seq 1 120); do fall="$fall,$frame33"; done
-gate jump    python3 yokan_gate.py gate demo/jump.py --script "${fall#,},dump"
-gate roster  python3 yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
+gate jump    "$PY" yokan_gate.py gate demo/jump.py --script "${fall#,},dump"
+gate roster  "$PY" yokan_gate.py gate demo/roster.py --script "select:member 7,dump,click:score,dump,click:score,dump,select@1:member 3,dump"
 # The shared properties on every element; the middle steps are inert while locked.
-gate shared  python3 yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
-gate pyops   python3 yokan_gate.py gate demo/pyops.py --script "click:crunch,click:walk,click:pairs,click:order,dump"
+gate shared  "$PY" yokan_gate.py gate demo/shared.py --script "click:lock,click:save,input:typed,dump,click:lock,click:save,dump"
+gate pyops   "$PY" yokan_gate.py gate demo/pyops.py --script "click:crunch,click:walk,click:pairs,click:order,dump"
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what
 # makes "every report is heard" a checked claim.
-gate pyjob   python3 yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
-gate stdlib  python3 yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
-gate files   python3 yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
-gate reader  python3 yokan_gate.py gate demo/reader.py --script "click:start,click:fetch,dump"
-gate webfetch python3 yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
+gate pyjob   "$PY" yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
+gate stdlib  "$PY" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
+gate files   "$PY" yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
+gate reader  "$PY" yokan_gate.py gate demo/reader.py --script "click:start,click:fetch,dump"
+gate webfetch "$PY" yokan_gate.py gate demo/webfetch.py --script "click:start,click:fetch,dump,click:headers,dump,click:post,dump,click:status,dump"
 # Fixture- and dependency-carrying gates.
-gate rustcrate python3 yokan_gate.py gate demo/rustcrate.py --script "click:run"
+gate rustcrate "$PY" yokan_gate.py gate demo/rustcrate.py --script "click:run"
 # Fixture- and dependency-carrying gates.
-gate dbnotes python3 yokan_gate.py gate demo/dbnotes.py --fresh demo/.gate/notes.db
+gate dbnotes "$PY" yokan_gate.py gate demo/dbnotes.py --fresh demo/.gate/notes.db
 # The ledger writes what the script types, so each tier starts from an
 # empty database — and the name it types carries an apostrophe, which
 # only a BOUND parameter survives.
-gate ledger  python3 yokan_gate.py gate demo/ledger.py --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
-gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy python3 yokan_gate.py gate demo/pystats.py
-gate proj     python3 yokan_gate.py gate demo/proj/app.py --script "click:run"
+gate ledger  "$PY" yokan_gate.py gate demo/ledger.py --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
+gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy "$PY" yokan_gate.py gate demo/pystats.py
+gate proj     "$PY" yokan_gate.py gate demo/proj/app.py --script "click:run"
 # Multi-module apps.
-gate multi    python3 yokan_gate.py gate demo/multi/app.py
-gate opsboard python3 yokan_gate.py gate demo/opsboard/app.py
+gate multi    "$PY" yokan_gate.py gate demo/multi/app.py
+gate opsboard "$PY" yokan_gate.py gate demo/opsboard/app.py
 # The scaffold, gated as the user receives it: `init` writes the file
 # and the gate runs it. A template that stopped compiling would be the
 # one broken thing every new app starts from.
 rm -rf .gate/init && mkdir -p .gate/init
-python3 yokan_gate.py init .gate/init/app.py >/dev/null
-gate init    python3 yokan_gate.py gate .gate/init/app.py --script "click:+1"
+"$PY" yokan_gate.py init .gate/init/app.py >/dev/null
+gate init    "$PY" yokan_gate.py gate .gate/init/app.py --script "click:+1"
 # Everything else: startup-dump gates.
 for f in demo/*.py; do
   b=$(basename "$f" .py)
@@ -98,7 +112,7 @@ for f in demo/*.py; do
     app|csv_viewer)
       echo "SKIP $b (development-only by design: dict state)"; continue;;
   esac
-  gate "$b" python3 yokan_gate.py gate "$f"
+  gate "$b" "$PY" yokan_gate.py gate "$f"
 done
 echo "SWEEP DONE: pass=$pass fail=$fail failed:$failed"
 [ "$fail" -eq 0 ]

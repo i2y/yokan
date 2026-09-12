@@ -1,12 +1,20 @@
 name: release
 
-# Build the Linux wheels for a tagged version, prove each one runs, and
-# attach them to that tag's release.
+# Build the wheels a Mac cannot make for a tagged version, prove each
+# one runs, and attach them to that tag's release: Linux on two
+# architectures, and Windows.
 #
 # The maintainer's machine is a Mac, and a Mac cannot make these: the
-# module carries the engine, and on Linux the engine links against that
-# platform's own graphics, font and audio libraries. macOS's wheel still
-# comes from `just publish` there; this workflow is the other half.
+# module carries the engine, and the engine is the platform's own —
+# Linux links that platform's graphics, font and audio libraries, and
+# Windows draws through DirectX. macOS's wheel still comes from
+# `just publish` there; this workflow is the other half.
+#
+# The Windows legs are independent of the Linux ones on purpose: they
+# are newer, nobody here has a Windows machine to try them on, and a
+# release that loses its Linux wheels because Windows broke would be
+# the worse failure. They meet again only at the end, where the
+# Windows wheel is attached after the Linux ones are.
 #
 # PyPI refuses a wheel tagged `linux_x86_64`, so the build happens inside
 # a manylinux container and the result is repaired into a manylinux tag.
@@ -227,6 +235,69 @@ jobs:
           fi
           echo "the two wheels agree"
 
+  # Windows: one leg, x64. There is no container, no auditwheel and
+  # nothing to repair — what a Windows wheel leaves to the machine is
+  # Windows itself and the Visual C++ runtime, which every CPython
+  # installation carries. arm64 Windows waits for a machine to try it
+  # on; the same is true of the whole platform, which is why
+  # `windows.yml` exists beside this file.
+  wheel-windows:
+    name: wheel (windows x86_64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the toolchain pin
+        id: pin
+        shell: bash
+        run: |
+          channel=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' rust-toolchain.toml | head -1)
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "building with rustc $channel"
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x64
+          working-directory: crates/yokan
+          rust-toolchain: ${{ steps.pin.outputs.channel }}
+          args: --release --out dist
+
+      - name: Say what the wheel carries
+        shell: bash
+        run: python -m zipfile -l crates/yokan/dist/*.whl
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-windows
+          path: crates/yokan/dist/*.whl
+
+  # The same recipe the maintainer runs before a macOS upload, and the
+  # Linux jobs run after theirs: install the artifact into a fresh
+  # environment, drive an app through it, translate one. `just smoke`
+  # finds the venv's own layout, so one recipe serves every platform.
+  smoke-windows:
+    name: smoke (windows x86_64)
+    needs: wheel-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel-windows
+          path: wheels
+
+      - name: Drive an app with the installed wheel
+        shell: bash
+        run: |
+          mkdir -p "$LOCALAPPDATA/pixie/target/wheels"
+          cp wheels/*.whl "$LOCALAPPDATA/pixie/target/wheels/"
+          uvx --from rust-just just smoke
+
   attach:
     name: attach to the release
     needs: [smoke, compare]
@@ -249,3 +320,23 @@ jobs:
             || gh release create "$TAG" --title "Yokan ${TAG#v}" \
                  --notes "See the commits since the previous tag."
           gh release upload "$TAG" dist/*.whl --clobber
+
+  # After the Linux ones, so the release exists and a failure here
+  # costs the Windows wheel alone.
+  attach-windows:
+    name: attach the Windows wheel
+    needs: [attach, smoke-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel-windows
+          path: dist
+
+      - name: Upload it to the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" dist/*.whl --clobber

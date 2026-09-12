@@ -1749,8 +1749,16 @@ fn render_type(t: &pixie_syntax::ast::TypeExpr) -> String {
 mod tests {
     use super::*;
 
+    /// A file URL for a document that need not exist. Built from the
+    /// platform's own temp directory rather than written out, because
+    /// `/tmp/x` is not an absolute path on Windows and a URL naming it
+    /// does not convert back to one.
+    fn uri_for(name: &str) -> Url {
+        Url::from_file_path(std::env::temp_dir().join(name)).unwrap()
+    }
+
     fn uri() -> Url {
-        Url::parse("file:///tmp/test.pix").unwrap()
+        uri_for("test.pix")
     }
 
     #[test]
@@ -2120,7 +2128,7 @@ fn run {
     #[test]
     fn member_hover_definition_and_completion() {
         let src = "store Session {\n  state name : String = \"\"\n\n  fn greet(t: String) {\n    name = t\n  }\n}\n\nview Main {\n  Column {\n    Text { text: Session.name }\n    Button { text: \"go\"; onClick: Session.greet(\"x\") }\n  }\n}\n";
-        let uri = Url::parse("file:///tmp/lsp-member.pix").unwrap();
+        let uri = uri_for("lsp-member.pix");
 
         // Hovering `name` in `Session.name` describes the property
         // and points at its declaration, not at `Session`.
@@ -2157,7 +2165,7 @@ fn run {
     #[test]
     fn the_hover_fence_says_pixie() {
         let src = "class C {\n  pub prop v : Int, default: 0\n}\n\nstore S {\n  state n : Int = 0\n}\n\nview Main {\n  Column { Text { text: \"#{S.n}\" } }\n}\n";
-        let uri = Url::parse("file:///tmp/lsp-fence.pix").unwrap();
+        let uri = uri_for("lsp-fence.pix");
         let diags = analyze(&uri, src);
         assert!(
             diags.iter().all(|d| d.source.as_deref() == Some("pixie")),
