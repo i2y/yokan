@@ -217,6 +217,13 @@ pub fn role_of(el: &Element) -> Option<Role> {
         // Every segment is always visible and one is always the
         // current choice — the same shape RadioGroup reports.
         Element::Segmented { .. } => Some(Role::RadioGroup),
+        // A Split reports nothing of its own, the way Column and Row
+        // do: it is layout — two panes and a rule between them. This
+        // vocabulary has no `splitter` or `separator` role, and
+        // inventing one to describe a container would say less than
+        // the panes' own contents already do; an app that wants the
+        // divider announced writes `role:` / `label:` on the split,
+        // which every element takes.
         _ => None,
     }
 }
@@ -396,6 +403,7 @@ fn children_of(el: &Element) -> &[Element] {
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. }
+        | Element::Split { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
         | Element::Modal { children, .. }

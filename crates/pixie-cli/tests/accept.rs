@@ -185,6 +185,9 @@ fn container_prop_allowlists_match_across_tiers() {
         // A leaf with its own props, consumed in its arm — both
         // tables must still say "no container keys".
         "Slider",
+        // A container that is ALSO a value control: its own props are
+        // container keys, so the two tables have to agree on them.
+        "Split",
         // Not a widget at all — both sides must still say "no keys".
         "Nonesuch",
     ] {
@@ -809,6 +812,17 @@ fn tiers_agree_on_every_demo() {
         (
             "examples/canvas/canvas.pix",
             "click:seed,dump,advance:100,advance:100",
+        ),
+        // The split: a divider whose ratio is a bound value, driven by
+        // the verb the Slider already had. `slide:` counts Sliders and
+        // Splits together, so `slide@1:` reaches the vertical split
+        // nested in the outer one's second pane — which is also the
+        // proof that a Split counts ITSELF and then walks its panes.
+        // The dump carries the ratio, so what a drag would have done
+        // is what the gate compares.
+        (
+            "examples/split/split.pix",
+            "slide:0.25,dump,slide@1:0.75,dump,slide:1.0",
         ),
     ];
     for (rel, script) in demos {

@@ -7184,6 +7184,41 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 lower_view_int(selected, cx, "selected")?
             ))
         }
+        // Two panes and a draggable divider. `ratio:` is the Slider's
+        // `value:` contract with a different gesture — required, and
+        // restricted to a property READ, because a literal could never
+        // reflect a divider the user has moved. There is no
+        // `min:`/`max:`: a ratio is a fraction, so its range is
+        // `[0, 1]` by construction, and an app that wants a floor
+        // under a pane clamps in its own `onChange`. `vertical:` is an
+        // ordinary Bool — false (the default) sits the panes side by
+        // side, true stacks them.
+        "Split" => {
+            let ratio = element_prop(el, "ratio").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "Split needs `ratio:` (a Float property to reflect — the share \
+                          of the split the FIRST pane takes)"
+                    .into(),
+            })?;
+            let ratio = lower_view_float_prop(ratio, cx, "ratio")?;
+            let vertical = match element_prop(el, "vertical") {
+                Some(v) => lower_view_bool(v, cx, "vertical")?,
+                None => "false".into(),
+            };
+            let on_change = match element_prop(el, "onChange") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onChange", &[("value", "f64")])?
+                ),
+                None => "None".into(),
+            };
+            check_split_panes(el)?;
+            let children = lower_children(el, cx, ind)?;
+            Ok(format!(
+                "Element::Split {{ ratio: {ratio}, vertical: {vertical}, \
+                 on_change: {on_change}, children: {children} }}"
+            ))
+        }
         // The drawing surface. `width:`/`height:` count VIRTUAL
         // pixels and are required — a canvas with no grid has no
         // meaning — while `scale:` (1) and `background:` (index 0)
@@ -7229,7 +7264,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                  (Column / Row / Grid / Stack / Text / Button / TextField / ListView / \
                  ScrollView / HScrollView / Image / Svg / DataTable / Modal / \
                  BarChart / LineChart / ProgressBar / Spinner / Checkbox / Switch / Slider / Select / RadioGroup / TabBar / \
-                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented / Canvas), and no \
+                 Spacer / Divider / Link / Table / NumberField / IntField / Segmented / Split / Canvas), and no \
                  `view {other}` component is declared in this module; the \
                  catalog grows widget by widget"
             ),
@@ -7285,6 +7320,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "borderWidth",
             "borderColor",
         ],
+        "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
         "ListView" => &["virtualized", "itemHeight", "height", "grow"],
         "ScrollView" => &["height"],
@@ -7658,6 +7694,40 @@ fn lower_op(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitErr
         _ => unreachable!("guarded by op_prop_keys"),
     };
     Ok(out)
+}
+
+/// A Split's panes: exactly two children, each written out.
+///
+/// The count is a COMPILE-time fact — the kernel variant holds a
+/// `Vec`, because that is what every tree walker's or-pattern reads,
+/// so "exactly two" has to be said here instead. A repeater or a
+/// conditional among the panes is refused rather than counted at run
+/// time: what a `for` produces is not known until the World is read,
+/// and a Split whose pane count depends on data is not a split.
+/// `pixie_interp::check_split_panes` is the mirror of this, word for
+/// word.
+fn check_split_panes(el: &Element) -> Result<(), EmitError> {
+    let items = items_of_members(&el.members);
+    for it in &items {
+        if !matches!(it, ViewItem::Child(_)) {
+            return err(
+                it.span(),
+                "a Split's panes are two elements written out — a `for`, an `if` or a \
+                 `case` between them cannot be counted; move it inside a pane's own Column",
+            );
+        }
+    }
+    if items.len() != 2 {
+        return err(
+            el.span,
+            format!(
+                "Split takes exactly two panes — this one has {}; put what belongs to \
+                 one side in a single Column or Row",
+                items.len()
+            ),
+        );
+    }
+    Ok(())
 }
 
 fn lower_children(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitError> {

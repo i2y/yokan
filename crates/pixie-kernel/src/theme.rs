@@ -257,6 +257,7 @@ fn children_of(el: &mut Element) -> Option<&mut Vec<Element>> {
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. }
+        | Element::Split { children, .. }
         | Element::ListView { children, .. }
         | Element::ScrollView { children, .. }
         | Element::Modal { children, .. }
