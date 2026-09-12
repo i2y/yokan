@@ -6690,6 +6690,19 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             // in the window; the dump materializes lazy rows, so the
             // tier gate never saw it — §8.24). The detection predicate
             // MUST match the interpreter's, or the tiers diverge.
+            // Which row is marked, and who to tell when one is
+            // clicked — Table's contract, on a list of any shape.
+            let selected = match element_prop(el, "selected") {
+                Some(v) => lower_view_int(v, cx, "selected")?,
+                None => "-1i64".into(),
+            };
+            let on_select = match element_prop(el, "onSelect") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSelect", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
             if virtualized == "true" {
                 if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                     let lazy = lower_lazy_rows(binding, index, iter, child, cx, ind)?;
@@ -6699,6 +6712,8 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                          {ind}    item_height: {item_height},\n\
                          {ind}    height: {height},\n\
                          {ind}    grow: {grow},\n\
+                         {ind}    selected: {selected},\n\
+                         {ind}    on_select: {on_select},\n\
                          {ind}    children: Vec::new(),\n\
                          {ind}    lazy: Some({lazy}),\n\
                          {ind}}}"
@@ -6707,7 +6722,7 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
             }
             let children = lower_children(el, cx, ind)?;
             Ok(format!(
-                "Element::ListView {{ virtualized: {virtualized}, item_height: {item_height}, height: {height}, grow: {grow}, children: {children}, lazy: None }}"
+                "Element::ListView {{ virtualized: {virtualized}, item_height: {item_height}, height: {height}, grow: {grow}, selected: {selected}, on_select: {on_select}, children: {children}, lazy: None }}"
             ))
         }
         "ScrollView" => {
@@ -7366,7 +7381,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         ],
         "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
-        "ListView" => &["virtualized", "itemHeight", "height", "grow"],
+        "ListView" => &["virtualized", "itemHeight", "height", "grow", "selected", "onSelect"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
         "Table" => &[

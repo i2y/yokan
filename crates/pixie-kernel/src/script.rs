@@ -568,7 +568,7 @@ pub fn run_parts<C: Component>(
             };
             let (options, on_select) = rt
                 .with(|w| tree.find_chooser(w, n))
-                .unwrap_or_else(|| crate::script_refusal!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table)"));
+                .unwrap_or_else(|| crate::script_refusal!("no chooser #{n} (Select / RadioGroup / TabBar / Segmented / Table / a ListView with onSelect)"));
             let ix = options
                 .iter()
                 .position(|o| o.as_str() == label)

@@ -2470,6 +2470,13 @@ fn build_element_inner(
             // static children) becomes LazyRows built on demand;
             // non-virtualized lists stay eager (§8.24 — the window's
             // clipped-viewport path renders `children`).
+            // The mirror of codegen's arm: `selected` is `-1` for
+            // none, and `onSelect` takes the clicked row's index.
+            let selected = match prop_of(el, "selected") {
+                Some(v) => eval_expr(v, env, scope, w)?.as_int()?,
+                None => -1,
+            };
+            let on_select = prop_of(el, "onSelect").map(|a| make_int_listener(a, env));
             if virtualized {
                 if let Some((binding, index, iter, child)) = single_repeater_of(el)? {
                     let lazy = build_lazy_rows(binding, index, iter, child, env, scope, w)?;
@@ -2478,6 +2485,8 @@ fn build_element_inner(
                         item_height,
                         height,
                         grow,
+                        selected,
+                        on_select,
                         children: Vec::new(),
                         lazy: Some(lazy),
                     });
@@ -2488,6 +2497,8 @@ fn build_element_inner(
                 item_height,
                 height,
                 grow,
+                selected,
+                on_select,
                 children: build_children(el, env, scope, w)?,
                 lazy: None,
             })
@@ -3203,7 +3214,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         ],
         "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
-        "ListView" => &["virtualized", "itemHeight", "height", "grow"],
+        "ListView" => &["virtualized", "itemHeight", "height", "grow", "selected", "onSelect"],
         "ScrollView" => &["height"],
         "Modal" => &["open"],
         "Table" => &[
