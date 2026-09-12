@@ -63,6 +63,13 @@ use pixie_kernel::{Component, Element, Handle, List, Runtime, Str, TextListener,
 
 use text_input::{Numeric, PixieInput};
 
+/// What a Select keeps between frames: whether its option panel is
+/// open, the control's bounds from its last paint, and the window's
+/// content height at that paint. `Rc<Cell<..>>` because the click
+/// handlers that flip it are registered during render and must not
+/// re-enter the Root.
+type SelectCell = Rc<Cell<(bool, (f32, f32, f32, f32), f32)>>;
+
 struct Root<C: Component> {
     runtime: Runtime,
     view: Handle<C>,
@@ -80,11 +87,13 @@ struct Root<C: Component> {
     /// registered during render and must not re-enter the Root.
     /// Same pass, same GC. Headless runs never populate it: the
     /// script verb selects through the kernel finder directly.
-    /// (open, control bounds x/y/w/h from its last paint) — the
-    /// bounds anchor the hoisted option panel right under the
-    /// control (taffy absolute resolves against the direct parent,
-    /// so the overlay cannot inherit them by position).
-    selects: HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    /// (open, control bounds x/y/w/h from its last paint, the
+    /// window's content height at that paint) — the bounds anchor the
+    /// hoisted option panel right under the control (taffy absolute
+    /// resolves against the direct parent, so the overlay cannot
+    /// inherit them by position), and the height decides whether
+    /// under is where it fits.
+    selects: HashMap<Vec<usize>, SelectCell>,
     /// The point under the pointer in each chart, keyed by element
     /// path — the `selects` rule applied to an index, GC'd by the
     /// same pass. What the readout shows for it is the kernel's
@@ -1765,7 +1774,7 @@ fn render_el<C: Component>(
     pass: &mut RenderPass,
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
-    selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    selects: &mut HashMap<Vec<usize>, SelectCell>,
     charts: &mut HashMap<Vec<usize>, ChartHover>,
     // Every canvas's last frame and the sprite sheets they have
     // decoded. Shared rather than threaded by value because the paint
@@ -1789,7 +1798,7 @@ fn render_el_in<C: Component>(
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
     // A Select's open-popover flag, keyed by element path like
     // `scrolls` and GC'd by the same pass rule.
-    selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    selects: &mut HashMap<Vec<usize>, SelectCell>,
     charts: &mut HashMap<Vec<usize>, ChartHover>,
     canvases: &Rc<RefCell<CanvasState>>,
     slot: Slot,
@@ -3436,7 +3445,7 @@ fn render_el_in<C: Component>(
             let key = pass.path.clone();
             pass.seen.push(key.clone());
             let flag = selects.entry(key).or_default().clone();
-            let (open, at) = flag.get();
+            let (open, at, win_h) = flag.get();
             // Verification hook: `PIXIE_DEBUG_OPEN_SELECTS=1` renders
             // every Select open without a click, so a screenshot can
             // prove the anchoring. The first frame has no recorded
@@ -3474,8 +3483,8 @@ fn render_el_in<C: Component>(
                 .on_click(cx.listener({
                     let flag = flag.clone();
                     move |_this: &mut Root<C>, _ev, _window, cx| {
-                        let (o, at) = flag.get();
-                        flag.set((!o, at));
+                        let (o, at, h) = flag.get();
+                        flag.set((!o, at, h));
                         cx.notify();
                     }
                 }))
@@ -3488,8 +3497,8 @@ fn render_el_in<C: Component>(
                     let flag = flag.clone();
                     canvas(
                         |_, _, _| (),
-                        move |bounds: Bounds<Pixels>, _, _window: &mut Window, _| {
-                            let (o, _) = flag.get();
+                        move |bounds: Bounds<Pixels>, _, window: &mut Window, _| {
+                            let (o, _, _) = flag.get();
                             flag.set((
                                 o,
                                 (
@@ -3498,13 +3507,42 @@ fn render_el_in<C: Component>(
                                     bounds.size.width.as_f32(),
                                     bounds.size.height.as_f32(),
                                 ),
+                                // Where the window ends, read where
+                                // the control is measured: the panel
+                                // has to know whether "under" fits.
+                                window.viewport_size().height.as_f32(),
                             ));
                         },
                     )
                     .size_full()
                 }));
             if open {
+                pass.next_id += 1;
                 let mut panel = div()
+                    .id(pass.next_id)
+                    // A click anywhere else closes the list, which is
+                    // what every native one does. The control itself
+                    // is "anywhere else" as far as the panel's bounds
+                    // go, so the control's own rectangle is excluded
+                    // here — otherwise a click on it would close the
+                    // panel in the capture phase and its own handler
+                    // would re-open it in the same gesture.
+                    .on_mouse_down_out({
+                        let flag = flag.clone();
+                        move |_ev, window: &mut Window, cx: &mut App| {
+                            let (_, at, h) = flag.get();
+                            let p = window.mouse_position();
+                            let (x, y) = (p.x.as_f32(), p.y.as_f32());
+                            let on_control = x >= at.0
+                                && x <= at.0 + at.2
+                                && y >= at.1
+                                && y <= at.1 + at.3;
+                            if !on_control {
+                                flag.set((false, at, h));
+                                cx.refresh_windows();
+                            }
+                        }
+                    })
                     .bg(rgb(th.panel))
                     .border_1()
                     .border_color(rgb(th.border))
@@ -3528,8 +3566,8 @@ fn render_el_in<C: Component>(
                         .child(SharedString::from(opt.as_str().to_string()))
                         .on_click(cx.listener(
                             move |this: &mut Root<C>, _ev, _window, cx| {
-                                let (_, at) = flag.get();
-                                flag.set((false, at));
+                                let (_, at, h) = flag.get();
+                                flag.set((false, at, h));
                                 match f.clone() {
                                     Some(f) => this.apply(cx, move |w| f(w, i as i64)),
                                     None => cx.notify(),
@@ -3553,11 +3591,23 @@ fn render_el_in<C: Component>(
                 // record — never painted — falls back to centered.
                 let (ax, ay, aw, ah) = at;
                 let wrapper = if aw > 0.0 {
-                    div()
-                        .absolute()
-                        .left(px(ax))
-                        .top(px(ay + ah + 4.0))
-                        .child(panel.w(px(aw)))
+                    // Under the control, unless under is off the
+                    // bottom of the window — then above it, with the
+                    // panel's BOTTOM pinned to the control's top, so
+                    // the panel's own height (which nothing knows
+                    // until it paints) never enters the arithmetic.
+                    // The test is the control's own bottom edge
+                    // against the middle of the window: a list that
+                    // fits in the upper half fits when it opens
+                    // upward from the lower one.
+                    let up = win_h > 0.0 && ay + ah > win_h / 2.0;
+                    let placed = div().absolute().left(px(ax));
+                    let placed = if up {
+                        placed.bottom(px(win_h - ay + 4.0))
+                    } else {
+                        placed.top(px(ay + ah + 4.0))
+                    };
+                    placed.child(panel.w(px(aw)))
                 } else {
                     div()
                         .absolute()
@@ -4171,7 +4221,7 @@ fn render_table_row<C: Component>(
     pass: &mut RenderPass,
     inputs: &mut HashMap<Vec<usize>, Entity<PixieInput>>,
     scrolls: &mut HashMap<Vec<usize>, ScrollState>,
-    selects: &mut HashMap<Vec<usize>, Rc<Cell<(bool, (f32, f32, f32, f32))>>>,
+    selects: &mut HashMap<Vec<usize>, SelectCell>,
     charts: &mut HashMap<Vec<usize>, ChartHover>,
     canvases: &Rc<RefCell<CanvasState>>,
     th: &'static Theme,
