@@ -1,6 +1,6 @@
 # Libraries and crates
 
-The [tour](tour.md) continues: error handling, the standard library, your own Rust crates and the CPython escapes.
+The [tour](tour.md) continues: error handling, the standard library, your own Rust crates, packages written in the dialect, and the CPython escapes.
 
 ## Error handling
 
@@ -239,6 +239,60 @@ Anything that cannot cross is refused, and the error says what and why.
 The demos: `demo/rustcrate.py` (a path crate and a crates.io crate;
 Optionals, Result, a struct, an enum and a dict) and `demo/proj/`
 (the pyproject spelling).
+
+## Packages
+
+An app can be several files: a module beside the entry is imported by name (`from widgets import badge`) and compiled into the same program.
+A package goes one step further — it is an ordinary installed Python package, and it compiles into the app that imports it.
+
+A package says it is written in the dialect with a `py.yokan` file beside its `__init__.py`, the way a typed package says so with `py.typed`:
+
+```
+yokanui/
+    __init__.py
+    py.yokan            # empty; "this is dialect code"
+    badges.py
+    panels.py
+```
+
+```toml
+# pyproject.toml — the marker has to ship with the package
+[tool.setuptools.package-data]
+yokanui = ["py.yokan"]
+```
+
+An app then imports it as it imports anything:
+
+```python
+from yokanui import badge, panel
+
+def view():
+    with column(spacing=10, padding=14):
+        panel("from a package", "compiled in")
+        badge("yokanui")
+```
+
+Inside the package, relative imports work (`from .badges import badge`), and `__init__.py` re-exports what the package offers.
+There is no library at run time and nothing to ship beside the app: the package's modules are read the way the app's own files are, and the binary carries them.
+
+**Names cannot collide.** A name from a package is emitted under a name derived from its module, so the package's `badge` and an app's own `badge_of` coexist and neither author has to know about the other.
+That is invisible from Python — the app calls `badge(...)` — and shows only in the `.pix`, as `YokanuiBadgesBadge`.
+
+**A package may carry Rust.** Its own `[tool.yokan.crates]` goes in a `yokan.toml` beside the marker, because a wheel does not carry a `pyproject.toml`:
+
+```toml
+# yokanui/yokan.toml
+[tool.yokan.crates]
+deunicode = "1"
+```
+
+That merges into the app's declarations, and the app never mentions the crate.
+Two sides that declare the same crate at different versions are refused by name — one crate is one version in a program.
+
+An installed package with no marker is refused where its names are used, and the message names the marker: a package that is not dialect code is `@py`'s to run.
+A package cannot carry `@py` itself — an escape carries Python into the build, and what that Python needs is declared by the app whose dependencies get installed.
+The demo is `demo/pkg/` (the package) and `demo/pkgapp.py` (the app that imports it).
+
 
 ## CPython escapes
 

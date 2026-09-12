@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yokanui"
+version = "0.1.0"
+description = "A few view helpers, written in Yokan's dialect."
+requires-python = ">=3.14"
+
+[tool.setuptools]
+packages = ["yokanui"]
+
+# The marker rides with the package: without it, an app importing
+# yokanui would be told this is not dialect code.
+[tool.setuptools.package-data]
+yokanui = ["py.yokan", "yokan.toml"]

@@ -4670,6 +4670,16 @@ fn view_value_shape(t: &RustTy) -> bool {
 fn lower_view_text(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError> {
     match &e.kind {
         ExprKind::Str(parts) => lower_interp(parts, &mut |inner| lower_view_display(inner, cx)),
+        // `color: if loud { "#f00" } else { "#0f0" }` — a value `if`
+        // in a String property. It is a value in a hole already
+        // (§8.54's arm in `lower_view_display_inner`); a property
+        // whose value is a String is the same expression in the same
+        // place, and reading is all either does.
+        ExprKind::If {
+            else_b: Some(_),
+            let_binding: None,
+            ..
+        } => lower_view_display(e, cx),
         // Routed to `lower_view_display` for its explanation of why
         // a view body cannot call a method (§8.53).
         ExprKind::MethodCall { .. } => lower_view_display(e, cx),

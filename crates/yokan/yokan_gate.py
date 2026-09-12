@@ -173,6 +173,68 @@ def parse_source(path: str) -> ast.Module:
     return tree
 
 
+class Renamer(ast.NodeTransformer):
+    """Rename module-level names, respecting what a function binds.
+
+    A package's names are emitted under names derived from its module,
+    so that a package author choosing a common word cannot break an
+    app that never saw it. The rename is the AST's, because the
+    translator's tables are keyed by name and two `badge`s would be
+    one key.
+
+    A local, a parameter or a loop variable shadows, exactly as it
+    does in Python — the shadow logic is `ConstInliner`'s, for the
+    same reason.
+    """
+
+    def __init__(self, names: dict):
+        self.names = names
+        self.shadow = []
+
+    def _scoped(self, node):
+        self.shadow.append(ConstInliner._bound(node))
+        try:
+            self.generic_visit(node)
+        finally:
+            self.shadow.pop()
+        return node
+
+    visit_Lambda = _scoped
+
+    def _hidden(self, name: str) -> bool:
+        return any(name in scope for scope in self.shadow)
+
+    def visit_FunctionDef(self, node):
+        # The def's own name is module-level; its body is a scope.
+        if node.name in self.names and not self._hidden(node.name):
+            node.name = self.names[node.name]
+        return self._scoped(node)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node):
+        if node.name in self.names and not self._hidden(node.name):
+            node.name = self.names[node.name]
+        self.generic_visit(node)
+        return node
+
+    def visit_Name(self, node):
+        if node.id in self.names and not self._hidden(node.id):
+            node.id = self.names[node.id]
+        return node
+
+
+def _pkg_prefix(module: str, name: str) -> str:
+    """The name a package's `name` is emitted under. The module's
+    parts make the prefix, and the original's first letter decides the
+    case — a class stays a class, a function stays a function."""
+    parts = [p for p in re.split(r"[._]", module) if p]
+    head = parts[0] + "".join(p[:1].upper() + p[1:] for p in parts[1:])
+    tail = name[:1].upper() + name[1:]
+    out = head + tail
+    return out[:1].upper() + out[1:] if name[:1].isupper() else out
+
+
 def module_consts(trees) -> tuple[dict, set]:
     """Module-level names bound to a pure value, and the statements
     that bind them.
@@ -761,6 +823,8 @@ class Translator:
         self.refusals = []             # what was refused, when collecting
         self.failed = set()            # names whose declaration was refused
         self.unchecked = []            # (node, names) — read a name that failed
+        self.pkg_roots = {}            # dialect package -> its directory
+        self.pkg_wrote = {}            # a renamed name -> what its author wrote
         self.model_instances = {}      # module-level `x = Model()` -> model name
         self.protocols = {}            # Protocol class -> [(method, params, ret)]
         self.replace_name = None       # `from dataclasses import replace` binding
@@ -3155,6 +3219,17 @@ class Translator:
         if self.state_node is not None and self.cells:
             raise Untranslatable(self.tree, "declare state with `State` — a `run(state={...})` dict alongside it is not in the dialect")
 
+    def _in_package(self, node):
+        """The dialect package a node's file belongs to, or None."""
+        where = getattr(node, "_yokan_file", None)
+        if not where:
+            return None
+        where = os.path.abspath(where)
+        for top, root in self.pkg_roots.items():
+            if where.startswith(os.path.abspath(root) + os.sep):
+                return top
+        return None
+
     def _refuse(self, e: "Untranslatable", node=None) -> None:
         """Write a refusal down and carry on. Only `check` gets here:
         every other mode stops at the first one, because a translation
@@ -3222,6 +3297,19 @@ class Translator:
         elif isinstance(node, ast.FunctionDef) and any(
             self._is_deco(d, "py") for d in node.decorator_list
         ):
+            top = self._in_package(node)
+            if top is not None:
+                # An escape carries Python into the build, and what
+                # that Python needs is declared by the app whose
+                # dependencies get installed. A package cannot say it
+                # from where it sits, so it does not get to.
+                wrote = self.pkg_wrote.get(node.name, node.name)
+                raise Untranslatable(
+                    node,
+                    f"`@py` is the app's, and `{wrote}` is in the package "
+                    f"`{top}` — a package is dialect code, which compiles; what "
+                    "needs Python belongs in the app that installs it",
+                )
             self._take_escape(node)
         elif isinstance(node, ast.FunctionDef):
             self.defs[node.name] = node
@@ -3665,6 +3753,13 @@ class Translator:
             note = self.PY_ABSENT.get(pymod)
             if note:
                 return f"`{pymod}` is not in the dialect — {note}"
+            if _installed_package(pymod):
+                return (
+                    f"`{pymod}` is an installed package that is not written in the "
+                    f"dialect — a package that is says so with a `{PKG_MARKER}` file "
+                    "beside its `__init__.py`, and is compiled into the app. For a "
+                    "package that is not, `@py` runs it"
+                )
             return (
                 f"`{pymod}` is not in the dialect. Python's modules that are: "
                 f"{', '.join(self.PY_MODULES)}. Yokan's own: "
@@ -11987,6 +12082,16 @@ class Translator:
             params.append((a.arg, ty))
         # leading per-instance state: `n: ui.State[int] = ui.local(0)`
         body_stmts = list(d.body)
+        # A docstring is not a statement that runs, and a component in
+        # a package is a documented thing. The module level has always
+        # skipped one; a body skips one too.
+        if (
+            body_stmts
+            and isinstance(body_stmts[0], ast.Expr)
+            and isinstance(body_stmts[0].value, ast.Constant)
+            and isinstance(body_stmts[0].value.value, str)
+        ):
+            body_stmts.pop(0)
         locals_ = []
         while body_stmts and isinstance(body_stmts[0], ast.AnnAssign):
             st = body_stmts[0]
@@ -12384,31 +12489,178 @@ class Translator:
 # -------------------------------------------------------------------
 # The gate.
 
-def _local_modules(entry: str) -> dict:
-    """Parse sibling .py modules reachable from the entry via
-    `import m` / `from m import x` (flattened for now — one emitted
-    .pix; .pix-module-per-file mapping is recorded future work)."""
+PKG_MARKER = "py.yokan"
+
+
+def _installed_package(mod: str) -> bool:
+    """Whether a name is an installed package on this machine, marker
+    or not. Read only to tell a reader WHY their import is refused:
+    a package that could have been dialect code and is not."""
+    top = mod.split(".", 1)[0]
+    if top in sys.builtin_module_names or top in sys.stdlib_module_names:
+        return False
+    try:
+        spec = importlib.util.find_spec(top)
+    except (ImportError, ValueError):
+        return False
+    return spec is not None and bool(spec.submodule_search_locations)
+
+
+def _pkg_root(mod: str):
+    """Where an installed package lives, if it is one and it says it
+    is written in the dialect. The marker is `py.yokan` beside its
+    `__init__.py`, which is the shape PEP 561's `py.typed` taught
+    publishers and packaging tools.
+
+    Answers (top-level name, directory) for a dialect package, None
+    for something that is not installed, and raises for an installed
+    package with no marker — because "I cannot find it" and "this is
+    not dialect code" are different things to be told."""
+    top = mod.split(".", 1)[0]
+    if top == "yokan" or top in sys.builtin_module_names:
+        return None
+    try:
+        spec = importlib.util.find_spec(top)
+    except (ImportError, ValueError):
+        return None
+    if spec is None or not spec.submodule_search_locations:
+        return None
+    for where in spec.submodule_search_locations:
+        if os.path.isfile(os.path.join(where, PKG_MARKER)):
+            return top, where
+    return None
+
+
+def _pkg_module_path(root: str, mod: str, top: str):
+    """The file a dotted module names inside a package: `a.b.c` is
+    `<root>/b/c.py`, or `<root>/b/c/__init__.py`."""
+    rest = mod.split(".")[1:] if mod != top else []
+    base = os.path.join(root, *rest)
+    for path in (base + ".py", os.path.join(base, "__init__.py")):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _local_modules(entry: str) -> tuple[ast.Module, dict, dict, dict]:
+    """The modules an app is built from, beside the entry.
+
+    Two kinds. A sibling `.py` next to the entry is read as it always
+    was: flattened into one program, its names as written. A module
+    from an installed package that carries `py.yokan` is read too, and
+    its names are renamed after its module, so that a package and an
+    app cannot collide over a common word.
+
+    Answers (the entry's tree, the modules by name, the packages by
+    top-level name, the renamed names by the name their author wrote)
+    — the entry comes back because the renames are applied to it
+    here, and the last map is what lets a refusal say the spelling the
+    author would recognise."""
     base = os.path.dirname(os.path.abspath(entry))
     seen: dict = {}
+    pkgs: dict = {}
+    renames: dict = {}
 
-    def walk(tree):
+    def take_pkg(mod: str, root: str, top: str, tree=None):
+        if mod in seen:
+            return
+        path = _pkg_module_path(root, mod, top)
+        if path is None:
+            raise Untranslatable(
+                tree, f"`{mod}` is not a module of the package `{top}`"
+            )
+        t = parse_source(path)
+        seen[mod] = t
+        pkgs[top] = root
+        is_pkg = os.path.basename(path) == "__init__.py"
+        # Its own top-level names, renamed after the module they are
+        # in; the importing side is renamed where the import says so.
+        own = {}
+        for st in t.body:
+            if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                own[st.name] = _pkg_prefix(mod, st.name)
+            elif isinstance(st, ast.Assign):
+                for tg in st.targets:
+                    if isinstance(tg, ast.Name):
+                        own[tg.id] = _pkg_prefix(mod, tg.id)
+            elif isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
+                own[st.target.id] = _pkg_prefix(mod, st.target.id)
+        renames.setdefault(mod, {}).update(own)
+        walk(t, pkg=(top, root), mod=mod, is_pkg=is_pkg)
+
+    def walk(tree, pkg=None, mod=None, is_pkg=False):
+        here = {}
         for node in ast.walk(tree):
-            names = []
             if isinstance(node, ast.Import):
-                names = [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                names = [node.module]
-            for m in names:
-                if m in seen or m == "yokan":
+                asked = [(a.name, None) for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    # A relative import, inside a package: `from
+                    # .widgets import badge` names a module of the
+                    # same package.
+                    if pkg is None:
+                        raise Untranslatable(
+                            node,
+                            "a relative import works inside a package — an app's own "
+                            "files are imported by name (`from widgets import badge`)",
+                        )
+                    # Python's own rule: a plain module's `.` is its
+                    # parent, and a package's `.` is itself.
+                    parts = (mod or "").split(".")
+                    base_parts = parts if is_pkg else parts[:-1]
+                    upto = base_parts[: len(base_parts) - (node.level - 1)]
+                    if not upto:
+                        raise Untranslatable(
+                            node, f"`{'.' * node.level}` reaches above the package `{pkg[0]}`"
+                        )
+                    target = ".".join(upto + ([node.module] if node.module else []))
+                    asked = [(target, [a for a in node.names])]
+                else:
+                    asked = [(node.module, [a for a in node.names])] if node.module else []
+            else:
+                continue
+            for m, names in asked:
+                if m is None or m == "yokan" or m.startswith("yokan."):
                     continue
                 path = os.path.join(base, m + ".py")
-                if os.path.isfile(path):
-                    t = parse_source(path)
-                    seen[m] = t
-                    walk(t)
+                if pkg is None and os.path.isfile(path):
+                    if m not in seen:
+                        t = parse_source(path)
+                        seen[m] = t
+                        walk(t, mod=m)
+                    continue
+                found = (pkg if pkg and m.split(".")[0] == pkg[0] else None) or _pkg_root(m)
+                if found is None:
+                    continue
+                top, root = found
+                take_pkg(m, root, top, tree)
+                # What this module called them, and what they are now.
+                for a in names or []:
+                    real = renames.get(m, {}).get(a.name)
+                    if real:
+                        here[a.asname or a.name] = real
+                if names is None:
+                    # `import mypkg.widgets` binds the module, and a
+                    # dotted read of it is not in the dialect yet.
+                    raise Untranslatable(
+                        tree,
+                        f"`import {m}` binds the module itself — import the names "
+                        f"instead (`from {m} import …`)",
+                    )
+        if here:
+            renames.setdefault(mod or "", {}).update(here)
 
-    walk(parse_source(entry))
-    return seen
+    entry_tree = parse_source(entry)
+    walk(entry_tree)
+    # Every tree is renamed with the map its own module earned: the
+    # package's own names inside it, and the imported ones where they
+    # are read.
+    for name, tree in [("", entry_tree), *seen.items()]:
+        m = renames.get(name)
+        if m:
+            Renamer(m).visit(tree)
+    wrote = {new: old for m in renames.values() for old, new in m.items()}
+    return entry_tree, seen, pkgs, wrote
 
 
 CRATE_CROSSING = ("Int", "Float", "Bool", "String")
@@ -12536,6 +12788,67 @@ def app_crate_decls(path: str) -> dict:
                 f"[tool.yokan.crates] `{name}`: write a version string "
                 f'({name} = "1.2") or a path table ({name} = {{ path = "…" }})'
             )
+    return out
+
+
+def pkg_crate_decls(top: str, root: str) -> dict:
+    """A dialect package's own `[tool.yokan.crates]`.
+
+    A wheel does not carry its `pyproject.toml`, so the declaration
+    travels beside the marker instead: `yokan.toml` in the package
+    directory, holding the same `[tool.yokan.crates]` table an app
+    writes. A package with no Rust half has no such file."""
+    import tomllib
+
+    path = os.path.join(root, "yokan.toml")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"`{top}`'s yokan.toml does not parse — {e}") from None
+    crates = data.get("tool", {}).get("yokan", {}).get("crates") or {}
+    out = {}
+    for name, spec in crates.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", name):
+            raise ValueError(f"`{top}`'s [tool.yokan.crates] `{name}`: crate names are lowercase")
+        if isinstance(spec, str):
+            out[name] = {"version": spec, "features": []}
+        elif isinstance(spec, dict) and "path" in spec:
+            d = os.path.normpath(os.path.join(root, spec["path"]))
+            if not os.path.isfile(os.path.join(d, "Cargo.toml")):
+                raise ValueError(f"`{top}`'s [tool.yokan.crates] `{name}`: no crate at {d}")
+            out[name] = {"path": d, "features": list(spec.get("features", []))}
+        elif isinstance(spec, dict) and "version" in spec:
+            out[name] = {"version": str(spec["version"]), "features": list(spec.get("features", []))}
+        else:
+            raise ValueError(
+                f"`{top}`'s [tool.yokan.crates] `{name}`: write a version string "
+                f'({name} = "1.2") or a path table ({name} = {{ path = "…" }})'
+            )
+    return out
+
+
+def _merge_crates(app: dict, pkg: dict, top: str, where: str) -> dict:
+    """The app's crate declarations with a package's added.
+
+    One crate, one version: a package and an app that disagree about
+    what `hexfmt` is would compile one of them against the other's,
+    and which one won would depend on the order they were read. So the
+    disagreement is refused by name, and the two sides pick."""
+    out = dict(app)
+    for name, spec in pkg.items():
+        had = out.get(name)
+        if had is not None and had != spec:
+            mine = had.get("version") or had.get("path")
+            theirs = spec.get("version") or spec.get("path")
+            raise ValueError(
+                f"`{top}` declares the crate `{name}` as {theirs}, and "
+                f"{os.path.basename(where)}'s side of it is {mine} — one crate is one "
+                "version in a program, so the two have to agree"
+            )
+        out[name] = spec
     return out
 
 
@@ -13050,10 +13363,16 @@ def translate_file(path: str, collect: bool = False) -> tuple[str, "Translator"]
     `collect` is `check`'s: the translator keeps going after a refusal
     and the refusals come back together, as `Refused`. Nothing else
     passes it, because what follows a refusal is not a program."""
-    modules = _local_modules(path)   # parses (and stamps) the entry too
-    tr = Translator(parse_source(path), modules)
+    # The entry comes back from here because a dialect package's
+    # names are renamed into it: parsing it again would undo that.
+    entry_tree, modules, pkgs, wrote = _local_modules(path)
+    tr = Translator(entry_tree, modules)
+    tr.pkg_roots = pkgs
+    tr.pkg_wrote = wrote
     tr.collect = collect
     decls = app_crate_decls(path)
+    for top, root in sorted(pkgs.items()):
+        decls = _merge_crates(decls, pkg_crate_decls(top, root), top, path)
     if decls:
         tr.crate_info = prepare_crates(path, decls)
     pix = tr.translate()

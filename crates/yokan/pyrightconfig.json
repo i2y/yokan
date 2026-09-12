@@ -4,5 +4,8 @@
     "**/.yokan",
     "**/dist",
     "**/__pycache__"
+  ],
+  "extraPaths": [
+    "demo/pkg"
   ]
 }

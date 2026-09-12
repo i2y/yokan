@@ -2899,3 +2899,65 @@ Both are in the tour. A VS Code extension was considered and dropped:
 the people and agents this is for read the text directly, and an
 extension would be a second place for the command's invocation rules
 to live and drift.
+
+## Packages written in the dialect (2026-09-12)
+
+An app could already be several files: a module beside the entry is
+imported by name and flattened into the one program. A package is the
+same idea reaching past the directory — an ordinary installed Python
+package whose modules compile into the app that imports it.
+
+**The marker is `py.yokan`**, beside `__init__.py`. PEP 561 taught
+publishers and packaging tools that shape for `py.typed`, and an
+empty file that ships with the package is something the translator
+can find with one question. A pyproject key would not have worked: a
+wheel does not carry its pyproject.
+
+**Names are namespaced by module.** An app's own sibling files share
+one namespace and a duplicate is refused, which is right when one
+person owns both. It is wrong for packages: a package author cannot
+see the app's names, so a common word like `badge` would break apps
+they never saw. So a package's names are emitted under names derived
+from their module — `badge` in `yokanui.badges` becomes
+`YokanuiBadgesBadge` — and the rename happens in the AST, because the
+translator's tables are keyed by name and two `badge`s would be one
+key. A local, a parameter and a loop variable shadow it, exactly as
+they shadow a module constant.
+
+pixie has a real module system (`use foo.{X as A}`, `pub use`,
+same-named items coexisting), and it is where this goes. It is not
+where this starts: the translator flattens in one pass over shared
+state, so emitting a `.pix` per module is a rewrite of how a program
+is emitted rather than a change to how names are spelled.
+
+**Relative imports work inside a package** and nowhere else, which is
+how packages are written in Python. The resolution is Python's own
+rule: a plain module's `.` is its parent, a package's `.` is itself.
+
+**A package may carry Rust.** Its `[tool.yokan.crates]` goes in a
+`yokan.toml` beside the marker, for the same reason the marker is a
+file: a wheel carries neither a pyproject nor anything outside the
+package directory. The declarations merge into the app's, and two
+sides that disagree about a version are refused by name, because one
+crate is one version in a program and which side won would otherwise
+depend on the order they were read.
+
+**An unmarked package is refused where its names are used**, not
+where it is imported — `import os` and `import numpy` sit in
+preambles and mean nothing until something calls through them. The
+message names the marker, so a reader learns that the missing thing
+is a file rather than a feature.
+
+**A package cannot carry `@py`**, and says so. An escape carries
+Python into the build, and what that Python needs is declared by the
+app whose dependencies get installed; a package cannot say it from
+where it sits.
+
+Two things this turned up, both fixed rather than worked around. A
+component could not carry a docstring — the body check counted it as
+a statement — and a package of documented helpers is exactly where
+that matters. And a conditional expression in a String property
+(`color=LOUD if loud else QUIET`) emitted pixie the view layer
+refused: an `if` was a value in a text hole but not in a property
+whose value is a string, which was a gap in the lowerer rather than a
+rule about views.

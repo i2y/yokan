@@ -749,6 +749,21 @@ A user decorator is folded into the function it decorates: the
 decorator is a def of one argument that returns it, or a wrapper
 that calls it once. Anything else is refused.
 
+**Packages.** An app can be several files (a module beside the entry,
+imported by name), and it can import an installed package written in
+the dialect: one that carries a `py.yokan` file beside its
+`__init__.py`, the way a typed package carries `py.typed`. Its
+modules compile into the app — no library at run time, nothing to
+ship beside the binary. Relative imports work inside a package, and
+`__init__.py` re-exports what it offers. A package's names are
+emitted under names derived from its modules, so its `badge` and an
+app's own cannot collide. A package may declare Rust crates of its
+own in a `yokan.toml` beside the marker (a wheel carries no
+pyproject); they merge into the app's, and a version the two disagree
+about is refused by name. An installed package with no marker is
+refused where its names are used, pointing at `@py`. The demo is
+`demo/pkg/` and `demo/pkgapp.py`.
+
 `text_field(..., multiline=True, rows=3)` is a field that holds
 paragraphs; every element takes `tooltip="…"`.
 

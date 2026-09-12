@@ -128,6 +128,11 @@ gate dbnotes "$PY" yokan_gate.py gate demo/dbnotes.py --fresh demo/.gate/notes.d
 # only a BOUND parameter survives.
 gate ledger  "$PY" yokan_gate.py gate demo/ledger.py --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
 gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy "$PY" yokan_gate.py gate demo/pystats.py
+# A package written in the dialect, installed the way a published one
+# would be and compiled into the app that imports it. Its names are
+# emitted under its modules, so the app's own `badge_of` and the
+# package's `badge` coexist.
+gate pkgapp  env -u VIRTUAL_ENV uv run --quiet --with-editable demo/pkg "$PY" yokan_gate.py gate demo/pkgapp.py --script "click:look,click:fold,dump,click:look,click:look,dump"
 gate proj     "$PY" yokan_gate.py gate demo/proj/app.py --script "click:run"
 # Multi-module apps.
 gate multi    "$PY" yokan_gate.py gate demo/multi/app.py
@@ -150,6 +155,7 @@ for f in demo/*.py; do
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
+    pkgapp) continue;;
     bytes|zones) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;

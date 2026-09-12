@@ -1,0 +1,7 @@
+# The Rust half of this package. A wheel does not carry a
+# pyproject.toml, so the declaration rides beside the marker instead,
+# with the same `[tool.yokan.crates]` table an app writes. It merges
+# into the app's, and a disagreement about a version is refused by
+# name.
+[tool.yokan.crates]
+deunicode = "1"
