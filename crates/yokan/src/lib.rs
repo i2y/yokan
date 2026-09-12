@@ -449,6 +449,16 @@ impl PyElement {
                         "element already used",
                     ));
                 }
+                // A split holds children and still has no `with` form:
+                // its panes are two, and a block's body is not a count
+                // anyone can read. Said by name, because the general
+                // message below would call a container something else.
+                Some(Element::Split { .. }) => {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "a split's two panes are its arguments — \
+                         `split(left, right, ratio=…)`, not a `with` block",
+                    ));
+                }
                 Some(e) => {
                     let mut probe = e.clone();
                     if set_children(&mut probe, Vec::new()).is_err() {
@@ -1042,6 +1052,19 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
         Element::Disabled { children } if children.len() == 1 => {
             set_children(&mut children[0], kids)
         }
+        // Two is what a split takes, so the count is checked where the
+        // panes are written — the same thing both lowerers do on the
+        // other side, and the reason `split` has no `with` form.
+        Element::Split { children, .. } => {
+            if kids.len() != 2 {
+                return Err(
+                    "a split takes exactly two panes — `split(left, right, ratio=…)`; \
+                     put what belongs to one side in a single column() or row()",
+                );
+            }
+            *children = kids;
+            Ok(())
+        }
         Element::Column { children, .. }
         | Element::Row { children, .. }
         | Element::Grid { children, .. }
@@ -1459,6 +1482,27 @@ element_fn! {
             options: str_list(options),
             selected,
             on_select: on_change.map(int_listener),
+        }
+    }
+}
+
+element_fn! {
+    /// Two panes with a divider the user can drag. `ratio` is the
+    /// share of the split the FIRST pane takes, and it is the app's
+    /// own number — the slider's contract with a different gesture:
+    /// the handler gets the new ratio, and the divider moves when the
+    /// app writes it back. The two panes are the ARGUMENTS, never a
+    /// `with` block: two is what the widget takes, and that is checked
+    /// where it is written.
+    container split
+    (ratio, vertical=false, on_change=None,)
+    [ratio: f64, vertical: bool, on_change: Option<Py<PyAny>>,]
+    {
+        Element::Split {
+            ratio,
+            vertical,
+            on_change: on_change.map(float_listener),
+            children: Vec::new(),
         }
     }
 }
@@ -3021,6 +3065,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(number_field, m)?)?;
     m.add_function(wrap_pyfunction!(int_field, m)?)?;
     m.add_function(wrap_pyfunction!(segmented, m)?)?;
+    m.add_function(wrap_pyfunction!(split, m)?)?;
     m.add_function(wrap_pyfunction!(py_escape, m)?)?;
     m.add_function(wrap_pyfunction!(model, m)?)?;
     m.add_function(wrap_pyfunction!(value, m)?)?;

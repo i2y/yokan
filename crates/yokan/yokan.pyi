@@ -458,6 +458,19 @@ def segmented(
     """A row of joined toggle buttons; the handler receives the
     chosen index."""
 
+def split(
+    *children: Element,
+    ratio: float,
+    vertical: bool = False,
+    on_change: Optional[Callable[[float], Any]] = None,
+    **props: Unpack[SharedProps],
+) -> Element:
+    """Two panes with a divider the user can drag. Exactly two panes,
+    written as the arguments; `ratio` is the share the first one takes
+    and the handler receives the new one, which the app writes back.
+    `vertical=True` stacks the panes instead of sitting them side by
+    side."""
+
 def spacer(grow: float = 0.0, **props: Unpack[SharedProps]) -> Element:
     """Takes the parent's remaining space along its main axis; 0 = one share."""
 
