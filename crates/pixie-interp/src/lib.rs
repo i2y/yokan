@@ -2889,6 +2889,35 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // The transient message — the mirror of codegen's `Toast` arm:
+        // same required prop, same `open:` default, same refusal for a
+        // countdown with nothing to call.
+        "Toast" => {
+            let m = prop_of(el, "message").ok_or("Toast needs `message:` (the line it shows)")?;
+            let open = match prop_of(el, "open") {
+                Some(o) => eval_expr(o, env, scope, w)?.as_bool()?,
+                None => true,
+            };
+            let on_close = prop_of(el, "onClose");
+            let duration_ms = match prop_of(el, "durationMs") {
+                Some(v) => {
+                    if on_close.is_none() {
+                        return Err("`durationMs:` closes the Toast by calling `onClose:` — \
+                                    add one that clears what `open:` reads, or drop \
+                                    `durationMs:` and take the toast away from the app"
+                            .to_string());
+                    }
+                    eval_expr(v, env, scope, w)?.as_float()?
+                }
+                None => 0.0,
+            };
+            Ok(Element::Toast {
+                message: eval_text(m, env, scope, w)?,
+                open,
+                duration_ms,
+                on_close: on_close.map(|a| make_listener(a, env)),
+            })
+        }
         // The drawing surface — the mirror of codegen's `Canvas` arm,
         // same required props, same defaults, same errors.
         "Canvas" => {

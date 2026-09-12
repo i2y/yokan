@@ -1508,6 +1508,50 @@ fn segmented_dumps_options_and_the_current_index() {
 
 
 #[test]
+fn toast_dumps_its_message_and_whether_it_is_up() {
+    // `open` prints whether or not it was written: whether the message
+    // is on screen is the element's whole point. `durationMs` joins
+    // only when set, the per-prop rule every other element follows.
+    let (w, e) = charts_world();
+    for (body, want) in [
+        (
+            "Toast { message: \"saved #{counter.count}\" }",
+            "Column[Toast(saved 3, open=true)]",
+        ),
+        (
+            "Toast { message: \"saved\"; open: false }",
+            "Column[Toast(saved, open=false)]",
+        ),
+        (
+            "Toast { message: \"saved\"; durationMs: 1200.0; onClose: { counter.count = 0 } }",
+            "Column[Toast(saved, open=true, durationMs=1200)]",
+        ),
+    ] {
+        let tree = build_view(&chart_view(body), &e, &tables(), &w).expect("builds");
+        assert_eq!(tree.dump(&w), want, "for `{body}`");
+    }
+}
+
+#[test]
+fn toast_needs_a_message_and_a_handler_to_close_with() {
+    // Mirrors codegen's errors, which the emission tests assert on the
+    // other tier.
+    let (w, e) = charts_world();
+    for (body, needle) in [
+        ("Toast { }", "Toast needs `message:`"),
+        (
+            "Toast { message: \"hi\"; durationMs: 1000.0 }",
+            "`durationMs:` closes the Toast by calling `onClose:`",
+        ),
+    ] {
+        match build_view(&chart_view(body), &e, &tables(), &w) {
+            Ok(_) => panic!("`{body}` must error"),
+            Err(err) => assert!(err.contains(needle), "error should teach: {err}"),
+        }
+    }
+}
+
+#[test]
 fn segmented_requires_its_props() {
     // Mirrors codegen's required-prop errors, which the emission
     // tests assert on the other tier.
