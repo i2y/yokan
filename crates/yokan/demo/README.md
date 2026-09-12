@@ -142,6 +142,9 @@ shows a finished transcript — its launch state is an empty table.
 #### filter — segmented: the toggle-button chooser over a filtered list
 <img src="screenshots/filter.png" width="360">
 
+#### menubutton — a button that opens a short menu: no current value, so the label stays put and the handler receives the chosen index; a script picks from it with `select:`
+<img src="screenshots/menubutton.png" width="360">
+
 #### quantities — number_field and int_field: typed numeric inputs that commit on enter, clamp into the range and snap to the step
 <img src="screenshots/quantities.png" width="360">
 
