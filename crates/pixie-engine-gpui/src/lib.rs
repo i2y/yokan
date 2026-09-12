@@ -2411,6 +2411,8 @@ fn render_el_in<C: Component>(
             item_height,
             height,
             grow,
+            selected,
+            on_select,
             children,
             lazy,
         } => {
@@ -2422,6 +2424,8 @@ fn render_el_in<C: Component>(
             if *virtualized && lazy.is_some() {
                 let rows = lazy.clone().expect("checked");
                 let ih = *item_height;
+                let sel = *selected;
+                let picker = on_select.clone();
                 pass.next_id += 1;
                 let id = pass.next_id;
                 let base_path = pass.path.clone();
@@ -2474,11 +2478,16 @@ fn render_el_in<C: Component>(
                                     cx,
                                 );
                                 row_pass.path.pop();
+                                let at = range.start + k;
                                 let mut wrap = div().w_full().flex_none();
                                 if ih > 0.0 {
                                     wrap = wrap.h(px(ih as f32));
                                 }
-                                out.push(wrap.child(e).into_any_element());
+                                out.push(
+                                    mark_row(wrap, at, sel, &picker, th, cx)
+                                        .child(e)
+                                        .into_any_element(),
+                                );
                             }
                         });
                         out
@@ -2523,12 +2532,24 @@ fn render_el_in<C: Component>(
                 pass.path.push(i);
                 let rendered = render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx);
                 pass.path.pop();
+                let pickable = on_select.is_some() || *selected >= 0;
                 rows.push(if *item_height > 0.0 {
                     // `flex_none` so the clipped viewport cannot squash
                     // the rows it is meant to scroll past.
-                    div()
-                        .h(px(*item_height as f32))
-                        .flex_none()
+                    mark_row(
+                        div().h(px(*item_height as f32)).flex_none(),
+                        i,
+                        *selected,
+                        on_select,
+                        th,
+                        cx,
+                    )
+                    .child(rendered)
+                    .into_any_element()
+                } else if pickable {
+                    // A list nobody picks from keeps its rows bare, so
+                    // an untouched demo lays out exactly as it did.
+                    mark_row(div().w_full(), i, *selected, on_select, th, cx)
                         .child(rendered)
                         .into_any_element()
                 } else {
@@ -4300,6 +4321,34 @@ fn table_track<E: gpui::Styled>(e: E, widths: &List<f64>, j: usize) -> E {
 /// Cells keep the path a `Row` would have given them, so a field in a
 /// cell keeps its editor across rebuilds.
 #[allow(clippy::too_many_arguments)]
+/// A list row's wrapper: the mark when it is the selected one, and
+/// the click that asks the app to move the mark. A list with neither
+/// gets the bare wrapper it always had — `render_table_row`'s tail,
+/// without the column tracks.
+fn mark_row<C: Component>(
+    mut d: gpui::Div,
+    i: usize,
+    selected: i64,
+    on_select: &Option<pixie_kernel::IntListener>,
+    th: &'static Theme,
+    cx: &mut Context<Root<C>>,
+) -> gpui::Stateful<gpui::Div> {
+    if i as i64 == selected {
+        d = d.bg(rgba(th.selection_rgba));
+    }
+    let mut d = d.id(("pixie-list-row", i));
+    if let Some(f) = on_select.clone() {
+        d = d
+            .cursor_pointer()
+            .hover(|s| s.bg(rgb(th.surface_hover)))
+            .on_click(cx.listener(move |this: &mut Root<C>, _ev, _window, cx| {
+                let f = f.clone();
+                this.apply(cx, move |w| f(w, i as i64));
+            }));
+    }
+    d
+}
+
 fn render_table_row<C: Component>(
     row: &Element,
     i: usize,

@@ -229,8 +229,15 @@ def list_view(
     height: float = 0.0,
     virtualized: bool = True,
     grow: float = 0.0,
+    selected: int = -1,
+    on_select: Optional[Callable[[int], Any]] = None,
     **props: Unpack[SharedPropsOwnHeight],
-) -> Element: ...
+) -> Element:
+    """`selected` is the row the app has marked, or -1 for none — data
+    the app owns, as a slider's value is: clicking a row calls
+    `on_select` with its index and the mark moves when the app writes
+    the new value back. A verification script picks a row by what it
+    says (`select:<text>`), the first text anywhere in it."""
 def scroll_view(
     *children: Element, height: float = 0.0, **props: Unpack[SharedPropsOwnHeight]
 ) -> Element: ...

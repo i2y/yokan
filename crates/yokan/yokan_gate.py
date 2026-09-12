@@ -10933,6 +10933,30 @@ class Translator:
             g = self._num(kw, "grow")
             if g is not None:
                 lines.append(f"{pad}  grow: {g}")
+            # Which row is marked, and who hears a click — the table's
+            # contract, on a list whose rows are any shape.
+            if "selected" in kw:
+                # `typed_read` lives below, with the table's helpers; a
+                # literal here could never reflect the selection, which
+                # is the same thing the table says.
+                v9 = kw["selected"]
+                if isinstance(v9, ast.Constant):
+                    raise Untranslatable(
+                        v9,
+                        "selected= is an int state or store-field read — a literal "
+                        "could never reflect the selection",
+                    )
+                lines.append(f"{pad}  selected: {self._int_binding(v9, 'selected=')}")
+            if "on_select" in kw:
+                h9 = self.handler(kw["on_select"], takes_text=True, implicit=("index", "Int"))
+                if isinstance(h9, tuple):
+                    lines += [f"{pad}  onSelect: {{"] + [f"{pad}    {ln}" for ln in h9[1]] + [f"{pad}  }}"]
+                else:
+                    lines.append(f"{pad}  onSelect: {h9}")
+            known = {"virtualized", "item_height", "height", "grow", "selected", "on_select"}
+            for k in kw:
+                if k not in known:
+                    raise Untranslatable(kw[k], f"list_view() does not take `{k}=`")
             lines += self._row_repeater(count_cell, rf, rparam, rbody, pad, indent)
             lines.append(f"{pad}}}")
             return lines
@@ -11349,6 +11373,23 @@ class Translator:
         ):
             raise Untranslatable(ca, f"{what}'s count is `len()` of a list state or store field")
         return count_cell
+
+    def _int_binding(self, v, what: str) -> str:
+        """An Int prop bound to a state read or a store field — what a
+        widget's `selected=` takes. The choosers' own `typed_read` is
+        a nested helper of the element lowering; this is the same rule
+        where another emitter can reach it."""
+        c9 = self._cell_read(v)
+        if c9 is not None and self._ty(c9) == "Int":
+            return f"App.{c9}"
+        if (
+            isinstance(v, ast.Attribute)
+            and isinstance(v.value, ast.Name)
+            and v.value.id in self.stores
+            and self.stores[v.value.id]["field_tys"].get(v.attr) == "Int"
+        ):
+            return f"{v.value.id}.{v.attr}"
+        raise Untranslatable(v, f"{what} is an int state or store-field read")
 
     def _row_builder(self, rf):
         """The row builder of a row-built element: (its index parameter,

@@ -1339,6 +1339,12 @@ pub enum Element {
         /// instead of the fixed `height` (which is ignored when grow
         /// is set). `0.0` = unset, keep the sized behavior.
         grow: f64,
+        /// The row the app has marked, or `-1` for none. BOUND data
+        /// the app owns, the Slider and Table rule: clicking a row
+        /// calls `on_select` with its index, and the mark moves only
+        /// when the app writes the new value back.
+        selected: i64,
+        on_select: Option<IntListener>,
         children: Vec<Element>,
         lazy: Option<LazyRows>,
     },
@@ -2535,8 +2541,10 @@ impl Element {
                 item_height,
                 height,
                 grow,
+                selected,
                 children,
                 lazy,
+                ..
             } => {
                 let mut inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 if let Some(rows) = lazy {
@@ -2549,7 +2557,12 @@ impl Element {
                 // the parenthesized group only when it is set, so a
                 // list that only sets `virtualized:`/`itemHeight:`
                 // dumps exactly as it did before `height:` existed.
-                if !*virtualized && *item_height == 0.0 && *height == 0.0 && *grow == 0.0 {
+                if !*virtualized
+                    && *item_height == 0.0
+                    && *height == 0.0
+                    && *grow == 0.0
+                    && *selected < 0
+                {
                     format!("ListView[{}]", inner.join(", "))
                 } else {
                     let mut props =
@@ -2559,6 +2572,11 @@ impl Element {
                     }
                     if *grow != 0.0 {
                         props.push_str(&format!(", grow={grow}"));
+                    }
+                    // Which row is marked is what the user sees, so it
+                    // is in the dump — and only when a row is.
+                    if *selected >= 0 {
+                        props.push_str(&format!(", selected={selected}"));
                     }
                     format!("ListView({props})[{}]", inner.join(", "))
                 }
@@ -2926,6 +2944,26 @@ impl Element {
     /// The text of a table row's first cell — what `select:<text>`
     /// matches a row by. Through the riders to the `Row`, then through
     /// the cell's own riders to its `Text`; anything else has no text.
+    /// The first `Text` anywhere under this element, or empty. A
+    /// list row is whatever the app built — a row of cells, a column,
+    /// a bare label — so "what does this row say" cannot be the first
+    /// CELL the way a table's is.
+    fn row_text(&self) -> Str {
+        match self.inner() {
+            Element::Text { text, .. } => text.clone(),
+            Element::Button { label, .. } | Element::Link { label, .. } => label.clone(),
+            Element::Column { children: cs, .. }
+            | Element::Row { children: cs, .. }
+            | Element::Grid { children: cs, .. }
+            | Element::Stack(cs) => cs
+                .iter()
+                .map(|c| c.row_text())
+                .find(|t| !t.as_str().is_empty())
+                .unwrap_or_else(Str::new),
+            _ => Str::new(),
+        }
+    }
+
     fn first_cell_text(&self) -> Str {
         match self.inner() {
             Element::Row { children, .. } => match children.first().map(|c| c.inner()) {
@@ -3489,8 +3527,47 @@ impl Element {
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
                 | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n, disabled)),
-                // Same as `find_input`: virtualization never hides a
-                // row from document order.
+                // A ListView with an `onSelect` is a chooser too, and
+                // its options are what its rows SAY — the first text
+                // anywhere in each one, because a row is whatever the
+                // app built rather than a row of cells. Without a
+                // handler it is an ordinary container and does not
+                // count, so a list nobody can pick from never shifts
+                // the index a script wrote.
+                Element::ListView {
+                    on_select: Some(on_select),
+                    children,
+                    lazy,
+                    ..
+                } => {
+                    if *seen == n {
+                        let mut options: List<Str> = List::new();
+                        for c in children {
+                            options.push(c.row_text());
+                        }
+                        if let Some(rows) = lazy {
+                            for c in (rows.build)(w, 0..rows.len) {
+                                options.push(c.row_text());
+                            }
+                        }
+                        let on_select =
+                            if disabled { Some(inert_int()) } else { Some(on_select.clone()) };
+                        return Some((options, on_select));
+                    }
+                    *seen += 1;
+                    if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
+                        return Some(hit);
+                    }
+                    lazy.as_ref().and_then(|rows| {
+                        (rows.build)(w, 0..rows.len)
+                            .iter()
+                            .find_map(|c| walk(c, w, seen, n, disabled))
+                    })
+                }
+                // One with no handler is an ordinary container, walked
+                // for the choosers its rows may hold. Same as
+                // `find_input`: virtualization never hides a row from
+                // document order.
                 Element::ListView { children, lazy, .. } => {
                     if let Some(hit) = children.iter().find_map(|c| walk(c, w, seen, n, disabled)) {
                         return Some(hit);
