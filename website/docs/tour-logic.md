@@ -250,6 +250,15 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
 ```
 
+`selected=` and `on_select` work on a list as they do on a table: the marked row is a number the app holds, and a click asks the app to move the mark rather than moving it behind the app's back.
+A script picks a row by what it says — the first text anywhere in that row, since a row is whatever the builder returned.
+A list with no `on_select` is an ordinary list, and a `select:` step walks past it.
+
+```python
+list_view(len(names()), line, item_height=28.0, height=180.0,
+          selected=picked(), on_select=picked.set)
+```
+
 A table is a `list_view` with a header and column tracks.
 `table(columns, count, row)` calls `row(i)` for the visible rows only, and the builder returns a `row` of one cell per column; `widths=` are the tracks' shares.
 `selected=` tints a row and `on_select` receives the clicked row's index; `sort=` / `descending=` draw the header's arrow and `on_sort` receives the clicked column's index — the app re-sorts its own lists.

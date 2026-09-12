@@ -63,6 +63,9 @@ shows a finished transcript — its launch state is an empty table.
 #### points — Value classes (frozen dataclasses): updates are functional, via `replace`
 <img src="screenshots/points.png" width="360">
 
+#### pkgapp — an app built from a package written in the dialect: `py.yokan` marks it, its modules compile in, and the Rust crate it declares rides along
+<img src="screenshots/pkgapp.png" width="360">
+
 #### vecops — operators on Value classes: define `__add__` / `__sub__` / `__mul__` and `+` `-` `*` mean that
 <img src="screenshots/vecops.png" width="360">
 
@@ -82,6 +85,15 @@ shows a finished transcript — its launch state is an empty table.
 
 #### flow — real control flow in handlers: if / elif / while / for / break / continue
 <img src="screenshots/flow.png" width="360">
+
+#### dialect — the everyday Python that used to be refused: a method answering `int | None`, a local dict, a conditional expression in a view, `d[k]` caught as a KeyError, `print` as a second compared channel, an early return
+<img src="screenshots/dialect.png" width="360">
+
+#### closures — functions as values: a lambda in a local, a nested def that captures, a callback field armed and swapped, a closure handed to a method, and `map` over one
+<img src="screenshots/closures.png" width="360">
+
+#### bytes — a byte literal, a digest, base64, and a binary file written and read back, its mark compared against the literal
+<img src="screenshots/bytes.png" width="360">
 
 #### edges — containment, demonstrated: out-of-bounds and overflow stop the same statement the same way in both runs, and the app keeps running
 <img src="screenshots/edges.png" width="360">
@@ -103,6 +115,9 @@ shows a finished transcript — its launch state is an empty table.
 #### dialog — the modal: existing IS being open, so wrap it in `if`
 <img src="screenshots/dialog.png" width="360">
 
+#### toast — a message over the app that closes itself: `duration_ms` counts on the framework's own clock (a script says `advance:`), and `on_close` clears the flag the `if` reads
+<img src="screenshots/toast.png" width="360">
+
 #### trend — line and bar charts
 <img src="screenshots/trend.png" width="360">
 
@@ -114,6 +129,9 @@ shows a finished transcript — its launch state is an empty table.
 
 #### layout — spacer and divider: a spacer pushes the button to the row's edge, a divider draws a rule (thicker and accent-colored between the sections)
 <img src="screenshots/layout.png" width="360">
+
+#### split — two panes and a divider you drag: the ratio is the app's own number, so the handler writes it back and clamps it there (the element has no min / max)
+<img src="screenshots/split.png" width="360">
 
 #### about — link: text that opens a URL, beside a button that copies one to the clipboard
 <img src="screenshots/about.png" width="360">
@@ -144,6 +162,9 @@ shows a finished transcript — its launch state is an empty table.
 
 #### roster — table: a virtualized table with column tracks, row selection and header sort (the app re-sorts its own lists)
 <img src="screenshots/roster.png" width="360">
+
+#### picklist — list_view with a marked row: `selected=` / `on_select`, the pair a table takes, and a script picks a row by what it says
+<img src="screenshots/picklist.png" width="360">
 
 #### labels — the accessibility properties `role=` and `a11y_label=`, printed by a script's `a11y` step
 <img src="screenshots/labels.png" width="360">
@@ -176,6 +197,9 @@ shows a finished transcript — its launch state is an empty table.
 
 #### stdlib — Python's `math`, `random`, `statistics`, `json`, `datetime`, `time`, `re`, `collections` and `itertools`, and Yokan's jsondoc and clock
 <img src="screenshots/stdlib.png" width="360">
+
+#### zones — zoneinfo: one meeting read in four places, `astimezone` between them, and the gap between two instants (both runs read the machine's own zone files, so they cannot disagree about an offset)
+<img src="screenshots/zones.png" width="360">
 
 #### dice — Python's `random`: seed it and both runs draw the same sequence
 <img src="screenshots/dice.png" width="360">

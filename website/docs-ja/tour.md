@@ -202,17 +202,18 @@ def view():
 
 要素は用途で分かれます。
 
-- **並べる**：`column`、`row`、`grid`、`stack`（子を重ねる）、`spacer`、`divider`。
+- **並べる**：`column`、`row`、`grid`、`stack`（子を重ねる）、`spacer`、`divider`、`split`。
   `grid(columns=, rows=)` は等分のトラックを敷き、中の要素は `col_span=` / `row_span=` でセルをまたげます（`demo/calcgrid.py`）。
   `spacer()` は余った幅を引き受けます（`grow=` で分け合えます）。
   `divider()` は親を横切る罫線で、行の中では縦線になります。
+  `split(first, second, ratio=…)` は、ドラッグできる仕切りで二つの区画を分けます。
 - **入力**：`button` と[フォームの要素](#フォームの要素)。
 - **見せる**：`text`、`link`、`image`、`svg`、`progress`、`spinner`、`bar_chart`、`line_chart`。
   `link("Docs", "https://…")` は、クリックすると URL をブラウザで開きます（ヘッドレス実行では `click:` を受けても開きません）。
 - **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
   `data_table` は、最初の `row` がヘッダー行、以降が交互に色の付くデータ行です。
   同じ列のセルに同じ `grow` を与えると、列が揃います（`demo/table.py`）。
-- **重ねる**：`modal`。
+- **重ねる**：`modal`、`toast`。
 
 `text` には、文字の体裁と、文字を囲む箱を指定できます。
 体裁は `bold=`、`italic=`、`mono=`、`underline=`。
@@ -252,6 +253,33 @@ if show():
 ```python
 if saved():
     toast("Saved", duration_ms=1500, on_close=lambda: saved.set(False))
+```
+
+`split` は、二つの区画を、ドラッグできる仕切りで分けたものです。
+`ratio` は最初の区画が取る割合で、アプリ自身が持つ数値です。
+仕切りをドラッグすると `on_change` が新しい割合を受け取り、アプリがそれを書き戻すまで何も動きません。
+`slider` と同じ約束を、別の操作で結んだものです。
+だから検証スクリプトは仕切りも `slide:` で動かせます。
+この要素のための新しいステップは要りません。
+`min=` / `max=` が無いのも同じ理由です。
+区画をつぶさないための下限は、その数値を持っているハンドラの中で押さえます。
+区画は引数として二つ書きます。
+二つ以外は、理由を挙げて断ります。
+`vertical=True` にすると、区画は左右ではなく上下に並びます。
+`split` の中に `split` を書けば、三つの区画の配置になります（`demo/split.py`）。
+
+```python
+@store
+class Panes:
+    ratio: float = 0.5
+
+    def widen(self, r: float) -> None:
+        self.ratio = min(0.8, max(0.2, r))     # 下限はここに一度だけ書く
+
+
+split(column(text("files"), grow=1.0),
+      column(text("editor"), grow=1.0),
+      ratio=Panes.ratio, on_change=Panes.widen)
 ```
 
 ## フォームの要素

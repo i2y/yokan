@@ -230,15 +230,16 @@ def view():
 
 The elements, by what they are for:
 
-- **Arranging**: `column`, `row`, `grid`, `stack` (children on top of each other), `spacer`, `divider`.
+- **Arranging**: `column`, `row`, `grid`, `stack` (children on top of each other), `spacer`, `divider`, `split`.
   `grid(columns=, rows=)` lays equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
   `spacer()` takes the space its row or column has left (`grow=` shares it between several); `divider()` draws a rule across its parent, vertical inside a row.
+  `split(first, second, ratio=…)` puts two panes either side of a divider the user can drag.
 - **Input**: `button`, and the [form controls](#form-controls).
 - **Showing**: `text`, `link`, `image`, `svg`, `progress`, `spinner`, `bar_chart`, `line_chart`.
   `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
 - **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
   `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
-- **Layering**: `modal`.
+- **Layering**: `modal`, `toast`.
 
 `text` carries typography and a box of its own.
 The typography is `bold=`, `italic=`, `mono=` and `underline=`.
@@ -272,6 +273,26 @@ Several toasts stack upward in the order they were declared.
 ```python
 if saved():
     toast("Saved", duration_ms=1500, on_close=lambda: saved.set(False))
+```
+
+A `split` is two panes with a divider the user can drag.
+`ratio` is the share the first pane takes, and it is the app's own number: the drag calls `on_change` with the new one, and nothing moves until the app writes it back — the slider's contract with a different gesture.
+That is why a script drives a divider with `slide:` and the element needs no verb of its own, and why there is no `min=` / `max=` pair: a floor under a pane is a clamp in the handler, where the number already lives.
+The two panes are the arguments, exactly two.
+`vertical=True` stacks them instead of sitting them side by side, and a split inside a split is how a three-pane layout is written (`demo/split.py`).
+
+```python
+@store
+class Panes:
+    ratio: float = 0.5
+
+    def widen(self, r: float) -> None:
+        self.ratio = min(0.8, max(0.2, r))     # the floor lives here, once
+
+
+split(column(text("files"), grow=1.0),
+      column(text("editor"), grow=1.0),
+      ratio=Panes.ratio, on_change=Panes.widen)
 ```
 
 ## Form controls
@@ -582,6 +603,15 @@ def row(i):
 
 list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # fill the parent's remaining height
+```
+
+`selected=` and `on_select` work on a list as they do on a table: the marked row is a number the app holds, and a click asks the app to move the mark rather than moving it behind the app's back.
+A script picks a row by what it says — the first text anywhere in that row, since a row is whatever the builder returned.
+A list with no `on_select` is an ordinary list, and a `select:` step walks past it.
+
+```python
+list_view(len(names()), line, item_height=28.0, height=180.0,
+          selected=picked(), on_select=picked.set)
 ```
 
 A table is a `list_view` with a header and column tracks.
@@ -1713,7 +1743,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **An optional rendered as text** (`f"{picked}"` where `picked` is `T | None`). Python writes `None` and the compiled run writes nothing, so narrow it first (`if (v := picked) is not None:`) and render `v`.
 - **In Yokan's own modules**: copying or renaming a file, and streaming or binary downloads.
 - **In Python's modules**: six members of `math` (each refused with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. A zone comes from `zoneinfo`, and `datetime.timezone`'s fixed offsets stay out: a zone the machine knows by name is what the two runs can both read. From `zoneinfo`: a key chosen while the app runs (the compiled side reads it as it translates), an aware value in a `State`, a field or a list, and `fold`, which is the keyword that picks between the two readings of an hour a clock shows twice — the dialect always takes the first, as Python does by default. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. From `collections`: everything but `Counter` — `defaultdict` (what a missing key answers is asked at the read here), `deque` (it works in place, and a list lives in a `State`), `namedtuple` (a `@value` class says it with types), `OrderedDict` (a dict here already keeps its order) and `ChainMap`. From `itertools`: what never ends (`count`, `cycle`, `repeat`), what yields an iterator of its own (`groupby`, `tee`), what takes a function (`starmap`, `takewhile`, `filterfalse`) and `batched`, whose last tuple is a different shape from the rest. From `hashlib`: everything but `sha256`, `sha1` and `md5`, and every spelling but `hashlib.sha256(b).hexdigest()`. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `decimal`.
-- **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). Each waits on a verb the headless harness does not have yet.
+- **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for (its text is in the dump). The keyboard ones wait on a verb the headless harness does not have. A drag has one now — `split`'s divider is driven by `slide:` — so a resizable column waits on the widget rather than on the harness.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.
 - **At the Rust-crate boundary, payload-carrying enums and methods on a twin do not cross yet.** Scalars, String, Lists, Optionals, str-keyed dicts, structs (nested and width-annotated fields included), enums, and Result (compound returns too) all do. The two that remain each wait on something specific: payload enums on rpi-gen itself, methods on impl-splicing onto an rpi-declared struct. Enum- or list-typed fields inside a struct stay out too; every call outside the set is refused, and the error says what and why.

@@ -59,6 +59,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### points — Value クラス（frozen dataclass）。書き換えは `replace` による関数的な更新
 <img src="screenshots/points.png" width="360">
 
+#### pkgapp — 方言で書いたパッケージから組み立てたアプリ。`py.yokan` が目印で、モジュールはアプリの中にコンパイルされ、パッケージが宣言した Rust crate も一緒に入る
+<img src="screenshots/pkgapp.png" width="360">
+
 #### vecops — Value クラスの演算子。`__add__` / `__sub__` / `__mul__` を定義すると `+` `-` `*` がその意味になる
 <img src="screenshots/vecops.png" width="360">
 
@@ -78,6 +81,15 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 #### flow — ハンドラの中の本物の制御フロー（if / elif / while / for / break / continue）
 <img src="screenshots/flow.png" width="360">
+
+#### dialect — これまで断っていた普段の Python。`int | None` を返すメソッド、ローカルの辞書、ビューの中の条件式、KeyError として捕まえる `d[k]`、比較される二つめの出力になった `print`、途中の `return`
+<img src="screenshots/dialect.png" width="360">
+
+#### closures — 値としての関数。ローカル変数のラムダ、捕獲する入れ子の def、差し替えられるコールバックのフィールド、メソッドに渡すクロージャ、それを呼ぶ map
+<img src="screenshots/closures.png" width="360">
+
+#### bytes — バイト列のリテラル、ダイジェスト、base64、そして書いて読み直すバイナリファイル。先頭の目印はリテラルと突き合わせる
+<img src="screenshots/bytes.png" width="360">
 
 #### edges — 封じ込めの実証。範囲外アクセスもオーバーフローも、両実行のどちらでも同じ文で同じように止まり、アプリは動き続ける
 <img src="screenshots/edges.png" width="360">
@@ -99,6 +111,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### dialog — モーダル。「存在すること」が「開いていること」なので、`if` で包む
 <img src="screenshots/dialog.png" width="360">
 
+#### toast — アプリの上に出て、自分で閉じるメッセージ。`duration_ms` はフレームワーク自身の時計で数え（スクリプトは `advance:` で進める）、`on_close` が `if` の読む値を消す
+<img src="screenshots/toast.png" width="360">
+
 #### trend — ライン / バーチャート
 <img src="screenshots/trend.png" width="360">
 
@@ -110,6 +125,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 #### layout — spacer と divider。spacer がボタンを行の端に押しやり、divider が罫線を引く（節の間は太い accent 色の線）
 <img src="screenshots/layout.png" width="360">
+
+#### split — 二つの区画と、ドラッグできる仕切り。割合はアプリ自身が持つ数値なので、ハンドラが書き戻し、下限もそこで押さえる（要素に min / max は無い）
+<img src="screenshots/split.png" width="360">
 
 #### about — link。URL を開くテキストと、その URL をクリップボードにコピーするボタン
 <img src="screenshots/about.png" width="360">
@@ -140,6 +158,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 #### roster — table。仮想化された表に、列トラック、行の選択、見出しでのソートを付ける（並べ替えはアプリ側）
 <img src="screenshots/roster.png" width="360">
+
+#### picklist — 行を選べる list_view。`selected=` / `on_select` は表と同じ組で、スクリプトは行が表示している文字で行を選ぶ
+<img src="screenshots/picklist.png" width="360">
 
 #### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが出力する
 <img src="screenshots/labels.png" width="360">
@@ -172,6 +193,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 #### stdlib — Python の `math`、`random`、`statistics`、`json`、`datetime`、`time`、`re`、`collections`、`itertools` と、Yokan の jsondoc、clock
 <img src="screenshots/stdlib.png" width="360">
+
+#### zones — zoneinfo。一つの会議を四つの土地の時計で読み、`astimezone` で移し、二つの時刻の差を取る（どちらの実行も機械自身のゾーンファイルを読むので、時差について食い違えない）
+<img src="screenshots/zones.png" width="360">
 
 #### dice — Python の `random`。同じ種を与えれば、両実行で同じ列が出る
 <img src="screenshots/dice.png" width="360">

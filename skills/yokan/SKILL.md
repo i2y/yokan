@@ -244,8 +244,8 @@ and a variant belongs to one sum type.
 The catalog: `text`, `link`, `button`, `text_field`, `number_field`,
 `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`,
 `tab_bar`, `segmented`, `column`, `row`, `grid`, `stack`, `spacer`,
-`divider`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
-`data_table`, `modal`, `image`, `svg`, `bar_chart`, `line_chart`,
+`divider`, `split`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
+`data_table`, `modal`, `toast`, `image`, `svg`, `bar_chart`, `line_chart`,
 `progress`, `spinner`, `canvas`. Containers are opened with `with`; elements
 add themselves to the open container. `grid(columns=, rows=)` lays
 equal tracks and a button spans cells with `col_span=` /
@@ -255,6 +255,12 @@ columns line up when the cells of one column share a `grow`. An
 element object is placed once; build fresh ones on every call.
 `spacer()` takes a row's or column's remaining space, `divider()`
 draws a rule (vertical in a row), `link(label, url)` opens a URL.
+`split(first, second, ratio=, on_change=)` is two panes and a divider
+the user drags: exactly two panes, given as the arguments, and the
+ratio is the app's own number — the handler writes it back and clamps
+there, since the element has no `min=` / `max=`; `vertical=True`
+stacks them, a split nests in a split, and a script drags it with
+`slide:`.
 `text` takes `bold=` / `italic=` / `mono=` / `underline=`,
 `wrap="nowrap"|"ellipsis"` with `width=`, `max_lines=`, and a box
 (`background=`, `padding=`, `border_radius=`) — a status pill is a
@@ -294,6 +300,12 @@ if show():
         button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
 
+A `toast(message, duration_ms=, on_close=)` is open by existing too: a
+message at the bottom of the window with no scrim, which closes itself
+by calling `on_close` — the app clears the flag its `if` reads.
+The countdown is on the framework's clock, so a script says
+`advance:1500` and sees what a person waiting would.
+
 **Lists and charts.** `items.set(items() + [x])` appends (the
 compiled run does an in-place push), `items.set([])` clears,
 `len(items())` counts, `items[0] = v` writes one slot, and a
@@ -304,7 +316,9 @@ value under it, and a script hovers with `hover:<i>` (the dump
 carries the readout). `list_view(len(items()), row,
 item_height=22.0, height=200.0)` is virtualized — `row(i)` runs
 only for visible rows and returns `text(items()[i])`; `grow=1.0`
-fills the parent instead of `height=`.
+fills the parent instead of `height=`. `selected=` / `on_select`
+mark a row as a table's do, and a script picks a row by the first
+text anywhere in it.
 
 **Components.** `@component` with `local` for per-instance state;
 `@component(slots=True)` takes children at `slot()`:

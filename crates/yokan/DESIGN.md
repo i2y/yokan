@@ -3022,3 +3022,62 @@ lifetime, while a toast's countdown starts when the element appears
 and must end when it leaves — an identity the view owns and a store
 has no name for. In the dialect a toast is open by existing, as a
 modal is, and an `open=` argument is refused with the same reason.
+
+## Two panes and a rule that drags (2026-09-12)
+
+A **split** is two panes with a divider between them, and `ratio:` is
+the share of the main axis the first pane takes. That number is the
+app's: dragging the rule calls `onChange` with the new one, and
+nothing moves until the app writes it back. It is the Slider's
+contract with a different gesture, which is why the element needs no
+script verb of its own — `slide[@n]:` counts Sliders and Splits
+together, and a Split counts itself before walking its panes, so a
+nested one is reachable.
+
+A ratio is a fraction, so its range is [0, 1] by construction and
+there are no `min:` / `max:` props. The engine clamps what it paints;
+an app that wants a floor under a pane clamps in its own handler,
+where the number already lives. One number with two owners is what a
+range prop would introduce. `vertical:` names how the panes sit, the
+way Column names how its children sit.
+
+The panes are flex items whose shares ARE the ratio, so taffy divides
+the box and nothing computes a pane's size. What the gesture needs
+numbers for it reads at paint — the split's own box, to turn a pointer
+into a ratio, and the rule's rect, for the hit test — and its
+listeners are window-wide, because a div's fire only while its hitbox
+is hovered and a six-pixel rule is left behind by the first fast drag.
+
+Exactly two panes, and both lowerers refuse anything else by name. The
+kernel variant holds a Vec because that is what every walker's
+or-pattern reads, so "exactly two" is said where it can be checked. In
+the dialect the panes are the call's arguments rather than a `with`
+block: a block's body is not a count either run can read before it has
+run, so the refusal is at the call site in both.
+
+## A list you can pick a row from (2026-09-12)
+
+`list_view` takes `selected` and `on_select`, the pair a table has
+always taken: the marked row is data the app owns, and a click asks
+the app to move the mark rather than moving it behind the app's back.
+A list with neither keeps the rows it always had, bare, so an
+untouched app lays out and dumps exactly as it did. Which row is
+marked is what the user sees, so it is in the dump — and only when a
+row is.
+
+A script picks a row by what it SAYS. A table's options are its rows'
+first cells, but a list row is whatever the builder returned — a row
+of cells, a column, a bare label — so the option is the first text
+anywhere under that row. A list with no handler is an ordinary
+container and does not count as a chooser, so a list nobody can pick
+from never shifts the index a script wrote. That ordering is the whole
+of the change on the kernel side: the selectable-list arm has to come
+before the plain-container arm it would otherwise fall into.
+
+The C face does not carry the pair. `elements.toml` declares no
+`selected:` / `onSelect:` on a list, so nothing on that face can write
+one, and the arm that builds a ListView there says the same thing in
+values: no row marked, no handler. A table's selection does cross,
+because the table declares both keywords. Putting them on the list is
+a row in that table and all four sweeps — a change of its own, not a
+consequence of this one.

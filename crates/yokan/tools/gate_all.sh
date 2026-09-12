@@ -118,6 +118,12 @@ gate zones   "$PY" yokan_gate.py gate demo/zones.py --script "click:winter,dump,
 # clock, so `advance:` is what proves it — no new verb, and no tier
 # able to disagree about when a second and a half passed.
 gate toast   "$PY" yokan_gate.py gate demo/toast.py --script "dump,click:dismiss,click:save,dump,advance:1000,dump,advance:500,dump"
+# Two panes and a rule that drags: `ratio` is the app's number, so
+# `slide:` is what proves it, and the last two steps land outside the
+# demo's own clamp — the app holds the floor, not the widget.
+gate split   "$PY" yokan_gate.py gate demo/split.py --script "slide:0.7,dump,slide@1:0.6,dump,slide:0.05,dump,slide@1:0.95"
+# A list whose rows are picked by what they say.
+gate picklist "$PY" yokan_gate.py gate demo/picklist.py --script "select:cy,dump,select:ada,dump,click:clear"
 gate pyjob   "$PY" yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
 gate stdlib  "$PY" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   "$PY" yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
@@ -160,7 +166,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
     pkgapp) continue;;
-    bytes|zones|toast) continue;;
+    bytes|zones|toast|split|picklist) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;

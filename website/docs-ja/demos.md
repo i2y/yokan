@@ -1275,6 +1275,68 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 値と型
 
+#### points — Value クラス（frozen dataclass）。書き換えは `replace` による関数的な更新
+<img src="images/demos/points.png" width="360">
+
+<!-- source -->
+??? note "points.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """struct ↔ frozen dataclass. `frozen=True` is the admission ticket:
+    an immutable value cannot expose Python's reference aliasing, so it
+    means the same thing as a native COW value by construction. Updates
+    are `dataclasses.replace` — a new value, both tiers.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from dataclasses import dataclass, replace  # noqa: E402
+
+    from yokan import button, column, row, run, State, text  # noqa: E402
+
+
+    @dataclass(frozen=True)
+    class Point:
+        x: int
+        y: int = 0
+
+
+    sel: State[Point] = State(Point(3, 4))
+    dist: State[int] = State(0)
+
+
+    def move_right():
+        sel.set(replace(sel(), x=sel().x + 5))
+
+
+    def swap():
+        sel.set(Point(sel().y, sel().x))
+
+
+    def measure():
+        p = sel()
+        dist.set(p.x * p.x + p.y * p.y)
+
+
+    def view():
+        with column(spacing=8, padding=12):
+            text(f"p=({sel().x}, {sel().y}) d2={dist()}")
+            with row(spacing=6):
+                button("right", on_click=move_right)
+                button("swap", on_click=swap)
+                button("measure", on_click=measure)
+
+
+    if __name__ == "__main__":
+        run(view, title="points")
+    ```
+<!-- source -->
+
 #### pkgapp — 方言で書いたパッケージから組み立てたアプリ。`py.yokan` が目印で、モジュールはアプリの中にコンパイルされ、パッケージが宣言した Rust crate も一緒に入る
 <img src="images/demos/pkgapp.png" width="360">
 
@@ -2964,6 +3026,68 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
+#### toast — アプリの上に出て、自分で閉じるメッセージ。`duration_ms` はフレームワーク自身の時計で数え（スクリプトは `advance:` で進める）、`on_close` が `if` の読む値を消す
+<img src="images/demos/toast.png" width="360">
+
+<!-- source -->
+??? note "toast.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """A message that appears over the app and goes away on its own.
+
+    A toast is open by existing, the way a modal is: put it behind
+    `if showing():` rather than passing a flag. Give it `duration_ms` and
+    it closes itself that many milliseconds later by calling `on_close` —
+    which is where the app clears what the `if` reads. The countdown runs
+    on the framework's own clock, so a headless script says `advance:1500`
+    and sees the same thing a person waiting would.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from yokan import button, column, row, run, State, text, toast  # noqa: E402
+
+    note: State[str] = State("nothing saved yet")
+    saved: State[bool] = State(False)
+    hint: State[bool] = State(True)
+
+
+    def save():
+        note.set("saved")
+        saved.set(True)
+
+
+    def done():
+        saved.set(False)
+        note.set("the toast closed itself")
+
+
+    def dismiss():
+        hint.set(False)
+
+
+    def view():
+        with column(spacing=10, padding=14):
+            text(f"{note()}", size=16)
+            with row(spacing=8):
+                button("save", on_click=save)
+                button("dismiss", on_click=dismiss)
+            if hint():
+                toast("welcome - press save")
+            if saved():
+                toast("Saved", duration_ms=1500, on_close=done)
+
+
+    if __name__ == "__main__":
+        run(view, title="toast")
+    ```
+<!-- source -->
+
 #### trend — ライン / バーチャート
 <img src="images/demos/trend.png" width="360">
 
@@ -3206,6 +3330,84 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 <!-- source -->
 
 
+
+#### split — 二つの区画と、ドラッグできる仕切り。割合はアプリ自身が持つ数値なので、ハンドラが書き戻し、下限もそこで押さえる（要素に min / max は無い）
+<img src="images/demos/split.png" width="360">
+
+<!-- source -->
+??? note "split.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """A split is two panes and a divider you drag.
+
+    `ratio` is the share the first pane takes, and it is the app's own
+    number: the handler receives the new one and writes it back, which is
+    what moves the divider. That is the slider's contract with a different
+    gesture, so `slide:` drives it headless with no verb of its own — and
+    because a ratio is a fraction, the widget has no min= / max=: a pane
+    that may not vanish says so once, in the handler.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from yokan import column, run, split, store, text  # noqa: E402
+
+
+    @store
+    class Panes:
+        ratio: float = 0.5
+        rows: float = 0.35
+
+        def widen(self, r: float) -> None:
+            # The floor under each pane, kept where the app keeps the
+            # number rather than on the widget: one owner, not two.
+            self.ratio = min(0.8, max(0.2, r))
+
+        def lower(self, r: float) -> None:
+            self.rows = min(0.85, max(0.15, r))
+
+
+    def view():
+        with column(spacing=10, padding=14, grow=1.0):
+            text(f"files {Panes.ratio}, output below {Panes.rows}", size=13)
+            split(
+                column(
+                    text("files", size=13),
+                    padding=12,
+                    background="#313244",
+                    grow=1.0,
+                ),
+                split(
+                    column(
+                        text("editor", size=13),
+                        padding=12,
+                        background="#45475a",
+                        grow=1.0,
+                    ),
+                    column(
+                        text("output", size=13),
+                        padding=12,
+                        background="#181825",
+                        grow=1.0,
+                    ),
+                    ratio=Panes.rows,
+                    vertical=True,
+                    on_change=Panes.lower,
+                ),
+                ratio=Panes.ratio,
+                on_change=Panes.widen,
+            )
+
+
+    if __name__ == "__main__":
+        run(view, title="split")
+    ```
+<!-- source -->
 
 #### about — link。URL を開くテキストと、その URL をクリップボードにコピーするボタン
 <img src="images/demos/about.png" width="360">
@@ -4586,6 +4788,70 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 
 
+#### picklist — 行を選べる list_view。`selected=` / `on_select` は表と同じ組で、スクリプトは行が表示している文字で行を選ぶ
+<img src="images/demos/picklist.png" width="360">
+
+<!-- source -->
+??? note "picklist.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """A list you can pick a row from.
+
+    `list_view` takes `selected` and `on_select` the way `table` does:
+    the marked row is data the app owns, and clicking a row asks the app
+    to move the mark rather than moving it behind the app's back. The
+    rows are whatever the builder returns, so a verification script picks
+    one by what it says — the first text anywhere in the row.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from yokan import State, button, column, list_view, row, run, text  # noqa: E402
+
+    names: State[list[str]] = State(["ada", "bo", "cy", "dee", "eve"])
+    sizes: State[list[int]] = State([12, 7, 31, 4, 19])
+    picked: State[int] = State(-1)
+
+
+    def choose(i: int) -> None:
+        picked.set(i)
+
+
+    def clear() -> None:
+        picked.set(-1)
+
+
+    def line(i: int):
+        with row(spacing=8):
+            text(names()[i], size=14)
+            text(f"{sizes()[i]} kb", size=12, color="#7aa2f7")
+
+
+    def view() -> None:
+        with column(spacing=10, padding=14):
+            text("pick a row", size=20)
+            list_view(
+                len(names()),
+                line,
+                item_height=28.0,
+                height=180.0,
+                selected=picked(),
+                on_select=choose,
+            )
+            text(f"picked: {picked()}")
+            button("clear", on_click=clear)
+
+
+    if __name__ == "__main__":
+        run(view, title="picklist")
+    ```
+<!-- source -->
+
 #### labels — アクセシビリティのプロパティ `role=` と `a11y_label=`。スクリプトの `a11y` ステップが出力する
 <img src="images/demos/labels.png" width="360">
 
@@ -5726,6 +5992,114 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 <!-- source -->
 
 
+
+#### zones — zoneinfo。一つの会議を四つの土地の時計で読み、`astimezone` で移し、二つの時刻の差を取る（どちらの実行も機械自身のゾーンファイルを読むので、時差について食い違えない）
+<img src="images/demos/zones.png" width="360">
+
+<!-- source -->
+??? note "zones.py"
+
+    ```python
+    # /// script
+    # requires-python = ">=3.14"
+    # ///
+    """`zoneinfo` in the dialect: one meeting, read in four places.
+
+    A zone is named where it is written — `ZoneInfo("Asia/Tokyo")` — and
+    both runs read the same zone files off the machine, so they cannot
+    disagree about an offset. `datetime(..., tzinfo=TOKYO)` is the wall
+    clock in that zone; `astimezone` moves it to another; `isoformat`,
+    `tzname`, `utcoffset` and `strftime`'s `%z` / `%Z` say where it is,
+    and a subtraction between two of them is the difference between the
+    instants, not between the clocks.
+
+    The zone rides in the type rather than in the value, so a key is a
+    literal: the compiled side reads it while it translates. What a State
+    or a field holds is the naive `datetime` it always held.
+    """
+    import os
+    import sys
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+    from yokan import State, button, column, row, run, text  # noqa: E402
+
+    TOKYO = ZoneInfo("Asia/Tokyo")
+    NEW_YORK = ZoneInfo("America/New_York")
+    LONDON = ZoneInfo("Europe/London")
+    KOLKATA = ZoneInfo("Asia/Kolkata")
+
+    # The meeting, in the clock of the room it is booked in.
+    lines: State[list[str]] = State([])
+    gap: State[str] = State("")
+    zone_now: State[str] = State("")
+
+
+    def elsewhere() -> None:
+        here = datetime(2026, 7, 14, 9, 30, tzinfo=TOKYO)
+        there = here.astimezone(NEW_YORK)
+        over = here.astimezone(LONDON)
+        east = here.astimezone(KOLKATA)
+        lines.set(
+            [
+                f"Tokyo     {here.strftime('%a %d %b %H:%M %Z %z')}",
+                f"New York  {there.strftime('%a %d %b %H:%M %Z %z')}",
+                f"London    {over.strftime('%a %d %b %H:%M %Z %z')}",
+                f"Kolkata   {east.strftime('%a %d %b %H:%M %Z %z')}",
+            ]
+        )
+
+
+    def winter() -> None:
+        # The same hour six months later: New York is on standard time,
+        # so the difference from Tokyo is an hour wider.
+        here = datetime(2026, 1, 14, 9, 30, tzinfo=TOKYO)
+        there = here.astimezone(NEW_YORK)
+        lines.set(
+            [
+                f"Tokyo     {here.isoformat()}",
+                f"New York  {there.isoformat()}",
+                f"New York offset {there.strftime('%z')}",
+                f"the name it goes by {there.tzname()}",
+            ]
+        )
+
+
+    def difference() -> None:
+        # Two clocks, one instant: the difference is zero. Move one of
+        # them and the difference is what moved.
+        start = datetime(2026, 7, 14, 9, 30, tzinfo=TOKYO)
+        end = start.astimezone(NEW_YORK) + timedelta(hours=2)
+        gap.set(f"{(end - start).total_seconds() / 3600.0} hours apart")
+
+
+    def right_now() -> None:
+        # The clock itself is not the same in two runs, so what the demo
+        # shows is what the zone says about now: its name and its offset.
+        n = datetime.now(TOKYO)
+        zone_now.set(f"Tokyo is {n.tzname()} at {n.strftime('%z')}")
+
+
+    def view() -> None:
+        with column(spacing=10, padding=14):
+            text("one meeting, four clocks", size=20)
+            with row(spacing=6):
+                button("summer", on_click=elsewhere)
+                button("winter", on_click=winter)
+                button("difference", on_click=difference)
+                button("now", on_click=right_now)
+            for line in lines():
+                text(line)
+            text(f"{gap()}")
+            text(f"{zone_now()}")
+
+
+    if __name__ == "__main__":
+        run(view, title="zones", on_start=elsewhere)
+    ```
+<!-- source -->
 
 #### dice — Python の `random`。同じ種を与えれば、両実行で同じ列が出る
 <img src="images/demos/dice.png" width="360">

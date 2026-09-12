@@ -84,13 +84,13 @@ Desktop apps, full stop. From a few-screen internal tool to a
 data-facing application of forms, tables, and charts — written with
 Python's feel, shipped as a native app.
 
-There are 32 UI elements (text, buttons, a full set of form
+There are 34 UI elements (text, buttons, a full set of form
 controls, tables, charts, virtualized lists, modals, and a pixel
 canvas you paint command by command), plus styles,
 light/dark themes, and animation; virtualized lists stay smooth at
 a hundred thousand rows. State comes in exactly three shapes, and
 the [language tour](crates/yokan/TOUR.md) walks the whole surface
-in one pass. There are 59 bundled demos, all screenshotted in the
+in one pass. There are 67 bundled demos, all screenshotted in the
 [gallery](crates/yokan/demo/README.md).
 
 ### Two ports

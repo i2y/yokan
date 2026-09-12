@@ -280,6 +280,17 @@ list_view(len(items()), row, item_height=22.0, height=200.0)
 list_view(len(items()), row, item_height=22.0, grow=1.0)   # 親の残り高さを埋める
 ```
 
+`selected=` と `on_select` は、表と同じようにリストでも使えます。
+選ばれている行はアプリが持つ番号で、行をクリックすると、選択が勝手に動くのではなく、アプリに番号を動かしてくれと頼みます。
+スクリプトは、行が表示している文字で行を選びます。
+行の中身は行を作る関数が返したものなので、その行のどこかにある最初のテキストが目印になります。
+`on_select` の無いリストはただのリストで、`select:` のステップはそれを数えません。
+
+```python
+list_view(len(names()), line, item_height=28.0, height=180.0,
+          selected=picked(), on_select=picked.set)
+```
+
 表は、ヘッダーと列トラックを持つ `list_view` です。
 `table(columns, count, row)` は、見えている行についてだけ `row(i)` を呼びます。
 行を作る関数は、セルを列ごとに一つずつ並べた `row` を返します。

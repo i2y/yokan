@@ -192,15 +192,16 @@ def view():
 
 The elements, by what they are for:
 
-- **Arranging**: `column`, `row`, `grid`, `stack` (children on top of each other), `spacer`, `divider`.
+- **Arranging**: `column`, `row`, `grid`, `stack` (children on top of each other), `spacer`, `divider`, `split`.
   `grid(columns=, rows=)` lays equal tracks, and a child spans cells with `col_span=` / `row_span=` (`demo/calcgrid.py`).
   `spacer()` takes the space its row or column has left (`grow=` shares it between several); `divider()` draws a rule across its parent, vertical inside a row.
+  `split(first, second, ratio=…)` puts two panes either side of a divider the user can drag.
 - **Input**: `button`, and the [form controls](#form-controls).
 - **Showing**: `text`, `link`, `image`, `svg`, `progress`, `spinner`, `bar_chart`, `line_chart`.
   `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
 - **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
   `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
-- **Layering**: `modal`.
+- **Layering**: `modal`, `toast`.
 
 `text` carries typography and a box of its own.
 The typography is `bold=`, `italic=`, `mono=` and `underline=`.
@@ -234,6 +235,26 @@ Several toasts stack upward in the order they were declared.
 ```python
 if saved():
     toast("Saved", duration_ms=1500, on_close=lambda: saved.set(False))
+```
+
+A `split` is two panes with a divider the user can drag.
+`ratio` is the share the first pane takes, and it is the app's own number: the drag calls `on_change` with the new one, and nothing moves until the app writes it back — the slider's contract with a different gesture.
+That is why a script drives a divider with `slide:` and the element needs no verb of its own, and why there is no `min=` / `max=` pair: a floor under a pane is a clamp in the handler, where the number already lives.
+The two panes are the arguments, exactly two.
+`vertical=True` stacks them instead of sitting them side by side, and a split inside a split is how a three-pane layout is written (`demo/split.py`).
+
+```python
+@store
+class Panes:
+    ratio: float = 0.5
+
+    def widen(self, r: float) -> None:
+        self.ratio = min(0.8, max(0.2, r))     # the floor lives here, once
+
+
+split(column(text("files"), grow=1.0),
+      column(text("editor"), grow=1.0),
+      ratio=Panes.ratio, on_change=Panes.widen)
 ```
 
 ## Form controls
