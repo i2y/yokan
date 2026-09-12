@@ -200,7 +200,7 @@ fn container_prop_allowlists_match_across_tiers() {
     // And the table is not vacuous.
     assert_eq!(
         pixie_codegen::container_prop_keys("ListView"),
-        ["virtualized", "itemHeight", "height", "grow"]
+        ["virtualized", "itemHeight", "height", "grow", "selected", "onSelect"]
     );
     // ScrollView takes the viewport height and nothing else; its
     // horizontal twin clips on width, so it takes no props at all.

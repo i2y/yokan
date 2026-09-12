@@ -773,6 +773,13 @@ fn materialize(b: &Bag, children: Vec<Element>) -> Element {
                 item_height: b.n(K_ITEM_HEIGHT),
                 height: b.n(K_HEIGHT),
                 grow: b.n(K_GROW),
+                // A marked row is the dialect's for now: the vocabulary
+                // has no `selected:` / `onSelect:` on list_view, so
+                // nothing on this face can write one, and -1 is the
+                // value that says no row is marked. A table's selection
+                // does cross, because the table declares both keywords.
+                selected: -1,
+                on_select: None,
                 children: Vec::new(),
                 lazy: b.lazy(K_ROW, count),
             }
