@@ -4124,13 +4124,14 @@ fn render_el_in<C: Component>(
         } => {
             let key = pass.path.clone();
             pass.seen.push(key.clone());
-            // The Select's cell is exactly the shape a Split needs —
-            // a flag and a rect — and the map is already path-keyed
-            // with this pass's GC, so the two share it: a path names
-            // one element and no element is both. Here the flag means
-            // "a drag is under way" and the rect is the divider's,
-            // recorded at paint and read at event time, so the order
-            // the two canvases paint in does not matter.
+            // The Select's cell already carries what a Split needs — a
+            // flag and a rect — and the map is path-keyed with this
+            // pass's GC, so the two share it: a path names one element
+            // and no element is both. Here the flag means "a drag is
+            // under way" and the rect is the divider's, recorded at
+            // paint and read at event time, so the order the two
+            // canvases paint in does not matter. The third slot is the
+            // Select's window height, carried through untouched.
             let cell = selects.entry(key).or_default().clone();
             let vertical = *vertical;
             let value = *ratio;
@@ -4203,7 +4204,7 @@ fn render_el_in<C: Component>(
                     canvas(
                         |_, _, _| (),
                         move |bounds: Bounds<Pixels>, _, _window: &mut Window, _: &mut App| {
-                            let (dragging, _) = cell.get();
+                            let (dragging, _, other) = cell.get();
                             cell.set((
                                 dragging,
                                 (
@@ -4212,6 +4213,7 @@ fn render_el_in<C: Component>(
                                     bounds.size.width.as_f32(),
                                     bounds.size.height.as_f32(),
                                 ),
+                                other,
                             ));
                         },
                     )
@@ -4268,7 +4270,7 @@ fn render_el_in<C: Component>(
                                         {
                                             return;
                                         }
-                                        let (_, (bx, by, bw, bh)) = cell.get();
+                                        let (_, (bx, by, bw, bh), other) = cell.get();
                                         if bw <= 0.0 || bh <= 0.0 {
                                             return;
                                         }
@@ -4281,8 +4283,7 @@ fn render_el_in<C: Component>(
                                         if !on_rule {
                                             return;
                                         }
-                                        let (_, rect) = cell.get();
-                                        cell.set((true, rect));
+                                        cell.set((true, (bx, by, bw, bh), other));
                                         cx.stop_propagation();
                                         window.refresh();
                                     },
@@ -4295,7 +4296,7 @@ fn render_el_in<C: Component>(
                                         if phase != DispatchPhase::Bubble {
                                             return;
                                         }
-                                        let (dragging, rect) = cell.get();
+                                        let (dragging, rect, other) = cell.get();
                                         if !dragging {
                                             return;
                                         }
@@ -4305,7 +4306,7 @@ fn render_el_in<C: Component>(
                                         // the drag anyway (the Slider's
                                         // rule).
                                         if ev.pressed_button != Some(MouseButton::Left) {
-                                            cell.set((false, rect));
+                                            cell.set((false, rect, other));
                                             window.refresh();
                                             return;
                                         }
@@ -4332,9 +4333,9 @@ fn render_el_in<C: Component>(
                                         if phase != DispatchPhase::Bubble {
                                             return;
                                         }
-                                        let (dragging, rect) = cell.get();
+                                        let (dragging, rect, other) = cell.get();
                                         if dragging {
-                                            cell.set((false, rect));
+                                            cell.set((false, rect, other));
                                             window.refresh();
                                         }
                                     },
