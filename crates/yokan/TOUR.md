@@ -68,7 +68,7 @@ if __name__ == "__main__":
     run(view, title="counter")
 ```
 
-`yokan init app.py` writes this file, with the title taken from the file name.
+`yokan init app.py` writes this file, with the title taken from the file name — and beside it `tests/test_app.py`, which drives the app, and `.github/workflows/gate.yml`, which runs those tests and the gate.
 There are three ways to run it.
 
 ```console
@@ -1406,25 +1406,62 @@ No display is involved, so it works over ssh and in CI, and what it draws is the
 That is the fast half of the loop; `yokan gate` is the slow half, and it is the one that proves the shipped run agrees.
 
 ```python
-# test_app.py
-import app                       # the module; its run(...) is under __main__
-from yokan import headless
+# tests/test_app.py
+def test_clicking_counts(app, run):
+    assert "count: 2" in run(app, "click:+1,click:+1")
 
 
-def test_clicking_counts():
-    out = headless(app.view, None, "click:+1,click:+1")
-    assert "count: 2" in out
-
-
-def test_typing_greets():
-    out = headless(app.view, None, "input:Momo")
-    assert "Momo" in out
+def test_typing_greets(app, run):
+    assert "Momo" in run(app, "input:Momo")
 ```
 
 ```console
 $ uv run --with pytest python -m pytest
 2 passed
 ```
+
+`app` and `run` come from the plugin on the wheel, so a suite that has Yokan installed has them: `app` imports `app.py` without running it (its `run(...)` is under `__main__`), and `run` drives it with no window.
+Every `run` starts the app over, so a test can drive it more than once and read the numbers a person would.
+Nothing forces the fixtures — `from yokan_testing import run_script` is the same machinery under another name, and `yokan.headless(view, state, script)` is the entry point both sit on.
+
+What a run answers is a `Transcript`.
+It IS the string it has always been — `in`, `==` and `str()` all behave as they did — and the run's pieces are on it:
+
+```python
+def test_the_middle_of_the_run(app, run):
+    t = run(app, "click:+1,dump,click:+10")
+    assert "count: 0" in t.before      # the screen it opened with
+    assert "count: 1" in t.dumps[0]    # what the `dump` step asked for
+    assert "count: 11" in t.after      # the screen it ended on
+    assert t.steps[0].step == "click:+1"
+```
+
+`a11y` puts the accessibility tree in the transcript, which is what a screen reader would be handed, and `mem` counts the objects the run is holding:
+
+```python
+def test_a_screen_reader_hears_the_count(app, run):
+    t = run(app, "click:+1,a11y")
+    assert 'label "count: 1"' in t.a11y
+    assert 'button "+1"' in t.a11y
+```
+
+A whole screen is worth recording rather than asserting piece by piece, and that is a snapshot: `snapshot(t)` compares the transcript against `tests/__snapshots__/<test>.dump` and `--yokan-update` writes it.
+A diff in a review then reads as the screen changing.
+
+```python
+def test_the_screen_is_what_it_was(app, run, snapshot):
+    snapshot(run(app, "click:+1,click:+10"))
+```
+
+And the gate is a test of its own.
+`gate("click:+1")` builds the app and compares the two runs for that script, failing with what diverged; `--yokan-gate` does it for every script the suite runs, which turns a suite into the proof that the compiled app agrees.
+
+```console
+$ uv run --with pytest python -m pytest --yokan-gate
+6 passed in 16.19s
+```
+
+It compiles, so it is the slow half on purpose: keep one `gate(...)` in the suite for the ordinary run, and reach for `--yokan-gate` before a release.
 
 The script vocabulary is the one in the next section, so anything a person can do to the app is something a test can do: click, type, press a key, drop a file, let a second pass with `advance:1000`.
 Handlers, store methods and value classes are ordinary Python too, so the parts that are only computation can be tested by calling them.
@@ -1451,7 +1488,8 @@ The step vocabulary is `click[@n]:<label>` (a button, a link, or a table's colum
 `@n` picks the n-th match in tree order, counting from 0, so a row of identical buttons is reachable (`click@2:delete` presses the third).
 `dump` prints the screen at that point in the script, which is what makes an intermediate state checked and not just the first and last.
 A comma inside text is written `\,` (`input:hello\, world`).
-The screen tree is dumped to stdout before and after the steps, and from tests `yokan.headless(view, state, script)` returns the same string.
+`a11y` and `mem` print beside the screens rather than into them: the gate compares `a11y`, because both runs build the same accessibility tree, and leaves `mem` to be read, because the two runs hold different objects by construction.
+The screen tree is dumped to stdout before and after the steps, and from tests `yokan.headless(view, state, script)` answers the same string.
 
 The **gate** replays the same script against the development build and the shipped build, and diffs the dumps.
 

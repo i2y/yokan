@@ -30,6 +30,15 @@ Documentation = "https://i2y.github.io/yokan/"
 [project.scripts]
 yokan = "yokan_gate:main"
 
+# The testing half registers itself, so a suite that has yokan
+# installed gets the fixtures and the two flags without naming a
+# plugin anywhere.
+[project.entry-points.pytest11]
+# Named for the module, so `-p yokan_testing` on a suite that has no
+# wheel installed asks for the same plugin rather than a second copy
+# of it under another name.
+yokan_testing = "yokan_testing"
+
 [tool.maturin]
 # abi3-py312: one wheel serves CPython 3.12+ (probed: the whole API
 # surface, PyModule::from_code included, builds under the limited API).
@@ -41,5 +50,6 @@ module-name = "yokan"
 # importantly: @store binds an INSTANCE to the class name).
 include = [
     { path = "yokan_gate.py", format = ["sdist", "wheel"] },
+    { path = "yokan_testing.py", format = ["sdist", "wheel"] },
     { path = "yokan.pyi", format = ["sdist", "wheel"] },
 ]

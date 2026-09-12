@@ -43,7 +43,7 @@ command: `uv tool install yokan`. Plain pip works too.
 
 ```console
 $ uv tool install yokan                     # the yokan command
-$ yokan init app.py                         # the first file
+$ yokan init app.py                         # the first file, its tests, a workflow
 $ uv run app.py                             # develop: window, live reload
 $ yokan check app.py                        # is it inside the dialect?
 $ yokan gate app.py --script "click:+1"     # both runs, compared

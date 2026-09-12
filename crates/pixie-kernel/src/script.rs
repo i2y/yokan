@@ -205,14 +205,43 @@ pub fn run<C: Component>(
     tree: &mut Element,
     script: &str,
 ) -> String {
-    let mut timed = false;
+    let (parts, last) = run_parts(rt, view, tree, script);
     let mut log = String::new();
+    for p in &parts {
+        log.push_str(&p.text);
+    }
+    log.push_str(&last);
+    log
+}
+
+/// One step of a script, and what it printed. A step that prints
+/// nothing carries an empty text, so the order here is the script's
+/// own and a caller can index it by the step it wrote.
+pub struct StepOut {
+    pub step: String,
+    pub text: String,
+}
+
+/// The same run, with the transcript kept in pieces: every step
+/// beside its own output, then the final dump. `run` is this joined,
+/// so nothing a caller prints moves — what this adds is the ability
+/// to ask WHICH step said a thing, which is what a test does and a
+/// byte comparison does not need.
+pub fn run_parts<C: Component>(
+    rt: &Runtime,
+    view: Handle<C>,
+    tree: &mut Element,
+    script: &str,
+) -> (Vec<StepOut>, String) {
+    let mut timed = false;
+    let mut parts: Vec<StepOut> = Vec::new();
     for step in split_steps(script) {
         if step.is_empty() {
             continue;
         }
         let step = step.as_str();
         timed = false;
+        let mut log = String::new();
         if let Some(name) = step.strip_prefix("theme:") {
             // §8.37: flipping the root palette is an ordinary
             // rebuild now, because the colors live in the tree.
@@ -553,10 +582,10 @@ pub fn run<C: Component>(
         // Whoever can draw gets this step's screen (`frames`); with
         // nobody listening this is one `is_none`.
         crate::frames::emit(tree);
+        parts.push(StepOut { step: step.to_string(), text: log });
     }
     if !timed {
         anim_settle(rt, view, tree);
     }
-    log.push_str(&rt.with(|w| tree.dump(w)));
-    log
+    (parts, rt.with(|w| tree.dump(w)))
 }

@@ -32,6 +32,7 @@ if __name__ == "__main__":
 ```
 
 このファイルは `yokan init app.py` が書きます（title はファイル名から取ります）。
+同時に、アプリを動かすテスト `tests/test_app.py` と、そのテストとゲートを走らせる `.github/workflows/gate.yml` も書きます。
 三つの動かし方があります。
 
 ```console

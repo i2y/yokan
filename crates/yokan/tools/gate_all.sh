@@ -30,6 +30,26 @@ gate() {
     fail=$((fail+1)); failed="$failed $name"; echo "FAIL $name"
   fi
 }
+# A command whose verdict is its exit code rather than a line it
+# prints: the test runs. What it said is shown only when it failed,
+# which is when anyone wants it.
+check() {
+  local name="$1"; shift
+  local out
+  if out=$("$@" 2>&1); then
+    pass=$((pass+1)); echo "OK   $name"
+  else
+    fail=$((fail+1)); failed="$failed $name"; echo "FAIL $name"
+    echo "$out" | tail -25
+  fi
+}
+# pytest is not the interpreter's, and the plugin is this tree's: both
+# are handed in here so the sweep runs the same way on a machine that
+# has never installed the wheel.
+pytest_run() {
+  env -u VIRTUAL_ENV PYTHONPATH="$PWD" uv run --quiet --with pytest \
+    "$PY" -m pytest "$@" -q -p yokan_testing
+}
 # Scripted gates (interaction coverage beyond the startup dump).
 gate counter "$PY" yokan_gate.py gate demo/counter.py --script "click:+1,dump,input:Momo\, again"
 gate forms   "$PY" yokan_gate.py gate demo/forms.py --script "click:Dark mode,slide:7,select:banana"
@@ -118,6 +138,12 @@ gate opsboard "$PY" yokan_gate.py gate demo/opsboard/app.py
 rm -rf .gate/init && mkdir -p .gate/init
 "$PY" yokan_gate.py init .gate/init/app.py >/dev/null
 gate init    "$PY" yokan_gate.py gate .gate/init/app.py --script "click:+1"
+# The tests `init` writes, run the way a user runs them: the scaffold
+# has to pass its own suite the moment it is written.
+check init-tests pytest_run .gate/init/tests
+# The demos' own tests: the fixtures, a snapshot of a screen, and the
+# gate called from inside a test.
+check tests  pytest_run demo/tests
 # Everything else: startup-dump gates.
 for f in demo/*.py; do
   b=$(basename "$f" .py)

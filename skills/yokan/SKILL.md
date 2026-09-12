@@ -765,7 +765,7 @@ place for startup work — loading data, seeding the RNG.
 ## Headless runs, the gate, shipping
 
 ```console
-$ yokan init app.py                                   # the smallest app, ready to gate
+$ yokan init app.py                                   # the app, its tests, and a CI workflow
 $ yokan check app.py [--strict]                       # refusals and warnings, no compiler
 $ yokan show app.py --script "click:+1" --frames shots/ --scale 3
                                                       # run it, print the screen, draw each frame
@@ -793,19 +793,36 @@ point; `hover:` moves it away, and the dump carries the readout),
 match in tree order; `dump` prints the screen mid-script; a comma
 in text is `\,`.
 
-**Testing.** An app is a Python module, so its tests are Python tests
-in any runner. `yokan.headless(view, state, script)` runs the app
-against a script with no window and answers the screen as text; a test
-asserts on it. Handlers, store methods and value classes are ordinary
-Python and can be called directly.
+**Testing.** An app is a Python module, so its tests are Python
+tests. The wheel registers a pytest plugin, so a suite has four
+fixtures without importing anything: `app` (the app module, imported
+without running it), `run` (drives it with no window and answers a
+`Transcript`), `snapshot` (a whole screen, recorded under
+`tests/__snapshots__/`), and `gate` (builds and compares the two
+runs). `yokan init` writes `tests/test_<app>.py` beside the app.
 
 ```python
-import app
-from yokan import headless
+def test_clicking_counts(app, run):
+    assert "count: 2" in run(app, "click:+1,click:+1")
 
-def test_clicking_counts():
-    assert "count: 2" in headless(app.view, None, "click:+1,click:+1")
+def test_a_screen_reader_hears_it(app, run):
+    assert 'label "count: 1"' in run(app, "click:+1,a11y").a11y
+
+def test_the_screen_is_what_it_was(app, run, snapshot):
+    snapshot(run(app, "click:+1"))
+
+def test_the_compiled_run_agrees(gate):
+    gate("click:+1")
 ```
+
+A `Transcript` IS the string it always was (`in`, `==`, `str()`), with
+`.before`, `.after`, `.steps`, `.dumps`, `.a11y` and `.mem` on it.
+Every `run` starts the app over. Two flags: `--yokan-update` records
+snapshots, `--yokan-gate` puts every script the suite runs through the
+gate as well. `from yokan_testing import run_script` is the same
+machinery without pytest, and `yokan.headless(view, state, script)` is
+what both sit on. Handlers, store methods and value classes are
+ordinary Python and can be called directly.
 
 That checks the development run (CPython); whether the shipped binary
 agrees is `yokan gate`'s half. Apps with PEP 723 dependencies run the
@@ -823,9 +840,10 @@ the libraries a host is not expected to have inside. `--bundle` and
 
 **The loop.** `check` (a second, no compiler) → `show` (a second, no
 window: the screen as text, and with `--frames` a PNG of each step's
-canvas that you can open and look at) → `gate` (a compile, and the
-proof that the shipped run agrees). Work in the first two and reach
-for the third when the change is done. `show --frames` is how a canvas
+canvas that you can open and look at) → `pytest` (seconds: the app
+driven by scripts, and the screens it recorded) → `gate` (a compile,
+and the proof that the shipped run agrees). Work in the first three
+and reach for the fourth when the change is done. `show --frames` is how a canvas
 app is checked at all: the dump says what a frame IS, command by
 command, and the PNG says what it looks like.
 

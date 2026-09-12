@@ -19,7 +19,7 @@ use pixie_kernel::{
     BoolListener, FloatListener, IntListener, TextListener, World, mount,
 };
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyModule, PyTuple};
+use pyo3::types::{PyDict, PyModule, PyString, PyTuple};
 use std::cell::{Cell, RefCell};
 use std::ffi::CString;
 use std::path::PathBuf;
@@ -2499,9 +2499,16 @@ fn install_frames() {
     }));
 }
 
-/// Test entry: run the app headless against `script` and return
+/// Test entry: run the app headless against `script` and answer
 /// "initial dump\nfinal dump" instead of printing. No window, no
 /// timers. Mirrors `run()`'s PIXIE_SCRIPT branch.
+///
+/// The answer is a `Transcript`, which IS that string — it subclasses
+/// `str`, so `in`, `==` and `str()` behave as they always did — and
+/// carries the run in pieces beside it: the dump before the steps,
+/// the dump after, and each step's own output. A wheel without
+/// `yokan_testing` on it answers the plain string instead, so the
+/// entry point never depends on the test half being importable.
 ///
 /// The name used to be `_headless`, which said "internal" while the
 /// tour told people to call it from their tests. Both resolve; the
@@ -2513,7 +2520,7 @@ fn headless(
     state: Option<Py<PyAny>>,
     script: String,
     on_start: Option<Py<PyAny>>,
-) -> PyResult<String> {
+) -> PyResult<Py<PyAny>> {
     // Determinism: with the cycle collector off, a strong cycle
     // leaks in tier A exactly as it does natively, and weak reads
     // agree by construction (Weak breaks cycles; then refcount
@@ -2557,10 +2564,27 @@ fn headless(
         pixie_kernel::script::anim_settle(&rt, h, &mut tree);
         let first = rt.with(|w| tree.dump(w));
         install_frames();
-        let last = pixie_kernel::script::run(&rt, h, &mut tree, &script);
-        format!("{first}\n{last}")
+        let (parts, after) = pixie_kernel::script::run_parts(&rt, h, &mut tree, &script);
+        let mut log = String::new();
+        for p in &parts {
+            log.push_str(&p.text);
+        }
+        log.push_str(&after);
+        let steps: Vec<(String, String)> =
+            parts.into_iter().map(|p| (p.step, p.text)).collect();
+        (format!("{first}\n{log}"), first, after, steps)
     });
-    Ok(out)
+    let (text, before, after, steps) = out;
+    // The value is the string it always was; `Transcript` adds the
+    // pieces to it. If the test module is not there, the string is.
+    let made = py
+        .import("yokan_testing")
+        .and_then(|m| m.getattr("Transcript"))
+        .and_then(|c| c.call1((text.as_str(), before, after, steps)));
+    Ok(match made {
+        Ok(t) => t.unbind(),
+        Err(_) => PyString::new(py, &text).into_any().unbind(),
+    })
 }
 
 /// The module lane's tier-A doors: `yokan.fs.*` etc. call the SAME

@@ -68,18 +68,24 @@ That is what makes a diff between two runs meaningful, and what makes an asserti
 
 ## The same run, from a test
 
-An app is a Python module, so its tests are Python tests in whatever runner you already use.
-`yokan.headless(view, state, script)` is the run `yokan show` performs, reachable from Python, and it returns the screen as a string.
+An app is a Python module, so its tests are Python tests.
+The wheel registers a pytest plugin, so a suite gets the run as a fixture: `app` is the app module imported without running it, and `run` drives it with no window.
 
 ```python
-# test_app.py
-import app
-from yokan import headless
+# tests/test_app.py
+def test_clicking_counts(app, run):
+    assert "count: 2" in run(app, "click:+1,click:+1")
 
 
-def test_clicking_counts():
-    assert "count: 2" in headless(app.view, None, "click:+1,click:+1")
+def test_the_screen_is_what_it_was(app, run, snapshot):
+    snapshot(run(app, "click:+1"))       # recorded, then compared
+
+
+def test_the_compiled_run_agrees(gate):
+    gate("click:+1")                     # the gate, from inside the suite
 ```
+
+`yokan init` writes the first of those beside a new app, and a workflow that runs them.
 
 Handlers, store methods and value classes are ordinary Python too, so the parts that are only computation can be tested by calling them.
 A test says the app does the right thing; the gate says the compiled app does the same thing.

@@ -78,19 +78,24 @@ ssh 越しでも CI でも、エージェントが動いている場所がどこ
 ## 同じ実行を、テストから
 
 アプリは普通の Python のモジュールなので、テストも普通の Python のテストです。
-使い慣れたテストランナーをそのまま使えます。
-`yokan.headless(view, state, script)` は、`yokan show` と同じ実行を Python から呼ぶための関数です。
-画面は文字列で返ってきます。
+wheel が pytest のプラグインを登録するので、実行はそのままフィクスチャとして使えます。
+`app` はアプリのモジュールを実行せずに読み込んだもので、`run` はウィンドウを出さずにそれを動かします。
 
 ```python
-# test_app.py
-import app
-from yokan import headless
+# tests/test_app.py
+def test_clicking_counts(app, run):
+    assert "count: 2" in run(app, "click:+1,click:+1")
 
 
-def test_clicking_counts():
-    assert "count: 2" in headless(app.view, None, "click:+1,click:+1")
+def test_the_screen_is_what_it_was(app, run, snapshot):
+    snapshot(run(app, "click:+1"))       # 記録して、以後は突き合わせる
+
+
+def test_the_compiled_run_agrees(gate):
+    gate("click:+1")                     # テストの中から呼ぶゲート
 ```
+
+新しいアプリを作ると、`yokan init` がこの一つめをアプリの隣に書き、それを走らせるワークフローも書きます。
 
 ハンドラもストアのメソッドも value クラスも普通の Python なので、計算だけの部分は直接呼んで確かめられます。
 テストはアプリが正しく動くことを確かめ、ゲートはコンパイル済みのアプリが同じように動くことを確かめます。

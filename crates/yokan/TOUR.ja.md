@@ -68,6 +68,7 @@ if __name__ == "__main__":
 ```
 
 このファイルは `yokan init app.py` が書きます（title はファイル名から取ります）。
+同時に、アプリを動かすテスト `tests/test_app.py` と、そのテストとゲートを走らせる `.github/workflows/gate.yml` も書きます。
 三つの動かし方があります。
 
 ```console
@@ -1602,25 +1603,73 @@ ffmpeg があれば `--gif` で1本にまとめます。
 リリースする実行と一致することを証明するのは、そちらの仕事です。
 
 ```python
-# test_app.py
-import app                       # モジュール。run(...) は __main__ の下なので import では開かない
-from yokan import headless
+# tests/test_app.py
+def test_clicking_counts(app, run):
+    assert "count: 2" in run(app, "click:+1,click:+1")
 
 
-def test_clicking_counts():
-    out = headless(app.view, None, "click:+1,click:+1")
-    assert "count: 2" in out
-
-
-def test_typing_greets():
-    out = headless(app.view, None, "input:Momo")
-    assert "Momo" in out
+def test_typing_greets(app, run):
+    assert "Momo" in run(app, "input:Momo")
 ```
 
 ```console
 $ uv run --with pytest python -m pytest
 2 passed
 ```
+
+`app` と `run` は wheel に載っているプラグインが渡します。
+Yokan を入れてあるテストなら、何も書かずに使えます。
+`app` は `app.py` を実行せずに読み込み（`run(...)` は `__main__` の下にあります）、`run` はウィンドウを出さずにスクリプトを流します。
+`run` のたびにアプリは最初の状態から始まるので、一つのテストで何度でも動かせますし、読める数は人が見る数と同じです。
+
+このフィクスチャは必須ではありません。
+`from yokan_testing import run_script` は同じ仕掛けを別の名前で呼ぶ書き方で、どちらも `yokan.headless(view, state, script)` の上に乗っています。
+
+実行が返すのは `Transcript` です。
+これまでどおりの文字列そのもので（`in`、`==`、`str()` の振る舞いは変わりません）、実行の内訳がそこに付いています。
+
+```python
+def test_the_middle_of_the_run(app, run):
+    t = run(app, "click:+1,dump,click:+10")
+    assert "count: 0" in t.before      # 開いたときの画面
+    assert "count: 1" in t.dumps[0]    # dump ステップが求めた画面
+    assert "count: 11" in t.after      # 終わったときの画面
+    assert t.steps[0].step == "click:+1"
+```
+
+`a11y` はアクセシビリティツリーを記録に残します。
+スクリーンリーダーに渡されるのと同じものです。
+`mem` はその実行が抱えているオブジェクトの数を数えます。
+
+```python
+def test_a_screen_reader_hears_the_count(app, run):
+    t = run(app, "click:+1,a11y")
+    assert 'label "count: 1"' in t.a11y
+    assert 'button "+1"' in t.a11y
+```
+
+画面を細かく検査するより、まるごと記録しておきたいことがあります。
+それがスナップショットです。
+`snapshot(t)` は記録を `tests/__snapshots__/<テスト名>.dump` と突き合わせ、`--yokan-update` がその内容を書き直します。
+レビューの差分が、画面の変化としてそのまま読めるようになります。
+
+```python
+def test_the_screen_is_what_it_was(app, run, snapshot):
+    snapshot(run(app, "click:+1,click:+10"))
+```
+
+ゲートもテストの一つとして書けます。
+`gate("click:+1")` はアプリをビルドし、そのスクリプトについて両方の実行を比べ、食い違えばその内容とともに失敗します。
+`--yokan-gate` を付けると、テストが流すすべてのスクリプトについて同じことをします。
+テスト一式が、そのまま「コンパイル済みのアプリも同じことをする」証明になります。
+
+```console
+$ uv run --with pytest python -m pytest --yokan-gate
+6 passed in 16.19s
+```
+
+これはコンパイルを伴うので、意図して遅いほうに置いてあります。
+普段はテスト一式に `gate(...)` を一つ置いておき、リリース前に `--yokan-gate` を使うのがよい配分です。
 
 スクリプトの語彙は、次の節にまとめてあります。
 人がアプリにできることは、テストにもできます。
@@ -1654,6 +1703,11 @@ Yokan が土台にしている [pixie](https://github.com/i2y/yokan/blob/main/do
 `@n` はツリー順で n 番目の一致を選ぶので、同じラベルのボタンが並ぶ行にも届きます（0 から数えるので、`click@2:削除` は三つ目）。
 `dump` はその時点の画面を出力するので、最初と最後だけでなく途中の状態も検査できます。
 テキストに含めるカンマは `\,` と書きます（`input:hello\, world`）。
+`a11y` と `mem` は画面の中ではなく、画面の隣に出ます。
+`a11y` はゲートも突き合わせます。
+両方の実行が同じアクセシビリティツリーを組み立てるからです。
+`mem` は読むためのもので、突き合わせません。
+二つの実行が抱えるオブジェクトは、作りからして違うからです。
 ステップの前後で、画面の内容がテキストになって標準出力に出ます。
 テストからは、`yokan.headless(view, state, script)` が同じ文字列を返します。
 

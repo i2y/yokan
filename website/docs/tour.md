@@ -32,7 +32,7 @@ if __name__ == "__main__":
     run(view, title="counter")
 ```
 
-`yokan init app.py` writes this file, with the title taken from the file name.
+`yokan init app.py` writes this file, with the title taken from the file name — and beside it `tests/test_app.py`, which drives the app, and `.github/workflows/gate.yml`, which runs those tests and the gate.
 There are three ways to run it.
 
 ```console

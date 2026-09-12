@@ -2806,3 +2806,55 @@ Python's rule is an identity check, and it matters for the hour a
 spring change skips — a wall time the clock never showed. Converting
 would have moved it; the same zone answering itself leaves it where
 the app wrote it.
+
+## The harness is the test suite (2026-09-12)
+
+The headless run, the dump and the accessibility tree were the gate's
+tools. They are also the only way to test a desktop UI without a
+window, so this phase hands them to the app's own suite.
+
+**What a run answers is a value now.** `headless` used to answer
+`"initial dump\nfinal dump"`, and a test could only search that
+string. It answers a `Transcript`, which IS that string — it
+subclasses `str`, so `in`, `==`, `str()` and every other string
+operation behave exactly as they did and every example written
+against the old shape still passes — with the run's pieces on it:
+the screen it opened with, the screen it ended on, and every step
+beside what that step printed. The kernel keeps the transcript in
+pieces for that (`run_parts`), and `run` is those pieces joined, so
+nothing a caller prints moved by a byte.
+
+**The fixtures are the plugin.** `yokan_testing.py` rides the wheel
+the way the translator does and registers itself with pytest, so a
+suite that has Yokan installed has `app` (the app module, imported
+without running it), `run` (drives it, answers the transcript),
+`snapshot` (a whole screen, recorded beside the test) and `gate`
+(builds the app and compares the two runs). Nothing forces them:
+`run_script` is the same machinery for a suite with no pytest in it.
+
+Every `run` starts the app over. State is module-level, so two runs
+in one test would otherwise continue from each other and a test would
+read numbers nobody would see; running the module body again rebinds
+the state in the module the test is holding, which keeps both true at
+once.
+
+**The gate is a flag.** `--yokan-gate` puts every script a suite runs
+through the compiled run as well. It compiles, so it is opt-in, and
+what it buys is that a suite written for the development run becomes
+the proof that the shipped one agrees.
+
+**`a11y` is comparable, and `mem` is not.** The gate refused both as
+"prints outside the dump". That stopped being true when the dump got
+a channel of its own: both runs write the accessibility tree into the
+transcript, and they agree on it — so a test can assert on what a
+screen reader would be handed, and the gate holds the compiled run to
+it. `mem` counts the objects one run is holding, and the two runs hold
+different ones by construction, so it stays a thing to read. The
+refusal says which of the two it is, and it is the gate's rule alone:
+`yokan show` reads `mem` fine.
+
+**`yokan init` writes three files.** The app, a test that drives it,
+and a workflow that runs the tests on every push and the gate behind
+a cache. A scaffold that only writes the app teaches that a desktop
+app is a file; the thing worth teaching is that it is a file, a way to
+drive it, and a run that proves the binary agrees.

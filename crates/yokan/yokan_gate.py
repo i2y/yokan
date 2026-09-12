@@ -14156,13 +14156,107 @@ if __name__ == "__main__":
 """
 
 
+TEST_TEMPLATE = '''"""A test is a script the app is driven by, and what it then shows.
+
+`app` imports APP without running it, and `run` drives it with no
+window; both come from the plugin that rides the yokan wheel. The
+script vocabulary is the one `yokan gate` takes, so anything a person
+can do to the app is something a test can do.
+
+    uv run --with pytest python -m pytest
+    uv run --with pytest python -m pytest --yokan-gate     # and compiled
+    uv run --with pytest python -m pytest --yokan-update   # record screens
+"""
+
+
+def test_it_counts(app, run):
+    assert "count: 1" in run(app, "click:+1")
+    assert "count: 3" in run(app, "click:+1,click:+1,click:+1")
+
+
+def test_it_starts_at_zero(app, run):
+    assert "count: 0" in run(app).before
+
+
+# The whole screen, recorded into tests/__snapshots__/ and compared
+# from then on. `--yokan-update` writes it the first time, and again
+# when a change to the screen is the change you meant.
+#
+# def test_the_screen_is_what_it_was(app, run, snapshot):
+#     snapshot(run(app, "click:+1"))
+'''
+
+# The workflow a new app starts with. Two questions, a job each — and
+# the second one compiles, which is why it carries a cache and says so.
+WORKFLOW_TEMPLATE = '''name: gate
+
+# Two questions, and a job each. Does the app do the right thing, and
+# does the binary it ships as agree with the Python it was developed
+# on? The first is a Python test run and takes seconds. The second is
+# `yokan gate`, which compiles the engine: the first run on a fresh
+# runner takes a while, and the cache below makes the rest quick.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run --with pytest --with yokan python -m pytest -q
+
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: dtolnay/rust-toolchain@stable
+      # The engine links these while it builds; a scripted run opens
+      # no window, so a display is not among them.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libasound2-dev libfontconfig1-dev \\
+            libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/yokan
+            ~/.cache/pixie/target
+          key: ${{ runner.os }}-yokan-${{ hashFiles('**/*.py') }}
+          restore-keys: ${{ runner.os }}-yokan-
+      - run: uv run --with yokan yokan gate APP --script "SCRIPT"
+'''
+
+
 def do_init(path: str) -> None:
-    """Write the smallest app that is already inside the dialect: the
-    file the tour opens with, its title taken from the file name. The
-    sweep gates what `init` writes, so the scaffold cannot drift away
-    from what compiles. What it teaches is not the code but the three
-    commands printed underneath — the gate is the product's promise,
-    and nobody finds it by guessing."""
+    """Write the smallest app that is already inside the dialect, its
+    tests, and the workflow that runs both. The sweep gates what
+    `init` writes and runs the tests it writes, so the scaffold cannot
+    drift away from what compiles or from what passes.
+
+    Three files rather than one, because the three things a desktop
+    app needs are the app, a test that drives it, and the run that
+    proves the shipped binary agrees — and only the first of those is
+    something anybody finds by guessing."""
     if not path.endswith(".py"):
         sys.exit(f"an app is a Python file — `yokan init {path}.py`")
     if os.path.exists(path):
@@ -14171,14 +14265,40 @@ def do_init(path: str) -> None:
     parent = os.path.dirname(os.path.abspath(path))
     os.makedirs(parent, exist_ok=True)
     open(path, "w", encoding="utf-8").write(TEMPLATE.replace('title="TITLE"', f'title="{stem}"'))
+    wrote = [path]
+
+    # The test goes beside the app, under `tests/`, named for it: that
+    # is how the `app` fixture finds the app without being told.
+    tests = os.path.join(parent, "tests")
+    test_path = os.path.join(tests, f"test_{stem}.py")
+    if not os.path.exists(test_path):
+        os.makedirs(tests, exist_ok=True)
+        open(test_path, "w", encoding="utf-8").write(
+            TEST_TEMPLATE.replace("APP", os.path.basename(path))
+        )
+        wrote.append(os.path.join(os.path.dirname(path), "tests", f"test_{stem}.py"))
+
+    flow = os.path.join(parent, ".github", "workflows", "gate.yml")
+    if not os.path.exists(flow):
+        os.makedirs(os.path.dirname(flow), exist_ok=True)
+        open(flow, "w", encoding="utf-8").write(
+            WORKFLOW_TEMPLATE.replace("APP", os.path.basename(path)).replace(
+                "SCRIPT", "click:+1"
+            )
+        )
+        wrote.append(os.path.join(os.path.dirname(path), ".github", "workflows", "gate.yml"))
+
     steps = [
         (f"uv run {path}", "develop: CPython, live reload"),
         (f"yokan check {path}", "is it inside the dialect?"),
+        ("uv run --with pytest python -m pytest", "test: the app, driven by a script"),
         (f'yokan gate {path} --script "click:+1"', "verify: the two runs, compared"),
         (f"yokan build {path} --release", "ship: the native binary"),
     ]
     w = max(len(c) for c, _ in steps)
-    print(f"wrote {path}\n")
+    for f in wrote:
+        print(f"wrote {f}")
+    print()
     for c, note in steps:
         print(f"  {c.ljust(w)}   # {note}")
 
@@ -14286,10 +14406,6 @@ def main():
     if args.app is None:
         tail = " <crate>" if args.mode == "add" else ""
         ap.error(f"{args.mode} takes an app: yokan {args.mode} app.py{tail}")
-
-    for step in args.script.split(","):
-        if step.split(":")[0] in ("mem", "a11y"):
-            sys.exit(f"`{step}` prints outside the dump; not gate-comparable for now")
 
     if args.mode == "add":
         do_add(args)
@@ -14438,6 +14554,22 @@ def main():
         print(f"built: {binary} ({describe_artifact(binary)})")
         print("  not gate-checked — `gate` with a script proves the two runs agree")
         return
+
+    # From here down is the gate, and this is the gate's own rule.
+    # `a11y` is comparable: the transcript has a channel of its own, so
+    # both runs write the accessibility tree into it and the gate reads
+    # it the way it reads a screen. `mem` counts the objects a World is
+    # holding, and the two runs hold different ones by construction —
+    # the interpreted tier keeps the app's objects on the Python side —
+    # so it is a thing to read rather than a thing to compare, and
+    # `yokan show` and a test both read it.
+    for step in args.script.split(","):
+        if step.split(":")[0] == "mem":
+            sys.exit(
+                f"`{step}` counts what one run is holding, and the two runs hold "
+                f"different things — `yokan show {os.path.basename(args.app)} "
+                f'--script "{args.script}"` reads it, and so does a test'
+            )
 
     for f in args.fresh:
         if os.path.exists(f):

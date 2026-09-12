@@ -568,7 +568,13 @@ def headless(
 ) -> str:
     """Run the app against a script with no window and answer the
     screen as text: the dump before the steps, then the dump after.
-    This is what a unit test asserts on."""
+    This is what a unit test asserts on.
+
+    The value is a `yokan_testing.Transcript`, which IS that string —
+    it subclasses `str` — and carries the run in pieces beside it:
+    `.before`, `.after`, `.steps`, `.a11y`, `.mem`. Typed as `str`
+    here so a checker reads the common case; import `Transcript` from
+    `yokan_testing` where the pieces are wanted."""
 
 # The name it had before 0.3. Still resolves, so a test written
 # against it keeps running.

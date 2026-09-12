@@ -40,7 +40,7 @@ pip でも入ります。
 
 ```console
 $ uv tool install yokan                     # yokan コマンド
-$ yokan init app.py                         # 最初のファイル
+$ yokan init app.py                         # 最初のファイルと、そのテストとワークフロー
 $ uv run app.py                             # 開発: ウィンドウとライブリロード
 $ yokan check app.py                        # 方言の内側かどうか
 $ yokan gate app.py --script "click:+1"     # 二つの実行を突き合わせる
