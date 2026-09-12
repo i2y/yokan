@@ -261,8 +261,8 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - 同じ要素オブジェクトを**二回置くこと**。
   一度置いた要素は使い切りで、二か所には置けません。
 - **注釈のないローカルのリストと辞書**（`out: list[str] = []`、`counts: dict[str, int] = {}`。コンパイル側が要素の型や値の型を読めるのは、この注釈があるからです）。
-- **方言に形のないものを返す str のメソッド**：`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
-  使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
+- **方言に形のないものを返す str のメソッド**：`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
+  使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.encode()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
@@ -281,7 +281,11 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   `json.loads` も断ります。
   返るものの形が実行するまで決まらないからで、読むときは `jsondoc` のドットパスを使います。
   `json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。
-  `datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。
+  `datetime` からは、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。
+  タイムゾーンは `zoneinfo` から来るもので、`datetime.timezone` の固定オフセットは入れません。
+  両方の実行がともに読めるのは、機械が名前で知っているゾーンだからです。
+  `zoneinfo` からは、実行中に決まるキー（コンパイル側は翻訳しながらキーを読みます）、`State` やフィールドやリストに入れたタイムゾーン付きの値、そして `fold` を断ります。
+  `fold` は時計が二度示す一時間のどちらを取るかを選ぶ引数で、この方言は Python の既定と同じく常に先のほうを取ります。
   `strftime` が取るのは、CPython が自ら意味を定める指示子だけです。
   `%c`、`%x`、`%X`、`%-d` は、何を返すかが機械の都合で決まるので断ります。
   `re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。
@@ -290,7 +294,8 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   `collections` からは `Counter` 以外を断ります。
   `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`@value` クラスが型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
   `itertools` からは、終わらないもの（`count`、`cycle`、`repeat`）、それ自体がイテレータを返すもの（`groupby`、`tee`）、関数を取るもの（`starmap`、`takewhile`、`filterfalse`）、最後のタプルだけ形の違う `batched` を断ります。
-  理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal`、`hashlib`、`base64`、`zoneinfo` です。
+  `hashlib` からは `sha256`、`sha1`、`md5` 以外を断り、`hashlib.sha256(b).hexdigest()` 以外の書き方も断ります。
+  理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal` です。
 - **新しい要素の周辺**。
   表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。
   チャートには凡例がありません。

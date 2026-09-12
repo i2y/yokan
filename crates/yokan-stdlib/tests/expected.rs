@@ -22,6 +22,9 @@ enum V {
     F(f64),
     B(bool),
     S(String),
+    /// Bytes, written as hex — the one value a table row cannot
+    /// carry as text, because a byte is not a character.
+    Y(Vec<u8>),
     L(Vec<V>),
     /// An object, in the order its keys went in.
     O(Vec<(String, V)>),
@@ -60,6 +63,12 @@ impl V {
         match self {
             V::B(x) => *x,
             other => panic!("wanted a bool argument, table says {other:?}"),
+        }
+    }
+    fn y(&self) -> Vec<u8> {
+        match self {
+            V::Y(x) => x.clone(),
+            other => panic!("wanted a bytes argument, table says {other:?}"),
         }
     }
     fn list(&self) -> &[V] {
@@ -140,6 +149,11 @@ fn parse(cell: &str) -> V {
         "f" => V::F(f64::from_bits(u64::from_str_radix(body, 16).expect("hex double"))),
         "b" => V::B(body == "1"),
         "s" => V::S(unquote(body)),
+        "y" => V::Y(
+            (0..body.len() / 2)
+                .map(|i| u8::from_str_radix(&body[i * 2..i * 2 + 2], 16).expect("hex byte"))
+                .collect(),
+        ),
         other => panic!("unknown tag `{other}` in `{cell}`"),
     }
 }
@@ -415,7 +429,82 @@ fn json_render(v: &V) -> String {
             pairs.iter().map(|(_, v)| json_render(v)).collect(),
         ),
         V::Raise(..) => unreachable!("an expected value, not an error"),
+        // `json.dumps` refuses bytes in Python too, so no row has one.
+        V::Y(_) => unreachable!("json has no bytes"),
     }
+}
+
+/// `zoneinfo`, over the wall clock the dialect carries: the offset,
+/// the name, the two renderings, the instant, and the conversions
+/// between zones. The answers are the machine's zone files, which is
+/// why the table's banner names the tzdata release beside CPython.
+#[test]
+fn zoneinfo_matches_cpython() {
+    check(include_str!("expected/zoneinfo.txt"), "zoneinfo", |fname, a| match fname {
+        "zone_utcoffset" => Some(V::I(zone_utcoffset(&a[0].s(), a[1].i()))),
+        "zone_dst" => Some(V::I(zone_dst(&a[0].s(), a[1].i()))),
+        "zone_tzname" => Some(V::S(zone_tzname(&a[0].s(), a[1].i()))),
+        "zone_isoformat" => Some(V::S(zone_isoformat(&a[0].s(), a[1].i()))),
+        "zone_str" => Some(V::S(zone_str(&a[0].s(), a[1].i()))),
+        "zone_strftime" => Some(V::S(zone_strftime(&a[0].s(), a[1].i(), &a[2].s()))),
+        "zone_timestamp" => Some(V::F(zone_timestamp(&a[0].s(), a[1].i()))),
+        "zone_instant" => Some(V::I(zone_instant(&a[0].s(), a[1].i()))),
+        "zone_from_timestamp" => Some(V::I(zone_from_timestamp(&a[0].s(), a[1].f()))),
+        "zone_astimezone" => Some(V::I(zone_astimezone(&a[0].s(), &a[1].s(), a[2].i()))),
+        "zone_check" => Some(V::S(zone_check(&a[0].s()))),
+        _ => None,
+    });
+}
+
+/// `bytes` itself: what Python's own operations answer, including
+/// the three faults a strict decode names and the two ways
+/// `fromhex` refuses its argument.
+#[test]
+fn bytes_matches_cpython() {
+    check(include_str!("expected/bytes.txt"), "bytes", |fname, a| match fname {
+        "py_bytes_hex" => Some(V::S(py_bytes_hex(&a[0].y()))),
+        "py_bytes_repr" => Some(V::S(py_bytes_repr(&a[0].y()))),
+        "py_bytes_from_hex" => Some(V::Y(py_bytes_from_hex(&a[0].s()).as_slice().to_vec())),
+        "py_bytes_decode" => Some(V::S(py_bytes_decode(&a[0].y()))),
+        "py_str_encode" => Some(V::Y(py_str_encode(&a[0].s()).as_slice().to_vec())),
+        "py_bytes_index" => Some(V::I(py_bytes_index(&a[0].y(), a[1].i()))),
+        "py_bytes_slice" => Some(V::Y(
+            py_bytes_slice(&a[0].y(), a[1].i(), a[2].i()).as_slice().to_vec(),
+        )),
+        "py_bytes_concat" => Some(V::Y(
+            py_bytes_concat(&a[0].y(), &a[1].y()).as_slice().to_vec(),
+        )),
+        _ => None,
+    });
+}
+
+#[test]
+fn hashlib_matches_cpython() {
+    check(include_str!("expected/hashlib.txt"), "hashlib", |fname, a| {
+        let b = a[0].y();
+        Some(V::S(match fname {
+            "py_sha256_hex" => py_sha256_hex(&b),
+            "py_sha1_hex" => py_sha1_hex(&b),
+            "py_md5_hex" => py_md5_hex(&b),
+            _ => return None,
+        }))
+    });
+}
+
+#[test]
+fn base64_matches_cpython() {
+    check(include_str!("expected/base64.txt"), "base64", |fname, a| {
+        let b = a[0].y();
+        Some(V::Y(
+            match fname {
+                "py_b64encode" => py_b64encode(&b),
+                "py_b64decode" => py_b64decode(&b),
+                _ => return None,
+            }
+            .as_slice()
+            .to_vec(),
+        ))
+    });
 }
 
 #[test]

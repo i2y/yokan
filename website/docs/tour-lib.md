@@ -65,10 +65,10 @@ None of them uses a Python module's name, because a Python name is a promise tha
 Reading a JSON document by a dotted path is `jsondoc`, not `json`, and the machine's own time zone is `clock`, not `time`.
 Call them from handlers (views stay pure).
 
-- **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet) / `size` (a file's length in bytes) / `modified_ms` (when it was last written, in the milliseconds `clock.format_ms` reads) / `is_dir` / `read_text_from(path, offset)` (the text from a byte offset to the end: the rest of a file a read already reached the end of once, which is how a growing log is followed without reading it again from the top; at or past the end it answers `""`)
+- **fs**: `read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir` (the names in a directory, sorted) / `make_dir` / `remove` / `app_dir(name)` (the directory this app may keep its own files in, created if it is not there yet) / `size` (a file's length in bytes) / `modified_ms` (when it was last written, in the milliseconds `clock.format_ms` reads) / `is_dir` / `read_text_from(path, offset)` (the text from a byte offset to the end: the rest of a file a read already reached the end of once, which is how a growing log is followed without reading it again from the top; at or past the end it answers `""`) / `read_bytes` / `write_bytes` (a file whole, as `bytes`, for what the text pair cannot carry: an image, an archive, a digest's input)
   — plus the platform's own panels, `open_dialog(title)` and `save_dialog(name)`, which answer with a path or `""` when the person cancelled. A dialog waits for a person, so it runs inside `task(...)`; a verification script answers it with `file:<path>`.
 - **sqlite**: `exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or` (SQLite bundled. `query_text` answers column 0 of each row, `query_rows` every column. Wrap aggregates in COALESCE and pin the order with ORDER BY)
-- **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third)
+- **http**: `get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `get_bytes(url)` / `post_text(url, body)` / `post_text_or` / `status(url)` (synchronous; `get_text` takes a deadline in milliseconds as a second argument, `post_text` a content type as a third; `get_bytes` answers the response as `bytes`, for what is not text)
 - **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — reads into a JSON document by a dotted path like `"items.0.title"`, which Python's `json` has no verb for. `get_texts(src, paths, default)` is several of those reads for one parse: a list of paths in, a list of texts out (a number or a bool as JSON writes it, a list or a map as its JSON), and `default` where a path finds nothing — the read that takes a line of a log apart, since a record does not always carry every field. Writing is Python's `json.dumps`.
 - **clock**: `format_ms(ms, "%Y-%m-%d")` (UTC. In verification scripts, pass a fixed ms), `format_local_ms(ms, fmt)` (the machine's own zone, from the same zone database in both runs), `local_offset_minutes(ms)` — the machine's zone, which Python's `time` reaches only through a struct. Reading the clock is Python's `time`, and calendar work is Python's `datetime`.
 - **strings**: `to_int(s, default)` / `to_float(s, default)` (numeric parsing where broken input becomes the default)
@@ -85,10 +85,35 @@ How far the Python half reaches, module by module:
 - **json** — `dumps`, with CPython's defaults and no keyword arguments.
 - **time** — `time`, `time_ns`, `monotonic`, `monotonic_ns`, `perf_counter`, `perf_counter_ns`, `sleep`.
 - **re** — `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not None` (with `match` and `fullmatch`) as the test. The pattern is a literal, because it is compiled while the app translates.
-- **datetime** — `date`, `datetime` and `timedelta`, all of them naive: construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
+- **datetime** — `date`, `datetime` and `timedelta`, naive unless a zone is given (see `zoneinfo` below): construction, `today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`, the parts (`.year`, `.hour`, `.days`, …), `isoformat`, `strftime`, `weekday`, `toordinal`, `timestamp`, `total_seconds`, arithmetic and comparison. A value renders in a hole the way `str()` renders it.
 - **collections** — `Counter`, over a list of str: the dict of counts, keyed in first-seen order, with `.most_common()` and `.total()` beside everything a dict answers. A Counter held in a `State` reads back as the dict it is, so take the counts out before storing it.
 - **itertools** — `chain`, `pairwise`, `accumulate`, `combinations`, `permutations`, `product`. Each answers an iterator in Python, so each is what a `for` walks here.
 - **string / textwrap / bisect / heapq** — the nine constants; `dedent` and `indent`; `bisect_left` and `bisect_right`; `nsmallest` and `nlargest`.
+- **hashlib** — `sha256`, `sha1` and `md5`, each read with `.hexdigest()`. Python spells a digest as two calls over a hash object; the dialect reads the pair, because an object written to in steps has no compiled shape.
+- **base64** — `b64encode` and `b64decode`. Both answer `bytes`, as Python's do.
+- **zoneinfo** — `ZoneInfo(key)`, and what a zone decides about an aware `datetime`: `now(tz)`, `fromtimestamp(ts, tz)`, `datetime(..., tzinfo=tz)`, `astimezone`, `utcoffset`, `dst`, `tzname`, `isoformat` with the offset, `strftime`'s `%z` and `%Z`, comparison and subtraction between two of them, and `+ timedelta`. Both runs read the machine's own zone files, so an offset is not something they can disagree about.
+
+The zone rides in the type rather than in the value, which is why a key is written where it stands: the compiled side reads it while it translates. The value itself is the same integer a naive `datetime` is — the wall clock in its own zone — so `.year`, `.hour` and the rest read it unchanged, and a `State` or a field, which has only its annotation to go by, holds the naive value it always held.
+
+```python
+TOKYO = ZoneInfo("Asia/Tokyo")
+NEW_YORK = ZoneInfo("America/New_York")
+
+here = datetime(2026, 7, 14, 9, 30, tzinfo=TOKYO)
+there = here.astimezone(NEW_YORK)           # 2026-07-13 20:30:00-04:00
+text(f"{there.strftime('%H:%M %Z')}")       # 20:30 EDT
+```
+
+`utcoffset()` and `tzname()` are typed `| None` in typeshed, because a naive value has neither. In a hole that reads fine; where the number itself is wanted, `strftime("%z")` says the same thing without the narrowing.
+
+`bytes` is a type of its own, and it behaves as Python's does: the literal is `b"..."` with its escapes, `s.encode()` makes bytes from text and `b.decode()` takes them back, `len(b)` counts them, `b[i]` answers a number, `b[a:b]` answers bytes, `+` joins two, and `.hex()` / `bytes.fromhex(s)` cross to and from text. A `State[bytes]` and a `bytes` field hold one, starting from `b""`.
+
+```python
+raw = phrase().encode()                    # b'yokan'
+stamp.set(hashlib.sha256(raw).hexdigest()) # 61aca55e4c72…
+packed.set(f"{base64.b64encode(raw)}")     # b'eW9rYW4='
+fs.write_bytes(path, PNG + raw)            # a literal joined to a value
+```
 
 ```python
 c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}

@@ -407,6 +407,8 @@ def py_ty(t) -> str:
     `int`, `List<String>` is `list[str]`, `Int?` is `int | None`."""
     if t is None:
         return "?"
+    if t.startswith("Datetime@"):
+        return "datetime"
     if t.endswith("?"):
         return f"{py_ty(t[:-1])} | None"
     m = re.fullmatch(r"List<(.+)>", t)
@@ -697,6 +699,9 @@ class Translator:
         self.py_from = {}            # `from x import y` -> x, for the same refusals
         self.stdlib_names = {}       # `from math import sqrt` -> (module, name)
         self.dt_names = {}           # `from datetime import date` -> "date"
+        self.zone_names = {}         # `from zoneinfo import ZoneInfo` -> "ZoneInfo"
+        self.zone_mods = {}          # `import zoneinfo as z` -> "zoneinfo"
+        self.zones = {}              # a name bound to a zone -> its key
         self.tuple_parts = {}        # tuple struct name -> its part types
         self.counter_locals = set()  # locals holding a Counter, not a plain dict
         self.dt_mods = {}            # `import datetime as dt` -> "datetime"
@@ -784,6 +789,10 @@ class Translator:
             for a in node.names:
                 if a.name == "yokan":
                     self.ui = a.asname or "yokan"
+                elif a.name == "zoneinfo":
+                    # `import zoneinfo` — `zoneinfo.ZoneInfo(key)` is
+                    # then the spelling, and the name is what says so.
+                    self.zone_mods[a.asname or a.name] = a.name
                 elif a.name == "datetime":
                     # `import datetime` — its VALUES are the module,
                     # so what the scanner binds is the name a
@@ -816,6 +825,15 @@ class Translator:
             for a in node.names:
                 if a.name == "Enum":
                     self.enum_bases.add(a.asname or "Enum")
+        elif isinstance(node, ast.ImportFrom) and node.module == "zoneinfo":
+            for a in node.names:
+                if a.name != "ZoneInfo":
+                    raise Untranslatable(
+                        node,
+                        f"`zoneinfo.{a.name}` is not in the dialect — it takes "
+                        "`ZoneInfo`, whose key names a zone the machine has",
+                    )
+                self.zone_names[a.asname or a.name] = "ZoneInfo"
         elif isinstance(node, ast.ImportFrom) and node.module == "datetime":
             for a in node.names:
                 if a.name in self.DT_TYPES:
@@ -824,8 +842,9 @@ class Translator:
                     raise Untranslatable(
                         node,
                         f"`datetime.{a.name}` is not in the dialect — it takes `date`, "
-                        "`datetime` and `timedelta`, all of them naive: a zone is read "
-                        "from the machine, and the two runs have to agree on it first",
+                        "`datetime` and `timedelta`; a zone comes from "
+                        "`from zoneinfo import ZoneInfo`, which names one the machine "
+                        "has rather than a fixed offset",
                     )
         elif isinstance(node, ast.ImportFrom) and node.module in self.PY_MODULES:
             # `from math import sqrt` — the name is bound on its own,
@@ -945,11 +964,12 @@ class Translator:
                 dt = self._dt_ty(sl)
                 return (dt, self._literal_of(call.args[0], dt))
             if isinstance(sl, ast.Name):
-                ty = {"int": "Int", "str": "String", "bool": "Bool", "float": "Float"}.get(sl.id)
+                ty = {"int": "Int", "str": "String", "bool": "Bool", "float": "Float",
+                      "bytes": "Bytes"}.get(sl.id)
                 if ty is None:
                     raise Untranslatable(
                         ann,
-                        f"State[{sl.id}] is not a state type — the state types are int, str, float, bool, list[...] and dict[str, ...] of those, `T | None`, an Enum, a value class or a sum type",
+                        f"State[{sl.id}] is not a state type — the state types are int, str, float, bool, bytes, list[...] and dict[str, ...] of those, `T | None`, an Enum, a value class or a sum type",
                     )
                 lit = self._state_field(call.args[0])[1]
                 field = (ty, lit)
@@ -1437,7 +1457,8 @@ class Translator:
             return ann.left
         return None
 
-    HELPER_TY = {"int": "Int", "float": "Float", "str": "String", "bool": "Bool"}
+    HELPER_TY = {"int": "Int", "float": "Float", "str": "String", "bool": "Bool",
+                 "bytes": "Bytes"}
 
     # python kwarg -> (pixie style key, kind: num / int / str / bool)
     STYLE_KEYS = {
@@ -3301,6 +3322,17 @@ class Translator:
                 and self._is_ui(node.value.func, "on_file_drop")
             ):
                 self._take_on_drop(node.value)
+            elif (
+                isinstance(node, (ast.Assign, ast.AnnAssign))
+                and node.value is not None
+                and self._zone_call(node.value) is not None
+            ):
+                # A zone is a name for a key. Nothing runs: the key is
+                # read while the app translates, and the statics take
+                # it where a zone decides the answer.
+                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                    if isinstance(t, ast.Name):
+                        self.zones[t.id] = self._zone_call(node.value)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and self._is_const_expr(node.value):
                 # A literal constant is a declaration: nothing runs.
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
@@ -3892,9 +3924,14 @@ class Translator:
                 return ("Float", f"-{c!r}" if neg else repr(c))
             if type(c) is str and not neg:
                 return ("String", f'"{esc(c)}"')
+            if type(c) is bytes and not neg:
+                # A default is read before the app exists, so it has to
+                # be constant: the bytes themselves, which is the
+                # spelling pixie takes for a byte string.
+                return ("Bytes", "[" + ", ".join(str(x) for x in c) + "]")
         raise Untranslatable(
             val,
-            "a default is a literal: int, float, str or bool",
+            "a default is a literal: int, float, str, bool or bytes",
         )
 
     # ---- expressions ----------------------------------------------
@@ -4009,10 +4046,6 @@ class Translator:
               "clock)",
         "decimal": "its arithmetic is a type of its own; `float` and the exact sums "
                    "in `statistics` are what the dialect has",
-        "hashlib": "it answers bytes, and `bytes` is not in the dialect yet",
-        "base64": "it answers bytes, and `bytes` is not in the dialect yet",
-        "zoneinfo": "a zone database is what the dialect keeps out for now — "
-                    "`from yokan import clock` reads the machine's own zone",
     }
 
     STDLIB_ABSENT = {
@@ -4039,6 +4072,14 @@ class Translator:
                                    "in a State here — `bisect_left` gives the position",
         ("bisect", "insort_right"): "it inserts into a list in place, and a list lives "
                                     "in a State here — `bisect_right` gives the position",
+        ("hashlib", "sha256"): "a hash object is what it answers, and an object "
+                                "written to in steps has no compiled shape — the "
+                                "dialect reads the pair, so write "
+                                "`hashlib.sha256(b).hexdigest()`",
+        ("hashlib", "sha1"): "a hash object is what it answers — write "
+                             "`hashlib.sha1(b).hexdigest()`",
+        ("hashlib", "md5"): "a hash object is what it answers — write "
+                            "`hashlib.md5(b).hexdigest()`",
         ("json", "loads"): "it answers a value whose shape is only known at run "
                            "time — read what you need out of the text with "
                            "`from yokan import jsondoc` and its dotted paths",
@@ -4073,8 +4114,14 @@ class Translator:
     # for, and the gate compares it against CPython's own module —
     # which is running on the other side.
     PY_LOWERED = ("collections", "itertools")
+    # `hashlib` is Python's too, but its spelling is a call on a hash
+    # object rather than `mod.fn(...)`, so the translator reads the
+    # pair (`_digest`) instead of the manifest naming a row.
+    PY_CARRIED = ("hashlib",)
     PY_MODULES = (
-        tuple(m for _c, m, layer, _r in STDLIB if layer == "python") + PY_LOWERED
+        tuple(m for _c, m, layer, _r in STDLIB if layer == "python")
+        + PY_LOWERED
+        + PY_CARRIED
     )
 
     @staticmethod
@@ -4417,6 +4464,14 @@ class Translator:
         import datetime as _dt  # noqa: PLC0415
 
         src = self._src(node)
+        if self._zone_in(node) is not None:
+            raise Untranslatable(
+                node,
+                "a stored datetime has no zone — the annotation is what a State or a "
+                "field says, and `datetime` there means the naive value. Keep the "
+                "zone where the value is read (`datetime.now(TOKYO)` in a handler), "
+                "or store the text `isoformat()` writes",
+            )
         try:
             env = {"date": _dt.date, "datetime": _dt.datetime, "timedelta": _dt.timedelta}
             for local, real in self.dt_names.items():
@@ -4448,26 +4503,39 @@ class Translator:
             f = node.func
             ty = self._dt_target(f)
             if ty is not None:
-                return self.DT_CTORS.get((ty, None), (None, None, None))[2]
+                key = self._zone_in(node)
+                out = self.DT_CTORS.get((ty, None), (None, None, None))[2]
+                return self.AWARE + key if key is not None and out == "Datetime" else out
             if isinstance(f, ast.Attribute):
                 owner = self._dt_target(f.value)
                 if owner is not None:
-                    return self.DT_CTORS.get((owner, f.attr), (None, None, None))[2]
+                    out = self.DT_CTORS.get((owner, f.attr), (None, None, None))[2]
+                    if out == "Datetime" and f.attr == "now" and len(node.args) == 1:
+                        return self.AWARE + self._zone_arg(node.args[0])
+                    if out == "Datetime" and f.attr == "fromtimestamp" and len(node.args) == 2:
+                        return self.AWARE + self._zone_arg(node.args[1])
+                    return out
                 recv = self._num_ty(f.value, ctx, param)
-                if recv in self.DT_TYPES.values():
-                    entry = self.DT_METHODS.get((recv, f.attr))
+                if self._is_dt(recv):
+                    zt = self._zone_method_ty(node, recv)
+                    if zt is not None:
+                        return zt
+                    entry = self.DT_METHODS.get((self._dt_kind(recv), f.attr))
                     return entry[2] if entry else None
             return None
         if isinstance(node, ast.Attribute):
             recv = self._num_ty(node.value, ctx, param)
-            if recv in self.DT_TYPES.values():
-                entry = self.DT_ATTRS.get((recv, node.attr))
+            if self._is_dt(recv):
+                entry = self.DT_ATTRS.get((self._dt_kind(recv), node.attr))
                 return entry[1] if entry else None
         if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
             lt = self._num_ty(node.left, ctx, param)
-            if lt in self.DT_TYPES.values():
+            if self._is_dt(lt):
                 rt = self._num_ty(node.right, ctx, param)
-                return self._dt_binop_kind(lt, rt, node.op)[1]
+                out = self._dt_binop_kind(self._dt_kind(lt), self._dt_kind(rt), node.op)[1]
+                # `aware + timedelta` is wall-clock arithmetic in the
+                # same zone, which is what Python does too.
+                return lt if out == "Datetime" and self._zone_key(lt) else out
         return None
 
     @staticmethod
@@ -4511,10 +4579,15 @@ class Translator:
                 return self._dt_construct(node, owner, f.attr, ctx, param)
             # A method on a value.
             recv_ty = self._num_ty(f.value, ctx, param)
-            if recv_ty in self.DT_TYPES.values():
-                entry = self.DT_METHODS.get((recv_ty, f.attr))
+            if self._is_dt(recv_ty):
+                zoned = self._zone_method(node, recv_ty, ctx, param)
+                if zoned is not None:
+                    return zoned
+                entry = self.DT_METHODS.get((self._dt_kind(recv_ty), f.attr))
                 if entry is None:
-                    have = sorted(m for (t, m) in self.DT_METHODS if t == recv_ty)
+                    have = sorted(m for (t, m) in self.DT_METHODS if t == self._dt_kind(recv_ty))
+                    if self._zone_key(recv_ty) is not None:
+                        have = sorted(set(have) | set(self.ZONE_METHODS) | {"astimezone"})
                     raise Untranslatable(
                         node,
                         f"`{py_ty(recv_ty)}.{f.attr}()` is not in the dialect — it has "
@@ -4535,6 +4608,9 @@ class Translator:
     def _dt_construct(self, node, ty, method, ctx, param):
         """A call on the TYPE: the constructor, or one of the class
         methods that answer a value."""
+        zoned = self._dt_construct_zoned(node, ty, method, ctx, param)
+        if zoned is not None:
+            return zoned
         entry = self.DT_CTORS.get((ty, method))
         if entry is None:
             have = sorted(m for (t, m) in self.DT_CTORS if t == ty and m)
@@ -4577,21 +4653,71 @@ class Translator:
         args += ["0"] * (hi - len(args))
         return f"{static}({', '.join(args)})"
 
+    def _dt_construct_zoned(self, node, ty, method, ctx, param):
+        """The three constructions that take a zone: `datetime.now(tz)`,
+        `datetime.fromtimestamp(ts, tz)` and `datetime(..., tzinfo=tz)`.
+        Each answers the wall clock in that zone, which is the integer
+        the naive value already is."""
+        if ty != "Datetime":
+            if self._zone_in(node) is not None:
+                raise Untranslatable(
+                    node,
+                    f"a zone belongs to a `datetime` — `{py_ty(ty)}` has none in "
+                    "Python either",
+                )
+            return None
+        if method == "now" and node.args:
+            if len(node.args) != 1 or node.keywords:
+                raise Untranslatable(node, "`datetime.now(tz)` takes one zone")
+            self.uses_stdlib = True
+            return f'Zone.now("{esc(self._zone_arg(node.args[0]))}")'
+        if method == "fromtimestamp" and len(node.args) == 2:
+            if node.keywords:
+                raise Untranslatable(node, "`datetime.fromtimestamp(ts, tz)` takes the seconds and a zone")
+            key = self._zone_arg(node.args[1])
+            self.uses_stdlib = True
+            with self._unwrapped():
+                secs = self.expr(node.args[0], ctx, param)
+            return f'Zone.fromTimestamp("{esc(key)}", {secs})'
+        if method is None:
+            key = self._zone_in(node)
+            if key is None:
+                return None
+            # The parts are the wall clock in that zone, so the naive
+            # constructor answers the value and the zone rides in the
+            # type — which is what `_dt_num_ty_zoned` reads back.
+            plain = ast.Call(func=node.func, args=node.args, keywords=[])
+            ast.copy_location(plain, node)
+            return self._dt_construct(plain, ty, None, ctx, param)
+        return None
+
+    def _zone_in(self, node):
+        """The zone a `tzinfo=` keyword names, or None."""
+        if not isinstance(node, ast.Call):
+            return None
+        for k in node.keywords:
+            if k.arg == "tzinfo":
+                return self._zone_arg(k.value)
+        return None
+
     def _dt_attr(self, node, ctx, param):
         """`d.year` and its siblings — a value in Python, so a value
         here, over a static."""
         if not isinstance(node, ast.Attribute):
             return None
         recv_ty = self._num_ty(node.value, ctx, param)
-        if recv_ty not in self.DT_TYPES.values():
+        if not self._is_dt(recv_ty):
             return None
-        entry = self.DT_ATTRS.get((recv_ty, node.attr))
+        base_ty = self._dt_kind(recv_ty)
+        entry = self.DT_ATTRS.get((base_ty, node.attr))
         if entry is None:
-            if (recv_ty, node.attr) in self.DT_METHODS:
+            if (base_ty, node.attr) in self.DT_METHODS or (
+                self._zone_key(recv_ty) is not None and node.attr in self.ZONE_METHODS
+            ):
                 raise Untranslatable(
                     node, f"`{node.attr}` is a method here — write `{node.attr}()`"
                 )
-            have = sorted(a for (t, a) in self.DT_ATTRS if t == recv_ty)
+            have = sorted(a for (t, a) in self.DT_ATTRS if t == base_ty)
             raise Untranslatable(
                 node,
                 f"`{py_ty(recv_ty)}.{node.attr}` is not in the dialect — it has "
@@ -4757,6 +4883,27 @@ class Translator:
             sm = self._str_method(node, ctx, param)
             if sm is not None:
                 return sm
+            bm = self._bytes_method(node, ctx, param)
+            if bm is not None:
+                return bm
+            dg = self._digest(node, ctx, param)
+            if dg is not None:
+                return dg
+            if (
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "bytes"
+                and node.func.value.id not in self.defs
+            ):
+                if node.func.attr != "fromhex" or len(node.args) != 1 or node.keywords:
+                    raise Untranslatable(
+                        node,
+                        "`bytes` here takes one class method — `bytes.fromhex(s)`; a "
+                        "literal is written `b\"...\"` and text becomes bytes with "
+                        "`s.encode()`",
+                    )
+                self.uses_stdlib = True
+                with self._unwrapped():
+                    return f"Py.bytesFromHex({self.expr(node.args[0], ctx, param)})"
             if (
                 node.func.attr == "join"
                 and len(node.args) == 1
@@ -4781,6 +4928,23 @@ class Translator:
                 hi = self.expr(node.slice.upper, ctx, param) if node.slice.upper else f"Py.strLen({recv})"
                 return f"Py.strSlice({recv}, {lo}, {hi})"
             return f"Py.strIndex({recv}, {self.expr(node.slice, ctx, param)})"
+        if (
+            isinstance(node, ast.Subscript)
+            and self._num_ty(node.value, ctx, param) == "Bytes"
+        ):
+            # `b[i]` answers an INT in Python, and `b[a:b]` bytes. The
+            # receiver is read as a value, not as text, which is what
+            # `_unwrapped` says inside a hole.
+            self.uses_stdlib = True
+            with self._unwrapped():
+                recv = self.expr(node.value, ctx, param)
+                if isinstance(node.slice, ast.Slice):
+                    if node.slice.step is not None:
+                        raise Untranslatable(node.slice, "a slice step is not in the dialect yet — `b[a:b]` takes a start and a stop")
+                    lo = self.expr(node.slice.lower, ctx, param) if node.slice.lower else "0"
+                    hi = self.expr(node.slice.upper, ctx, param) if node.slice.upper else f"({recv}).length"
+                    return f"Py.bytesSlice({recv}, {lo}, {hi})"
+                return f"Py.bytesIndex({recv}, {self.expr(node.slice, ctx, param)})"
         if isinstance(node, ast.Name) and self.row is not None and node.id == self.row[1]:
             # The row index: the repeater binds it beside the row, so
             # it reads like any other local in the row's own scope.
@@ -4795,6 +4959,11 @@ class Translator:
                 return repr(node.value)
             if type(node.value) is str:
                 return f'"{esc(node.value)}"'
+            if type(node.value) is bytes:
+                # A pixie string holds text, so the bytes ride as hex
+                # and the static makes the value on the other side.
+                self.uses_stdlib = True
+                return f'Py.bytesFromHex("{node.value.hex()}")'
             if node.value is None:
                 raise Untranslatable(
                     node,
@@ -4818,7 +4987,7 @@ class Translator:
                 self.cells.get(c, "").startswith("List<")
                 or self.cells.get(c, "").startswith("Map<")
             ):
-                return f"{c}.length" if ctx == "store" else f"App.{c}.length"
+                return f"{self._cell_ref(c, ctx)}.length"
             a0 = node.args[0]
             if (
                 isinstance(a0, ast.Attribute)
@@ -4834,6 +5003,11 @@ class Translator:
             if self._num_ty(a0, ctx, param) == "String":
                 self.uses_stdlib = True
                 return f"Py.strLen({self.expr(a0, ctx, param)})"
+            if self._num_ty(a0, ctx, param) == "Bytes":
+                # The kernel's own `length` — no static, because the
+                # answer is the buffer's length in both runs.
+                with self._unwrapped():
+                    return f"({self.expr(a0, ctx, param)}).length"
             if isinstance(a0, (ast.List, ast.Tuple, ast.Set)):
                 return str(len(a0.elts))
             if isinstance(a0, ast.Dict):
@@ -4975,7 +5149,7 @@ class Translator:
             recv = mty = None
             d9 = self._cell_read(node.func.value)
             if d9 is not None and self._ty(d9).startswith("Map<"):
-                recv, mty = (d9 if ctx == "store" else f"App.{d9}"), self._ty(d9)
+                recv, mty = self._cell_ref(d9, ctx), self._ty(d9)
             elif (
                 isinstance(node.func.value, ast.Attribute)
                 and isinstance(node.func.value.value, ast.Name)
@@ -5094,7 +5268,7 @@ class Translator:
         if cell is not None:
             if self.comp_locals and cell in self.comp_locals:
                 return cell  # component-local: bare in every position
-            return cell if ctx == "store" else f"App.{cell}"
+            return self._cell_ref(cell, ctx)
         if isinstance(node, ast.Name) and param is not None and node.id == param:
             if self.inline_text_param == param:
                 return self.inline_implicit_name or "text"
@@ -5137,7 +5311,7 @@ class Translator:
             sname = None
             c = self._cell_read(src)
             if c is not None and self._ty(c) in self.structs:
-                sname, src_code = self._ty(c), (c if ctx == "store" else f"App.{c}")
+                sname, src_code = self._ty(c), self._cell_ref(c, ctx)
             elif isinstance(src, ast.Name) and src.id in self.handler_locals:
                 raise Untranslatable(src, "replace(...) on a local cannot see its value class yet — read the value from a State (`replace(sel(), x=1)`)")
             if sname is None:
@@ -5188,7 +5362,7 @@ class Translator:
                 raise Untranslatable(node, f"`{node.attr}` is not a field of {self._ty(c8)}")
             if self.text_hole and not self.in_wrapped_hole and fields[node.attr] in ("Float", "Bool"):
                 raise Untranslatable(node, 'a float or bool field has no text in this position — read it in an f-string hole (`f"{Cart.ratio}"`)')
-            return f"{c8}.{node.attr}" if ctx == "store" else f"App.{c8}.{node.attr}"
+            return f"{self._cell_ref(c8, ctx)}.{node.attr}"
         if (
             isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name)
@@ -5247,7 +5421,7 @@ class Translator:
                 raise Untranslatable(node, f"`{node.attr}` is not a field of {mname}")
             if self.text_hole and not self.in_wrapped_hole and fields[node.attr] in ("Float", "Bool"):
                 raise Untranslatable(node, 'a float or bool field has no text in this position — read it in an f-string hole (`f"{Cart.ratio}"`)')
-            return f"{node.value.id}.{node.attr}" if ctx == "store" else f"App.{node.value.id}.{node.attr}"
+            return f"{self._cell_ref(node.value.id, ctx)}.{node.attr}"
         if (
             isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name)
@@ -5525,9 +5699,12 @@ class Translator:
             )
         if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
             lt0 = self._num_ty(node.left, ctx, param)
-            if lt0 in self.DT_TYPES.values():
+            if self._is_dt(lt0):
                 rt0 = self._num_ty(node.right, ctx, param)
-                static, _out = self._dt_binop_kind(lt0, rt0, node.op)
+                zoned = self._zone_binop(node, lt0, rt0, ctx, param)
+                if zoned is not None:
+                    return zoned
+                static, _out = self._dt_binop_kind(self._dt_kind(lt0), self._dt_kind(rt0), node.op)
                 if static is None:
                     raise Untranslatable(
                         node,
@@ -5539,6 +5716,11 @@ class Translator:
                 a = self.expr(node.left, ctx, param)
                 b = self.expr(node.right, ctx, param)
                 return f"{static}({a}, {b})"
+            if lt0 == "Bytes" and isinstance(node.op, ast.Add):
+                self.uses_stdlib = True
+                a = self.expr(node.left, ctx, param)
+                b = self.expr(node.right, ctx, param)
+                return f"Py.bytesConcat({a}, {b})"
             if lt0 is not None and lt0 in self.structs:
                 dunder = {ast.Add: "__add__", ast.Sub: "__sub__", ast.Mult: "__mul__"}[type(node.op)]
                 entry = self.struct_methods.get(lt0, {}).get(dunder)
@@ -5774,7 +5956,7 @@ class Translator:
                 return f"!{bare}" if isinstance(node.ops[0], ast.NotIn) else bare
             d = self._cell_read(node.comparators[0])
             if d is not None and self._ty(d).startswith("Map<"):
-                recv = d if ctx == "store" else f"App.{d}"
+                recv = self._cell_ref(d, ctx)
             else:
                 m = self._map_source(node.comparators[0])
                 if m is None:
@@ -5786,7 +5968,7 @@ class Translator:
         if c is not None:
             if self._ty(c) != "Bool":
                 raise Untranslatable(node, self._unknown_cond(node))
-            return c if ctx == "store" else f"App.{c}"
+            return self._cell_ref(c, ctx)
         if (
             isinstance(node, ast.Attribute)
             and self._num_ty(node, "store" if ctx == "store" else "view", param) == "Bool"
@@ -5860,12 +6042,29 @@ class Translator:
             # and so does this.
             lt = self._num_ty(node.left, ctx, param)
             rt = self._num_ty(node.comparators[0], ctx, param)
-            if (lt in self.DT_TYPES.values() or rt in self.DT_TYPES.values()) and lt != rt:
+            za, zb = self._zone_key(lt), self._zone_key(rt)
+            both_dt = self._dt_kind(lt) == "Datetime" and self._dt_kind(rt) == "Datetime"
+            if both_dt and (za is None) != (zb is None):
                 raise Untranslatable(
                     node,
-                    f"`{py_ty(lt)}` and `{py_ty(rt)}` do not compare — Python refuses "
-                    "the pair too",
+                    "a datetime with a zone and one without do not compare — Python "
+                    "refuses the pair too; give the naive one a zone where it is "
+                    "built (`datetime(..., tzinfo=TOKYO)`)",
                 )
+            if (self._is_dt(lt) or self._is_dt(rt)) and self._dt_kind(lt) != self._dt_kind(rt):
+                raise Untranslatable(
+                    node,
+                    f"`{py_ty(self._dt_kind(lt))}` and `{py_ty(self._dt_kind(rt))}` do "
+                    "not compare — Python refuses the pair too",
+                )
+            if za is not None and zb is not None:
+                # Two aware values compare as INSTANTS, which is what
+                # Python compares; the integers are wall clocks.
+                self.uses_stdlib = True
+                with self._unwrapped():
+                    left = f'Zone.instant("{esc(za)}", {self.expr(node.left, ctx, param)})'
+                    right = f'Zone.instant("{esc(zb)}", {self.expr(node.comparators[0], ctx, param)})'
+                return f"{left} {op} {right}"
             left = self.expr(node.left, ctx, param)
             right = self.expr(node.comparators[0], ctx, param)
             return f"{left} {op} {right}"
@@ -6168,6 +6367,7 @@ class Translator:
         ("splitlines", 0): ("strSplitlines", "List<String>"),
         ("expandtabs", 0): ("strExpandtabs", "String", ("8",)),
         ("expandtabs", 1): ("strExpandtabs", "String"),
+        ("encode", 0): ("strEncode", "Bytes"),
     }
 
     @staticmethod
@@ -6242,6 +6442,93 @@ class Translator:
             if ty == "String":
                 return f"Py.floatOfStr({inner})"
         return None
+
+    # A method on a `bytes` value: the receiver, then what it answers.
+    BYTES_METHOD_STATICS = {
+        ("hex", 0): ("bytesHex", "String"),
+        ("decode", 0): ("bytesDecode", "String"),
+    }
+
+    # `hashlib.sha256(b).hexdigest()`: the module's name for the
+    # algorithm, and the static that answers its digest as text.
+    HASHLIB = {"sha256": "sha256Hex", "sha1": "sha1Hex", "md5": "md5Hex"}
+
+    def _bytes_method(self, node: ast.Call, ctx, param):
+        """`b.hex()` and `b.decode()` — a Py static over the same
+        bytes, so the compiled run answers what CPython answered."""
+        f = node.func
+        if not isinstance(f, ast.Attribute) or node.keywords or node.args:
+            return None
+        entry = self.BYTES_METHOD_STATICS.get((f.attr, 0))
+        if entry is None or self._num_ty(f.value, ctx, param) != "Bytes":
+            return None
+        self.uses_stdlib = True
+        with self._unwrapped():
+            return f"Py.{entry[0]}({self.expr(f.value, ctx, param)})"
+
+    def _bytes_method_ty(self, node: ast.Call, ctx, param):
+        f = node.func
+        if not isinstance(f, ast.Attribute) or node.keywords or node.args:
+            return None
+        entry = self.BYTES_METHOD_STATICS.get((f.attr, 0))
+        if entry is None or self._num_ty(f.value, ctx, param) != "Bytes":
+            return None
+        return entry[1]
+
+    def _digest(self, node: ast.Call, ctx, param):
+        """`hashlib.sha256(b).hexdigest()`. Python spells it as two
+        calls over a hash object, and an object that is written to has
+        no compiled shape here — so the pair is read as one, and every
+        other spelling is refused by name."""
+        f = node.func
+        if not isinstance(f, ast.Attribute) or node.args or node.keywords:
+            return None
+        inner = f.value
+        if not isinstance(inner, ast.Call):
+            return None
+        if isinstance(inner.func, ast.Attribute):
+            if self._py_mod_name(inner.func.value) != "hashlib":
+                return None
+            algo = inner.func.attr
+        elif isinstance(inner.func, ast.Name):
+            # `from hashlib import sha256` binds the name on its own.
+            bound = self.stdlib_names.get(inner.func.id)
+            if bound is None or bound[0] != "hashlib":
+                return None
+            algo = bound[1]
+        else:
+            return None
+        if algo not in self.HASHLIB:
+            raise Untranslatable(
+                inner,
+                f"`hashlib.{algo}` is not in the dialect — it has "
+                f"{', '.join(sorted(self.HASHLIB))}",
+            )
+        if f.attr != "hexdigest":
+            raise Untranslatable(
+                node,
+                f"a hash is read with `.hexdigest()` here — `.{f.attr}()` needs a hash "
+                "object that is written to, and that has no compiled shape",
+            )
+        if len(inner.args) != 1 or inner.keywords:
+            raise Untranslatable(
+                inner, f"`hashlib.{algo}(b)` takes the bytes to digest, in one call"
+            )
+        if self._num_ty(inner.args[0], ctx, param) != "Bytes":
+            raise Untranslatable(
+                inner.args[0],
+                "a digest is taken over bytes — `s.encode()` makes them from text",
+            )
+        self.uses_stdlib = True
+        with self._unwrapped():
+            return f"Py.{self.HASHLIB[algo]}({self.expr(inner.args[0], ctx, param)})"
+
+    def _py_mod_name(self, node):
+        """The Python module an attribute's receiver names, following
+        an `import x as y`."""
+        if not isinstance(node, ast.Name):
+            return None
+        return self.stdlib_mods.get(node.id)
 
     def _str_method(self, node: ast.Call, ctx, param):
         """`name().upper()` and the rest: a Py static over the same
@@ -6962,7 +7249,7 @@ class Translator:
             ty = self._ty(c)
             if self.comp_locals and c in self.comp_locals:
                 return c, ty
-            return (c if ctx == "store" else f"App.{c}"), ty
+            return self._cell_ref(c, ctx), ty
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
             base = node.value.id
             if base in self.stores and node.attr in self.stores[base]["field_tys"]:
@@ -7040,7 +7327,7 @@ class Translator:
             return node.id, self.comp_locals[node.id]
         if isinstance(node, ast.Name) and node.id in self.handler_locals:
             t = self.typed_locals.get(node.id)
-            if t in ("Int", "Float", "Bool", "String"):
+            if t in ("Int", "Float", "Bool", "String", "Bytes"):
                 return None      # a scalar local; `s[0]` is a str index
             # A local copied out of a list state carries no type of its
             # own; indexing is what it is for, so it counts as a list.
@@ -7172,6 +7459,15 @@ class Translator:
             return self.comp_locals[name]
         return self.cells.get(name)
 
+    def _cell_ref(self, name: str, ctx) -> str:
+        """A module-level State as the compiled side spells it. The app
+        store's own methods say the name alone, because it is a field
+        of theirs; a view says `App.name`, and so does a method of a
+        `@store` or `@model` class, whose own fields are a different
+        set."""
+        bare = ctx == "store" and self.model_scope is None
+        return name if bare else f"App.{name}"
+
     # Python's `datetime` values, carried as integers: a date is its
     # ordinal, a datetime is microseconds from the same origin, a
     # timedelta is microseconds. Comparison is then integer
@@ -7179,6 +7475,29 @@ class Translator:
     # method or an attribute is a static over that integer.
     DT_TYPES = {"date": "Date", "datetime": "Datetime", "timedelta": "Delta"}
     DT_PIX = {"Date": "Int", "Datetime": "Int", "Delta": "Int"}
+
+    # An AWARE datetime is the same integer a naive one is — the wall
+    # clock in its own zone — and the zone rides here, in the type the
+    # translator keeps. `Datetime@Asia/Tokyo` is that type. Every
+    # naive attribute reads the integer unchanged; the operations a
+    # zone decides take the key as their first argument.
+    AWARE = "Datetime@"
+
+    @classmethod
+    def _zone_key(cls, ty) -> str | None:
+        """The zone an aware datetime's type names, or None."""
+        if isinstance(ty, str) and ty.startswith(cls.AWARE):
+            return ty[len(cls.AWARE):]
+        return None
+
+    @classmethod
+    def _dt_kind(cls, ty):
+        """The dialect type behind a possibly-aware one."""
+        return "Datetime" if cls._zone_key(ty) is not None else ty
+
+    @classmethod
+    def _is_dt(cls, ty) -> bool:
+        return cls._dt_kind(ty) in cls.DT_TYPES.values()
 
     # (type, name) -> the static, and what it answers.
     DT_ATTRS = {
@@ -7236,10 +7555,145 @@ class Translator:
     # How each value renders in a text hole and under `str()`.
     DT_SHOW = {"Date": "Dt.dateStr", "Datetime": "Dt.datetimeStr", "Delta": "Dt.deltaStr"}
 
+    # What an AWARE datetime answers that a naive one cannot: the
+    # static, its extra parameter types, and what it answers. The
+    # zone's key goes in front of the receiver.
+    ZONE_METHODS = {
+        "utcoffset": ("Zone.utcoffset", (), "Delta"),
+        "dst": ("Zone.dst", (), "Delta"),
+        "tzname": ("Zone.tzname", (), "String"),
+        "isoformat": ("Zone.isoformat", (), "String"),
+        "strftime": ("Zone.strftime", ("String",), "String"),
+        "timestamp": ("Zone.timestamp", (), "Float"),
+    }
+
+    def _zone_method(self, node: ast.Call, recv_ty, ctx, param):
+        """A method on an aware datetime. The ones a zone decides go to
+        `Zone.*` with the key in front; `astimezone` answers a value in
+        another zone, so it moves the type as well."""
+        key = self._zone_key(recv_ty)
+        if key is None:
+            return None
+        name = node.func.attr
+        if name == "astimezone":
+            if len(node.args) != 1 or node.keywords:
+                raise Untranslatable(node, "`astimezone(tz)` takes one zone")
+            there = self._zone_arg(node.args[0])
+            self.uses_stdlib = True
+            with self._unwrapped():
+                recv = self.expr(node.func.value, ctx, param)
+            return f'Zone.astimezone("{esc(key)}", "{esc(there)}", {recv})'
+        entry = self.ZONE_METHODS.get(name)
+        if entry is None:
+            return None
+        static, extra, _ret = entry
+        if len(node.args) != len(extra) or node.keywords:
+            raise Untranslatable(node, f"`{name}()` takes {len(extra)} argument(s) here")
+        self.uses_stdlib = True
+        with self._unwrapped():
+            args = [f'"{esc(key)}"', self.expr(node.func.value, ctx, param)]
+            args += [self.expr(a, ctx, param) for a in node.args]
+        return f"{static}({', '.join(args)})"
+
+    def _zone_method_ty(self, node: ast.Call, recv_ty):
+        """What one of those answers, without emitting it."""
+        key = self._zone_key(recv_ty)
+        if key is None:
+            return None
+        if node.func.attr == "astimezone":
+            if len(node.args) != 1 or node.keywords:
+                raise Untranslatable(node, "`astimezone(tz)` takes one zone")
+            return self.AWARE + self._zone_arg(node.args[0])
+        entry = self.ZONE_METHODS.get(node.func.attr)
+        return entry[2] if entry else None
+
+    def _zone_binop(self, node: ast.BinOp, lt, rt, ctx, param):
+        """`aware - aware` is the difference between two INSTANTS,
+        which is what Python subtracts; `aware + timedelta` is
+        wall-clock arithmetic and needs nothing new."""
+        za, zb = self._zone_key(lt), self._zone_key(rt)
+        if za is None and zb is None:
+            return None
+        both = self._dt_kind(lt) == "Datetime" and self._dt_kind(rt) == "Datetime"
+        if both and (za is None) != (zb is None):
+            raise Untranslatable(
+                node,
+                "a datetime with a zone and one without do not combine — Python "
+                "refuses the pair too; give both a zone",
+            )
+        if za is not None and zb is not None and isinstance(node.op, ast.Sub):
+            self.uses_stdlib = True
+            with self._unwrapped():
+                a = f'Zone.instant("{esc(za)}", {self.expr(node.left, ctx, param)})'
+                b = f'Zone.instant("{esc(zb)}", {self.expr(node.right, ctx, param)})'
+            return f"{a} - {b}"
+        return None
+
+    def _no_zone_into(self, ty, node, param, where: str):
+        """A datetime with a zone cannot land in a slot that has none.
+        The slot's type is its annotation, and `datetime` there is the
+        naive value — storing an aware one would keep the wall clock
+        and drop the zone, which the two runs would then print
+        differently."""
+        if self._dt_kind(ty) != "Datetime":
+            return
+        if self._zone_key(self._num_ty(node, "store", param)) is None:
+            return
+        raise Untranslatable(
+            node,
+            f"{where} holds a naive `datetime`, and this one carries a zone — keep "
+            "the zone where the value is read, or store the text `isoformat()` "
+            "writes",
+        )
+
+    def _zone_arg(self, node) -> str:
+        """The zone a call names. The key is a literal, because the
+        compiled side reads it while it translates: a zone computed at
+        run time is refused here by name."""
+        if isinstance(node, ast.Name) and node.id in self.zones:
+            return self.zones[node.id]
+        key = self._zone_call(node)
+        if key is not None:
+            return key
+        raise Untranslatable(
+            node,
+            "a zone is named where it is written — `ZoneInfo(\"Asia/Tokyo\")`, or a "
+            "name bound to one; a zone chosen while the app runs is not in the "
+            "dialect, because the compiled side reads the key as it translates",
+        )
+
+    def _zone_call(self, node):
+        """`ZoneInfo("Asia/Tokyo")` — the key it names, or None."""
+        if not isinstance(node, ast.Call):
+            return None
+        f = node.func
+        named = (
+            (isinstance(f, ast.Name) and self.zone_names.get(f.id) == "ZoneInfo")
+            or (
+                isinstance(f, ast.Attribute)
+                and f.attr == "ZoneInfo"
+                and isinstance(f.value, ast.Name)
+                and self.zone_mods.get(f.value.id) == "zoneinfo"
+            )
+        )
+        if not named:
+            return None
+        if len(node.args) != 1 or node.keywords:
+            raise Untranslatable(node, "`ZoneInfo(key)` takes one key")
+        a = node.args[0]
+        if not (isinstance(a, ast.Constant) and type(a.value) is str):
+            raise Untranslatable(
+                a,
+                "a zone key is a literal here (`ZoneInfo(\"Asia/Tokyo\")`) — the "
+                "compiled side reads it as it translates, so a key computed while "
+                "the app runs is not in the dialect",
+            )
+        return a.value
+
     @classmethod
     def pix(cls, ty: str) -> str:
         """The pixie type a dialect type is carried as."""
-        return cls.DT_PIX.get(ty, ty)
+        return cls.DT_PIX.get(cls._dt_kind(ty), ty)
 
     @contextlib.contextmanager
     def _unwrapped(self):
@@ -7264,10 +7718,10 @@ class Translator:
         """The struct a tuple of these types is carried as, declared
         on first use."""
         for t in tys:
-            if t in self.DT_TYPES.values():
+            if self._is_dt(t):
                 raise Untranslatable(
                     node,
-                    f"a tuple holding a `{py_ty(t)}` is not in the dialect yet — that "
+                    f"a tuple holding a `{py_ty(self._dt_kind(t))}` is not in the dialect yet — that "
                     "value is carried as a number, and a tuple would read as one",
                 )
         name = self.TUPLE_PREFIX + "".join(_ty_slug(t) for t in tys)
@@ -7354,10 +7808,10 @@ class Translator:
         """A datetime value stands on its own for now: it is carried
         as an integer, and a container of them would read as a
         container of ints wherever the translator did not follow."""
-        if inner in self.DT_TYPES.values():
+        if self._is_dt(inner):
             raise Untranslatable(
                 ann,
-                f"a container of `{py_ty(inner)}` is not in the dialect yet — a "
+                f"a container of `{py_ty(self._dt_kind(inner))}` is not in the dialect yet — a "
                 "datetime value is carried as a number, and a list of them would "
                 "read as a list of numbers; keep the parts you need instead",
             )
@@ -7453,7 +7907,7 @@ class Translator:
         key = node.slice.value
         if key not in self.state:
             raise Untranslatable(node, f"`{key}` is not a state key")
-        return key if ctx == "store" else f"App.{key}"
+        return self._cell_ref(key, ctx)
 
     @staticmethod
     def _splice(inner: str) -> str:
@@ -7854,32 +8308,33 @@ class Translator:
             ):
                 if len(call.args) != 1:
                     raise Untranslatable(call, "`.set` takes exactly one value")
-                cell = f.value.id
+                cell = self._cell_ref(f.value.id, "store")
                 arg = call.args[0]
                 if isinstance(arg, ast.Constant) and arg.value is None:
-                    if not self._ty(cell).endswith("?"):
-                        raise Untranslatable(arg, f"`{cell}` is not optional — annotate it `T | None`")
+                    if not self._ty(f.value.id).endswith("?"):
+                        raise Untranslatable(arg, f"`{f.value.id}` is not optional — annotate it `T | None`")
                     return [f"{cell} = nil"]
                 # `xs.set(xs() + [e])` → xs.push(e)
                 if (
                     isinstance(arg, ast.BinOp)
                     and isinstance(arg.op, ast.Add)
-                    and self._cell_read(arg.left) == cell
+                    and self._cell_read(arg.left) == f.value.id
                     and isinstance(arg.right, ast.List)
                     and len(arg.right.elts) == 1
                 ):
                     return [f"{cell}.push({self.expr(arg.right.elts[0], 'store', param)})"]
                 # `xs.set([...])` → xs = [...]
                 if isinstance(arg, ast.List):
-                    ty = self.cells[cell]
+                    ty = self.cells[f.value.id]
                     if not ty.startswith("List<"):
                         raise Untranslatable(arg, "assigning a list to a state that is not a list")
                     return [f"{cell} = {self._list_literal(arg, ty[5:-1])}"]
                 if isinstance(arg, ast.Dict):
-                    ty = self.cells[cell]
+                    ty = self.cells[f.value.id]
                     if not ty.startswith("Map<"):
                         raise Untranslatable(arg, "assigning a dict to a state that is not a dict")
                     return [f"{cell} = {self._dict_literal(arg, ty.split(', ', 1)[1][:-1])}"]
+                self._no_zone_into(self.cells[f.value.id], arg, param, f"`{f.value.id}`")
                 return [f"{cell} = {self.expr(arg, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
@@ -7923,14 +8378,15 @@ class Translator:
             and stmt.targets[0].value.id in self.cells
         ):
             t = stmt.targets[0]
-            cell = t.value.id
-            ty = self.cells[cell]
+            name = t.value.id
+            cell = self._cell_ref(name, "store")
+            ty = self.cells[name]
             val = self.expr(stmt.value, "store", param)
             if ty.startswith("Map<"):
                 return [f"{cell}[{self._dict_key(t.slice, 'store', param)}] = {val}"]
             if ty.startswith("List<"):
                 return [f"{cell}[{self._write_index(t, param, cell)}] = {val}"]
-            raise Untranslatable(t, f"`{cell}` is not a list or a dict, so `{cell}[...] = ...` has nothing to write to")
+            raise Untranslatable(t, f"`{name}` is not a list or a dict, so `{name}[...] = ...` has nothing to write to")
         if (
             isinstance(stmt, ast.Expr)
             and isinstance(stmt.value, ast.Call)
@@ -8023,11 +8479,11 @@ class Translator:
                 if src is not None and src[1] not in ("List<?>",):
                     vt = src[1]
             if vt is not None and (
-                vt in ("Int", "Float", "Bool", "String")
+                vt in ("Int", "Float", "Bool", "String", "Bytes")
                 or vt in self.models
                 or vt in self.structs
                 or vt in self.enums
-                or vt in self.DT_TYPES.values()
+                or self._is_dt(vt)
                 or vt.startswith("Map<")
                 or vt.startswith("List<")
                 or vt.startswith("fn(")
@@ -8205,6 +8661,7 @@ class Translator:
                     f"{sname}.{t0.attr} = "
                     f"{self._closure_value(v0, ftys[t0.attr], param, f'`{t0.attr}`')}"
                 ]
+            self._no_zone_into(ftys[t0.attr], v0, param, f"`{sname}.{t0.attr}`")
             return [f"{sname}.{t0.attr} = {self.expr(v0, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
@@ -8230,6 +8687,7 @@ class Translator:
                 return [f"{base}.{t0.attr} = nil"]
             if isinstance(v0, (ast.List, ast.Dict)):
                 return [f"{base}.{t0.attr} = {self._literal_of(v0, fty0)}"]
+            self._no_zone_into(fty0, v0, param, f"`{t0.attr}`")
             return [f"{base}.{t0.attr} = {self.expr(v0, 'store', param)}"]
         if (
             isinstance(stmt, ast.Assign)
@@ -8427,7 +8885,7 @@ class Translator:
                     ty = self._num_ty(rhs, "store", param) if rhs is not None else None
                     if ty is None:
                         continue  # unknown type: the old block-scope rule stands
-                    hoist_lines.append(f"var {n} = {self._zero_of(ty)}")
+                    hoist_lines.append(self._zero_decl(n, ty))
                     self.handler_locals.add(n)
                     self.typed_locals[n] = ty
             lines = hoist_lines + [f"if {self._cond(stmt.test, 'store', param)} {{"]
@@ -8905,6 +9363,8 @@ class Translator:
                 return "Float"
             if type(node.value) is str:
                 return "String"
+            if type(node.value) is bytes:
+                return "Bytes"
             return None
         # An f-string is a str, so a local bound to one is a str local
         # and reads in a hole like any other.
@@ -8951,15 +9411,33 @@ class Translator:
                     return entry[2] if entry else None
                 if lt == "String" and rt == "String" and isinstance(node.op, ast.Add):
                     return "String"
+                if lt == "Bytes" and rt == "Bytes" and isinstance(node.op, ast.Add):
+                    return "Bytes"
                 if "Float" in (lt, rt):
                     return "Float"
                 if lt == "Int" and rt == "Int":
                     return "Int"
                 return None
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if (
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "bytes"
+                and node.func.attr == "fromhex"
+            ):
+                return "Bytes"
+            bmt = self._bytes_method_ty(node, ctx, param)
+            if bmt is not None:
+                return bmt
+            if node.func.attr == "hexdigest" and isinstance(node.func.value, ast.Call):
+                inner = node.func.value.func
+                if (isinstance(inner, ast.Attribute)
+                        and self._py_mod_name(inner.value) == "hashlib") or (
+                        isinstance(inner, ast.Name)
+                        and (self.stdlib_names.get(inner.id) or ("",))[0] == "hashlib"):
+                    return "String"
             smt = self._str_method_ty(node, ctx, param)
             if smt is not None:
-                return smt if smt in ("Int", "Float", "Bool", "String") else None
+                return smt if smt in ("Int", "Float", "Bool", "String", "Bytes") else None
             if (
                 node.func.attr == "join"
                 and len(node.args) == 1
@@ -9043,15 +9521,19 @@ class Translator:
             if c is not None:
                 t = self._ty(c)
                 if (
-                    t in ("Int", "Float", "Bool", "String")
+                    t in ("Int", "Float", "Bool", "String", "Bytes")
                     or t in self.enums
                     or t in self.structs
-                    or t in self.DT_TYPES.values()
+                    or self._is_dt(t)
                 ):
                     return t
                 return None
         if isinstance(node, ast.Subscript) and self._num_ty(node.value, ctx, param) == "String":
             return "String"
+        if isinstance(node, ast.Subscript) and self._num_ty(node.value, ctx, param) == "Bytes":
+            # `b[i]` is a byte, which Python answers as an int; a slice
+            # of bytes is bytes.
+            return "Bytes" if isinstance(node.slice, ast.Slice) else "Int"
         if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
             lit = self._literal_element(node)
             if lit is not None:
@@ -9070,13 +9552,13 @@ class Translator:
                 t = self.comp_locals.get(node.id)
             if t is None and self.helper_params is not None:
                 t = self.helper_params.get(node.id)
-            if t in ("Int", "Float", "Bool", "String") or (
+            if t in ("Int", "Float", "Bool", "String", "Bytes") or (
                 t is not None
                 and (
                     t in self.enums
                     or t in self.structs
                     or t in self.models
-                    or t in self.DT_TYPES.values()
+                    or self._is_dt(t)
                 )
             ):
                 return t
@@ -9115,7 +9597,7 @@ class Translator:
                     if f == node.attr and (
                         t in ("Int", "Float", "Bool", "String")
                         or t in self.structs
-                        or t in self.DT_TYPES.values()
+                        or self._is_dt(t)
                     ):
                         return t
                 return None
@@ -9125,9 +9607,9 @@ class Translator:
                 t = self.model_scope[1].get(node.attr)
             elif node.value.id in self.stores:
                 t = self.stores[node.value.id]["field_tys"].get(node.attr)
-            if t in ("Int", "Float", "Bool", "String") or (
+            if t in ("Int", "Float", "Bool", "String", "Bytes") or (
                 t is not None
-                and (t in self.enums or t in self.structs or t in self.DT_TYPES.values())
+                and (t in self.enums or t in self.structs or self._is_dt(t))
             ):
                 return t
             # An OPTIONAL field answers its own type: the places that
@@ -9175,6 +9657,25 @@ class Translator:
                     return "Py.boolRepr(" + self.expr(node, ctx, param) + ")"
                 finally:
                     self.in_wrapped_hole = False
+            if t == "Bytes":
+                # Python's `b'...'`, which is what `str(b)` and a hole
+                # both write.
+                self.uses_stdlib = True
+                self.in_wrapped_hole = True
+                try:
+                    return "Py.bytesRepr(" + self.expr(node, ctx, param) + ")"
+                finally:
+                    self.in_wrapped_hole = False
+            if self._zone_key(t) is not None:
+                # `str(aware)` is the isoformat with a space where the
+                # T is, and the offset after it.
+                self.uses_stdlib = True
+                with self._unwrapped():
+                    return (
+                        f'Zone.str("{esc(self._zone_key(t))}", '
+                        + self.expr(node, ctx, param)
+                        + ")"
+                    )
             if t in self.DT_SHOW:
                 # `str(date)` is its isoformat, and `str(datetime)`
                 # the same with a space where the T is — the twin
@@ -9211,7 +9712,15 @@ class Translator:
             return None
         return self._pix_ty(ann)
 
-    ZERO_OF = {"Int": "0", "Float": "0.0", "String": '""', "Bool": "false"}
+    ZERO_OF = {"Int": "0", "Float": "0.0", "String": '""', "Bool": "false",
+               "Bytes": "[]"}
+
+    def _zero_decl(self, name: str, ty: str) -> str:
+        """`var name = <zero>` — with the type said when the zero does
+        not say it on its own: `[]` reads as an empty list unless the
+        declaration names `Bytes`."""
+        zero = self._zero_of(ty)
+        return f"var {name} : {ty} = {zero}" if ty == "Bytes" else f"var {name} = {zero}"
 
     def _zero_of(self, ty: str) -> str:
         if ty in self.ZERO_OF:
@@ -9425,7 +9934,7 @@ class Translator:
         if kind == "local":
             self.handler_locals.add(target)
             self.typed_locals[target] = vty
-            lines.append(f"var {target} = {self._zero_of(vty)}")
+            lines.append(self._zero_decl(target, vty))
         lines += [
             f"if {recv}.contains({tmp}) {{",
             f"  {target} = {recv}.getOr({tmp}, {self._zero_of(vty)})",
@@ -9481,7 +9990,7 @@ class Translator:
                         f"{crate}.{fn} returns `{py_ty(ret)}`, which has no pre-binding "
                         f"default — assign the result to a store field instead of a local",
                     )
-                pre = [f"var {target} = {zero}"]
+                pre = [self._zero_decl(target, ret)]
                 self.handler_locals.add(target)
                 self.typed_locals[target] = ret
                 okline = f"{target} = __v"
@@ -9548,7 +10057,7 @@ class Translator:
                 # manifest says what that is, so the local starts from
                 # that type's default.
                 ret_pix = self.STDLIB_RET[mod_fn]
-                pre = [f"var {target} = {self._zero_of(ret_pix)}"]
+                pre = [self._zero_decl(target, ret_pix)]
                 self.handler_locals.add(target)
                 self.typed_locals[target] = ret_pix
                 okline = f"{target} = __v"
@@ -9593,7 +10102,7 @@ class Translator:
         pre = []
         okline = None
         if kind == "local":
-            pre = [f"var {target} = {self._zero_of(esc['ret'][0])}"]
+            pre = [self._zero_decl(target, esc["ret"][0])]
             self.handler_locals.add(target)
             self.typed_locals[target] = esc["ret"][0]
             okline = f"{target} = {t_var}.value"
@@ -11835,7 +12344,10 @@ def _crate_crossable(t: str, structs=None, enums=None):
     if m and m.group(1) in CRATE_CROSSING:
         return None
     if t == "Bytes":
-        return "the dialect has no bytes values yet, so nothing could hold it"
+        return (
+            "bytes do not cross a user crate's door yet — the dialect's own come "
+            "from `b\"...\"`, `s.encode()` and `fs.read_bytes`"
+        )
     m = re.fullmatch(r"Map<(\w+), (\w+)>", t)
     if m and m.group(1) == "String" and m.group(2) in CRATE_CROSSING:
         return None

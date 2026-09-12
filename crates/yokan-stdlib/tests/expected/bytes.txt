@@ -1,0 +1,70 @@
+# CPython 3.14.2 — printed by tools/gen_expected.py, not by hand.
+py_bytes_hex y: -> s:
+py_bytes_repr y: -> s:b%27%27
+py_bytes_from_hex s: -> y:
+py_bytes_decode y: -> s:
+py_bytes_hex y:796f6b616e -> s:796f6b616e
+py_bytes_repr y:796f6b616e -> s:b%27yokan%27
+py_bytes_from_hex s:796f6b616e -> y:796f6b616e
+py_bytes_decode y:796f6b616e -> s:yokan
+py_bytes_hex y:89504e470d0a1a0a -> s:89504e470d0a1a0a
+py_bytes_repr y:89504e470d0a1a0a -> s:b%27%5Cx89PNG%5Cr%5Cn%5Cx1a%5Cn%27
+py_bytes_from_hex s:89504e470d0a1a0a -> y:89504e470d0a1a0a
+py_bytes_decode y:89504e470d0a1a0a -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200x89%20in%20position%200%3A%20invalid%20start%20byte
+py_bytes_hex y:e38288e38186e3818be38293 -> s:e38288e38186e3818be38293
+py_bytes_repr y:e38288e38186e3818be38293 -> s:b%27%5Cxe3%5Cx82%5Cx88%5Cxe3%5Cx81%5Cx86%5Cxe3%5Cx81%5Cx8b%5Cxe3%5Cx82%5Cx93%27
+py_bytes_from_hex s:e38288e38186e3818be38293 -> y:e38288e38186e3818be38293
+py_bytes_decode y:e38288e38186e3818be38293 -> s:%E3%82%88%E3%81%86%E3%81%8B%E3%82%93
+py_bytes_hex y:612762 -> s:612762
+py_bytes_repr y:612762 -> s:b%22a%27b%22
+py_bytes_from_hex s:612762 -> y:612762
+py_bytes_decode y:612762 -> s:a%27b
+py_bytes_hex y:6122622763 -> s:6122622763
+py_bytes_repr y:6122622763 -> s:b%27a%22b%5C%27c%27
+py_bytes_from_hex s:6122622763 -> y:6122622763
+py_bytes_decode y:6122622763 -> s:a%22b%27c
+py_bytes_hex y:00017f80ff -> s:00017f80ff
+py_bytes_repr y:00017f80ff -> s:b%27%5Cx00%5Cx01%5Cx7f%5Cx80%5Cxff%27
+py_bytes_from_hex s:00017f80ff -> y:00017f80ff
+py_bytes_decode y:00017f80ff -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200x80%20in%20position%203%3A%20invalid%20start%20byte
+py_str_encode s: -> y:
+py_str_encode s:yokan -> y:796f6b616e
+py_str_encode s:%E3%82%88%E3%81%86%E3%81%8B%E3%82%93 -> y:e38288e38186e3818be38293
+py_str_encode s:a%09b%0A -> y:6109620a
+py_bytes_decode y:ff -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200xff%20in%20position%200%3A%20invalid%20start%20byte
+py_bytes_decode y:80 -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200x80%20in%20position%200%3A%20invalid%20start%20byte
+py_bytes_decode y:c3 -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200xc3%20in%20position%200%3A%20unexpected%20end%20of%20data
+py_bytes_decode y:c328 -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200xc3%20in%20position%200%3A%20invalid%20continuation%20byte
+py_bytes_decode y:616263e282 -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20bytes%20in%20position%203-4%3A%20unexpected%20end%20of%20data
+py_bytes_decode y:f580 -> !UnicodeDecodeError:%27utf-8%27%20codec%20can%27t%20decode%20byte%200xf5%20in%20position%200%3A%20invalid%20start%20byte
+py_bytes_from_hex s:zz -> !ValueError:non-hexadecimal%20number%20found%20in%20fromhex%28%29%20arg%20at%20position%200
+py_bytes_from_hex s:41zz -> !ValueError:non-hexadecimal%20number%20found%20in%20fromhex%28%29%20arg%20at%20position%202
+py_bytes_from_hex s:41%204z -> !ValueError:non-hexadecimal%20number%20found%20in%20fromhex%28%29%20arg%20at%20position%204
+py_bytes_from_hex s:4 -> !ValueError:fromhex%28%29%20arg%20must%20contain%20an%20even%20number%20of%20hexadecimal%20digits
+py_bytes_from_hex s:41%204 -> !ValueError:fromhex%28%29%20arg%20must%20contain%20an%20even%20number%20of%20hexadecimal%20digits
+py_bytes_from_hex s:%2041 -> y:41
+py_bytes_from_hex s:41%20%2042 -> y:4142
+py_bytes_from_hex s:4%201 -> !ValueError:non-hexadecimal%20number%20found%20in%20fromhex%28%29%20arg%20at%20position%201
+py_bytes_from_hex s:41%0A42 -> y:4142
+py_bytes_index y:796f6b616e i:0 -> i:121
+py_bytes_index y:796f6b616e i:1 -> i:111
+py_bytes_index y:796f6b616e i:4 -> i:110
+py_bytes_index y:796f6b616e i:-1 -> i:110
+py_bytes_index y:796f6b616e i:-5 -> i:121
+py_bytes_index y:796f6b616e i:5 -> !IndexError:index%20out%20of%20range
+py_bytes_index y:796f6b616e i:-6 -> !IndexError:index%20out%20of%20range
+py_bytes_slice y:796f6b616e i:0 i:5 -> y:796f6b616e
+py_bytes_slice y:796f6b616e i:1 i:3 -> y:6f6b
+py_bytes_slice y:796f6b616e i:0 i:0 -> y:
+py_bytes_slice y:796f6b616e i:3 i:1 -> y:
+py_bytes_slice y:796f6b616e i:-3 i:-1 -> y:6b61
+py_bytes_slice y:796f6b616e i:-9 i:9 -> y:796f6b616e
+py_bytes_slice y:796f6b616e i:2 i:99 -> y:6b616e
+py_bytes_slice y:796f6b616e i:-99 i:-98 -> y:
+py_bytes_concat y: y:21 -> y:21
+py_bytes_concat y:796f6b616e y:21 -> y:796f6b616e21
+py_bytes_concat y:89504e470d0a1a0a y:21 -> y:89504e470d0a1a0a21
+py_bytes_concat y:e38288e38186e3818be38293 y:21 -> y:e38288e38186e3818be3829321
+py_bytes_concat y:612762 y:21 -> y:61276221
+py_bytes_concat y:6122622763 y:21 -> y:612262276321
+py_bytes_concat y:00017f80ff y:21 -> y:00017f80ff21

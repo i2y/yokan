@@ -2911,6 +2911,36 @@ fn py_fs_read_text_from(py: Python<'_>, path: &str, offset: i64) -> PyResult<Str
     py.detach(|| yokan_stdlib::fs_read_text_from_result(path, offset)).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+/// The byte doors. `bytes` crosses as Python's own `bytes` on this
+/// side and as the kernel's COW `Bytes` on the other, so an app reads
+/// one value in both runs.
+#[pyfunction]
+#[pyo3(name = "read_bytes")]
+fn py_fs_read_bytes(py: Python<'_>, path: &str) -> PyResult<pyo3::Py<pyo3::types::PyBytes>> {
+    // `Bytes` owns an Rc, which may not cross a thread: the bytes
+    // themselves do, and Python's own value is made from them here.
+    let data = py
+        .detach(|| yokan_stdlib::fs_read_bytes_result(path).map(|b| b.as_slice().to_vec()))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Ok(pyo3::types::PyBytes::new(py, &data).unbind())
+}
+
+#[pyfunction]
+#[pyo3(name = "write_bytes")]
+fn py_fs_write_bytes(py: Python<'_>, path: &str, data: &[u8]) -> PyResult<i64> {
+    py.detach(|| yokan_stdlib::fs_write_bytes_result(path, data))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+#[pyo3(name = "get_bytes")]
+fn py_http_get_bytes(py: Python<'_>, url: &str) -> PyResult<pyo3::Py<pyo3::types::PyBytes>> {
+    let data = py
+        .detach(|| yokan_stdlib::http_get_bytes_result(url).map(|b| b.as_slice().to_vec()))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Ok(pyo3::types::PyBytes::new(py, &data).unbind())
+}
+
 /// `json.dumps(v)` — the door reads the value's type at run time, the
 /// translator reads it from the annotation; both land on the same
 /// stdlib writer, which is what makes the two runs print one string.
@@ -3062,6 +3092,8 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fs.add_function(wrap_pyfunction!(py_fs_modified_ms, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_is_dir, &fs)?)?;
     fs.add_function(wrap_pyfunction!(py_fs_read_text_from, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_read_bytes, &fs)?)?;
+    fs.add_function(wrap_pyfunction!(py_fs_write_bytes, &fs)?)?;
     m.add_submodule(&fs)?;
     let sqlite = PyModule::new(m.py(), "sqlite")?;
     sqlite.add_function(wrap_pyfunction!(py_sqlite_exec, &sqlite)?)?;
@@ -3079,6 +3111,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     http.add_function(wrap_pyfunction!(py_http_post_text, &http)?)?;
     http.add_function(wrap_pyfunction!(py_http_post_text_or, &http)?)?;
     http.add_function(wrap_pyfunction!(py_http_status, &http)?)?;
+    http.add_function(wrap_pyfunction!(py_http_get_bytes, &http)?)?;
     m.add_submodule(&http)?;
     // `from yokan import fs` works by attribute; this makes the
     // dotted forms (`import yokan.fs` etc.) resolve too.

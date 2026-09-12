@@ -2746,3 +2746,63 @@ form already carried, applied to fields, parameters and answers. And a
 `set` was refused as a gap ("not in the dialect yet") when the ledger
 had already decided it: it iterates in an order the compiled side
 would not reproduce. Both spellings say the reason now.
+
+## Bytes, and the zone the machine keeps (2026-09-12)
+
+The standard-library memo's last two items were blocked on each other
+and on a type: `hashlib` and `base64` answer bytes, and `zoneinfo`
+answers a zone. Both are in now.
+
+**`bytes` is pixie's `Bytes`.** The substrate had the value already —
+a copy-on-write buffer, a type, the codegen adapters, the interpreter
+— and the dialect had none of it. What it needed was a spelling for a
+literal, because a pixie string holds text and cannot carry an
+arbitrary byte. A literal lands as the bytes themselves: an array of
+numbers against a `Bytes` slot, which is what a declaration or a
+field's type says. That reaches further than a default — a local
+annotated `bytes`, an argument — so the emitter now reads an array of
+byte-sized numbers as a byte string wherever a slot names one. Two
+gaps in the view layer closed with it: a `Bytes` argument crossing a
+binding, and `Bytes` counting as a value shape a view may call a pure
+static with. Everything else is Python's: `len`, an index that answers
+a number, a slice, `+`, `.hex()`, `bytes.fromhex`, `.encode()` and
+`.decode()`, and a hole that writes what `str(b)` writes.
+
+**A digest is a function of its input.** `hashlib.sha256(b)` answers
+an object in Python and the second call reads it; an object written to
+in steps has no compiled shape, so the dialect reads the PAIR —
+`hashlib.sha256(b).hexdigest()` — and refuses every other spelling by
+name. `base64` needed no such trick and is an ordinary manifest
+module. Both carry tables CPython printed, and the tables hold the
+failures too: what `b64decode` says about a length that cannot be
+right, what a strict decode says about each of the three ways UTF-8
+breaks, and both of `fromhex`'s complaints.
+
+**A zone rides in the type.** An aware datetime is the same integer a
+naive one is — the wall clock in its own zone — so every attribute
+that reads that integer keeps working, and only what a zone decides
+needs the key. The key is therefore a literal: `ZoneInfo("Asia/Tokyo")`
+is read while the app translates, and a zone chosen at run time is
+refused by name. What a `State` or a field holds is the naive value it
+always held, because an annotation is all they have to go by and
+`datetime` there means naive; storing an aware one is refused where it
+is written rather than diverging in a dump later.
+
+**The zone data is the machine's.** CPython's `zoneinfo` reads the
+TZif files on the machine, so the compiled run reads the same files,
+in the same order, with the same rules — the transition table in UTC
+and in local time, the POSIX rule in the file's footer for dates past
+the last transition, the DST offset inferred from the flags. That is
+a port of CPython's own reader, which is why a 2045 date in New York
+and Lord Howe's half-hour change both answer what CPython answers. The
+ground-truth table names the machine's tzdata release beside the
+CPython that printed it: the rows are pinned to zones whose rules are
+old, but the claim is about a release all the same, and a machine on
+another one reads the table as stale rather than pretending.
+
+One thing the table caught that reasoning had not: `astimezone` to the
+zone a value is already in answers the value, and does not convert.
+Python's rule is an identity check, and it matters for the hour a
+spring change skips — a wall time the clock never showed. Converting
+would have moved it; the same zone answering itself leaves it where
+the app wrote it.

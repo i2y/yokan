@@ -46,6 +46,10 @@ rows = [
   { py = "modified_ms", fn = "modifiedMs", params = "path: String", ret = "Int", rust = "fs_modified_ms", flags = "try" },
   { py = "is_dir", fn = "isDir", params = "path: String", ret = "Bool", rust = "fs_is_dir" },
   { py = "read_text_from", fn = "readTextFrom", params = "path: String, offset: Int", ret = "String", rust = "fs_read_text_from", flags = "try" },
+  # Bytes, for a file the text pair cannot carry: an image, an
+  # archive, anything whose bytes are not UTF-8.
+  { py = "read_bytes", fn = "readBytes", params = "path: String", ret = "Bytes", rust = "fs_read_bytes", flags = "try" },
+  { py = "write_bytes", fn = "writeBytes", params = "path: String, data: Bytes", ret = "Int", rust = "fs_write_bytes", flags = "try" },
 ]
 
 [[group]]
@@ -122,6 +126,7 @@ rows = [
   { py = "get_text_or", fn = "getTextOr", params = "url: String, default: String", ret = "String", rust = "http_get_text_or" },
   { py = "get_text", fn = "getTextTimeout", params = "url: String, timeoutMs: Int", ret = "String", rust = "http_get_text_timeout", flags = "try" },
   { py = "get_text_with", fn = "getTextWith", params = "url: String, headers: Map<String, String>", ret = "String", rust = "http_get_text_with", flags = "try" },
+  { py = "get_bytes", fn = "getBytes", params = "url: String", ret = "Bytes", rust = "http_get_bytes", flags = "try" },
   { py = "post_text", fn = "postText", params = "url: String, body: String", ret = "String", rust = "http_post_text", flags = "try" },
   { py = "post_text", fn = "postTextAs", params = "url: String, body: String, contentType: String", ret = "String", rust = "http_post_text_as", flags = "try" },
   { py = "post_text_or", fn = "postTextOr", params = "url: String, body: String, default: String", ret = "String", rust = "http_post_text_or" },
@@ -493,6 +498,44 @@ rows = [
   { fn = "deltaAbs", params = "a: Int", ret = "Int", rust = "delta_abs", flags = "pure cpython" },
 ]
 
+# `zoneinfo`, as the dialect carries it: an aware datetime is the same
+# integer a naive one is (the wall clock in its own zone) and the zone
+# rides in the translator's type, so every naive attribute keeps
+# working and only these need the zone's key. The key is a literal in
+# the app, which is why no row takes one from a value.
+[[group]]
+class = "Zone"
+# no module: `zoneinfo.ZoneInfo(key)` is not a `module.fn` call
+# no layer
+rows = [
+  { fn = "utcoffset", params = "key: String, us: Int", ret = "Int", rust = "zone_utcoffset", flags = "pure cpython" },
+  { fn = "dst", params = "key: String, us: Int", ret = "Int", rust = "zone_dst", flags = "pure cpython" },
+  { fn = "tzname", params = "key: String, us: Int", ret = "String", rust = "zone_tzname", flags = "pure cpython" },
+  { fn = "isoformat", params = "key: String, us: Int", ret = "String", rust = "zone_isoformat", flags = "pure cpython" },
+  { fn = "str", params = "key: String, us: Int", ret = "String", rust = "zone_str", flags = "pure cpython" },
+  { fn = "strftime", params = "key: String, us: Int, fmt: String", ret = "String", rust = "zone_strftime", flags = "pure cpython" },
+  { fn = "instant", params = "key: String, us: Int", ret = "Int", rust = "zone_instant", flags = "pure cpython" },
+  { fn = "timestamp", params = "key: String, us: Int", ret = "Float", rust = "zone_timestamp", flags = "pure cpython" },
+  { fn = "fromTimestamp", params = "key: String, secs: Float", ret = "Int", rust = "zone_from_timestamp", flags = "pure cpython" },
+  { fn = "astimezone", params = "here: String, there: String, us: Int", ret = "Int", rust = "zone_astimezone", flags = "pure cpython" },
+  # Not pure: it reads the clock, so a view may not call it.
+  { fn = "now", params = "key: String", ret = "Int", rust = "zone_now" },
+  # `ZoneInfo(key)` itself, so a key the machine does not have is said
+  # where the app wrote the name.
+  { fn = "check", params = "key: String", ret = "String", rust = "zone_check", flags = "pure" },
+]
+
+[[group]]
+class = "Base64"
+module = "base64"
+layer = "python"
+rows = [
+  # Both answer BYTES, as Python's do. `b64decode` of text that is not
+  # base64 raises in Python, which is what the `try` twin is for.
+  { py = "b64encode", fn = "b64encode", params = "b: Bytes", ret = "Bytes", rust = "py_b64encode", flags = "pure cpython" },
+  { py = "b64decode", fn = "b64decode", params = "b: Bytes", ret = "Bytes", rust = "py_b64decode", flags = "pure cpython try" },
+]
+
 [[group]]
 class = "Py"
 # no module: not reachable as `module.fn`
@@ -585,4 +628,23 @@ rows = [
   { fn = "strRpartitionBefore", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_before", flags = "pure" },
   { fn = "strRpartitionSep", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_sep", flags = "pure" },
   { fn = "strRpartitionAfter", params = "s: String, sep: String", ret = "String", rust = "py_str_rpartition_after", flags = "pure" },
+  # `bytes`: a literal and `bytes.fromhex` arrive as hex, because a
+  # pixie string cannot carry an arbitrary byte. `len(b)` is the
+  # kernel's own `length`, so it has no row.
+  { fn = "bytesFromHex", params = "hex: String", ret = "Bytes", rust = "py_bytes_from_hex", flags = "pure cpython try" },
+  { fn = "bytesHex", params = "b: Bytes", ret = "String", rust = "py_bytes_hex", flags = "pure cpython" },
+  { fn = "strEncode", params = "s: String", ret = "Bytes", rust = "py_str_encode", flags = "pure cpython" },
+  { fn = "bytesDecode", params = "b: Bytes", ret = "String", rust = "py_bytes_decode", flags = "pure cpython try" },
+  { fn = "bytesIndex", params = "b: Bytes, i: Int", ret = "Int", rust = "py_bytes_index", flags = "pure cpython" },
+  { fn = "bytesSlice", params = "b: Bytes, a: Int, z: Int", ret = "Bytes", rust = "py_bytes_slice", flags = "pure cpython" },
+  { fn = "bytesConcat", params = "a: Bytes, b: Bytes", ret = "Bytes", rust = "py_bytes_concat", flags = "pure cpython" },
+  { fn = "bytesRepr", params = "b: Bytes", ret = "String", rust = "py_bytes_repr", flags = "pure cpython" },
+  # `hashlib.sha256(b).hexdigest()` and its two neighbours. A digest is
+  # a function of its input alone, which is why the compiled run can
+  # answer it without the interpreter and the table still holds it to
+  # CPython. The Python spelling is two calls, so the translator reads
+  # the pair rather than the module reaching these as `hashlib.fn`.
+  { fn = "sha256Hex", params = "b: Bytes", ret = "String", rust = "py_sha256_hex", flags = "pure cpython" },
+  { fn = "sha1Hex", params = "b: Bytes", ret = "String", rust = "py_sha1_hex", flags = "pure cpython" },
+  { fn = "md5Hex", params = "b: Bytes", ret = "String", rust = "py_md5_hex", flags = "pure cpython" },
 ]

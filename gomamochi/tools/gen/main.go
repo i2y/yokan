@@ -769,6 +769,14 @@ func loadStdlib(path string) []stdRow {
 			if !r.has("rust") {
 				continue
 			}
+			// The row number is the C face's, and the face carries only
+			// the shapes rakugan/tools/gen_capi.pl writes an arm for. A
+			// row it cannot carry gets no arm and no number there, so it
+			// must get none here either, or every row after it would
+			// call the wrong one.
+			if !stdCarried(r) {
+				continue
+			}
 			id++
 			row := stdRow{id: id, module: module, py: r.str("py"), ret: r.str("ret")}
 			for _, p := range strings.Split(r.str("params"), ",") {
@@ -788,6 +796,25 @@ func loadStdlib(path string) []stdRow {
 		}
 	}
 	return rows
+}
+
+// stdCarried is the crossing test of the generator that writes the C
+// face's arms: the argument shapes it pushes and the answers it reads.
+func stdCarried(r table) bool {
+	args := map[string]bool{"String": true, "Int": true, "Float": true, "List<String>": true}
+	rets := map[string]bool{"String": true, "Int": true, "Bool": true, "Float": true,
+		"List<String>": true, "List<List<String>>": true, "": true}
+	for _, p := range strings.Split(r.str("params"), ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		_, kind, ok := strings.Cut(p, ":")
+		if !ok || !args[strings.TrimSpace(kind)] {
+			return false
+		}
+	}
+	return rets[r.str("ret")]
 }
 
 func (t table) rows() []table {

@@ -609,7 +609,7 @@ store Sheet {
   state rows : List<Row> = []
   state tally : Map<String, Int> = {}
   state picked : String? = nil
-  state raw : Bytes = []                  # [] が空のバイト列
+  state raw : Bytes = [0, 255]            # バイトそのもの。[] は空
 }
 # Row("ada") と書けば score と note はデフォルトで埋まる
 ```

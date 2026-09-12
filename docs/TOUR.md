@@ -628,7 +628,7 @@ store Sheet {
   state rows : List<Row> = []
   state tally : Map<String, Int> = {}
   state picked : String? = nil
-  state raw : Bytes = []                  # `[]` is the empty one
+  state raw : Bytes = [0, 255]            # the bytes; `[]` is empty
 }
 # Row("ada")  fills score and note from their defaults
 ```

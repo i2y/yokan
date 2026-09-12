@@ -2849,13 +2849,24 @@ fn lower_method_stmt(s: &Stmt, cx: &mut MethodCtx, out: &mut String, ind: &str) 
                 );
             }
             let is_opt = ann_opt || expr_is_opt(value, cx);
-            let v = if ann_opt {
-                lower_nullable_slot(value, cx)?
-            } else {
-                lower_method_expr(value, cx)?
+            let ann_ty = match ty {
+                Some(t) => Some(lower_type(t, cx.class_names)?),
+                None => None,
             };
-            let ann = match ty {
-                Some(t) => format!(": {}", lower_type(t, cx.class_names)?.render()),
+            // A declaration that says `Bytes` is what makes an array
+            // of byte-sized numbers a byte string rather than a list.
+            let as_bytes = if matches!(ann_ty, Some(RustTy::Bytes)) {
+                bytes_literal(value)
+            } else {
+                None
+            };
+            let v = match as_bytes {
+                Some(b) => b,
+                None if ann_opt => lower_nullable_slot(value, cx)?,
+                None => lower_method_expr(value, cx)?,
+            };
+            let ann = match &ann_ty {
+                Some(t) => format!(": {}", t.render()),
                 None => String::new(),
             };
             let rn = camel_to_snake(&name.name);
@@ -4565,6 +4576,9 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
                 let v = lower_view_display_inner(a, cx)?;
                 lowered.push(match ty {
                     RustTy::Str => format!("({v}).as_str()"),
+                    // The same slice the method side hands across
+                    // (§8.73): one vocabulary either side.
+                    RustTy::Bytes => format!("({v}).as_slice()"),
                     // A list crosses as an owned `Vec` of the Rust
                     // element type, the same conversion the method
                     // side uses — one vocabulary either side of the
@@ -4583,6 +4597,7 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
                 RustTy::Int => format!("(({call}) as i64)"),
                 RustTy::Float => format!("(({call}) as f64)"),
                 RustTy::Str => format!("Str::from({call})"),
+                RustTy::Bytes => format!("Bytes::from({call})"),
                 RustTy::List(_) => {
                     // `let` rather than a closure, for the reason
                     // `RetConv::Expr` gives: a closure parameter has
@@ -4642,7 +4657,10 @@ fn lower_view_display_inner(e: &Expr, cx: &ViewCtx) -> Result<String, EmitError>
 /// view: values, never a World handle, and never a fallible result.
 fn view_value_shape(t: &RustTy) -> bool {
     match t {
-        RustTy::Int | RustTy::Float | RustTy::Bool | RustTy::Str => true,
+        // `Bytes` is a value like `Str` is — a COW buffer, no World
+        // handle in it — so a static that renders or measures one is
+        // as view-safe as `Py.floatRepr` (§8.54).
+        RustTy::Int | RustTy::Float | RustTy::Bool | RustTy::Str | RustTy::Bytes => true,
         RustTy::List(inner) => view_value_shape(inner),
         _ => false,
     }
@@ -5082,6 +5100,27 @@ fn lower_view_str_list(e: &Expr, cx: &ViewCtx, key: &str) -> Result<String, Emit
     }
 }
 
+/// A byte string written out: an array of byte-sized numbers against
+/// a `Bytes` slot. pixie has no literal of its own for one, so this is
+/// the spelling that gives it one — and the place that says the slot
+/// is `Bytes` is a declaration, a field's type or a parameter.
+fn bytes_literal(e: &Expr) -> Option<String> {
+    let ExprKind::Array(items) = &e.kind else {
+        return None;
+    };
+    if items.is_empty() {
+        return Some("Bytes::new()".into());
+    }
+    let mut out = Vec::with_capacity(items.len());
+    for it in items {
+        match &it.kind {
+            ExprKind::Int(n) if (0..=255).contains(n) => out.push(format!("{n}u8")),
+            _ => return None,
+        }
+    }
+    Some(format!("Bytes::from(vec![{}])", out.join(", ")))
+}
+
 /// Lower a `colors:` property (the charts) to a `List<Str>`. A series
 /// palette is written where it is read, so this takes a LITERAL list
 /// of strings as well as `lower_view_str_list`'s bound read — the
@@ -5328,9 +5367,16 @@ fn lower_action_stmt(
             name, ty, value, ..
         } => {
             let is_var = matches!(s, Stmt::Var { .. });
-            let v = lower_action_expr(value, cx)?;
-            let ann = match ty {
-                Some(t) => format!(": {}", lower_type(t, cx.view.class_names)?.render()),
+            let ann_ty = match ty {
+                Some(t) => Some(lower_type(t, cx.view.class_names)?),
+                None => None,
+            };
+            let v = match ann_ty.as_ref().filter(|t| **t == RustTy::Bytes).and_then(|_| bytes_literal(value)) {
+                Some(b) => b,
+                None => lower_action_expr(value, cx)?,
+            };
+            let ann = match &ann_ty {
+                Some(t) => format!(": {}", t.render()),
                 None => String::new(),
             };
             let rn = camel_to_snake(&name.name);
@@ -9064,11 +9110,11 @@ fn lower_default(e: &Expr, ty: &RustTy) -> Result<String, EmitError> {
             out.push_str(" __m }");
             Ok(out)
         }
-        // `[]` against `Bytes` — the empty byte string (§8.68). Bytes
-        // arrive from a file or a response and there is no literal
-        // for one, so the only value a default can name is the empty
-        // one, and this is the empty-sequence spelling pixie has.
-        (ExprKind::Array(items), RustTy::Bytes) if items.is_empty() => Ok("Bytes::new()".into()),
+        // An array of byte-sized numbers against `Bytes` — a byte
+        // string written out (§8.68). `[]` is the empty one, which is
+        // where a value that arrives from a file or a response starts;
+        // a translator that HAS a byte literal writes the bytes.
+        (_, RustTy::Bytes) if bytes_literal(e).is_some() => Ok(bytes_literal(e).expect("guarded")),
         // A default that CONSTRUCTS a struct (§8.68). A struct is a
         // value, so `P(1, 2)` is as constant as its arguments — the
         // same trailing-defaults rule construction sites use.

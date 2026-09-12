@@ -69,6 +69,8 @@ def carried():
         "datetime": {n: ("call", True) for n in T.DT_TYPES},
         "collections": {"Counter": ("call", True)},
         "itertools": {n: ("call", True) for n in T.ITERTOOLS},
+        "hashlib": {n: ("call", True) for n in T.HASHLIB},
+        "zoneinfo": {"ZoneInfo": ("call", True)},
     }
 
 

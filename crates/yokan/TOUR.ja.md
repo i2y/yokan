@@ -1193,13 +1193,13 @@ Python の名前を名乗ることが、CPython の答えに合わせるとい�
 JSON 文書をドットパスで読むのは `json` ではなく `jsondoc`、機械のタイムゾーンを読むのは `time` ではなく `clock` です。
 呼ぶのはハンドラからです（ビューは純粋なまま）。
 
-- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）/ `size`（ファイルの長さ。バイト数）/ `modified_ms`（最後に書かれた時刻。`clock.format_ms` が読むミリ秒）/ `is_dir` / `read_text_from(path, offset)`（バイト位置から末尾までの文字列。一度末尾まで読んだファイルの続きで、伸びていくログを先頭から読み直さずに追いかける読み方。末尾かその先を指せば `""` を返す）
+- **fs**：`read_text` / `write_text` / `append_text` / `exists` / `read_text_or` / `list_dir`（ディレクトリの中の名前を並べ替えて返す）/ `make_dir` / `remove` / `app_dir(name)`（このアプリが自分のファイルを置いてよいディレクトリ。無ければ作って返す）/ `size`（ファイルの長さ。バイト数）/ `modified_ms`（最後に書かれた時刻。`clock.format_ms` が読むミリ秒）/ `is_dir` / `read_text_from(path, offset)`（バイト位置から末尾までの文字列。一度末尾まで読んだファイルの続きで、伸びていくログを先頭から読み直さずに追いかける読み方。末尾かその先を指せば `""` を返す）/ `read_bytes` / `write_bytes`（ファイルをまるごと `bytes` として読み書きする。画像や書庫、ダイジェストの入力のように、文字列では運べないもののため）
   それと、プラットフォーム自身のダイアログを開く `open_dialog(title)` と `save_dialog(name)`。
   返るのはパスで、取り消されたときは `""` です。
   ダイアログは人を待つので `task(...)` の中で呼びます。
   検証スクリプトでは、`file:<path>` がこのダイアログに答えます。
 - **sqlite**：`exec` / `query_text` / `query_int` / `query_rows` / `query_int_or` / `query_text_or` / `query_rows_or`（SQLite 同梱。`query_text` は各行の 0 列目、`query_rows` は全列を返す。集計は COALESCE で包み、ORDER BY で順序を固定する）
-- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒単位の制限時間、`post_text` は第三引数に content type を取る）
+- **http**：`get_text(url)` / `get_text_or` / `get_text_with(url, headers)` / `get_bytes(url)` / `post_text(url, body)` / `post_text_or` / `status(url)`（同期。`get_text` は第二引数にミリ秒単位の制限時間、`post_text` は第三引数に content type を取る。`get_bytes` は応答を `bytes` で返すので、文字列でないものを受け取れる）
 - **jsondoc**：`get_text` / `get_int` / `get_float` / `get_bool` / `length` / `has` — JSON 文書を `"items.0.title"` のようなドットパスで読みます。`get_texts(src, paths, default)` はその読みを一回の解析でまとめて行います。パスのリストを渡すと文字列のリストが返り（数値と真偽値は JSON が書く形、リストとマップはその JSON）、パスの先に何もなければ `default` になります。ログの一行を分解する読み方で、レコードが毎回すべての項目を持つとは限らないからです。
   Python の `json` に、同じ読み方はありません。
   書き出しは Python の `json.dumps` です
@@ -1235,7 +1235,7 @@ Python のどこまでを実装しているかを、モジュールごとに挙�
 - **re** — `findall`、`sub`、`split`、`escape` と、判定としての `re.search(p, s) is not None`（`match` と `fullmatch` も同じ）。
   パターンはリテラルだけです。
   アプリを翻訳する時点でコンパイルするからです。
-- **datetime** — `date`、`datetime`、`timedelta` の三つで、いずれも naive です。
+- **datetime** — `date`、`datetime`、`timedelta` の三つで、ゾーンを与えないかぎりタイムゾーンなしの値です（ゾーンは下の `zoneinfo` を見てください）。
   使えるのは、構築、`today` / `now` / `fromisoformat` / `fromtimestamp` / `fromordinal` / `combine`、各部分（`.year`、`.hour`、`.days` など）、`isoformat`、`strftime`、`weekday`、`toordinal`、`timestamp`、`total_seconds`、それに算術と比較です。
   穴に置いた値は `str()` と同じ形で描かれます。
 - **collections** — `Counter`（str のリストを数えます）。
@@ -1244,6 +1244,42 @@ Python のどこまでを実装しているかを、モジュールごとに挙�
 - **itertools** — `chain`、`pairwise`、`accumulate`、`combinations`、`permutations`、`product`。
   どれも Python ではイテレータを返すので、ここでは `for` で回すものになります。
 - **string / textwrap / bisect / heapq** — 九つの定数、`dedent` と `indent`、`bisect_left` と `bisect_right`、`nsmallest` と `nlargest`。
+- **hashlib** — `sha256`、`sha1`、`md5` の三つを `.hexdigest()` で読みます。
+  Python はダイジェストをハッシュオブジェクト越しの二回の呼び出しで書きますが、途中で書き換わるオブジェクトはコンパイルする形を持たないので、方言はこの二つを一組として読みます。
+- **base64** — `b64encode` と `b64decode`。
+  Python のものと同じく、どちらも `bytes` を返します。
+- **zoneinfo** — `ZoneInfo(key)` と、タイムゾーン付きの `datetime` についてゾーンが決めることすべてです。
+  `now(tz)`、`fromtimestamp(ts, tz)`、`datetime(..., tzinfo=tz)`、`astimezone`、`utcoffset`、`dst`、`tzname`、オフセット付きの `isoformat`、`strftime` の `%z` と `%Z`、二つの値の比較と差、`+ timedelta` です。
+  両方の実行がこの機械のゾーンファイルを読むので、オフセットは二つの実行が食い違える対象ではありません。
+
+ゾーンは値ではなく型のほうに乗ります。
+キーを書いた場所でそのまま読む書き方になるのはそのためで、コンパイル側は翻訳しながらキーを読みます。
+値そのものはタイムゾーンなしの `datetime` と同じ整数（そのゾーンでの壁時計）なので、`.year` や `.hour` はそのまま読めますし、注釈しか手がかりのない `State` やフィールドは、これまでどおりタイムゾーンなしの値を持ちます。
+
+```python
+TOKYO = ZoneInfo("Asia/Tokyo")
+NEW_YORK = ZoneInfo("America/New_York")
+
+here = datetime(2026, 7, 14, 9, 30, tzinfo=TOKYO)
+there = here.astimezone(NEW_YORK)           # 2026-07-13 20:30:00-04:00
+text(f"{there.strftime('%H:%M %Z')}")       # 20:30 EDT
+```
+
+`utcoffset()` と `tzname()` は typeshed では `| None` の型を持ちます。
+タイムゾーンなしの値にはどちらも無いからです。
+穴に置いて描くぶんには問題になりませんが、数そのものが欲しいときは `strftime("%z")` が同じことを絞り込みなしで言います。
+
+`bytes` はそれ自身が一つの型で、振る舞いは Python のものと同じです。
+リテラルはエスケープも含めて `b"..."` で、`s.encode()` が文字列からバイト列を作り、`b.decode()` が文字列に戻します。
+`len(b)` は個数、`b[i]` は数値、`b[a:b]` はバイト列、`+` は連結で、`.hex()` と `bytes.fromhex(s)` が文字列との行き来です。
+`State[bytes]` と `bytes` のフィールドも持てて、どちらも `b""` から始まります。
+
+```python
+raw = phrase().encode()                    # b'yokan'
+stamp.set(hashlib.sha256(raw).hexdigest()) # 61aca55e4c72…
+packed.set(f"{base64.b64encode(raw)}")     # b'eW9rYW4='
+fs.write_bytes(path, PNG + raw)            # リテラルと値の連結
+```
 
 ```python
 c = Counter(votes())                       # {"ivy": 3, "momo": 2, "ada": 1}
@@ -1752,8 +1788,8 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - 同じ要素オブジェクトを**二回置くこと**。
   一度置いた要素は使い切りで、二か所には置けません。
 - **注釈のないローカルのリストと辞書**（`out: list[str] = []`、`counts: dict[str, int] = {}`。コンパイル側が要素の型や値の型を読めるのは、この注釈があるからです）。
-- **方言に形のないものを返す str のメソッド**：`.encode()`（bytes）、`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
-  使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
+- **方言に形のないものを返す str のメソッド**：`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
+  使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.encode()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
@@ -1772,7 +1808,11 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   `json.loads` も断ります。
   返るものの形が実行するまで決まらないからで、読むときは `jsondoc` のドットパスを使います。
   `json.dumps` は、書き下したリテラルなら何段でも入れ子にできますが、アプリが保持している値は一段までです。
-  `datetime` からは、タイムゾーン付きの値（`timezone`、`tzinfo`）、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。
+  `datetime` からは、`datetime.time`、`replace`、`strptime`、リストや辞書に入れた `date`、ヘルパの引数としての `date` を断ります。
+  タイムゾーンは `zoneinfo` から来るもので、`datetime.timezone` の固定オフセットは入れません。
+  両方の実行がともに読めるのは、機械が名前で知っているゾーンだからです。
+  `zoneinfo` からは、実行中に決まるキー（コンパイル側は翻訳しながらキーを読みます）、`State` やフィールドやリストに入れたタイムゾーン付きの値、そして `fold` を断ります。
+  `fold` は時計が二度示す一時間のどちらを取るかを選ぶ引数で、この方言は Python の既定と同じく常に先のほうを取ります。
   `strftime` が取るのは、CPython が自ら意味を定める指示子だけです。
   `%c`、`%x`、`%X`、`%-d` は、何を返すかが機械の都合で決まるので断ります。
   `re` からは、Match（`re.search` を値として使うこと）と実行時に組み立てたパターンを断ります。
@@ -1781,7 +1821,8 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   `collections` からは `Counter` 以外を断ります。
   `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`@value` クラスが型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
   `itertools` からは、終わらないもの（`count`、`cycle`、`repeat`）、それ自体がイテレータを返すもの（`groupby`、`tee`）、関数を取るもの（`starmap`、`takewhile`、`filterfalse`）、最後のタプルだけ形の違う `batched` を断ります。
-  理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal`、`hashlib`、`base64`、`zoneinfo` です。
+  `hashlib` からは `sha256`、`sha1`、`md5` 以外を断り、`hashlib.sha256(b).hexdigest()` 以外の書き方も断ります。
+  理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal` です。
 - **新しい要素の周辺**。
   表の列幅はドラッグで変えられず、行のキーボード操作と複数選択もありません。
   チャートには凡例がありません。

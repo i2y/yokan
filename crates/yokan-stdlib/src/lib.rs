@@ -43,6 +43,40 @@ pub fn fs_write_text(path: &str, text: &str) -> i64 {
     }
 }
 
+/// A file read whole as bytes, and one written from them: what an
+/// image, a zip or a digest's input is. The text pair cannot carry
+/// these, because a byte that is not UTF-8 has no string to land in.
+pub fn fs_read_bytes_result(path: &str) -> std::io::Result<pixie_kernel::Bytes> {
+    std::fs::read(path)
+        .map(pixie_kernel::Bytes::from)
+        .map_err(|e| std::io::Error::other(format!("fs.read_bytes {path}: {e}")))
+}
+
+pub fn fs_read_bytes(path: &str) -> pixie_kernel::Bytes {
+    match fs_read_bytes_result(path) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+pub fn fs_write_bytes_result(path: &str, data: &[u8]) -> std::io::Result<i64> {
+    if let Some(dir) = std::path::Path::new(path).parent() {
+        if !dir.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+    }
+    std::fs::write(path, data)
+        .map(|()| data.len() as i64)
+        .map_err(|e| std::io::Error::other(format!("fs.write_bytes {path}: {e}")))
+}
+
+pub fn fs_write_bytes(path: &str, data: &[u8]) -> i64 {
+    match fs_write_bytes_result(path, data) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
 pub fn fs_exists(path: &str) -> bool {
     std::path::Path::new(path).exists()
 }
@@ -90,6 +124,29 @@ pub fn http_get_text_result(url: &str) -> std::io::Result<String> {
 pub fn http_get_text(url: &str) -> String {
     match http_get_text_result(url) {
         Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// The bytes of a response, for what is not text: an image to show,
+/// a file to keep, the input of a digest.
+pub fn http_get_bytes_result(url: &str) -> std::io::Result<pixie_kernel::Bytes> {
+    match ureq::get(url).call() {
+        Ok(resp) => {
+            use std::io::Read;
+            let mut out = Vec::new();
+            resp.into_reader()
+                .read_to_end(&mut out)
+                .map_err(|e| std::io::Error::other(format!("http.get_bytes {url}: {e}")))?;
+            Ok(pixie_kernel::Bytes::from(out))
+        }
+        Err(e) => Err(std::io::Error::other(format!("http.get_bytes {url}: {e}"))),
+    }
+}
+
+pub fn http_get_bytes(url: &str) -> pixie_kernel::Bytes {
+    match http_get_bytes_result(url) {
+        Ok(v) => v,
         Err(e) => panic!("{e}"),
     }
 }
@@ -2867,6 +2924,397 @@ pub fn py_str_slice(s: &str, a: i64, b: i64) -> String {
         return String::new();
     }
     cs[lo..hi].iter().collect()
+}
+
+// ---- zoneinfo: the machine's own zone data ---------------------------
+//
+// An aware datetime carries the same integer a naive one does — the
+// wall clock in its own zone — and the zone rides in the type the
+// translator keeps, so every naive attribute keeps working and only
+// the zone-sensitive operations need a static. Each of these takes
+// the zone's key, which is a literal in the app.
+
+mod zone;
+
+/// Seconds between the datetime origin (0001-01-01) and the Unix
+/// epoch: what turns the dialect's microseconds into the seconds a
+/// zone file is indexed by.
+const EPOCH_US: i64 = 719_162 * DAY_US;
+
+fn zone_of(key: &str) -> std::sync::Arc<zone::Zone> {
+    match zone::zone(key) {
+        Ok(z) => z,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+fn wall_secs(us: i64) -> i64 {
+    (us - EPOCH_US).div_euclid(1_000_000)
+}
+
+/// The offset in effect at a wall-clock time, in seconds, and its
+/// abbreviation.
+fn at_wall(key: &str, us: i64) -> zone::Tti {
+    zone_of(key).at_local(wall_secs(us), datetime_year(us), 0)
+}
+
+/// `dt.utcoffset()` — a timedelta, so microseconds.
+pub fn zone_utcoffset(key: &str, us: i64) -> i64 {
+    at_wall(key, us).utcoff * 1_000_000
+}
+
+/// `dt.dst()` — how much of the offset is daylight saving.
+pub fn zone_dst(key: &str, us: i64) -> i64 {
+    at_wall(key, us).dstoff * 1_000_000
+}
+
+/// `dt.tzname()` — the abbreviation the zone file carries.
+pub fn zone_tzname(key: &str, us: i64) -> String {
+    at_wall(key, us).name
+}
+
+/// The offset as `isoformat` writes it: `+09:00`, with seconds only
+/// when the zone has them.
+fn offset_text(secs: i64) -> String {
+    let sign = if secs < 0 { '-' } else { '+' };
+    let v = secs.abs();
+    let (h, m, s) = (v / 3600, v / 60 % 60, v % 60);
+    if s == 0 {
+        format!("{sign}{h:02}:{m:02}")
+    } else {
+        format!("{sign}{h:02}:{m:02}:{s:02}")
+    }
+}
+
+pub fn zone_isoformat(key: &str, us: i64) -> String {
+    format!("{}{}", datetime_isoformat(us), offset_text(at_wall(key, us).utcoff))
+}
+
+/// `str(dt)` — the isoformat with a space where the T is.
+pub fn zone_str(key: &str, us: i64) -> String {
+    format!("{}{}", datetime_str(us), offset_text(at_wall(key, us).utcoff))
+}
+
+/// `strftime` over an aware value: `%z` and `%Z` are the two
+/// directives a zone fills in, and the rest is the naive twin's.
+pub fn zone_strftime(key: &str, us: i64, fmt: &str) -> String {
+    let tti = at_wall(key, us);
+    let mut out = String::new();
+    let mut cs = fmt.chars().peekable();
+    while let Some(c) = cs.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        match cs.peek() {
+            Some('z') => {
+                cs.next();
+                let v = tti.utcoff.abs();
+                let sign = if tti.utcoff < 0 { '-' } else { '+' };
+                let (h, m, sec) = (v / 3600, v / 60 % 60, v % 60);
+                if sec == 0 {
+                    out.push_str(&format!("{sign}{h:02}{m:02}"));
+                } else {
+                    out.push_str(&format!("{sign}{h:02}{m:02}{sec:02}"));
+                }
+            }
+            Some('Z') => {
+                cs.next();
+                out.push_str(&tti.name);
+            }
+            Some('%') => {
+                cs.next();
+                out.push_str("%%");
+            }
+            _ => out.push('%'),
+        }
+    }
+    py_strftime(micros_to_naive(us), &out)
+}
+
+/// The instant an aware datetime names, in microseconds from the same
+/// origin — what a comparison and a subtraction across zones read.
+pub fn zone_instant(key: &str, us: i64) -> i64 {
+    us - at_wall(key, us).utcoff * 1_000_000
+}
+
+/// `dt.timestamp()` — seconds from the Unix epoch.
+pub fn zone_timestamp(key: &str, us: i64) -> f64 {
+    let inst = zone_instant(key, us) - EPOCH_US;
+    inst.div_euclid(1_000_000) as f64 + inst.rem_euclid(1_000_000) as f64 / 1e6
+}
+
+/// The wall clock in `key` at an instant given in the same origin.
+fn wall_at_instant(key: &str, inst: i64) -> i64 {
+    let z = zone_of(key);
+    let secs = (inst - EPOCH_US).div_euclid(1_000_000);
+    // The year is only there to pick a year of the POSIX rule, and
+    // UTC's year is close enough for that — CPython passes the same.
+    let year = datetime_year(inst);
+    let (tti, _fold) = z.at_utc(secs, year);
+    inst + tti.utcoff * 1_000_000
+}
+
+/// `datetime.now(tz)`.
+pub fn zone_now(key: &str) -> i64 {
+    let now = chrono::Utc::now().naive_utc();
+    wall_at_instant(key, naive_to_micros(now))
+}
+
+/// `datetime.fromtimestamp(ts, tz)`.
+pub fn zone_from_timestamp(key: &str, secs: f64) -> i64 {
+    assert!(secs.is_finite(), "timestamp out of range");
+    let us = (secs * 1e6).round() as i64 + EPOCH_US;
+    wall_at_instant(key, us)
+}
+
+/// `dt.astimezone(other)` — the same instant, read in another zone.
+/// The same zone answers the same value, as Python's does: it returns
+/// the value itself rather than converting, which is what keeps a
+/// wall time the clock never showed (the hour a spring change skips)
+/// from moving under a conversion that was asked to do nothing.
+pub fn zone_astimezone(from: &str, to: &str, us: i64) -> i64 {
+    if from == to {
+        zone_of(from);
+        return us;
+    }
+    wall_at_instant(to, zone_instant(from, us))
+}
+
+/// `ZoneInfo(key)` itself: nothing to answer, but the key has to be
+/// one the machine has, and the app should hear about it where it
+/// wrote the name rather than at the first read.
+pub fn zone_check(key: &str) -> String {
+    zone_of(key);
+    key.to_string()
+}
+
+// ---- bytes: what Python's own `bytes` answers -----------------------
+//
+// A `bytes` value is the kernel's COW `Bytes`. Everything here is
+// CPython's semantics, spelled once: the interpreted run calls
+// Python's own, the compiled run calls these, and the tables in
+// `tests/expected/` hold them to what CPython printed.
+
+/// `bytes.fromhex(s)`. Python's own rules: ASCII whitespace may sit
+/// BETWEEN two-digit pairs and never inside one, and the two ways it
+/// fails carry the two messages CPython raises.
+pub fn py_bytes_from_hex_result(hex: &str) -> std::io::Result<pixie_kernel::Bytes> {
+    let cs: Vec<char> = hex.chars().collect();
+    let mut out = Vec::with_capacity(cs.len() / 2);
+    let mut i = 0usize;
+    let bad = |at: usize| {
+        std::io::Error::other(format!(
+            "non-hexadecimal number found in fromhex() arg at position {at}"
+        ))
+    };
+    while i < cs.len() {
+        if cs[i].is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        let Some(hi) = cs[i].to_digit(16) else {
+            return Err(bad(i));
+        };
+        if i + 1 >= cs.len() {
+            return Err(std::io::Error::other(
+                "fromhex() arg must contain an even number of hexadecimal digits",
+            ));
+        }
+        let Some(lo) = cs[i + 1].to_digit(16) else {
+            return Err(bad(i + 1));
+        };
+        out.push((hi * 16 + lo) as u8);
+        i += 2;
+    }
+    Ok(pixie_kernel::Bytes::from(out))
+}
+
+/// A `b"…"` literal reaches the compiled run as the bytes themselves,
+/// so this is `bytes.fromhex` alone.
+pub fn py_bytes_from_hex(hex: &str) -> pixie_kernel::Bytes {
+    match py_bytes_from_hex_result(hex) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// `b.hex()` — lowercase, no separators, which is what Python writes.
+pub fn py_bytes_hex(b: &[u8]) -> String {
+    let mut out = String::with_capacity(b.len() * 2);
+    for byte in b {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// `s.encode()` — UTF-8, the only encoding the dialect takes.
+pub fn py_str_encode(s: &str) -> pixie_kernel::Bytes {
+    pixie_kernel::Bytes::from(s.as_bytes())
+}
+
+/// `b.decode()` — UTF-8, errors strict, so invalid bytes fail the way
+/// Python's do rather than landing as replacement characters. The
+/// message is CPython's, down to which of the three faults it names
+/// and whether it names one byte or a run of them.
+pub fn py_bytes_decode_result(b: &[u8]) -> std::io::Result<String> {
+    let e = match std::str::from_utf8(b) {
+        Ok(s) => return Ok(s.to_string()),
+        Err(e) => e,
+    };
+    let at = e.valid_up_to();
+    let first = b.get(at).copied().unwrap_or(0);
+    let msg = match e.error_len() {
+        // Nothing wrong with the bytes so far: the sequence they
+        // start is simply not all here.
+        None if b.len() - at == 1 => format!(
+            "'utf-8' codec can't decode byte 0x{first:02x} in position {at}: unexpected end of data"
+        ),
+        None => format!(
+            "'utf-8' codec can't decode bytes in position {at}-{}: unexpected end of data",
+            b.len() - 1
+        ),
+        // A byte that cannot begin a sequence, against one that can
+        // but is followed by something that cannot continue it.
+        Some(_) => {
+            let why = if (0x80..=0xc1).contains(&first) || first >= 0xf5 {
+                "invalid start byte"
+            } else {
+                "invalid continuation byte"
+            };
+            format!("'utf-8' codec can't decode byte 0x{first:02x} in position {at}: {why}")
+        }
+    };
+    Err(std::io::Error::other(msg))
+}
+
+pub fn py_bytes_decode(b: &[u8]) -> String {
+    match py_bytes_decode_result(b) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// `b[i]` — an INT, as in Python, with a negative index counting back.
+pub fn py_bytes_index(b: &[u8], i: i64) -> i64 {
+    let n = b.len() as i64;
+    let k = if i < 0 { i + n } else { i };
+    assert!(k >= 0 && k < n, "index out of range");
+    i64::from(b[k as usize])
+}
+
+/// `b[a:b]` — Python's slice rules, the same ones `py_str_slice` has.
+pub fn py_bytes_slice(b: &[u8], a: i64, z: i64) -> pixie_kernel::Bytes {
+    let n = b.len() as i64;
+    let clamp = |v: i64| -> usize {
+        let v = if v < 0 { v + n } else { v };
+        v.clamp(0, n) as usize
+    };
+    let (lo, hi) = (clamp(a), clamp(z));
+    if lo >= hi {
+        return pixie_kernel::Bytes::new();
+    }
+    pixie_kernel::Bytes::from(&b[lo..hi])
+}
+
+pub fn py_bytes_concat(a: &[u8], b: &[u8]) -> pixie_kernel::Bytes {
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    out.extend_from_slice(a);
+    out.extend_from_slice(b);
+    pixie_kernel::Bytes::from(out)
+}
+
+/// `str(b)` / `f"{b}"` — Python's repr: `b'…'`, printable ASCII as
+/// itself, the three named escapes, everything else `\xNN`. The quote
+/// is single unless the bytes hold one and no double quote, which is
+/// the rule CPython's own repr follows.
+pub fn py_bytes_repr(b: &[u8]) -> String {
+    let quote = if b.contains(&b'\'') && !b.contains(&b'"') { '"' } else { '\'' };
+    let mut out = String::from("b");
+    out.push(quote);
+    for &c in b {
+        match c {
+            b'\\' => out.push_str("\\\\"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            c if c as char == quote => {
+                out.push('\\');
+                out.push(quote);
+            }
+            0x20..=0x7e => out.push(c as char),
+            _ => out.push_str(&format!("\\x{c:02x}")),
+        }
+    }
+    out.push(quote);
+    out
+}
+
+/// `hashlib.sha256(b).hexdigest()` and its two neighbours. A digest is
+/// a function of the bytes and nothing else, so the two runs agree by
+/// construction — the tables hold that to CPython all the same.
+pub fn py_sha256_hex(b: &[u8]) -> String {
+    use sha2::Digest;
+    py_bytes_hex(&sha2::Sha256::digest(b))
+}
+
+pub fn py_sha1_hex(b: &[u8]) -> String {
+    use sha1::Digest;
+    py_bytes_hex(&sha1::Sha1::digest(b))
+}
+
+pub fn py_md5_hex(b: &[u8]) -> String {
+    use md5::Digest;
+    py_bytes_hex(&md5::Md5::digest(b))
+}
+
+/// `base64.b64encode(b)` / `b64decode(b)` — both answer BYTES, as
+/// Python's do.
+pub fn py_b64encode(b: &[u8]) -> pixie_kernel::Bytes {
+    use base64::Engine;
+    pixie_kernel::Bytes::from(
+        base64::engine::general_purpose::STANDARD.encode(b).into_bytes(),
+    )
+}
+
+/// `base64.b64decode(b)` with Python's default rules: a byte outside
+/// the alphabet is ignored rather than refused, and the two ways the
+/// length can be wrong carry the two messages `binascii` raises.
+pub fn py_b64decode_result(b: &[u8]) -> std::io::Result<pixie_kernel::Bytes> {
+    use base64::Engine;
+    let data: Vec<u8> = b
+        .iter()
+        .copied()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == b'+' || *c == b'/')
+        .collect();
+    let leftover = data.len() % 4;
+    if leftover == 1 {
+        return Err(std::io::Error::other(format!(
+            "Invalid base64-encoded string: number of data characters ({}) cannot be 1 \
+             more than a multiple of 4",
+            data.len()
+        )));
+    }
+    if leftover != 0 {
+        // The padding that would complete the last group has to be
+        // there; Python counts what follows the data, not what it
+        // would have needed.
+        let pads = b.iter().filter(|c| **c == b'=').count();
+        if pads < 4 - leftover {
+            return Err(std::io::Error::other("Incorrect padding"));
+        }
+    }
+    base64::engine::general_purpose::STANDARD_NO_PAD
+        .decode(&data)
+        .map(pixie_kernel::Bytes::from)
+        .map_err(|e| std::io::Error::other(format!("Invalid base64-encoded string: {e}")))
+}
+
+pub fn py_b64decode(b: &[u8]) -> pixie_kernel::Bytes {
+    match py_b64decode_result(b) {
+        Ok(v) => v,
+        Err(e) => panic!("{e}"),
+    }
 }
 
 pub fn py_str_upper(s: &str) -> String {

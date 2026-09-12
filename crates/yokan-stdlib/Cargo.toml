@@ -5,6 +5,14 @@ edition = "2024"
 
 [dependencies]
 pixie-kernel = { path = "../pixie-kernel" }
+# `hashlib` and `base64` over `bytes`. A digest is a function of the
+# bytes and nothing else, so these answer what CPython's own modules
+# answer; the tables in tests/expected hold them to it. RustCrypto's
+# three are pure Rust, which keeps the build a cargo build.
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+base64 = "0.22"
 rusqlite = { version = "0.32", features = ["bundled"] }
 ureq = "2"
 serde_json = "1"

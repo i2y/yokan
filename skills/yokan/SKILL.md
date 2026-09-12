@@ -551,8 +551,9 @@ Two layers, told apart by where the name comes from.
 **Python's own**: `import math`, `import random`, `import
 statistics`, `import json`, `import datetime`, `import time`,
 `import re`, `import string`, `import textwrap`, `import bisect`,
-`import heapq`, `import collections`, `import itertools`, written as
-Python writes them. Development imports
+`import heapq`, `import collections`, `import itertools`,
+`import hashlib`, `import base64`, `from zoneinfo import ZoneInfo`,
+written as Python writes them. Development imports
 CPython's module; the shipped binary calls a twin that answers what
 CPython answers, error messages included. `math` and
 `statistics` are pure, so a view may call them; `random` moves a
@@ -570,6 +571,7 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   `clock.format_ms` reads) / `is_dir` / `read_text_from(path,
   offset)` (from a byte offset to the end — the rest of a file a
   read already reached the end of; at or past the end answers `""`)
+  / `read_bytes` / `write_bytes` (a file whole, as `bytes`)
 - **sqlite**: `exec(path, sql) -> int` / `query_text(path, sql) ->
   list[str]` (column 0 as text; `ORDER BY` for determinism) /
   `query_rows` (every column, `list[list[str]]`) / `query_int` /
@@ -581,8 +583,8 @@ runs; the shipped binary needs no Python. Call it from handlers only.
   splice user text into SQL.
 - **http**: `get_text(url[, timeout_ms])` / `get_text_or` /
   `get_text_with(url, headers)` / `post_text(url, body[,
-  content_type])` / `post_text_or` / `status(url)` (synchronous;
-  inside `task` the compiled run awaits it)
+  content_type])` / `post_text_or` / `status(url)` / `get_bytes(url)`
+  (synchronous; inside `task` the compiled run awaits it)
 - **jsondoc**: `get_text` / `get_int` / `get_float` / `get_bool` /
   `length` / `has` by dotted path (`"items.0.title"`) — the read
   Python's `json` has no verb for. Writing is `json.dumps`.
@@ -617,12 +619,26 @@ with its reason); `random`'s `seed`, `random`,
 nests to any depth; a value the app is holding reaches one level.
 From `time`: `time`, `time_ns`, `monotonic`, `monotonic_ns`,
 `perf_counter`, `perf_counter_ns`, `sleep`. From `datetime`: `date`,
-`datetime` and `timedelta`, all naive — construction, `today` /
+`datetime` and `timedelta` — construction, `today` /
 `now` / `fromisoformat` / `fromtimestamp`, the parts, `isoformat`,
 `strftime` (the directives CPython defines itself), `weekday`,
-`timestamp`, `total_seconds`, arithmetic and comparison. An aware
-value, `datetime.time`, `replace`, `strptime`, a date in a container
-and a date as a helper parameter are refused. From `re`:
+`timestamp`, `total_seconds`, arithmetic and comparison.
+`datetime.time`, `replace`, `strptime`, a date in a container
+and a date as a helper parameter are refused. A zone comes from
+`zoneinfo`: `ZoneInfo("Asia/Tokyo")` with a LITERAL key (the compiled
+side reads it as it translates), then `now(tz)`,
+`datetime(..., tzinfo=tz)`, `fromtimestamp(ts, tz)`, `astimezone`,
+`utcoffset`, `dst`, `tzname`, `isoformat` with the offset,
+`strftime`'s `%z` / `%Z`, and comparison and subtraction between two
+aware values. Both runs read the machine's own zone files. What a
+`State` or a field holds is the naive value — an annotation carries
+no zone — so keep a zone where the value is read.
+From `hashlib`: `sha256`, `sha1` and `md5`, each written as the pair
+`hashlib.sha256(b).hexdigest()`. From `base64`: `b64encode` and
+`b64decode`, both over `bytes`. `bytes` itself is Python's:
+`b"..."`, `s.encode()`, `b.decode()`, `len`, `b[i]` (a number),
+`b[a:b]`, `+`, `.hex()`, `bytes.fromhex(s)`, and a `State[bytes]` or
+a field starting from `b""`. From `re`:
 `findall`, `sub`, `split`, `escape`, and `re.search(p, s) is not
 None` as the test — the pattern is a LITERAL, compiled by CPython at
 translate time, and a `Match` used as a value is refused. From the

@@ -5510,6 +5510,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
 name = "sha1_smol"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7838,7 +7849,9 @@ dependencies = [
 name = "yokan-stdlib"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "chrono",
+ "md-5",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -7847,6 +7860,8 @@ dependencies = [
  "rusqlite",
  "rustpython-sre_engine",
  "serde_json",
+ "sha1",
+ "sha2",
  "unicode-case-mapping",
  "ureq",
 ]

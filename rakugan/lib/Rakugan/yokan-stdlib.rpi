@@ -27,6 +27,10 @@ class Fs {
   static fn isDir(path: String) Bool @rust("yokan_stdlib::fs_is_dir")
   static fn readTextFrom(path: String, offset: Int) String @rust("yokan_stdlib::fs_read_text_from")
   static fn tryReadTextFrom(path: String, offset: Int) !String @rust("yokan_stdlib::fs_read_text_from_result")
+  static fn readBytes(path: String) Bytes @rust("yokan_stdlib::fs_read_bytes")
+  static fn tryReadBytes(path: String) !Bytes @rust("yokan_stdlib::fs_read_bytes_result")
+  static fn writeBytes(path: String, data: Bytes) Int @rust("yokan_stdlib::fs_write_bytes")
+  static fn tryWriteBytes(path: String, data: Bytes) !Int @rust("yokan_stdlib::fs_write_bytes_result")
 }
 
 class Sqlite {
@@ -83,6 +87,8 @@ class Http {
   static fn tryGetTextTimeout(url: String, timeoutMs: Int) !String @rust("yokan_stdlib::http_get_text_timeout_result")
   static fn getTextWith(url: String, headers: Map<String, String>) String @rust("stdmap:yokan_stdlib::http_get_text_with")
   static fn tryGetTextWith(url: String, headers: Map<String, String>) !String @rust("stdmap:yokan_stdlib::http_get_text_with_result")
+  static fn getBytes(url: String) Bytes @rust("yokan_stdlib::http_get_bytes")
+  static fn tryGetBytes(url: String) !Bytes @rust("yokan_stdlib::http_get_bytes_result")
   static fn postText(url: String, body: String) String @rust("yokan_stdlib::http_post_text")
   static fn tryPostText(url: String, body: String) !String @rust("yokan_stdlib::http_post_text_result")
   static fn postTextAs(url: String, body: String, contentType: String) String @rust("yokan_stdlib::http_post_text_as")
@@ -337,6 +343,27 @@ class Dt {
   static fn deltaAbs(a: Int) Int @rust("yokan_stdlib::delta_abs")
 }
 
+class Zone {
+  static fn utcoffset(key: String, us: Int) Int @rust("yokan_stdlib::zone_utcoffset")
+  static fn dst(key: String, us: Int) Int @rust("yokan_stdlib::zone_dst")
+  static fn tzname(key: String, us: Int) String @rust("yokan_stdlib::zone_tzname")
+  static fn isoformat(key: String, us: Int) String @rust("yokan_stdlib::zone_isoformat")
+  static fn str(key: String, us: Int) String @rust("yokan_stdlib::zone_str")
+  static fn strftime(key: String, us: Int, fmt: String) String @rust("yokan_stdlib::zone_strftime")
+  static fn instant(key: String, us: Int) Int @rust("yokan_stdlib::zone_instant")
+  static fn timestamp(key: String, us: Int) Float @rust("yokan_stdlib::zone_timestamp")
+  static fn fromTimestamp(key: String, secs: Float) Int @rust("yokan_stdlib::zone_from_timestamp")
+  static fn astimezone(here: String, there: String, us: Int) Int @rust("yokan_stdlib::zone_astimezone")
+  static fn now(key: String) Int @rust("yokan_stdlib::zone_now")
+  static fn check(key: String) String @rust("yokan_stdlib::zone_check")
+}
+
+class Base64 {
+  static fn b64encode(b: Bytes) Bytes @rust("yokan_stdlib::py_b64encode")
+  static fn b64decode(b: Bytes) Bytes @rust("yokan_stdlib::py_b64decode")
+  static fn tryB64decode(b: Bytes) !Bytes @rust("yokan_stdlib::py_b64decode_result")
+}
+
 class Py {
   static fn printText(s: String, end: String) Int @rust("yokan_stdlib::py_print_text")
   static fn floatRepr(v: Float) String @rust("yokan_stdlib::py_float_repr")
@@ -423,4 +450,17 @@ class Py {
   static fn strRpartitionBefore(s: String, sep: String) String @rust("yokan_stdlib::py_str_rpartition_before")
   static fn strRpartitionSep(s: String, sep: String) String @rust("yokan_stdlib::py_str_rpartition_sep")
   static fn strRpartitionAfter(s: String, sep: String) String @rust("yokan_stdlib::py_str_rpartition_after")
+  static fn bytesFromHex(hex: String) Bytes @rust("yokan_stdlib::py_bytes_from_hex")
+  static fn tryBytesFromHex(hex: String) !Bytes @rust("yokan_stdlib::py_bytes_from_hex_result")
+  static fn bytesHex(b: Bytes) String @rust("yokan_stdlib::py_bytes_hex")
+  static fn strEncode(s: String) Bytes @rust("yokan_stdlib::py_str_encode")
+  static fn bytesDecode(b: Bytes) String @rust("yokan_stdlib::py_bytes_decode")
+  static fn tryBytesDecode(b: Bytes) !String @rust("yokan_stdlib::py_bytes_decode_result")
+  static fn bytesIndex(b: Bytes, i: Int) Int @rust("yokan_stdlib::py_bytes_index")
+  static fn bytesSlice(b: Bytes, a: Int, z: Int) Bytes @rust("yokan_stdlib::py_bytes_slice")
+  static fn bytesConcat(a: Bytes, b: Bytes) Bytes @rust("yokan_stdlib::py_bytes_concat")
+  static fn bytesRepr(b: Bytes) String @rust("yokan_stdlib::py_bytes_repr")
+  static fn sha256Hex(b: Bytes) String @rust("yokan_stdlib::py_sha256_hex")
+  static fn sha1Hex(b: Bytes) String @rust("yokan_stdlib::py_sha1_hex")
+  static fn md5Hex(b: Bytes) String @rust("yokan_stdlib::py_md5_hex")
 }

@@ -21,6 +21,7 @@ to a decimal round-trip.
 Rows read `name arg… -> result`, values tagged by type:
 
     i:-12   an int          s:hello        a str (percent-escaped)
+    y:4142  bytes, in hex
     f:hex   a double        !Name:message  the exception CPython raised
     b:0     a bool          [f:..,f:..]    a list
     u:      None            {s:k=i:1,..}   an object, in order
@@ -30,8 +31,11 @@ the platform's libm rather than from IEEE-754, so CPython and the
 twin agree exactly on this machine but a table is read on others.
 """
 
+import base64
 import datetime as _dt
+import hashlib
 import json
+import zoneinfo
 import math
 import os
 import random
@@ -659,8 +663,172 @@ def cases_small():
         yield ("py_str_rstrip_chars", (t, cs))
 
 
+def _tzdata_version() -> str:
+    """What the machine's zone directory says about itself."""
+    for d in zoneinfo.TZPATH:
+        p = os.path.join(d, "+VERSION")
+        if os.path.isfile(p):
+            return open(p).read().strip()
+    return "unknown"
+
+
+def _aware(key, us):
+    """The dialect's integer read back as the aware datetime it
+    carries: the wall clock in that zone."""
+    return _dtof(us).replace(tzinfo=zoneinfo.ZoneInfo(key))
+
+
+class _ZoneTwin:
+    """`zoneinfo`, asked the way the dialect asks it: the zone's key,
+    then the wall clock as the integer the value is carried as."""
+
+    __name__ = "zoneinfo"
+
+    zone_utcoffset = staticmethod(lambda k, u: _td(_aware(k, u).utcoffset()))
+    zone_dst = staticmethod(lambda k, u: _td(_aware(k, u).dst()))
+    zone_tzname = staticmethod(lambda k, u: _aware(k, u).tzname())
+    zone_isoformat = staticmethod(lambda k, u: _aware(k, u).isoformat())
+    zone_str = staticmethod(lambda k, u: str(_aware(k, u)))
+    zone_strftime = staticmethod(lambda k, u, f: _aware(k, u).strftime(f))
+    zone_timestamp = staticmethod(lambda k, u: _aware(k, u).timestamp())
+    # The instant, in the same integer the wall clock uses: what a
+    # comparison and a difference across zones read.
+    zone_instant = staticmethod(lambda k, u: u - _td(_aware(k, u).utcoffset()))
+    zone_from_timestamp = staticmethod(
+        lambda k, s: _us(_dt.datetime.fromtimestamp(s, zoneinfo.ZoneInfo(k)).replace(tzinfo=None))
+    )
+    zone_astimezone = staticmethod(
+        lambda a, b, u: _us(_aware(a, u).astimezone(zoneinfo.ZoneInfo(b)).replace(tzinfo=None))
+    )
+    zone_check = staticmethod(lambda k: (zoneinfo.ZoneInfo(k), k)[1])
+
+
+class _BytesTwin:
+    """What Python's own `bytes` answers, asked the way the dialect
+    asks it: a static per operation, over the same bytes."""
+
+    __name__ = "bytes"
+
+    py_bytes_from_hex = staticmethod(bytes.fromhex)
+    py_bytes_hex = staticmethod(bytes.hex)
+    py_str_encode = staticmethod(str.encode)
+    py_bytes_decode = staticmethod(bytes.decode)
+    py_bytes_index = staticmethod(lambda b, i: b[i])
+    py_bytes_slice = staticmethod(lambda b, a, z: b[a:z])
+    py_bytes_concat = staticmethod(lambda a, b: a + b)
+    # `str(b)` is `repr(b)` for bytes, which is what a hole renders.
+    py_bytes_repr = staticmethod(repr)
+
+
+class _HashlibTwin:
+    __name__ = "hashlib"
+
+    py_sha256_hex = staticmethod(lambda b: hashlib.sha256(b).hexdigest())
+    py_sha1_hex = staticmethod(lambda b: hashlib.sha1(b).hexdigest())
+    py_md5_hex = staticmethod(lambda b: hashlib.md5(b).hexdigest())
+
+
+class _Base64Twin:
+    __name__ = "base64"
+
+    py_b64encode = staticmethod(base64.b64encode)
+    py_b64decode = staticmethod(base64.b64decode)
+
+
+# The bytes every table asks about: empty, ASCII, a file's magic
+# number, text that is not ASCII, and the three ways UTF-8 breaks.
+_BYTES = (
+    b"",
+    b"yokan",
+    b"\x89PNG\r\n\x1a\n",
+    "\u3088\u3046\u304b\u3093".encode(),
+    b"a'b",
+    b"a\"b'c",
+    b"\x00\x01\x7f\x80\xff",
+)
+
+
+def cases_bytes():
+    for b in _BYTES:
+        yield ("py_bytes_hex", (b,))
+        yield ("py_bytes_repr", (b,))
+        yield ("py_bytes_from_hex", (b.hex(),))
+        yield ("py_bytes_decode", (b,))
+    for s in ("", "yokan", "\u3088\u3046\u304b\u3093", "a\tb\n"):
+        yield ("py_str_encode", (s,))
+    # The three faults a strict decode names, each with its own
+    # message: a byte that cannot start a sequence, one that starts a
+    # sequence nothing finishes, and one whose continuation is wrong.
+    for bad in (b"\xff", b"\x80", b"\xc3", b"\xc3\x28", b"abc\xe2\x82", b"\xf5\x80"):
+        yield ("py_bytes_decode", (bad,))
+    for hx in ("zz", "41zz", "41 4z", "4", "41 4", " 41", "41  42", "4 1", "41\n42"):
+        yield ("py_bytes_from_hex", (hx,))
+    for i in (0, 1, 4, -1, -5, 5, -6):
+        yield ("py_bytes_index", (b"yokan", i))
+    for a, z in ((0, 5), (1, 3), (0, 0), (3, 1), (-3, -1), (-9, 9), (2, 99), (-99, -98)):
+        yield ("py_bytes_slice", (b"yokan", a, z))
+    for a in _BYTES:
+        yield ("py_bytes_concat", (a, b"!"))
+
+
+def cases_hashlib():
+    for b in _BYTES:
+        yield ("py_sha256_hex", (b,))
+        yield ("py_sha1_hex", (b,))
+        yield ("py_md5_hex", (b,))
+
+
+def cases_base64():
+    for b in _BYTES:
+        yield ("py_b64encode", (b,))
+        yield ("py_b64decode", (base64.b64encode(b),))
+    # The alphabet is what counts: anything else is ignored, and the
+    # two ways the count can be wrong are the two errors.
+    for t in (b"eW9rYW4=", b"eW9rYW4===", b"!!!!", b"e W 9 r Y W 4 =",
+              b"eW9rYW4", b"a", b"ab", b"abc"):
+        yield ("py_b64decode", (t,))
+
+
+# Zones whose rules are old and whose dates are settled: a half-hour
+# offset, a zone with no DST, both hemispheres, a zone whose
+# abbreviation is a number, and one whose DST is half an hour.
+_ZONES = ("Asia/Tokyo", "America/New_York", "Europe/London", "Australia/Sydney",
+          "Asia/Kolkata", "Australia/Lord_Howe", "Pacific/Chatham", "UTC",
+          "America/Sao_Paulo", "Europe/Paris")
+
+# Dates on both sides of the northern and southern changeovers, one in
+# each half of the year, and two that are far from any of them.
+_WHEN = ((2026, 1, 15, 12, 0), (2026, 7, 15, 12, 0), (2026, 3, 8, 2, 30),
+         (2026, 11, 1, 1, 30), (2026, 10, 4, 2, 30), (1990, 6, 1, 9, 0),
+         (2045, 7, 4, 12, 0), (2026, 12, 31, 23, 59))
+
+
+def cases_zoneinfo():
+    for key in _ZONES:
+        yield ("zone_check", (key,))
+        for y, mo, d, h, mi in _WHEN:
+            u = _us(_dt.datetime(y, mo, d, h, mi))
+            for fn in ("zone_utcoffset", "zone_dst", "zone_tzname", "zone_isoformat",
+                       "zone_str", "zone_timestamp", "zone_instant"):
+                yield (fn, (key, u))
+            for f in ("%Y-%m-%d %H:%M %z", "%Z", "%z%Z", "%%z", "%H:%M:%S%z"):
+                yield ("zone_strftime", (key, u, f))
+            yield ("zone_astimezone", (key, "Asia/Tokyo", u))
+            yield ("zone_astimezone", (key, "America/New_York", u))
+    for ts in (0.0, 1_757_000_000.5, -1.0, 2_000_000_000.0):
+        for key in ("Asia/Tokyo", "America/New_York", "Pacific/Chatham"):
+            yield ("zone_from_timestamp", (key, ts))
+    # A key the machine does not have: the message is CPython's.
+    yield ("zone_check", ("Mars/Olympus",))
+    yield ("zone_check", ("../etc/passwd",))
+
+
 MODULES = {
     "math": (math, cases_math),
+    "zoneinfo": (_ZoneTwin, cases_zoneinfo),
+    "bytes": (_BytesTwin, cases_bytes),
+    "hashlib": (_HashlibTwin, cases_hashlib),
+    "base64": (_Base64Twin, cases_base64),
     "small": (_SmallTwin, cases_small),
     "re": (_ReTwin, cases_re),
     "datetime": (_DatetimeTwin, cases_datetime),
@@ -681,6 +849,8 @@ def enc(v) -> str:
         return "f:%016x" % struct.unpack("<Q", struct.pack("<d", v))[0]
     if isinstance(v, str):
         return "s:" + urllib.parse.quote(v, safe="")
+    if isinstance(v, (bytes, bytearray)):
+        return "y:" + bytes(v).hex()
     if isinstance(v, (list, tuple)):
         return "[" + ",".join(enc(x) for x in v) + "]"
     if isinstance(v, dict):
@@ -695,6 +865,14 @@ def render(name: str) -> str:
     out = [
         f"# CPython {sys.version.split()[0]} — printed by tools/gen_expected.py, not by hand.",
     ]
+    if name == "zoneinfo":
+        # A zone's answers come from the machine's own files, so the
+        # table is a claim about a tzdata release as well as about
+        # CPython. The rows are pinned to zones and dates whose rules
+        # are old, which is what keeps that claim quiet — but a
+        # machine on another release reads this line as stale, and
+        # that is the honest reading.
+        out.append(f"# tzdata {_tzdata_version()} — the machine's, read the same way both runs read it.")
     for fn, args in cases():
         target = getattr(mod, fn)
         try:

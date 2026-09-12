@@ -85,6 +85,15 @@ gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what
 # makes "every report is heard" a checked claim.
+# `bytes` and the two modules over it: a literal, a digest, base64,
+# and a binary file written and read back — the mark at its head
+# compared against the literal in both runs.
+gate bytes   "$PY" yokan_gate.py gate demo/bytes.py --script "input:hello there,click:encode,dump,click:decode,dump,click:save,dump,click:load,dump"
+# One meeting in four zones: both runs read the machine's own zone
+# files, so an offset is not something they can disagree about. The
+# `now` step renders what the zone says rather than the clock, which
+# is the part two runs cannot share.
+gate zones   "$PY" yokan_gate.py gate demo/zones.py --script "click:winter,dump,click:difference,dump,click:now,dump,click:summer,dump"
 gate pyjob   "$PY" yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
 gate stdlib  "$PY" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   "$PY" yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
@@ -115,6 +124,7 @@ for f in demo/*.py; do
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
+    bytes|zones) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;
