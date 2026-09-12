@@ -142,6 +142,9 @@ shows a finished transcript — its launch state is an empty table.
 #### filter — segmented: the toggle-button chooser over a filtered list
 <img src="screenshots/filter.png" width="360">
 
+#### contextmenu — the menu a right-click opens on what it wraps: the items are the app's data, so they are in a dump open or not, and a script picks one with `select:`
+<img src="screenshots/contextmenu.png" width="360">
+
 #### menubutton — a button that opens a short menu: no current value, so the label stays put and the handler receives the chosen index; a script picks from it with `select:`
 <img src="screenshots/menubutton.png" width="360">
 

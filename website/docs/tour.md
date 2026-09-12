@@ -201,7 +201,7 @@ The elements, by what they are for:
   `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
 - **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
   `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
-- **Layering**: `modal`, `toast`.
+- **Layering**: `modal`, `toast`, `context_menu` (the menu a right-click opens on what it wraps).
 
 `text` carries typography and a box of its own.
 The typography is `bold=`, `italic=`, `mono=` and `underline=`.
@@ -256,6 +256,17 @@ split(column(text("files"), grow=1.0),
       column(text("editor"), grow=1.0),
       ratio=Panes.ratio, on_change=Panes.widen)
 ```
+
+A `context_menu` wraps one element with the items a right-click offers there.
+
+```python
+with context_menu(options=["Rename", "Duplicate", "Delete"], on_select=Board.pick):
+    with column(padding=16, background="#313244"):
+        text("a card")
+```
+
+The items are the app's own data, so they are in the dump whether the menu is open or not, and the handler receives the chosen index — the chooser contract again.
+That is why a script picks from a context menu with `select:<item>`, without the click that opens it: where the panel sits is the window's business, as a `select`'s open list is.
 
 ## Form controls
 

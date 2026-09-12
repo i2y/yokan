@@ -215,6 +215,7 @@ fn children_of(el: &Element) -> Option<std::slice::Iter<'_, Element>> {
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
         | Element::Tooltip { children, .. }
+        | Element::ContextMenu { children, .. }
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. }
@@ -2273,6 +2274,68 @@ fn render_el_in<C: Component>(
                     cx.new(|_| PixieTooltip { label }).into()
                 })
                 .into_any_element()
+        }
+        // The context-menu rider: what it wraps renders as it would
+        // anywhere, inside a wrapper that copies the child's flex
+        // share so the extra div changes no layout (the Tooltip
+        // rule). A right-click on it opens the items AT THE POINTER;
+        // where the panel is, and whether it is open at all, is
+        // engine state keyed by element path, exactly as a Select's
+        // popover is. The items themselves are in the tree either
+        // way, which is why a script picks from the menu without
+        // opening it.
+        Element::ContextMenu {
+            options,
+            on_select,
+            children,
+        } => {
+            let Some(child) = children.first() else {
+                return div().into_any_element();
+            };
+            let key = pass.path.clone();
+            pass.seen.push(key.clone());
+            let flag = selects.entry(key).or_default().clone();
+            pass.path.push(0);
+            let rendered = render_el(
+                child, pass, inputs, scrolls, selects, charts, canvases, slot, sem, th, cx,
+            );
+            pass.path.pop();
+            let (grow, basis) = child_flex(child);
+            pass.next_id += 1;
+            let mut d = div().id(pass.next_id).flex();
+            if grow > 0.0 {
+                d = d.flex_grow(grow as f32).flex_shrink_0();
+                if basis > 0.0 {
+                    d = d.flex_basis(px(basis as f32));
+                }
+            }
+            let d = d.child(rendered).on_mouse_down(MouseButton::Right, {
+                let flag = flag.clone();
+                move |ev: &MouseDownEvent, window: &mut Window, cx: &mut App| {
+                    // A point, not a rectangle: the menu sits where the
+                    // click was, and the anchor excludes nothing from
+                    // the click that closes it again.
+                    let at = ev.position;
+                    flag.set((
+                        true,
+                        (at.x.as_f32(), at.y.as_f32(), 0.0, 0.0),
+                        window.viewport_size().height.as_f32(),
+                    ));
+                    cx.refresh_windows();
+                }
+            });
+            // The same verification hook a Select has: with
+            // `PIXIE_DEBUG_OPEN_SELECTS=1` the menu is open without a
+            // click, so a screenshot can show what it holds. Nothing
+            // recorded a pointer in that case, so it opens at the
+            // window's corner — the anchor is the click's, and there
+            // was no click.
+            let (open, at, _) = flag.get();
+            let open = open || std::env::var_os("PIXIE_DEBUG_OPEN_SELECTS").is_some();
+            if open {
+                chooser_overlay(&flag, options, -1, false, Some(at), on_select, pass, th, cx);
+            }
+            d.into_any_element()
         }
         // The disabled rider. The child renders as it would anywhere,
         // dimmed, under a shield that owns the mouse: a bare
@@ -4514,6 +4577,131 @@ fn mark_row<C: Component>(
     d
 }
 
+/// The panel a chooser opens, hoisted onto the frame's overlays.
+///
+/// Two elements open one: a closed chooser, under its control, and a
+/// context menu, at the pointer. What differs is the anchor — a
+/// rectangle to sit under, or a point to sit at — whether an option is
+/// marked, and whether the panel takes the anchor's width. A click
+/// outside closes it, excluding the anchor's own rectangle, because a
+/// click on the control that opened the panel must not close it in the
+/// capture phase and re-open it in the same gesture.
+#[allow(clippy::too_many_arguments)]
+fn chooser_overlay<C: Component>(
+    flag: &SelectCell,
+    options: &List<Str>,
+    marked: i64,
+    match_width: bool,
+    anchor: Option<(f32, f32, f32, f32)>,
+    on_select: &Option<pixie_kernel::IntListener>,
+    pass: &mut RenderPass,
+    th: &'static Theme,
+    cx: &mut Context<Root<C>>,
+) {
+    let (_, _at, win_h) = flag.get();
+    pass.next_id += 1;
+    let mut panel = div()
+        .id(pass.next_id)
+        // A click anywhere else closes the list, which is
+        // what every native one does. The control itself
+        // is "anywhere else" as far as the panel's bounds
+        // go, so the control's own rectangle is excluded
+        // here — otherwise a click on it would close the
+        // panel in the capture phase and its own handler
+        // would re-open it in the same gesture.
+        .on_mouse_down_out({
+            let flag = flag.clone();
+            move |_ev, window: &mut Window, cx: &mut App| {
+                let (_, at, h) = flag.get();
+                let p = window.mouse_position();
+                let (x, y) = (p.x.as_f32(), p.y.as_f32());
+                let on_control = x >= at.0
+                    && x <= at.0 + at.2
+                    && y >= at.1
+                    && y <= at.1 + at.3;
+                if !on_control {
+                    flag.set((false, at, h));
+                    cx.refresh_windows();
+                }
+            }
+        })
+        .bg(rgb(th.panel))
+        .border_1()
+        .border_color(rgb(th.border))
+        .rounded_md()
+        .p_1()
+        .flex()
+        .flex_col()
+        .min_w(px(160.));
+    for (i, opt) in options.iter().enumerate() {
+        let f = on_select.clone();
+        let flag = flag.clone();
+        pass.next_id += 1;
+        let mut row = div()
+            .id(pass.next_id)
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .cursor_pointer()
+            .text_color(rgb(th.text))
+            .hover(|s| s.bg(rgb(th.surface_hover)))
+            .child(SharedString::from(opt.as_str().to_string()))
+            .on_click(cx.listener(
+                move |this: &mut Root<C>, _ev, _window, cx| {
+                    let (_, at, h) = flag.get();
+                    flag.set((false, at, h));
+                    match f.clone() {
+                        Some(f) => this.apply(cx, move |w| f(w, i as i64)),
+                        None => cx.notify(),
+                    }
+                },
+            ));
+        if i as i64 == marked {
+            row = row.text_color(rgb(th.accent));
+        }
+        panel = panel.child(row);
+    }
+    // The wrapper carries no id, listeners or hover style,
+    // so it creates no hitbox: clicks around the panel
+    // fall through to the content beneath (no scrim, no
+    // occlude — a Select is lighter than a Modal).
+    //
+    // Anchored under the control via its recorded bounds
+    // (a click opened it, so the control has painted and
+    // the bounds are fresh); the panel matches the
+    // control's width, the native-select look. A zeroed
+    // record — never painted — falls back to centered.
+    let wrapper = if let Some((ax, ay, aw, ah)) = anchor {
+        // Under the control, unless under is off the
+        // bottom of the window — then above it, with the
+        // panel's BOTTOM pinned to the control's top, so
+        // the panel's own height (which nothing knows
+        // until it paints) never enters the arithmetic.
+        // The test is the control's own bottom edge
+        // against the middle of the window: a list that
+        // fits in the upper half fits when it opens
+        // upward from the lower one.
+        let up = win_h > 0.0 && ay + ah > win_h / 2.0;
+        let placed = div().absolute().left(px(ax));
+        let placed = if up {
+            placed.bottom(px(win_h - ay + 4.0))
+        } else {
+            placed.top(px(ay + ah + 4.0))
+        };
+        placed.child(if match_width && aw > 0.0 { panel.w(px(aw)) } else { panel })
+    } else {
+        div()
+            .absolute()
+            .inset_0()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(panel)
+    };
+    pass.overlays.push(deferred(wrapper).into_any_element());
+}
+
 /// A closed chooser: a bordered control with a caret, and an option
 /// panel that opens over the app. Select and MenuButton are the same
 /// widget twice — what the control shows (the current option, or a
@@ -4619,108 +4807,18 @@ fn closed_chooser<C: Component>(
             .size_full()
         }));
     if open {
-        pass.next_id += 1;
-        let mut panel = div()
-            .id(pass.next_id)
-            // A click anywhere else closes the list, which is
-            // what every native one does. The control itself
-            // is "anywhere else" as far as the panel's bounds
-            // go, so the control's own rectangle is excluded
-            // here — otherwise a click on it would close the
-            // panel in the capture phase and its own handler
-            // would re-open it in the same gesture.
-            .on_mouse_down_out({
-                let flag = flag.clone();
-                move |_ev, window: &mut Window, cx: &mut App| {
-                    let (_, at, h) = flag.get();
-                    let p = window.mouse_position();
-                    let (x, y) = (p.x.as_f32(), p.y.as_f32());
-                    let on_control = x >= at.0
-                        && x <= at.0 + at.2
-                        && y >= at.1
-                        && y <= at.1 + at.3;
-                    if !on_control {
-                        flag.set((false, at, h));
-                        cx.refresh_windows();
-                    }
-                }
-            })
-            .bg(rgb(th.panel))
-            .border_1()
-            .border_color(rgb(th.border))
-            .rounded_md()
-            .p_1()
-            .flex()
-            .flex_col()
-            .min_w(px(160.));
-        for (i, opt) in options.iter().enumerate() {
-            let f = on_select.clone();
-            let flag = flag.clone();
-            pass.next_id += 1;
-            let mut row = div()
-                .id(pass.next_id)
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .cursor_pointer()
-                .text_color(rgb(th.text))
-                .hover(|s| s.bg(rgb(th.surface_hover)))
-                .child(SharedString::from(opt.as_str().to_string()))
-                .on_click(cx.listener(
-                    move |this: &mut Root<C>, _ev, _window, cx| {
-                        let (_, at, h) = flag.get();
-                        flag.set((false, at, h));
-                        match f.clone() {
-                            Some(f) => this.apply(cx, move |w| f(w, i as i64)),
-                            None => cx.notify(),
-                        }
-                    },
-                ));
-            if i as i64 == marked {
-                row = row.text_color(rgb(th.accent));
-            }
-            panel = panel.child(row);
-        }
-        // The wrapper carries no id, listeners or hover style,
-        // so it creates no hitbox: clicks around the panel
-        // fall through to the content beneath (no scrim, no
-        // occlude — a Select is lighter than a Modal).
-        //
-        // Anchored under the control via its recorded bounds
-        // (a click opened it, so the control has painted and
-        // the bounds are fresh); the panel matches the
-        // control's width, the native-select look. A zeroed
-        // record — never painted — falls back to centered.
-        let (ax, ay, aw, ah) = at;
-        let wrapper = if aw > 0.0 {
-            // Under the control, unless under is off the
-            // bottom of the window — then above it, with the
-            // panel's BOTTOM pinned to the control's top, so
-            // the panel's own height (which nothing knows
-            // until it paints) never enters the arithmetic.
-            // The test is the control's own bottom edge
-            // against the middle of the window: a list that
-            // fits in the upper half fits when it opens
-            // upward from the lower one.
-            let up = win_h > 0.0 && ay + ah > win_h / 2.0;
-            let placed = div().absolute().left(px(ax));
-            let placed = if up {
-                placed.bottom(px(win_h - ay + 4.0))
-            } else {
-                placed.top(px(ay + ah + 4.0))
-            };
-            placed.child(if match_width { panel.w(px(aw)) } else { panel })
-        } else {
-            div()
-                .absolute()
-                .inset_0()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(panel)
-        };
-        pass.overlays.push(deferred(wrapper).into_any_element());
+        let (_, at, _) = flag.get();
+        chooser_overlay(
+            &flag,
+            options,
+            marked,
+            match_width,
+            if at.2 > 0.0 { Some(at) } else { None },
+            on_select,
+            pass,
+            th,
+            cx,
+        );
     }
     control.into_any_element()
 }

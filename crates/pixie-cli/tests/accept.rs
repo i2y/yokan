@@ -840,6 +840,14 @@ fn tiers_agree_on_every_demo() {
             "examples/toast/toast.pix",
             "dump,click:dismiss,click:save,dump,advance:1000,dump,advance:500,dump",
         ),
+        // The context menu: a rider whose items are a chooser's
+        // options. `select:` reaches them without the right-click that
+        // opens the panel, because what an app OFFERS is in the tree
+        // and where the panel sits is not.
+        (
+            "examples/contextmenu/contextmenu.pix",
+            "dump,select:Delete,dump",
+        ),
         // The menu button: a chooser with nothing to show, which is
         // why it needs no verb of its own — `select:` counts it with
         // the other choosers, and `select@1:` reaches the second one.
@@ -859,7 +867,7 @@ fn tiers_agree_on_every_demo() {
         // is what the gate compares.
         (
             "examples/split/split.pix",
-            "slide:0.25,dump,slide@1:0.75,dump,slide:1.0",
+            "slide:0.25,dump,slide@1:0.75,dump,select:cherry,dump,slide:1.0",
         ),
     ];
     for (rel, script) in demos {

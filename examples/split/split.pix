@@ -1,12 +1,14 @@
 store Panes {
   state ratio : Float = 0.5
   state rows : Float = 0.35
+  state fruits : List<String> = ["apple", "banana", "cherry"]
+  state pick : Int = 0
 }
 
 view Main {
   Column {
     grow: 1.0
-    Text { text: "ratio: #{Panes.ratio} rows: #{Panes.rows}" }
+    Text { text: "ratio: #{Panes.ratio} rows: #{Panes.rows} pick: #{Panes.pick}" }
     Split {
       ratio: Panes.ratio
       onChange: {
@@ -16,6 +18,9 @@ view Main {
         background: "#313244"
         padding: 12.0
         Text { text: "left" }
+        # A chooser beside a divider: the select step has to walk
+        # into a pane, the way the click step already did.
+        Select { options: Panes.fruits; selected: Panes.pick; onSelect: { Panes.pick = index } }
       }
       Split {
         ratio: Panes.rows

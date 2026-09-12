@@ -245,7 +245,8 @@ The catalog: `text`, `link`, `button`, `text_field`, `number_field`,
 `int_field`, `checkbox`, `switch`, `slider`, `select`, `radio_group`,
 `tab_bar`, `segmented`, `menu_button`, `column`, `row`, `grid`, `stack`, `spacer`,
 `divider`, `split`, `list_view`, `table`, `scroll_view`, `h_scroll_view`,
-`data_table`, `modal`, `toast`, `image`, `svg`, `bar_chart`, `line_chart`,
+`data_table`, `modal`, `toast`, `context_menu`, `image`, `svg`, `bar_chart`,
+`line_chart`,
 `progress`, `spinner`, `canvas`. Containers are opened with `with`; elements
 add themselves to the open container. `grid(columns=, rows=)` lays
 equal tracks and a button spans cells with `col_span=` /
@@ -302,6 +303,10 @@ if show():
         text("confirm?")
         button("yes", on_click=lambda: (done.set(True), show.set(False)))
 ```
+
+`with context_menu(options=[...], on_select=)` wraps ONE element with the items
+a right-click offers on it; the items are in the dump either way, so a
+script picks one with `select:` and never opens the panel.
 
 A `toast(message, duration_ms=, on_close=)` is open by existing too: a
 message at the bottom of the window with no scrim, which closes itself

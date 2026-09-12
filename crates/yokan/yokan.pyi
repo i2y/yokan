@@ -422,6 +422,18 @@ def tab_bar(
     on_change: Optional[Callable[[int], Any]] = None,
     **props: Unpack[SharedProps],
 ) -> Element: ...
+def context_menu(
+    *children: Element,
+    options: Sequence[str] = (),
+    on_select: Optional[Callable[[int], Any]] = None,
+    **props: Unpack[SharedProps],
+) -> Element:
+    """The menu a right-click offers on the one element this wraps,
+    opened with `with context_menu(options=[...], on_select=...):`. The
+    items
+    are the app's data, so they are in a dump whether the menu is open
+    or not, and a script picks from them the way it picks from a
+    `select`."""
 def menu_button(
     label: str,
     options: Sequence[str] = (),

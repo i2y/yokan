@@ -1103,6 +1103,19 @@ pub enum Element {
         text: Str,
         children: Vec<Element>,
     },
+    /// The context-menu rider: the items a right-click offers on the
+    /// one wrapped element. Layout-transparent like `Tooltip`, and a
+    /// checked output for the same reason — what an app OFFERS is
+    /// data it declared, so the items are in the tree and in the dump
+    /// whether the panel is open or not. Whether it is open is engine
+    /// state keyed by element path, as a Select's popover is, and a
+    /// script never needs it: the items are a chooser's options, so
+    /// the step that picks from a menu picks from this one.
+    ContextMenu {
+        options: List<Str>,
+        on_select: Option<IntListener>,
+        children: Vec<Element>,
+    },
     /// The disabled rider: the wrapped element is shown but takes no
     /// input. Produced by the lowerers when an element carries
     /// `disabled: true` — a literal, or a bound Bool that reads true;
@@ -2490,6 +2503,17 @@ impl Element {
                 let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Tooltip({text})[{}]", inner.join(", "))
             }
+            // The items go where a Tooltip's text goes — they are what
+            // this rider says — and the brackets stay the wrapped
+            // element's, the way every rider's do.
+            Element::ContextMenu {
+                options, children, ..
+            } => {
+                let items: Vec<String> =
+                    options.iter().map(|o| o.as_str().to_string()).collect();
+                let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
+                format!("ContextMenu({})[{}]", items.join(", "), inner.join(", "))
+            }
             Element::Disabled { children } => {
                 let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
                 format!("Disabled[{}]", inner.join(", "))
@@ -3072,6 +3096,7 @@ impl Element {
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
             | Element::Tooltip { children, .. }
+            | Element::ContextMenu { children, .. }
             | Element::Disabled { children }
             | Element::Sized { children, .. }
             | Element::Themed { children, .. } => match children.first() {
@@ -3088,6 +3113,7 @@ impl Element {
             | Element::Anim { children, .. }
             | Element::Semantics { children, .. }
             | Element::Tooltip { children, .. }
+            | Element::ContextMenu { children, .. }
             | Element::Disabled { children }
             | Element::Sized { children, .. }
             | Element::Themed { children, .. } => match children.first_mut() {
@@ -3160,6 +3186,7 @@ impl Element {
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
             | Element::Tooltip { children: cs, .. }
+            | Element::ContextMenu { children: cs, .. }
             | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Split { children: cs, .. }
@@ -3316,6 +3343,7 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::ContextMenu { children: cs, .. }
                 | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Split { children: cs, .. }
@@ -3408,6 +3436,7 @@ impl Element {
             | Element::Anim { children: cs, .. }
             | Element::Semantics { children: cs, .. }
             | Element::Tooltip { children: cs, .. }
+            | Element::ContextMenu { children: cs, .. }
             | Element::Sized { children: cs, .. }
             | Element::Themed { children: cs, .. }
             | Element::Split { children: cs, .. }
@@ -3467,6 +3496,7 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::ContextMenu { children: cs, .. }
                 | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Split { children: cs, .. }
@@ -3556,6 +3586,7 @@ impl Element {
                 | Element::Anim { children: cs, .. }
                 | Element::Semantics { children: cs, .. }
                 | Element::Tooltip { children: cs, .. }
+                | Element::ContextMenu { children: cs, .. }
                 | Element::Sized { children: cs, .. }
                 | Element::Themed { children: cs, .. }
                 | Element::Stack(cs)
@@ -3647,7 +3678,29 @@ impl Element {
                 | Element::Stack(cs)
                 | Element::ScrollView { children: cs, .. }
                 | Element::HScrollView(cs)
+                // A pane is a container like any other: every other
+                // finder walks into a Split, and this one has to, or a
+                // chooser someone put beside a divider is unreachable
+                // from a script while a button in the same pane is not.
+                | Element::Split { children: cs, .. }
                 | Element::DataTable(cs) => cs.iter().find_map(|c| walk(c, w, seen, n, disabled)),
+                // A context menu is the one rider that is ALSO a
+                // chooser: its items are the options, so it counts
+                // itself and then walks the element it belongs to,
+                // which is the order a Split's own arm uses.
+                Element::ContextMenu {
+                    options,
+                    on_select,
+                    children: cs,
+                } => {
+                    if *seen == n {
+                        let on_select =
+                            if disabled { Some(inert_int()) } else { on_select.clone() };
+                        return Some((options.clone(), on_select));
+                    }
+                    *seen += 1;
+                    cs.iter().find_map(|c| walk(c, w, seen, n, disabled))
+                }
                 // A ListView with an `onSelect` is a chooser too, and
                 // its options are what its rows SAY — the first text
                 // anywhere in each one, because a row is whatever the

@@ -2908,6 +2908,18 @@ fn build_element_inner(
                 on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
             })
         }
+        // The context-menu rider, mirroring codegen's arm: `options:`
+        // required, `onSelect` binding the implicit `index`, and one
+        // wrapped element checked with codegen's own words.
+        "ContextMenu" => {
+            let o = prop_of(el, "options").ok_or("ContextMenu needs `options:` (the items it offers)")?;
+            check_menu_child(el)?;
+            Ok(Element::ContextMenu {
+                options: eval_str_list(o, env, scope, w)?,
+                on_select: prop_of(el, "onSelect").map(|a| make_int_listener(a, env)),
+                children: build_children(el, env, scope, w)?,
+            })
+        }
         // The menu button, mirroring codegen's arm: `text:` (a
         // Button's spelling, and not the `label:` rider) and
         // `options:` are required, there is no current value, and
@@ -3237,6 +3249,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         ],
         "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
+        "ContextMenu" => &["options", "onSelect"],
         "ListView" => &[
             "virtualized",
             "itemHeight",
@@ -3321,6 +3334,19 @@ pub fn native_size_keys(element: &str) -> &'static [&'static str] {
 /// `when some(..)` — the present half of a `T?` match (§8.69).
 fn is_some_pattern(p: &ast::Pattern) -> bool {
     matches!(p, ast::Pattern::Ctor { name, .. } if name.name == "some")
+}
+
+/// The mirror of `pixie_codegen::check_menu_child`, word for word: a
+/// rider belongs to one element, and two children would mean a box
+/// the app never wrote.
+fn check_menu_child(el: &ast::Element) -> Result<(), String> {
+    let items = items_of_members(&el.members);
+    if items.len() != 1 || !matches!(items[0], ViewItem::Child(_)) {
+        return Err("a ContextMenu belongs to one element — put what shares the menu \
+                    in a single Column or Row"
+            .to_string());
+    }
+    Ok(())
 }
 
 /// The mirror of `pixie_codegen::check_split_panes`, word for word: a

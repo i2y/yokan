@@ -251,7 +251,7 @@ def view():
 - **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
   `data_table` は、最初の `row` がヘッダー行、以降が交互に色の付くデータ行です。
   同じ列のセルに同じ `grow` を与えると、列が揃います（`demo/table.py`）。
-- **重ねる**：`modal`、`toast`。
+- **重ねる**：`modal`、`toast`、`context_menu`（包んだ要素を右クリックすると開くメニュー）。
 
 `text` には、文字の体裁と、文字を囲む箱を指定できます。
 体裁は `bold=`、`italic=`、`mono=`、`underline=`。
@@ -319,6 +319,19 @@ split(column(text("files"), grow=1.0),
       column(text("editor"), grow=1.0),
       ratio=Panes.ratio, on_change=Panes.widen)
 ```
+
+`context_menu` は、包んだ一つの要素の上で右クリックしたときに出る項目を持ちます。
+
+```python
+with context_menu(options=["Rename", "Duplicate", "Delete"], on_select=Board.pick):
+    with column(padding=16, background="#313244"):
+        text("a card")
+```
+
+項目はアプリ自身のデータなので、メニューが開いているかどうかに関わらずダンプに出ます。
+ハンドラが受け取るのは選ばれた番号で、他の選択の要素と同じ約束です。
+だからスクリプトは、メニューを開くクリックなしで `select:<項目>` と書けば選べます。
+パネルがどこに出るかはウィンドウの側の話で、`select` の開いた一覧と同じ扱いです。
 
 ## フォームの要素
 

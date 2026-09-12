@@ -463,7 +463,7 @@ impl PyElement {
                     let mut probe = e.clone();
                     if set_children(&mut probe, Vec::new()).is_err() {
                         return Err(pyo3::exceptions::PyTypeError::new_err(
-                            "only containers (column/row/grid/stack/scroll_view/h_scroll_view/data_table/modal) work as `with` blocks",
+                            "only containers (column/row/grid/stack/scroll_view/h_scroll_view/data_table/modal/context_menu) work as `with` blocks",
                         ));
                     }
                 }
@@ -1060,6 +1060,23 @@ fn set_children(el: &mut Element, kids: Vec<Element>) -> Result<(), &'static str
                 return Err(
                     "a split takes exactly two panes — `split(left, right, ratio=…)`; \
                      put what belongs to one side in a single column() or row()",
+                );
+            }
+            *children = kids;
+            Ok(())
+        }
+        // A rider belongs to one element, and the lowerers say so in
+        // the same words: what a `with context_menu(...)` block holds
+        // is the element the menu is offered on.
+        Element::ContextMenu { children, .. } => {
+            // More than one is refused here, where the block is; the
+            // empty case is what `__enter__` probes with, and the
+            // lowerers hold the "exactly one" line for the compiled
+            // run with the same words.
+            if kids.len() > 1 {
+                return Err(
+                    "a context menu belongs to one element — put what shares the menu \
+                     in a single column() or row()",
                 );
             }
             *children = kids;
@@ -1793,6 +1810,23 @@ element_fn! {
     ()
     []
     { Element::DataTable(Vec::new()) }
+}
+
+element_fn! {
+    /// The menu a right-click offers on whatever this wraps. The items
+    /// are data the app declares, so they are in the dump open or not,
+    /// and `select:` picks from them without the click that opens the
+    /// panel — which is engine state, like a `select`'s own popover.
+    container context_menu
+    (options=vec![], on_select=None,)
+    [options: Vec<String>, on_select: Option<Py<PyAny>>,]
+    {
+        Element::ContextMenu {
+            options: str_list(options),
+            on_select: on_select.map(int_listener),
+            children: Vec::new(),
+        }
+    }
 }
 
 element_fn! {
@@ -3090,6 +3124,7 @@ pub fn yokan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(h_scroll_view, m)?)?;
     m.add_function(wrap_pyfunction!(data_table, m)?)?;
     m.add_function(wrap_pyfunction!(modal, m)?)?;
+    m.add_function(wrap_pyfunction!(context_menu, m)?)?;
     m.add_function(wrap_pyfunction!(toast, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(svg, m)?)?;

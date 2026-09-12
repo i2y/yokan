@@ -641,6 +641,7 @@ fn tween_riders(st: &mut AnimStore, el: &mut Element, path: &Path, dur: f64, eas
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
         | Element::Tooltip { children, .. }
+        | Element::ContextMenu { children, .. }
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. } => {
@@ -746,6 +747,7 @@ fn children_of(el: &mut Element) -> Option<&mut Vec<Element>> {
         | Element::Anim { children, .. }
         | Element::Semantics { children, .. }
         | Element::Tooltip { children, .. }
+        | Element::ContextMenu { children, .. }
         | Element::Disabled { children }
         | Element::Sized { children, .. }
         | Element::Themed { children, .. }

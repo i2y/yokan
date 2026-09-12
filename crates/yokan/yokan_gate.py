@@ -10992,21 +10992,7 @@ class Translator:
             raise Untranslatable(v, f"{what} is a {want.lower()} state or store-field read")
 
         def list_read(v, what):
-            c9 = self._cell_read(v)
-            if c9 is not None and self._ty(c9) == "List<String>":
-                return f"App.{c9}"
-            if (
-                isinstance(v, ast.Attribute)
-                and isinstance(v.value, ast.Name)
-                and v.value.id in self.stores
-                and self.stores[v.value.id]["field_tys"].get(v.attr) == "List<String>"
-            ):
-                return f"{v.value.id}.{v.attr}"
-            if isinstance(v, ast.List) and all(
-                isinstance(e, ast.Constant) and type(e.value) is str for e in v.elts
-            ):
-                return self._list_literal(v, "String")
-            raise Untranslatable(v, f"{what} is a list of str literals, or a list[str] state or store-field read")
+            return self._str_list_binding(v, what)
 
         if self._is_ui(node.func, "table"):
             # `table(columns, count, row, ...)`: the count and the row
@@ -11471,6 +11457,29 @@ class Translator:
             return f"{v.value.id}.{v.attr}"
         raise Untranslatable(v, f"{what} is an int state or store-field read")
 
+    def _str_list_binding(self, v, what: str) -> str:
+        """A list-of-strings prop: a list of str literals, a state read
+        or a store-field read. The choosers' own `list_read` is a
+        nested helper of the element lowering; this is the same rule
+        where a `with` block's emitter can reach it."""
+        c9 = self._cell_read(v)
+        if c9 is not None and self._ty(c9) == "List<String>":
+            return f"App.{c9}"
+        if (
+            isinstance(v, ast.Attribute)
+            and isinstance(v.value, ast.Name)
+            and v.value.id in self.stores
+            and self.stores[v.value.id]["field_tys"].get(v.attr) == "List<String>"
+        ):
+            return f"{v.value.id}.{v.attr}"
+        if isinstance(v, ast.List) and all(
+            isinstance(e, ast.Constant) and type(e.value) is str for e in v.elts
+        ):
+            return self._list_literal(v, "String")
+        raise Untranslatable(
+            v, f"{what} is a list of str literals, or a list[str] state or store-field read"
+        )
+
     def _row_builder(self, rf):
         """The row builder of a row-built element: (its index parameter,
         its body) — a module-level def or a lambda of one argument."""
@@ -11772,6 +11781,7 @@ class Translator:
             "h_scroll_view": "HScrollView",
             "data_table": "DataTable",
             "modal": "Modal",
+            "context_menu": "ContextMenu",
             "canvas": "Canvas",
         }
         tag = None
@@ -11813,6 +11823,28 @@ class Translator:
                 raise Untranslatable(k.value, "one style per element — compose with `|` first")
             style_rider = self.styles[k.value.id][0]
         riders = self._riders(kw, call)
+        if tag == "ContextMenu":
+            if "options" not in kw:
+                raise Untranslatable(
+                    call, "context_menu() needs options= — the list the menu offers"
+                )
+            # A rider belongs to one element. Counted here so `check`
+            # says it, in the words both lowerers and the runtime use.
+            body = [
+                st
+                for st in node.body
+                if not (
+                    isinstance(st, ast.Expr)
+                    and isinstance(st.value, ast.Constant)
+                    and isinstance(st.value.value, str)
+                )
+            ]
+            if len(body) != 1:
+                raise Untranslatable(
+                    call,
+                    "a context menu belongs to one element: put what shares the menu "
+                    "in a single column() or row()",
+                )
         if tag == "Modal" and "open" in kw:
             raise Untranslatable(call, "a modal is open by existing — wrap it in `if show():` instead of passing open=")
         lines = [f"{pad}{tag} {{"]
@@ -11829,6 +11861,22 @@ class Translator:
             h = self._num(kw, "height")
             if h is not None:
                 lines.append(f"{pad}  height: {h}")
+        if tag == "ContextMenu":
+            # The chooser contract again: a list of items and a handler
+            # that takes the chosen index. What opens the menu is the
+            # window's business, so nothing here says it.
+            lines.append(
+                f"{pad}  options: {self._str_list_binding(kw['options'], 'context_menu()\u2019s items')}"
+            )
+            if "on_select" in kw:
+                h9 = self.handler(kw["on_select"], takes_text=True, implicit=("index", "Int"))
+                if isinstance(h9, tuple):
+                    lines += [f"{pad}  onSelect: {{"] + [f"{pad}    {ln}" for ln in h9[1]] + [f"{pad}  }}"]
+                else:
+                    lines.append(f"{pad}  onSelect: {h9}")
+            for k in kw:
+                if k not in ("options", "on_select"):
+                    raise Untranslatable(kw[k], f"context_menu() does not take `{k}=`")
         if tag == "Canvas":
             # `canvas(160, 120)` reads the way the grid is spoken, so
             # the two sizes may be positional; everything else is

@@ -1,0 +1,26 @@
+store Board {
+  state items : List<String> = ["Rename", "Duplicate", "Delete"]
+  state note : String = "right-click the card"
+
+  fn pick(i: Int) {
+    note = "chose #{items[i]}"
+  }
+}
+
+view Main {
+  Column {
+    spacing: 8.0
+    padding: 12.0
+
+    Text { text: "#{Board.note}"; fontSize: 16.0 }
+    ContextMenu {
+      options: Board.items
+      onSelect: Board.pick(index)
+      Column {
+        background: "#313244"
+        padding: 16.0
+        Text { text: "a card" }
+      }
+    }
+  }
+}

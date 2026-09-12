@@ -3139,3 +3139,28 @@ ask is checked by looking at it. The C face declares no keyword for
 it, so the three sibling languages are unaffected, and a table has no
 `scrollTo:` yet either: it shares the machinery and would be a second
 row in the same tables.
+
+## The right-click step that is not being added (2026-09-12)
+
+A context menu's items are the app's own data: it declares them, so
+they are in the built tree and in the dump whether the panel is open
+or not. That makes a context menu a **chooser**, and the step that
+picks from a select picks from this one — `select:<item>` — with no
+click to open anything.
+
+A `rightclick:` step would therefore prove only the engine's open
+flag, which is the state the dump deliberately does not carry, and it
+would prove it by driving a pointer the headless run does not have. So
+the step is refused by design, and `context_menu` lands without one.
+
+The cost is stated where it is felt: a container carrying a context
+menu takes its place in `select@n:` numbering, exactly as a ListView
+with an `onSelect` does. A chooser that can be picked from is counted;
+one that cannot is not.
+
+The element itself is a rider — it wraps one element, hands it no box
+(the wrapper copies the child's flex share, the Tooltip rule) and
+refuses a second child by name. The panel it opens is the Select's,
+lifted into one function: a chooser opens its options under a
+rectangle or at a point, and those are the same panel with a different
+anchor.

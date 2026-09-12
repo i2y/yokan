@@ -138,6 +138,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 #### filter — segmented。トグルボタン群で絞り込むリスト
 <img src="screenshots/filter.png" width="360">
 
+#### contextmenu — 包んだ要素を右クリックすると開くメニュー。項目はアプリのデータなので、開いているかどうかに関わらずダンプに出て、スクリプトは `select:` で選ぶ
+<img src="screenshots/contextmenu.png" width="360">
+
 #### menubutton — 押すと短いメニューが開くボタン。現在値が無いのでラベルは変わらず、ハンドラは選ばれた番号を受け取る。スクリプトは `select:` で選ぶ
 <img src="screenshots/menubutton.png" width="360">
 

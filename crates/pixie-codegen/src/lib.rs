@@ -7222,6 +7222,29 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
         // control shows and `options:` what it offers, so there is no
         // `selected:` to require. `onSelect` binds the same implicit
         // `index` every chooser's handler binds.
+        // The context-menu rider: the items a right-click offers on
+        // the one element it wraps. The items are DATA, so they are
+        // in the tree and in the dump whether the panel is open or
+        // not — which is why picking from one needs no new step.
+        "ContextMenu" => {
+            let options = element_prop(el, "options").ok_or_else(|| EmitError {
+                span: el.span,
+                message: "ContextMenu needs `options:` (the items it offers)".into(),
+            })?;
+            let on_select = match element_prop(el, "onSelect") {
+                Some(a) => format!(
+                    "Some({})",
+                    lower_view_action_with(a, cx, "onSelect", &[("index", "i64")])?
+                ),
+                None => "None".into(),
+            };
+            check_menu_child(el)?;
+            let children = lower_children(el, cx, ind)?;
+            Ok(format!(
+                "Element::ContextMenu {{ options: {}, on_select: {on_select}, children: {children} }}",
+                lower_view_str_list(options, cx, "options")?
+            ))
+        }
         "MenuButton" => {
             // `text:`, the way a Button spells the string it shows —
             // and not `label:`, which is the accessibility rider every
@@ -7421,6 +7444,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
         ],
         "Split" => &["ratio", "vertical", "onChange"],
         "Canvas" => &["width", "height", "scale", "background", "palette"],
+        "ContextMenu" => &["options", "onSelect"],
         "ListView" => &[
             "virtualized",
             "itemHeight",
@@ -7813,6 +7837,22 @@ fn lower_op(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<String, EmitErr
 /// and a Split whose pane count depends on data is not a split.
 /// `pixie_interp::check_split_panes` is the mirror of this, word for
 /// word.
+/// A rider belongs to ONE element: it hands its properties to what it
+/// wraps, and two children would mean a box that is not there in the
+/// tree the app wrote. Said here, where the error can name the span,
+/// and in interp with the same words.
+fn check_menu_child(el: &Element) -> Result<(), EmitError> {
+    let items = items_of_members(&el.members);
+    if items.len() != 1 || !matches!(items[0], ViewItem::Child(_)) {
+        return err(
+            el.span,
+            "a ContextMenu belongs to one element — put what shares the menu in a \
+             single Column or Row",
+        );
+    }
+    Ok(())
+}
+
 fn check_split_panes(el: &Element) -> Result<(), EmitError> {
     let items = items_of_members(&el.members);
     for it in &items {
