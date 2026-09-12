@@ -4133,6 +4133,12 @@ fn render_el_in<C: Component>(
             // canvases paint in does not matter. The third slot is the
             // Select's window height, carried through untouched.
             let cell = selects.entry(key).or_default().clone();
+            // `PIXIE_TRACE_SPLIT=1` prints the rule's laid-out rect,
+            // every press tested against it and every move that
+            // reaches the handler — the numbers between "the divider
+            // did not move" and reading this arm (`PIXIE_TRACE_SCROLL`
+            // is the precedent). Read once here, not per event.
+            let trace = std::env::var_os("PIXIE_TRACE_SPLIT").is_some();
             let vertical = *vertical;
             let value = *ratio;
             let r = value.clamp(0.0, 1.0) as f32;
@@ -4205,6 +4211,12 @@ fn render_el_in<C: Component>(
                         |_, _, _| (),
                         move |bounds: Bounds<Pixels>, _, _window: &mut Window, _: &mut App| {
                             let (dragging, _, other) = cell.get();
+                            if trace {
+                                eprintln!(
+                                    "pixie split: rule at {:?} {:?}",
+                                    bounds.origin, bounds.size
+                                );
+                            }
                             cell.set((
                                 dragging,
                                 (
@@ -4280,6 +4292,12 @@ fn render_el_in<C: Component>(
                                             && p <= bx + bw + SPLIT_SLOP
                                             && q >= by - SPLIT_SLOP
                                             && q <= by + bh + SPLIT_SLOP;
+                                        if trace {
+                                            eprintln!(
+                                                "pixie split: down at ({p}, {q}) \
+                                                 rule=({bx}, {by}, {bw}, {bh}) on_rule={on_rule}"
+                                            );
+                                        }
                                         if !on_rule {
                                             return;
                                         }
@@ -4319,6 +4337,12 @@ fn render_el_in<C: Component>(
                                         // that differs from the bound
                                         // one goes out, so a pointer
                                         // held still fires nothing.
+                                        if trace {
+                                            eprintln!(
+                                                "pixie split: move to {v} \
+                                                 (bound {value}) vertical={vertical}"
+                                            );
+                                        }
                                         if v != value {
                                             send(v, cx);
                                             window.refresh();
