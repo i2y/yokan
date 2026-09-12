@@ -8674,10 +8674,15 @@ fn lower_default(e: &Expr, ty: &RustTy) -> Result<String, EmitError> {
             if !all_text {
                 return lower_interp(parts, &mut |inner| lower_default_display(inner));
             }
+            // A PLAIN string, so the format!-only brace doubling must
+            // not leak into it — the rule `lower_interp` follows, and
+            // the one place it was missed: a default carrying `{`
+            // (a code sample in a transcript) shipped as `{{`, which
+            // the gate caught as the two runs disagreeing.
             let mut s = String::new();
             for p in parts {
                 if let StrPart::Text(t) = p {
-                    escape_fmt_text(t, &mut s);
+                    escape_plain_text(t, &mut s);
                 }
             }
             Ok(format!("Str::from(\"{s}\")"))

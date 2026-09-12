@@ -18,6 +18,10 @@ store Weather {
   state count : Int = 0
   state offset : Float = 0.0
   state label : String = "none"
+  # A plain string carrying braces. A constant default is emitted as a
+  # plain Rust string, so the `format!` brace doubling must not reach
+  # it: the tiers once disagreed here, `{` against `{{`.
+  state braces : String = "{\"a\": [1, 2]}"
 
   fn sample {
     readings.push(Temp.fromF(32.0 + offset))
@@ -43,6 +47,7 @@ view Main {
     }
     Text { text: "[#{Weather.count:04}] [#{Weather.label:>8}] [#{Weather.label:*^9}]" }
 
+    Text { text: Weather.braces }
     Button { text: "sample"; onClick: Weather.sample() }
   }
 }
