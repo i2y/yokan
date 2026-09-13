@@ -8340,6 +8340,21 @@ class Translator:
         param = None
         if (
             isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.stores
+            and node.attr in self.stores[node.value.id]["method_names"]
+        ):
+            # `on_click=Cart.clear`, the same bound method the hoisting
+            # path takes — written where it stands, because a
+            # component's body is not hoisted into App's handler list.
+            # Checked before `x.set`, so a store whose method is called
+            # `set` still reads as the method it is.
+            m = self._smeth(node.value.id, node.attr)
+            if takes_text:
+                return f"{node.value.id}.{m}({implicit[0]})"
+            return f"{node.value.id}.{m}()"
+        if (
+            isinstance(node, ast.Attribute)
             and node.attr == "set"
             and isinstance(node.value, ast.Name)
         ):
@@ -11272,19 +11287,10 @@ class Translator:
                         props.insert(0, f"data: App.{c}")
                 if "labels" in kw:
                     la = kw["labels"]
-                    lc = self._cell_read(la)
-                    if (
-                        lc is None
-                        and isinstance(la, ast.Attribute)
-                        and isinstance(la.value, ast.Name)
-                        and la.value.id in self.stores
-                        and self.stores[la.value.id]["field_tys"].get(la.attr) == "List<String>"
-                    ):
-                        props.append(f"labels: {la.value.id}.{la.attr}")
-                    elif lc is None or self.cells.get(lc) != "List<String>":
-                        raise Untranslatable(la, "labels= is a list[str] state or store-field read — a literal list is not accepted here yet")
-                    else:
-                        props.append(f"labels: App.{lc}")
+                    # A state read, a store field, or the labels written
+                    # out: axis labels are as often a fixed row of names
+                    # as they are data, and both lower to the same list.
+                    props.append(f"labels: {self._str_list_binding(la, 'labels=')}")
                 for prop, pix in (("width", "width"), ("height", "height"), ("min", "min"), ("max", "max")):
                     val = self._num(kw, prop)
                     if val is not None:
@@ -11334,8 +11340,19 @@ class Translator:
                 val = f"{float(v.value)!r}"
             elif (pc := self._cell_read(v)) is not None and self._ty(pc) == "Float":
                 val = f"App.{pc}"
+            elif (
+                isinstance(v, ast.Attribute)
+                and isinstance(v.value, ast.Name)
+                and v.value.id in self.stores
+                and self.stores[v.value.id]["field_tys"].get(v.attr) == "Float"
+            ):
+                # A store field is what a slider's `value=` takes, and a
+                # progress bar shows the same kind of number.
+                val = f"{v.value.id}.{v.attr}"
             else:
-                raise Untranslatable(v, "progress takes a float literal or a float state read")
+                raise Untranslatable(
+                    v, "progress takes a float literal, or a float state or store-field read"
+                )
             props = [f"value: {val}"]
             for prop in ("width", "height"):
                 n = self._num(kw, prop)
@@ -11487,7 +11504,18 @@ class Translator:
             d = self.defs[rf.id]
             if len(d.args.args) != 1:
                 raise Untranslatable(rf, "a row builder takes one argument, the row index")
-            return d.args.args[0].arg, d.body
+            # A docstring is not a statement that runs, and a builder is
+            # a documented thing — the module level and a component's
+            # body both skip one, so this does too.
+            body = list(d.body)
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                body.pop(0)
+            return d.args.args[0].arg, body
         if isinstance(rf, ast.Lambda) and len(rf.args.args) == 1:
             return rf.args.args[0].arg, [ast.Return(rf.body)]
         raise Untranslatable(rf, "a row builder is a one-argument lambda or a module-level def")

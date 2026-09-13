@@ -131,6 +131,9 @@ gate menubutton "$PY" yokan_gate.py gate demo/menubutton.py --script "select:Del
 # The items a right-click offers are in the tree, so the step that
 # picks from a menu picks from this one without opening it.
 gate contextmenu "$PY" yokan_gate.py gate demo/contextmenu.py --script "select:Delete,dump"
+# The catalog: nine pages, and a walk that opens every one of them. If
+# an element stops dumping what it did, this is where it shows.
+gate widgets "$PY" yokan_gate.py gate demo/widgets.py --script "dump,select:Text,dump,select:Input,input:Ada,input@2:9.5,dump,select:Choosers,select@1:cherry,select@5:S,select@2:cherry,dump,select:Lists,select@1:dee,dump,select:Reporting,dump,select:Over the app,click:show modal,dump,click:close,click:show toast,dump,advance:1600,select@1:banana,dump,select:Canvas,dump,select:Riders,dump"
 gate pyjob   "$PY" yokan_gate.py gate demo/pyjob.py --script "click:count,dump"
 gate stdlib  "$PY" yokan_gate.py gate demo/stdlib.py --script "click:measure,click:stats,click:due,click:sift,click:roll,click:count,click:combine,click:parse,click:stamp,click:write,dump,click:write list,dump"
 gate files   "$PY" yokan_gate.py gate demo/files.py --script "click:save,click:append,click:load,click:list,dump,click:measure,click:rest,dump,click:data dir,dump,click:remove,dump"
@@ -173,7 +176,7 @@ for f in demo/*.py; do
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
     stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
     pkgapp) continue;;
-    bytes|zones|toast|split|picklist|menubutton|contextmenu) continue;;
+    bytes|zones|toast|split|picklist|menubutton|contextmenu|widgets) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;
     canvas|shooter|jump) continue;;
     shared) continue;;

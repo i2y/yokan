@@ -99,6 +99,9 @@ numpy を使う 3 本（pystats / csv_viewer / app）は `uv run --with numpy` �
 
 ## 画面の要素
 
+#### widgets — すべての要素を 1 つのアプリで。リストで選ぶ 9 ページに、並べる要素からキャンバスまでを並べ、どの要素も取る共通プロパティも 1 ページ取ってある
+<img src="screenshots/widgets.png" width="720">
+
 #### todo — 定番の TODO リスト
 <img src="screenshots/todo.png" width="360">
 

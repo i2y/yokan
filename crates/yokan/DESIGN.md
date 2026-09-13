@@ -3190,3 +3190,34 @@ a minute and under 2 GB, because generated crates build with
 disagree, which is how this was found: the gate already honoured the
 variable for the workspace's own crates while the app built beside it
 went somewhere else.
+
+## One app that holds the catalog (2026-09-13)
+
+`demo/widgets.py` is every element in one place: nine pages behind a
+list you pick from, with the riders on a page of their own. It is
+gated like any other demo, and its script walks all nine — so the
+promise "every element still dumps what it did" is a line in the
+sweep rather than a claim in prose.
+
+Writing it found four places where the dialect refused something it
+had no reason to, and each is now taken:
+
+- **A store's bound method as a handler inside a component.** The
+  refusal even said a bound method was one of the three shapes it
+  took; the inline path (the one a component's body uses, because its
+  handlers cannot be hoisted into App's list) simply had no arm for
+  it. It has one now, checked before `x.set` so a store whose method
+  is named `set` still reads as the method it is.
+- **A row builder's docstring.** A component's body learned to skip
+  one when packages landed; a builder is as documented a thing, and
+  now skips one too.
+- **A progress bar bound to a store field.** A literal and a state
+  read were taken, a field was not — while a slider's `value=`, the
+  same kind of number, took all three.
+- **A chart's `labels=` written out.** Axis labels are as often a
+  fixed row of names as they are data, and the list binding that
+  reads a literal, a state or a field already existed.
+
+None of the four is a design that was made and then regretted. They
+are places where one emitter grew a rule and its neighbours did not,
+which is what an app that touches everything at once is for.

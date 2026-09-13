@@ -103,6 +103,9 @@ shows a finished transcript — its launch state is an empty table.
 
 ## UI elements
 
+#### widgets — every element in one app: nine pages behind a picked list, from the arrangers to the canvas, with the riders every element takes on a page of their own
+<img src="screenshots/widgets.png" width="720">
+
 #### todo — the classic todo list
 <img src="screenshots/todo.png" width="360">
 

@@ -241,6 +241,8 @@ The elements, by what they are for:
   `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
 - **Layering**: `modal`, `toast`, `context_menu` (the menu a right-click opens on what it wraps).
 
+Every one of them is in `demo/widgets.py`, a page at a time — the app to read when you want to see a widget before you write it.
+
 `text` carries typography and a box of its own.
 The typography is `bold=`, `italic=`, `mono=` and `underline=`.
 The wrapping is `wrap="nowrap"` or `wrap="ellipsis"` (with a `width=` to clip against) and `max_lines=`.

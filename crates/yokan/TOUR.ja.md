@@ -253,6 +253,9 @@ def view():
   同じ列のセルに同じ `grow` を与えると、列が揃います（`demo/table.py`）。
 - **重ねる**：`modal`、`toast`、`context_menu`（包んだ要素を右クリックすると開くメニュー）。
 
+ここに挙げた要素は全部 `demo/widgets.py` に 1 ページずつ入っています。
+書く前に見たいときは、そのアプリを読むのが早いはずです。
+
 `text` には、文字の体裁と、文字を囲む箱を指定できます。
 体裁は `bold=`、`italic=`、`mono=`、`underline=`。
 折り返しの指定は `wrap="nowrap"`、`wrap="ellipsis"`（切り詰めの基準になる `width=` と組で使います）、`max_lines=`。
