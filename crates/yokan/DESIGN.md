@@ -937,8 +937,8 @@ script, and marked in both accessibility trees — a person cannot
 press it and neither can a script, and the dump says so. The one
 surprise was mechanical: a tree nine wrappers deep overran the render
 walk's megabyte stack frame, now guarded with a heap-allocated
-segment. Rejected: per-variant fields (the merge cost of wave 1, in
-which every branch collided on the same signatures), and `occlude`
+segment. Rejected: per-variant fields (they made every branch of a
+parallel change collide on the same signatures), and `occlude`
 for the shield (a disabled scroller should still scroll to be read).
 
 ## One rider table per layer
@@ -2630,7 +2630,7 @@ that is what the gate reads. A shipped app therefore opens a console
 window behind its own, which is not what someone double-clicking an app
 should see; the fix is the `windows_subsystem` attribute on the
 generated main, and it can only be set once the dump has a channel of
-its own to go to. That channel is the next phase's `PIXIE_DUMP`, so
+its own to go to. That channel is `PIXIE_DUMP`, which came later, so
 this waits for it rather than trading the gate for a tidy launch.
 
 
@@ -2813,7 +2813,7 @@ the app wrote it.
 
 The headless run, the dump and the accessibility tree were the gate's
 tools. They are also the only way to test a desktop UI without a
-window, so this phase hands them to the app's own suite.
+window, so they are handed to the app's own suite.
 
 **What a run answers is a value now.** `headless` used to answer
 `"initial dump\nfinal dump"`, and a test could only search that
