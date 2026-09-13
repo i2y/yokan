@@ -186,13 +186,55 @@ impl PyComponent {
             c.set(0);
             v
         });
+        // A component IS an element, which the compiled side has always
+        // agreed with: the body builds into a frame of its own, and the
+        // one element it makes is handed back. So a call places itself
+        // in the block it stands in, exactly as before, AND can be
+        // written where an element goes — a Split's pane, say.
+        BUILD_FRAMES.with(|f| f.borrow_mut().push(Vec::new()));
         let r = self.f.call(py, args, kwargs);
+        let frame = BUILD_FRAMES
+            .with(|f| f.borrow_mut().pop())
+            .unwrap_or_default();
         COMP_PATH.with(|p| {
             p.borrow_mut().pop();
         });
         COMP_COUNTER.with(|c| c.set(my_ix + 1));
         LOCAL_IX.with(|c| c.set(saved_local));
-        r
+        r?;
+        // Two things make a frame longer than what it built. An
+        // element handed to a constructor as an argument is SPENT (its
+        // content moved into the parent) and leaves its shell behind,
+        // which is what a container's own `__exit__` skips; and a
+        // `with` block's container joins the frame twice, once when it
+        // is constructed and once when the block closes. So count what
+        // is live, each object once.
+        let mut live: Vec<Py<PyElement>> = Vec::new();
+        for pe in frame {
+            if pe.bind(py).borrow().el.borrow().is_none() {
+                continue;
+            }
+            if live.iter().any(|k| k.as_ptr() == pe.as_ptr()) {
+                continue;
+            }
+            live.push(pe);
+        }
+        let mut made = live.into_iter();
+        let (Some(el), None) = (made.next(), made.next()) else {
+            // Both lowerers say this; the door says it in the same
+            // words, so a body that builds two things is refused where
+            // it is written rather than at the next build.
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "a component's body is one container — wrap what it builds in a \
+                 column() or row()",
+            ));
+        };
+        BUILD_FRAMES.with(|f| {
+            if let Some(frame) = f.borrow_mut().last_mut() {
+                frame.push(el.clone_ref(py));
+            }
+        });
+        Ok(el.into_any())
     }
 }
 
@@ -1793,9 +1835,9 @@ element_fn! {
 
 element_fn! {
     container native_height scroll_view
-    (height=0.0,)
-    [height: f64,]
-    { Element::ScrollView { height, children: Vec::new() } }
+    (height=0.0, grow=0.0,)
+    [height: f64, grow: f64,]
+    { Element::ScrollView { height, grow, children: Vec::new() } }
 }
 
 element_fn! {

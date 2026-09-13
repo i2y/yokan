@@ -2520,6 +2520,10 @@ fn build_element_inner(
             };
             Ok(Element::ScrollView {
                 height,
+                grow: match prop_of(el, "grow") {
+                    Some(v) => eval_expr(v, env, scope, w)?.as_float()?,
+                    None => 0.0,
+                },
                 children: build_children(el, env, scope, w)?,
             })
         }
@@ -3259,7 +3263,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "onSelect",
             "scrollTo",
         ],
-        "ScrollView" => &["height"],
+        "ScrollView" => &["height", "grow"],
         "Modal" => &["open"],
         "Table" => &[
             "columns",

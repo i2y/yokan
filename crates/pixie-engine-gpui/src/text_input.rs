@@ -179,6 +179,11 @@ impl Numeric {
 
 pub struct PixieInput {
     pub focus_handle: FocusHandle,
+    /// The palette to paint in. gpui renders an input on its own, after
+    /// the walk that knew which `theme:` scope it stood in, so the walk
+    /// writes the answer here every frame — otherwise a light scope
+    /// would hold a field the engine still painted dark.
+    pub theme: &'static pixie_kernel::theme::Theme,
     content: SharedString,
     /// The value the element tree carried at the last sync — the push
     /// happens only when the tree-side value changes, so user edits are
@@ -230,6 +235,7 @@ impl PixieInput {
     pub fn new(cx: &mut Context<Self>, value: &str, placeholder: &str) -> Self {
         PixieInput {
             focus_handle: cx.focus_handle(),
+            theme: crate::theme(),
             content: SharedString::from(value.to_string()),
             last_bound: SharedString::from(value.to_string()),
             placeholder: SharedString::from(placeholder.to_string()),
@@ -928,7 +934,7 @@ impl gpui::Element for PixieInputElement {
         let style = window.text_style();
 
         let (display_text, text_color) = if content.is_empty() {
-            (input.placeholder.clone(), crate::rgba(crate::theme().text_dim_rgba).into())
+            (input.placeholder.clone(), crate::rgba(input.theme.text_dim_rgba).into())
         } else {
             (content, style.color)
         };
@@ -1032,7 +1038,7 @@ impl gpui::Element for PixieInputElement {
                         point(bounds.left() + caret.x, bounds.top() + caret.y - scroll_y),
                         size(px(2.), line_height),
                     ),
-                    rgb(crate::theme().accent),
+                    rgb(input.theme.accent),
                 )
             });
             // One quad per visual row the selection covers.
@@ -1055,7 +1061,7 @@ impl gpui::Element for PixieInputElement {
                                         point(bounds.left() + a.x, bounds.top() + above + a.y - scroll_y),
                                         point(bounds.left() + b.x, bounds.top() + above + a.y + line_height - scroll_y),
                                     ),
-                                    rgba(crate::theme().selection_rgba),
+                                    rgba(input.theme.selection_rgba),
                                 ));
                             } else {
                                 selections.push(fill(
@@ -1063,7 +1069,7 @@ impl gpui::Element for PixieInputElement {
                                         point(bounds.left() + a.x, bounds.top() + above + a.y - scroll_y),
                                         point(right, bounds.top() + above + a.y + line_height - scroll_y),
                                     ),
-                                    rgba(crate::theme().selection_rgba),
+                                    rgba(input.theme.selection_rgba),
                                 ));
                                 let mut y = a.y + line_height;
                                 while y < b.y {
@@ -1072,7 +1078,7 @@ impl gpui::Element for PixieInputElement {
                                             point(bounds.left(), bounds.top() + above + y - scroll_y),
                                             point(right, bounds.top() + above + y + line_height - scroll_y),
                                         ),
-                                        rgba(crate::theme().selection_rgba),
+                                        rgba(input.theme.selection_rgba),
                                     ));
                                     y += line_height;
                                 }
@@ -1081,7 +1087,7 @@ impl gpui::Element for PixieInputElement {
                                         point(bounds.left(), bounds.top() + above + b.y - scroll_y),
                                         point(bounds.left() + b.x, bounds.top() + above + b.y + line_height - scroll_y),
                                     ),
-                                    rgba(crate::theme().selection_rgba),
+                                    rgba(input.theme.selection_rgba),
                                 ));
                             }
                         }
@@ -1136,7 +1142,7 @@ impl gpui::Element for PixieInputElement {
                         point(bounds.left() + cursor_pos - scroll, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
-                    rgb(crate::theme().accent),
+                    rgb(input.theme.accent),
                 )),
             )
         } else {
@@ -1152,7 +1158,7 @@ impl gpui::Element for PixieInputElement {
                             bounds.bottom(),
                         ),
                     ),
-                    rgba(crate::theme().selection_rgba),
+                    rgba(input.theme.selection_rgba),
                 )),
                 None,
             )
@@ -1288,9 +1294,9 @@ impl Render for PixieInput {
             .w_full()
             .px_2()
             .py_1()
-            .bg(rgb(crate::theme().field_bg))
+            .bg(rgb(self.theme.field_bg))
             .border_1()
-            .border_color(if focused { rgb(crate::theme().accent) } else { rgb(crate::theme().surface) })
+            .border_color(if focused { rgb(self.theme.accent) } else { rgb(self.theme.surface) })
             .rounded_md()
             .child(
                 div()

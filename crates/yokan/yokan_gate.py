@@ -11242,6 +11242,11 @@ class Translator:
                     f"split() takes exactly two panes — this one has {len(node.args)}; "
                     "put what belongs to one side in a single column() or row()",
                 )
+            for k in kw:
+                if k not in ("ratio", "vertical", "on_change"):
+                    # Silently dropping a property the runtime refuses
+                    # is how the two runs come to disagree; say it here.
+                    raise Untranslatable(kw[k], f"split() does not take `{k}=`")
             props = [f"ratio: {typed_read(kw['ratio'], 'Float', 'ratio=')}"]
             vertical = self._boolean(kw, "vertical")
             if vertical is not None:
@@ -11889,6 +11894,9 @@ class Translator:
             h = self._num(kw, "height")
             if h is not None:
                 lines.append(f"{pad}  height: {h}")
+            g = self._num(kw, "grow")
+            if g is not None:
+                lines.append(f"{pad}  grow: {g}")
         if tag == "ContextMenu":
             # The chooser contract again: a list of items and a handler
             # that takes the chosen index. What opens the menu is the

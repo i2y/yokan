@@ -758,6 +758,10 @@ fn materialize(b: &Bag, children: Vec<Element>) -> Element {
         KIND_STACK => Element::Stack(children),
         KIND_SCROLL_VIEW => Element::ScrollView {
             height: b.n(K_HEIGHT),
+            // A share of the parent is the dialect's for now: the
+            // vocabulary has no `grow:` on scroll_view, so nothing on
+            // this face can ask for one.
+            grow: 0.0,
             children,
         },
         KIND_H_SCROLL_VIEW => Element::HScrollView(children),

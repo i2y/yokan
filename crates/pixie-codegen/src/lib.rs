@@ -6741,9 +6741,15 @@ fn lower_element_inner(el: &Element, cx: &mut ViewCtx, ind: &str) -> Result<Stri
                 Some(v) => lower_view_float(v, cx, "height")?,
                 None => "0f64".into(),
             };
+            // And the same `grow:` — a share of the parent instead of a
+            // number, for a viewport that has to follow the window.
+            let grow = match element_prop(el, "grow") {
+                Some(v) => lower_view_float(v, cx, "grow")?,
+                None => "0f64".into(),
+            };
             let children = lower_children(el, cx, ind)?;
             Ok(format!(
-                "Element::ScrollView {{ height: {height}, children: {children} }}"
+                "Element::ScrollView {{ height: {height}, grow: {grow}, children: {children} }}"
             ))
         }
         "HScrollView" => {
@@ -7454,7 +7460,7 @@ pub fn container_prop_keys(element: &str) -> &'static [&'static str] {
             "onSelect",
             "scrollTo",
         ],
-        "ScrollView" => &["height"],
+        "ScrollView" => &["height", "grow"],
         "Modal" => &["open"],
         "Table" => &[
             "columns",

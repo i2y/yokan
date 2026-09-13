@@ -3221,3 +3221,40 @@ had no reason to, and each is now taken:
 None of the four is a design that was made and then regretted. They
 are places where one emitter grew a rule and its neighbours did not,
 which is what an app that touches everything at once is for.
+
+## Three things the catalog asked for (2026-09-13)
+
+Opening `demo/widgets.py` in a window and resizing it found three more
+places where one part of the framework knew something the next did
+not.
+
+**A component IS an element.** The tour has always said so, and the
+compiled side agreed — a component call lowers to an element wherever
+an element goes. The door did not: a call built its content into the
+open container and answered nothing, so a component could not be a
+Split's pane. It builds into a frame of its own now and answers the
+one element it made, placing it in the enclosing block exactly as
+before. Counting that frame is not a length check: an element handed
+to a constructor as an argument leaves a spent shell behind, and a
+`with` block's container joins its frame twice, so what is counted is
+the live ones, each object once. A body that builds two things is
+refused at the door in the words both lowerers use.
+
+**A scroll view takes a share.** A `ListView` has had `grow:` since
+the viewport props landed — a share of the parent instead of a fixed
+height — and a `ScrollView`, the same kind of thing, had only the
+number. It has both now, and the dump prints whichever is set.
+
+**A `theme:` scope reaches a text field.** The scope is applied by a
+kernel pass that rewrites token names in the tree, plus an engine walk
+that knows which palette the subtree is in. A text field escaped both:
+gpui renders the input entity after the walk, and the input read the
+window's palette. So a light scope held fields the engine still
+painted dark. The walk now writes the palette onto the input each
+frame, which is the same shape as everything else it pushes there.
+
+Two smaller ones in the same pass: `split()` refuses a property it
+does not take rather than dropping it (the runtime already refused
+`grow=`, so the two runs disagreed about a typo), and a component call
+inside another component may be a store's bound method handler — the
+inline path had no arm for the shape its own refusal promised.

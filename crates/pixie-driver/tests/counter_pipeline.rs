@@ -613,8 +613,9 @@ fn scroll_demo_checks_and_emits() {
     for needle in [
         // Both scroll containers lower through `lower_children`, so a
         // `for` repeater inside one collects into the same Vec — but
-        // only the vertical one carries a `height:` viewport prop.
-        "Element::ScrollView { height: 240f64, children:",
+        // only the vertical one carries the viewport props, and a
+        // share it was not given is `0f64`, the way an unset height is.
+        "Element::ScrollView { height: 240f64, grow: 0f64, children:",
         "Element::HScrollView(",
         "w.singleton_ref::<Feed>().items(w)",
     ] {

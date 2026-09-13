@@ -67,10 +67,12 @@ from yokan import (  # noqa: E402
     toast,
 )
 
+# Every colour here is a palette token rather than a hex, so the
+# switch on the Input page actually moves them.
 heading = style(size=18, color="accent")
-faint = style(size=12, color="#8a8f98")
-panel = style(padding=10, background="#1f2027", border_radius=8.0)
-cell = style(size=12, background="#313244", padding=6, border_radius=6.0, align="center")
+faint = style(size=12, color="textDim")
+panel = style(padding=10, background="panel", border_radius=8.0)
+cell = style(size=12, background="surface", padding=6, border_radius=6.0, align="center")
 
 
 @store
@@ -87,7 +89,10 @@ class Gallery:
         "Riders",
     ]
     page: int = 0
-    ratio: float = 0.28
+    # The chrome's divider, and the one the Arranging page shows: two
+    # splits, two numbers, because a ratio belongs to its own divider.
+    ratio: float = 0.2
+    pane_ratio: float = 0.4
 
     # What the input page binds. Every control shows a value the app
     # holds and hands the new one back — the same contract nine times.
@@ -96,6 +101,7 @@ class Gallery:
     price: float = 2.5
     qty: int = 3
     dark: bool = True
+    palette_name: str = "dark"
     wifi: bool = False
     volume: float = 6.0
 
@@ -129,7 +135,10 @@ class Gallery:
         self.page = i
 
     def widen(self, r: float) -> None:
-        self.ratio = min(0.5, max(0.15, r))
+        self.ratio = min(0.5, max(0.12, r))
+
+    def widen_pane(self, r: float) -> None:
+        self.pane_ratio = min(0.8, max(0.2, r))
 
     def set_name(self, s: str) -> None:
         self.name = s
@@ -144,7 +153,14 @@ class Gallery:
         self.qty = n
 
     def set_dark(self, on: bool) -> None:
+        # The one control on this page that DOES something: `theme=` on
+        # the app's outermost column is a scope, and this is the value
+        # it reads.
         self.dark = on
+        if on:
+            self.palette_name = "dark"
+        else:
+            self.palette_name = "light"
 
     def set_wifi(self, on: bool) -> None:
         self.wifi = on
@@ -225,13 +241,13 @@ def arranging():
             text("four", **cell)
         divider(color="accent", thickness=2.0)
         with stack():
-            text("stacked under", size=28, color="#3b3f4a")
+            text("stacked under", size=28, color="border")
             text("and over", size=14)
         split(
-            column(text("a pane"), padding=10, background="#313244", grow=1.0),
-            column(text("and the other"), padding=10, background="#45475a", grow=1.0),
-            ratio=Gallery.ratio,
-            on_change=Gallery.widen,
+            column(text("a pane"), padding=10, background="panel", grow=1.0),
+            column(text("and the other"), padding=10, background="surface", grow=1.0),
+            ratio=Gallery.pane_ratio,
+            on_change=Gallery.widen_pane,
             height=70.0,
         )
         with h_scroll_view():
@@ -252,7 +268,7 @@ def texts():
         text("italic", italic=True)
         text("mono 0x1f", mono=True)
         text("underlined", underline=True)
-        text("a pill", size=12, background="#313244", padding=4, border_radius=6.0)
+        text("a pill", size=12, background="surface", padding=4, border_radius=6.0)
         text("one line, clipped with an ellipsis when it does not fit", wrap="ellipsis", width=180.0)
         link("yokan on GitHub", "https://github.com/i2y/yokan")
         with row(spacing=12):
@@ -350,7 +366,7 @@ def over_the_app():
             button("show modal", on_click=Gallery.ask)
             button("show toast", on_click=Gallery.save)
         with context_menu(options=Gallery.fruits, on_select=Gallery.act):
-            with column(padding=14, background="#313244", border_radius=8.0):
+            with column(padding=14, background="surface", border_radius=8.0):
                 text("right-click this card", size=14)
         text(f"chosen: {Gallery.chosen}", **faint)
 
@@ -367,7 +383,7 @@ def riders():
                     border_radius=8.0):
             text("a scope with the other palette", size=13)
             button("in the light", on_click=Gallery.save)
-        text("wider than it needs", width=220.0, background="#313244", padding=6)
+        text("wider than it needs", width=220.0, background="surface", padding=6)
         text("read as a heading", role="heading", size=15)
         image("demo/assets/yokan.svg", width=40.0, height=40.0,
               a11y_label="the Yokan mark")
@@ -386,49 +402,53 @@ def painting():
             pixel_text(2, 24, "PIXELS", 1)
 
 
+@component
+def pages():
+    # `grow=` on a scroll_view is a share of the pane, the way a list's
+    # is: the viewport follows the window instead of a number.
+    with scroll_view(grow=1.0):
+        if Gallery.page == 0:
+            arranging()
+        elif Gallery.page == 1:
+            texts()
+        elif Gallery.page == 2:
+            inputs()
+        elif Gallery.page == 3:
+            choosers()
+        elif Gallery.page == 4:
+            lists()
+        elif Gallery.page == 5:
+            reporting()
+        elif Gallery.page == 6:
+            over_the_app()
+        elif Gallery.page == 7:
+            painting()
+        else:
+            riders()
+
+
 def view() -> None:
-    with column(grow=1.0):
+    with column(grow=1.0, theme=Gallery.palette_name):
         with row(spacing=8, padding=10):
             text("Yokan widgets", **heading)
             spacer()
             text(f"{len(Gallery.pages)} pages, every element", **faint)
         divider()
-        with row(grow=1.0):
+        # The chrome is a split, so both panes follow the window and
+        # the divider between them can be dragged.
+        split(
             list_view(
                 len(Gallery.pages),
                 page_row,
                 item_height=30.0,
-                height=430.0,
-                width=150.0,
+                grow=1.0,
                 selected=Gallery.page,
                 on_select=Gallery.go,
-            )
-            divider()
-            # A scroll_view takes a height rather than a share of its
-            # row, so the column around it takes the width that is left
-            # and carries the height. And a row centres what it holds,
-            # so that height is what makes the page start at the top
-            # rather than float in the middle.
-            with column(grow=1.0, padding=10, height=450.0):
-                with scroll_view(height=430.0):
-                    if Gallery.page == 0:
-                        arranging()
-                    elif Gallery.page == 1:
-                        texts()
-                    elif Gallery.page == 2:
-                        inputs()
-                    elif Gallery.page == 3:
-                        choosers()
-                    elif Gallery.page == 4:
-                        lists()
-                    elif Gallery.page == 5:
-                        reporting()
-                    elif Gallery.page == 6:
-                        over_the_app()
-                    elif Gallery.page == 7:
-                        painting()
-                    else:
-                        riders()
+            ),
+            pages(),
+            ratio=Gallery.ratio,
+            on_change=Gallery.widen,
+        )
         if Gallery.asking:
             with modal():
                 text("a modal takes the clicks behind it", size=14)

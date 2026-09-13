@@ -213,6 +213,9 @@ def view():
 - **並べて見せる**：`list_view`、`table`、`data_table`、`scroll_view` / `h_scroll_view`。
   `data_table` は、最初の `row` がヘッダー行、以降が交互に色の付くデータ行です。
   同じ列のセルに同じ `grow` を与えると、列が揃います（`demo/table.py`）。
+  `scroll_view` は中身を切り取ってスクロールさせます。
+  `height=` は表示の高さを決め、`grow=` は親の取り分を受け取ります。
+  窓に合わせて伸びてほしいときは後者です。
 - **重ねる**：`modal`、`toast`、`context_menu`（包んだ要素を右クリックすると開くメニュー）。
 
 ここに挙げた要素は全部 `demo/widgets.py` に 1 ページずつ入っています。

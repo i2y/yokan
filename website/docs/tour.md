@@ -201,6 +201,7 @@ The elements, by what they are for:
   `link("Docs", "https://…")` opens the URL in the browser; a headless `click:` on it opens nothing.
 - **Showing many**: `list_view`, `table`, `data_table`, `scroll_view` / `h_scroll_view`.
   `data_table`'s first `row` child is the header and the rest are data rows shaded in alternation; columns line up when the cells of one column carry the same `grow` (`demo/table.py`).
+  `scroll_view` clips and scrolls what it holds: `height=` fixes the viewport, `grow=` takes a share of the parent instead, for one that follows the window.
 - **Layering**: `modal`, `toast`, `context_menu` (the menu a right-click opens on what it wraps).
 
 Every one of them is in `demo/widgets.py`, a page at a time — the app to read when you want to see a widget before you write it.

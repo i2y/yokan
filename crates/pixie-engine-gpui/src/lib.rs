@@ -2095,6 +2095,10 @@ fn render_el_in<C: Component>(
                 value.as_str().to_string(),
                 placeholder.as_str().to_string(),
             );
+            // The walk knows which `theme:` scope this field stands in;
+            // gpui renders the input afterwards and would otherwise
+            // paint it in the window's palette instead of the scope's.
+            entity.update(cx, |inp, _| inp.theme = th);
             let (ml, rw) = (*multiline, *rows as f32);
             entity.update(cx, |inp, cx| {
                 inp.on_commit = commit_cb;
@@ -2709,7 +2713,11 @@ fn render_el_in<C: Component>(
         // outermost is the positioning context the thumb overlay is
         // measured against, the middle one scrolls and clips, the inner
         // one lays the children out.
-        Element::ScrollView { height, children } => {
+        Element::ScrollView {
+            height,
+            grow,
+            children,
+        } => {
             pass.next_id += 1;
             let id = pass.next_id;
             let st = scroll_state(scrolls, pass);
@@ -2719,16 +2727,21 @@ fn render_el_in<C: Component>(
                 inner = inner.child(render_el(c, pass, inputs, scrolls, selects, charts, canvases, Slot::Flow, Sem::default(), th, cx));
                 pass.path.pop();
             }
-            div()
-                .relative()
-                .child(
-                    div()
-                        .id(id)
-                        .overflow_y_scroll()
-                        .track_scroll(&st.handle)
-                        .max_h(px(viewport_h(*height)))
-                        .child(inner),
-                )
+            // With a share, the viewport is a flex item that takes
+            // what the parent has left, and the clip is `h_full` rather
+            // than a number — the ListView's rule, one element over.
+            // `min_h(0)` so the child may shrink below its content and
+            // actually scroll.
+            let mut outer = div().relative();
+            let mut port = div().id(id).overflow_y_scroll().track_scroll(&st.handle);
+            if *grow > 0.0 {
+                outer = outer.flex_grow(*grow as f32).min_h(px(0.));
+                port = port.h_full();
+            } else {
+                port = port.max_h(px(viewport_h(*height)));
+            }
+            outer
+                .child(port.child(inner))
                 .child(scrollbar(&st, false))
                 .into_any_element()
         }
@@ -4014,7 +4027,7 @@ fn render_el_in<C: Component>(
                     });
                 })
             });
-            number_field(el, *value, num, placeholder, cb, inputs, pass, slot, sem, cx)
+            number_field(el, *value, num, placeholder, cb, inputs, pass, slot, sem, th, cx)
         }
         Element::IntField {
             value,
@@ -4050,6 +4063,7 @@ fn render_el_in<C: Component>(
                 pass,
                 slot,
                 sem,
+                th,
                 cx,
             )
         }
@@ -4919,6 +4933,7 @@ fn number_field<C: Component>(
     pass: &mut RenderPass,
     slot: Slot,
     sem: Sem<'_>,
+    th: &'static Theme,
     cx: &mut Context<Root<C>>,
 ) -> gpui::AnyElement {
     let shown = num.show(value);
@@ -4937,6 +4952,7 @@ fn number_field<C: Component>(
     }
     let p = placeholder.as_str().to_string();
     entity.update(cx, |inp, cx| {
+        inp.theme = th;
         inp.numeric = Some(num);
         inp.bound_num = value;
         inp.on_number = on_number;

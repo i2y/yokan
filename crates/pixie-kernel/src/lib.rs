@@ -1370,9 +1370,15 @@ pub enum Element {
     /// A vertically wheel-scrollable viewport: children stack like a
     /// Column, the box clips them to `height` pixels (`0.0` = the
     /// engine's 320 px default) and the engine paints a draggable
-    /// scrollbar thumb over the right edge. cute_ui's ~120 ms scroll
-    /// inertia is still deferred (see DESIGN §11).
-    ScrollView { height: f64, children: Vec<Element> },
+    /// scrollbar thumb over the right edge. `grow` takes a flex share
+    /// of the parent instead, the way a ListView's does — a viewport
+    /// that follows the window rather than a number. cute_ui's ~120 ms
+    /// scroll inertia is still deferred (see DESIGN §11).
+    ScrollView {
+        height: f64,
+        grow: f64,
+        children: Vec<Element>,
+    },
     /// The horizontal twin of `ScrollView`: children lay out like a
     /// Row and the box clips them to its width — so there is no
     /// `height:` to set, only the bottom-edge thumb.
@@ -2663,12 +2669,22 @@ impl Element {
                     format!("ListView({props})[{}]", inner.join(", "))
                 }
             }
-            Element::ScrollView { height, children } => {
+            Element::ScrollView {
+                height,
+                grow,
+                children,
+            } => {
                 let inner: Vec<String> = children.iter().map(|c| c.dump_in(w)).collect();
-                if *height == 0.0 {
+                // Each prop joins only when set, the container rule: a
+                // viewport that takes neither dumps as it always did.
+                if *height == 0.0 && *grow == 0.0 {
                     format!("ScrollView[{}]", inner.join(", "))
-                } else {
+                } else if *grow == 0.0 {
                     format!("ScrollView(height={height})[{}]", inner.join(", "))
+                } else if *height == 0.0 {
+                    format!("ScrollView(grow={grow})[{}]", inner.join(", "))
+                } else {
+                    format!("ScrollView(height={height}, grow={grow})[{}]", inner.join(", "))
                 }
             }
             Element::HScrollView(cs) => {

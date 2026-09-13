@@ -244,8 +244,14 @@ def list_view(
     obeys it when the number changes, so a list someone has scrolled
     is left where they put it."""
 def scroll_view(
-    *children: Element, height: float = 0.0, **props: Unpack[SharedPropsOwnHeight]
-) -> Element: ...
+    *children: Element,
+    height: float = 0.0,
+    grow: float = 0.0,
+    **props: Unpack[SharedPropsOwnHeight],
+) -> Element:
+    """A clipped, wheel-scrollable box. `height` fixes the viewport;
+    `grow` takes a share of the parent instead, for one that follows
+    the window."""
 def h_scroll_view(*children: Element, **props: Unpack[SharedProps]) -> Element: ...
 def data_table(*children: Element, **props: Unpack[SharedProps]) -> Element:
     """The first `row` child is the header; later `row` children
