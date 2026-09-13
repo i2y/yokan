@@ -3306,3 +3306,24 @@ got far enough to reach it, and the test that keeps it fixed is a
 round trip through the same parser the manifest reader uses — a case
 every platform can run, because the failing input is a string, not an
 operating system.
+
+## Two tables belong to the machine that printed them (2026-09-13)
+
+The ground-truth tables are CPython's answers, printed on one machine
+and compared byte for byte. Two of them cannot be read on a Windows
+runner, and the reason is the tables' own design rather than a bug.
+
+`math` carries a `~>` on the rows a platform's libm decides, and the
+test allows those one ulp. MSVC's tangent of 2.3e16 is further out than
+that — argument reduction, not a wrong answer — so on Windows the row
+reports that the runner is not the printer.
+
+`zoneinfo` needs a zone database, and Windows ships none. CPython's own
+`zoneinfo` raises there unless the `tzdata` package is installed, and
+the twin reads the same places CPython reads, so the table would be
+measuring whether a pip package is present.
+
+Both keep running on the machine the tables belong to, every sweep. The
+Windows job skips those two and says why where it skips them. When
+Windows becomes a platform anyone installs, what a user needs to know
+is the same thing CPython's docs say: `zoneinfo` there wants `tzdata`.

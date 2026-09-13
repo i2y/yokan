@@ -98,6 +98,25 @@ jobs:
         # needs no symbol — and nothing on this platform runs Rakugan;
         # what would not link is its own test binary.
         run: cargo test --workspace --exclude rakugan-stdlib
+          -- --skip math_matches_cpython --skip zoneinfo_matches_cpython
+
+      # Two of the ground-truth tables are a claim about the machine
+      # that printed them, and this is not that machine.
+      #
+      # `math`: the tables were printed against macOS's libm, and a row
+      # marked `~>` is allowed one ulp because a platform's libm decides
+      # the last bit. MSVC's differs by more than that for a tangent of
+      # 2.3e16 — argument reduction, not a wrong answer — so the row
+      # says the runner is not the printer, which is already known.
+      #
+      # `zoneinfo`: Windows ships no zone database. CPython's own
+      # `zoneinfo` raises there too unless the `tzdata` package is
+      # installed, and the twin reads the same places CPython does, so
+      # what the table would measure here is whether a pip package is
+      # present rather than whether the twin agrees.
+      #
+      # Both run on the machine the tables belong to, every time the
+      # sweep runs.
 
       # The substrate's promise: every pixie example through both
       # execution tiers, failing on any dump difference. It is where a
