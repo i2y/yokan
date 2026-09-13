@@ -3327,3 +3327,32 @@ Both keep running on the machine the tables belong to, every sweep. The
 Windows job skips those two and says why where it skips them. When
 Windows becomes a platform anyone installs, what a user needs to know
 is the same thing CPython's docs say: `zoneinfo` there wants `tzdata`.
+
+## What a Windows runner cost, and what it found (2026-09-13)
+
+The Windows job had been written and never run. Running it took seven
+fixes, and two of them were bugs a user would have met on the first
+command they typed.
+
+Every manifest the substrate writes — a project's `pixie.toml`, the
+lock, the generated crate's `Cargo.toml` — and four more the dialect's
+gate writes were putting values into text raw. A path with a backslash
+is invalid TOML, so on Windows `pixie add` wrote a file it could not
+read back and every generated app failed before cargo saw it. One
+escaper on each side fixes it, and the test that keeps it fixed round
+trips a Windows path through the parser the reader uses, on every
+platform.
+
+The other five were the platform saying what it is: no `localtime_r`
+for the POSIX-only twins, two ground-truth tables that belong to the
+machine that printed them, a wheel that needs pyo3 to write its own
+import library, and a check of mine that pinned a closing paren the
+dump does not have.
+
+What is still open is the window. gpui stops at
+`Error creating DirectWriteTextSystem` on a GitHub runner, so the job
+that photographs the screen photographs a desktop. Everything a
+headless run does — the tier gate, the demos through both runs, the
+packaged folder driven on a machine that never built it — passes
+there. That is the honest shape of the platform today, and the tour
+says exactly that.

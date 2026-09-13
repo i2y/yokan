@@ -86,8 +86,14 @@ the same change.
 - Windows is CI's for now: nobody here has the machine, so
   `.github/workflows/windows.yml` builds the workspace, runs the tier
   gate, gates the demos and drives what `--app` writes, on dispatch
-  and on tags. Nothing about it has been run yet, and no user-facing
-  page claims the platform until it has.
+  and on tags. It went green for the first time on 2026-09-13, and
+  finding out cost seven fixes — two of them real bugs (every manifest
+  pixie and the gate wrote dropped paths in raw, which is invalid TOML
+  the moment a path has a backslash). Two ground-truth tables are
+  skipped there, at the skip, with the reason: they are a claim about
+  the machine that printed them. The window is still open as a
+  question — gpui stops at `Error creating DirectWriteTextSystem` on
+  the runner — so no user-facing page claims the platform yet.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast. (On Windows the same rule
