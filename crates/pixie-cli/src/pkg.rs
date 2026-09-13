@@ -233,29 +233,30 @@ fn parse_add_args(args: &[String]) -> Result<AddSpec, String> {
 /// Render the manifest line for the spec — string form when only a
 /// version is present, inline table otherwise.
 fn render_entry(spec: &AddSpec) -> String {
+    use crate::manifest::toml_str;
     let mut parts: Vec<String> = Vec::new();
     if let Some(g) = &spec.git {
-        parts.push(format!("git = \"{g}\""));
+        parts.push(format!("git = {}", toml_str(g)));
         if let Some((kind, v)) = &spec.refspec {
-            parts.push(format!("{kind} = \"{v}\""));
+            parts.push(format!("{kind} = {}", toml_str(v)));
         }
     }
     if let Some(p) = &spec.path {
-        parts.push(format!("path = \"{p}\""));
+        parts.push(format!("path = {}", toml_str(p)));
     }
     if parts.is_empty() && spec.features.is_empty() && spec.bind.is_none() {
         let v = spec.version.as_deref().expect("validated");
-        return format!("{} = \"{v}\"", spec.name);
+        return format!("{} = {}", spec.name, toml_str(v));
     }
     if let Some(v) = &spec.version {
-        parts.insert(0, format!("version = \"{v}\""));
+        parts.insert(0, format!("version = {}", toml_str(v)));
     }
     if !spec.features.is_empty() {
-        let fs: Vec<String> = spec.features.iter().map(|f| format!("\"{f}\"")).collect();
+        let fs: Vec<String> = spec.features.iter().map(|f| toml_str(f)).collect();
         parts.push(format!("features = [{}]", fs.join(", ")));
     }
     if let Some(b) = &spec.bind {
-        parts.push(format!("bind = \"{b}\""));
+        parts.push(format!("bind = {}", toml_str(b)));
     }
     format!("{} = {{ {} }}", spec.name, parts.join(", "))
 }

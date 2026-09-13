@@ -3288,3 +3288,21 @@ draws after the walk — a text field's input, a tooltip's panel — has to
 be handed the palette the walk knew, or a scope leaks. Both are fixed;
 a third of the same kind would be found the same way, by opening a
 window and looking.
+
+## A manifest value is written as TOML, not as text (2026-09-13)
+
+Every manifest pixie writes — a project's `pixie.toml`, the lock, the
+generated crate's `Cargo.toml` — is written as TEXT, so the layout a
+person wrote survives a `pixie add`. The values were being dropped into
+that text raw, which is fine until a value contains a backslash or a
+quote. A Windows path contains four:
+
+    kit = { git = "C:\Users\RUNNER~1\AppData\Local\Temp\pixie" }
+    TOML parse error at line 12, column 20
+
+So a value is now written through one escaper, and the reader gets back
+what the writer had. The bug was found by the first Windows CI run that
+got far enough to reach it, and the test that keeps it fixed is a
+round trip through the same parser the manifest reader uses — a case
+every platform can run, because the failing input is a string, not an
+operating system.
