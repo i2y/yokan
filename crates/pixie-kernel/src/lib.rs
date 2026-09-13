@@ -4470,8 +4470,9 @@ pub fn stat_total(entries: Vec<Entry>, only: Option<PathKind>) -> i64 {
 pub struct Perms(pub u32);
 
 /// Battery helper: the mode bits at `path`, or zero when there are
-/// none to read.
-pub fn perms_of(path: &str) -> Perms {
+/// none to read — which is every path on Windows, where a file has no
+/// mode to read and the argument goes unused on purpose.
+pub fn perms_of(#[cfg_attr(not(unix), allow(unused_variables))] path: &str) -> Perms {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

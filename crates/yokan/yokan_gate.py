@@ -13092,13 +13092,43 @@ def _merge_crates(app: dict, pkg: dict, top: str, where: str) -> dict:
     return out
 
 
+def toml_str(s: str) -> str:
+    """A value as a TOML basic string, escapes and all.
+
+    Every manifest this command writes is written as text, so the
+    layout stays readable; a value dropped in raw is a value the
+    reader may not get back. A Windows path says it out loud —
+    `D:\\a\\yokan` is two escapes and a parse error — and a quote in a
+    path does the same anywhere. The substrate's writer holds the
+    same rule (`pixie_cli::manifest::toml_str`).
+    """
+    out = ['"']
+    for ch in s:
+        if ch == '"':
+            out.append('\\"')
+        elif ch == "\\":
+            out.append("\\\\")
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
 def _crate_dep_spec(name: str, spec: dict) -> str:
     """The Cargo/pixie dependency table for a declared crate — the
     same line serves the pyo3 shim, the scratch manifest and the
     generated project's [crates]."""
     parts = []
     if "path" in spec:
-        parts.append(f'path = "{spec["path"]}"')
+        parts.append(f"path = {toml_str(spec['path'])}")
     if "version" in spec:
         parts.append(f'version = "{spec["version"]}"')
     if spec.get("features"):
@@ -13657,7 +13687,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
         # it. An app that imports `audio` asks for the feature.
         wants_audio = "audio" in tr.stdlib_mods.values()
         feats = ', features = ["audio"]' if wants_audio else ""
-        crates.append(f'yokan-stdlib = {{ path = "{stdlib_dir}"{feats} }}')
+        crates.append(f"yokan-stdlib = {{ path = {toml_str(stdlib_dir)}{feats} }}")
         open(os.path.join(proj, ".pixie", "rpi", "yokan-stdlib.rpi"), "w", encoding="utf-8").write(
             stdlib_rpi(Translator.STDLIB, ("audio",) if wants_audio else ())
         )
@@ -13718,7 +13748,7 @@ def emit_project(gate_dir: str, stem: str, pix: str, tr: "Translator") -> str:
     open(os.path.join(proj, "escapes", "Cargo.toml"), "w", encoding="utf-8").write(
         '[package]\nname = "escapes"\nversion = "0.1.0"\nedition = "2024"\n\n'
         '[dependencies]\npyo3 = { version = "0.26", features = ["auto-initialize"] }\n'
-        f'pixie-kernel = {{ path = "{kernel_dir}" }}\n\n[workspace]\n'
+        f"pixie-kernel = {{ path = {toml_str(kernel_dir)} }}\n\n[workspace]\n"
     )
     dataclasses_py = []
     for sname in sorted(tr.escape_structs):
@@ -14731,7 +14761,7 @@ def do_add(args) -> None:
         parts = []
         if args.path:
             rel = os.path.relpath(os.path.abspath(args.path), base_dir)
-            parts.append(f'path = "{rel}"')
+            parts.append(f"path = {toml_str(rel)}")
         else:
             parts.append(f'version = "{version}"')
         if feats:
