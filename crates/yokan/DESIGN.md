@@ -3245,6 +3245,13 @@ the viewport props landed — a share of the parent instead of a fixed
 height — and a `ScrollView`, the same kind of thing, had only the
 number. It has both now, and the dump prints whichever is set.
 
+**A `theme:` scope reaches what gpui draws later.** Two things are
+built after the walk that knows which palette a subtree is in: a text
+field's input entity and a tooltip's little panel. Both read the
+window's palette, so a light scope held a dark field and brought up a
+dark tooltip. Both are handed the palette now, at the point the walk
+still knows it.
+
 **A `theme:` scope reaches a text field.** The scope is applied by a
 kernel pass that rewrites token names in the tree, plus an engine walk
 that knows which palette the subtree is in. A text field escaped both:

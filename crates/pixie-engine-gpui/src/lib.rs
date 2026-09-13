@@ -484,15 +484,16 @@ fn root_scope_theme(mut el: &Element) -> Option<&'static Theme> {
 /// window: the panel background, dim text, one line.
 struct PixieTooltip {
     label: SharedString,
+    /// The palette the element this rides on was drawn in. gpui builds
+    /// the tooltip later, out of the walk, so the walk hands it the
+    /// answer — otherwise a tooltip inside a `theme:` scope would come
+    /// up in the window's colours instead of the scope's.
+    theme: &'static Theme,
 }
 
 impl Render for PixieTooltip {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let th: &'static Theme = if THEME_LIGHT_ON.load(std::sync::atomic::Ordering::Relaxed) {
-            &THEME_LIGHT
-        } else {
-            &THEME_DARK
-        };
+        let th: &'static Theme = self.theme;
         div()
             .px_2()
             .py_1()
@@ -2275,7 +2276,7 @@ fn render_el_in<C: Component>(
             d.child(rendered)
                 .tooltip(move |_window, cx| {
                     let label = label.clone();
-                    cx.new(|_| PixieTooltip { label }).into()
+                    cx.new(|_| PixieTooltip { label, theme: th }).into()
                 })
                 .into_any_element()
         }
