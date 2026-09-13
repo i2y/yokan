@@ -63,7 +63,10 @@ jobs:
 
       # The registry, not the build tree: downloads are worth carrying
       # between runs and object files are not (see the header).
-      - uses: actions/cache@v4
+      # v6 runs on node24; v4 was the last node20 major and the
+      # runners now force it onto 24 anyway, with a deprecation line
+      # in every log. The inputs are unchanged.
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
