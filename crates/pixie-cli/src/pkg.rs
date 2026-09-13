@@ -622,7 +622,8 @@ mod tests {
 
         cmd_add(&app, &["kit".into(), "--git".into(), repo.clone()]).expect("add");
         let toml = std::fs::read_to_string(app.join("pixie.toml")).unwrap();
-        assert!(toml.contains(&format!("kit = {{ git = \"{repo}\" }}")), "{toml}");
+        let line = format!("kit = {{ git = {} }}", crate::manifest::toml_str(&repo));
+        assert!(toml.contains(&line), "{toml}");
         assert!(app.join("pixie.lock").is_file(), "lock written");
         assert!(app.join(".pixie/deps/kit/src/lib.pix").is_file(), "checkout");
 
@@ -632,10 +633,7 @@ mod tests {
 
         cmd_remove(&app, "kit").expect("remove");
         let toml = std::fs::read_to_string(app.join("pixie.toml")).unwrap();
-        assert!(
-            !toml.contains(&format!("kit = {{ git = \"{repo}\" }}")),
-            "{toml}"
-        );
+        assert!(!toml.contains(&line), "{toml}");
         assert!(!app.join("pixie.lock").exists(), "lock deleted when empty");
         assert!(!app.join(".pixie/deps/kit").exists(), "checkout cleaned");
 

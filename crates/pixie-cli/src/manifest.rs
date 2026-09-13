@@ -841,9 +841,12 @@ mod pkg_tests {
         std::fs::write(
             dir.join("index/kit.toml"),
             format!(
-                "[versions]\n\"1.2.0\" = {{ git = \"{}\", rev = \"{rev}\" }}\n\"0.9.0\" = {{ git = \"{}\", rev = \"{rev}\" }}\n",
-                repo.display(),
-                repo.display()
+                "[versions]\n\"1.2.0\" = {{ git = {}, rev = \"{rev}\" }}\n\"0.9.0\" = {{ git = {}, rev = \"{rev}\" }}\n",
+                // The index this test writes is a manifest too: a path
+                // with backslashes in it has to be escaped here for the
+                // same reason the writer escapes one.
+                toml_str(&repo.display().to_string()),
+                toml_str(&repo.display().to_string())
             ),
         )
         .unwrap();
