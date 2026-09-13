@@ -194,7 +194,11 @@ jobs:
           $env:PIXIE_SCRIPT = 'click:+1,dump'
           $out = & $exe.FullName
           $out
-          if (-not ($out -match 'Text\(count: 1\)')) {
+          # The text carries its own properties — `count:` is a
+          # `text(..., size=34)` — so the match ends at the comma or
+          # the paren rather than pinning what follows it. What is
+          # being asked is whether the click reached the app.
+          if (-not ($out -match 'Text\(count: 1[,)]')) {
             throw "the app did not react to the script"
           }
 
