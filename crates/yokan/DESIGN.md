@@ -3265,3 +3265,26 @@ does not take rather than dropping it (the runtime already refused
 `grow=`, so the two runs disagreed about a typo), and a component call
 inside another component may be a store's bound method handler — the
 inline path had no arm for the shape its own refusal promised.
+
+## An app-wide theme stays a scope (2026-09-13)
+
+A first-class "app theme" — a value the app sets that the engine's own
+palette follows — is not being added. The reason is that the thing it
+would buy already exists: `theme:` on the outermost element is a scope
+that covers everything under it, which is every element the app has,
+and the catalog demo switches its whole self that way in one line.
+
+What it would cost is three decisions, each of which has to be right
+or the gate stops meaning what it means. The value would have to reach
+the dump, or the two runs could not be held to it. It would have to
+settle who wins when the engine's own Cmd+T disagrees with what the
+app asked for — the app, the last one to move, or neither. And it
+would put a second owner on a value that already has one, which is the
+mistake this ledger has refused for a split's ratio, a list's marked
+row and a toast's flag.
+
+What the question WAS worth is the bug class it exposed: anything gpui
+draws after the walk — a text field's input, a tooltip's panel — has to
+be handed the palette the walk knew, or a scope leaks. Both are fixed;
+a third of the same kind would be found the same way, by opening a
+window and looking.
