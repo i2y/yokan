@@ -91,7 +91,13 @@ jobs:
       # shows up here first, and the `~>` rows are the ones allowed to
       # differ by an ulp.
       - name: The workspace's own tests
-        run: cargo test --workspace
+        # Rakugan's twins are left out here, and only here: perl and the
+        # XS door are POSIX-only, so the crate that mirrors what perl
+        # answers reads the platform's own `localtime_r`, which MSVC
+        # does not have. The crate still BUILDS on Windows — a rlib
+        # needs no symbol — and nothing on this platform runs Rakugan;
+        # what would not link is its own test binary.
+        run: cargo test --workspace --exclude rakugan-stdlib
 
       # The substrate's promise: every pixie example through both
       # execution tiers, failing on any dump difference. It is where a
