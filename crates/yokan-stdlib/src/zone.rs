@@ -612,36 +612,38 @@ fn parse_day_rule(s: &str) -> Option<DayRule> {
 // ---- finding the file ----------------------------------------------
 
 /// Where CPython looks: `PYTHONTZPATH` when it is set, and otherwise
-/// the directories its own default names. A `tzdata` package is
-/// reached through `PYTHONPATH`, which is where an environment that
-/// installed one puts it.
+/// the directories its own default names — none on Windows, which
+/// ships no zone files. A `tzdata` package is reached through
+/// `PYTHONPATH`, which is where an environment that installed one puts
+/// it.
 fn search_path() -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    match std::env::var("PYTHONTZPATH") {
-        Ok(v) if !v.is_empty() => {
-            for part in v.split(':') {
-                if !part.is_empty() {
-                    out.push(std::path::PathBuf::from(part));
-                }
-            }
-        }
-        _ => {
-            for d in [
-                "/usr/share/zoneinfo",
-                "/usr/lib/zoneinfo",
-                "/usr/share/lib/zoneinfo",
-                "/etc/zoneinfo",
-            ] {
-                out.push(std::path::PathBuf::from(d));
-            }
-        }
-    }
-    if let Ok(v) = std::env::var("PYTHONPATH") {
-        for part in v.split(':') {
-            if !part.is_empty() {
-                out.push(std::path::Path::new(part).join("tzdata").join("zoneinfo"));
-            }
-        }
+    search_path_in(std::env::var_os("PYTHONTZPATH"), std::env::var_os("PYTHONPATH"))
+}
+
+/// Both lists are split the way the platform writes a path list, as
+/// CPython splits them: `;` on Windows, where every `C:\` path has a
+/// colon in it, and `:` elsewhere.
+fn search_path_in(
+    tzpath: Option<std::ffi::OsString>,
+    pythonpath: Option<std::ffi::OsString>,
+) -> Vec<std::path::PathBuf> {
+    let list = |v: &std::ffi::OsString| -> Vec<std::path::PathBuf> {
+        std::env::split_paths(v).filter(|p| !p.as_os_str().is_empty()).collect()
+    };
+    let mut out = match tzpath.filter(|v| !v.is_empty()) {
+        Some(v) => list(&v),
+        None if cfg!(windows) => Vec::new(),
+        None => [
+            "/usr/share/zoneinfo",
+            "/usr/lib/zoneinfo",
+            "/usr/share/lib/zoneinfo",
+            "/etc/zoneinfo",
+        ]
+        .map(std::path::PathBuf::from)
+        .to_vec(),
+    };
+    if let Some(v) = pythonpath {
+        out.extend(list(&v).into_iter().map(|p| p.join("tzdata").join("zoneinfo")));
     }
     out
 }
@@ -684,4 +686,34 @@ pub fn zone(key: &str) -> Result<std::sync::Arc<Zone>, String> {
     map.entry(key.to_string())
         .or_insert_with(|| read_zone(key).map(std::sync::Arc::new))
         .clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::search_path_in;
+    use std::path::PathBuf;
+
+    /// A list the platform wrote splits back into what went in — on
+    /// Windows the temp dir is `C:\...`, whose colon a `:` split cut.
+    #[test]
+    fn a_path_list_splits_the_way_the_platform_writes_one() {
+        let dirs = [std::env::temp_dir().join("a"), std::env::temp_dir().join("b")];
+        let joined = std::env::join_paths(&dirs).unwrap();
+        let got = search_path_in(Some(joined.clone()), Some(joined));
+        let tzdata = |p: &PathBuf| p.join("tzdata").join("zoneinfo");
+        assert_eq!(got, vec![dirs[0].clone(), dirs[1].clone(), tzdata(&dirs[0]), tzdata(&dirs[1])]);
+    }
+
+    /// With nothing set, the directories CPython names itself: none on
+    /// Windows, the four system ones elsewhere.
+    #[test]
+    fn the_default_is_the_platforms_own() {
+        let got = search_path_in(None, None);
+        if cfg!(windows) {
+            assert!(got.is_empty());
+        } else {
+            assert_eq!(got.len(), 4);
+            assert_eq!(got[0], PathBuf::from("/usr/share/zoneinfo"));
+        }
+    }
 }
