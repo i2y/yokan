@@ -704,6 +704,40 @@ fn vendored_gpui_macos_dir() -> Option<PathBuf> {
     v.canonicalize().ok()
 }
 
+/// Whether a generated crate's lock is (re)seeded from the tree's:
+/// when it has none, and when it resolved gpui against a Zed revision
+/// the tree no longer carries. An app's resolution cannot take a new
+/// engine on its own — the new gpui pins some crates exactly, and the
+/// old lock holds other versions of them, so cargo stops at a
+/// conflict it then misreports as a missing feature. A lock with no
+/// gpui in it (a `pixie test` crate has no engine) stays the app's.
+fn lock_needs_seed(tree: &Path, app: &Path) -> bool {
+    let Ok(app) = std::fs::read_to_string(app) else {
+        return true;
+    };
+    let Ok(tree) = std::fs::read_to_string(tree) else {
+        return false;
+    };
+    match (gpui_source(&app), gpui_source(&tree)) {
+        (Some(a), Some(t)) => a != t,
+        _ => false,
+    }
+}
+
+/// The `source` of the `gpui` package in a Cargo.lock: the Zed
+/// revision that lock resolved the engine against.
+fn gpui_source(lock: &str) -> Option<&str> {
+    let mut lines = lock.lines().map(str::trim);
+    while let Some(line) = lines.next() {
+        if line == "name = \"gpui\"" {
+            return lines
+                .take_while(|l| !l.is_empty())
+                .find_map(|l| l.strip_prefix("source = "));
+        }
+    }
+    None
+}
+
 fn write_crate(
     out: &Path,
     name: &str,
@@ -733,13 +767,14 @@ fn write_crate(
             // already-resolved demo stayed green. Generated code is
             // the compiler's responsibility, and so is what it builds
             // against: a new app now starts from the versions this
-            // tree is tested with. Seeded, never overwritten — cargo
+            // tree is tested with. Seeded, not overwritten — cargo
             // keeps adjusting it from there, and an app that has
             // resolved (or that someone ran `cargo update` in) is
-            // left alone.
+            // left alone, until the engine moves under it.
             let lock = repo.join("Cargo.lock");
-            if lock.is_file() && !out.join("Cargo.lock").exists() {
-                let _ = std::fs::copy(&lock, out.join("Cargo.lock"));
+            let app_lock = out.join("Cargo.lock");
+            if lock.is_file() && lock_needs_seed(&lock, &app_lock) {
+                let _ = std::fs::copy(&lock, &app_lock);
             }
         }
     }
@@ -790,4 +825,50 @@ fn write_crate(
     std::fs::write(out.join("Cargo.toml"), manifest)?;
     std::fs::write(out.join("src").join("main.rs"), code)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod lock_seed_tests {
+    use super::{gpui_source, lock_needs_seed};
+
+    /// A lock shaped the way cargo writes one, with gpui resolved
+    /// against `rev` between two neighbours.
+    fn lock(rev: &str) -> String {
+        format!(
+            "version = 4\n\n\
+             [[package]]\nname = \"gpu-alloc\"\nversion = \"0.6.0\"\n\n\
+             [[package]]\nname = \"gpui\"\nversion = \"0.2.2\"\n\
+             source = \"git+https://github.com/zed-industries/zed?rev={rev}#{rev}\"\n\
+             dependencies = [\n \"anyhow\",\n]\n\n\
+             [[package]]\nname = \"gpui_macos\"\nversion = \"0.1.0\"\n"
+        )
+    }
+
+    #[test]
+    fn reads_the_revision_gpui_was_resolved_against() {
+        let want = "\"git+https://github.com/zed-industries/zed?rev=bda9c0b#bda9c0b\"";
+        assert_eq!(gpui_source(&lock("bda9c0b")), Some(want));
+        // A checkout that turned the lock's line endings into CRLF.
+        assert_eq!(gpui_source(&lock("bda9c0b").replace('\n', "\r\n")), Some(want));
+        assert_eq!(gpui_source("version = 4\n"), None);
+    }
+
+    /// No lock, or a lock resolved against another engine, takes the
+    /// tree's; the same engine, or no engine at all, keeps the app's.
+    #[test]
+    fn a_lock_is_seeded_again_only_when_the_engine_moved() {
+        let dir = std::env::temp_dir().join(format!("pixie-lock-seed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (tree, app) = (dir.join("tree.lock"), dir.join("app.lock"));
+        std::fs::write(&tree, lock("bda9c0b")).unwrap();
+        let _ = std::fs::remove_file(&app);
+        assert!(lock_needs_seed(&tree, &app));
+        std::fs::write(&app, lock("bda9c0b")).unwrap();
+        assert!(!lock_needs_seed(&tree, &app));
+        std::fs::write(&app, lock("d9ad6af")).unwrap();
+        assert!(lock_needs_seed(&tree, &app));
+        std::fs::write(&app, "version = 4\n\n[[package]]\nname = \"pixie-kernel\"\n").unwrap();
+        assert!(!lock_needs_seed(&tree, &app));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
