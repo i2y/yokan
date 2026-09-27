@@ -22,7 +22,7 @@ import tomllib
 ZED_ROOT_TOML = sys.argv[1]
 TARGET = sys.argv[2]
 GIT = "https://github.com/zed-industries/zed"
-REV = sys.argv[3] if len(sys.argv) > 3 else "d9ad6aff67e47de43abb270d22de75dd950f1b48"
+REV = sys.argv[3] if len(sys.argv) > 3 else "bda9c0bd43a8d235d82adb01ea5bc875b861ecfc"
 
 with open(ZED_ROOT_TOML, "rb") as f:
     root = tomllib.load(f)

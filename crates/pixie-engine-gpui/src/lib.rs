@@ -59,8 +59,6 @@ use gpui::{
     TextRun, TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, canvas, deferred, div,
     fill, hsla, point, prelude::*, px, relative, rgb, rgba, size,
 };
-use futures::FutureExt as _;
-use gpui::Asset as _;
 use pixie_kernel::{Component, Element, Handle, List, Runtime, Str, TextListener, World};
 
 use text_input::{Numeric, PixieInput};
@@ -331,7 +329,7 @@ impl PixieImageCache {
             let Some(key) = victim else {
                 return;
             };
-            let Some(mut e) = self.entries.remove(&key) else {
+            let Some(e) = self.entries.remove(&key) else {
                 return;
             };
             self.bytes = self.bytes.saturating_sub(e.bytes);
@@ -358,43 +356,25 @@ impl gpui::ImageCache for PixieImageCache {
         let key = gpui::hash(resource);
         self.clock += 1;
         let now = self.clock;
-        if let Some(e) = self.entries.get_mut(&key) {
-            e.used = now;
-            let got = e.item.get();
-            if e.bytes == 0 {
-                if let Some(Ok(img)) = &got {
-                    e.bytes = PixieImageCache::image_bytes(img);
-                    self.bytes += e.bytes;
-                    self.evict(now, window, cx);
-                }
+        // A miss starts the decode on the background pool, exactly as
+        // `RetainAllImageCache` does. The entry owns the load, and
+        // `use_image` has gpui notify the asking view when it lands,
+        // so the image arrives in a paint.
+        let e = self.entries.entry(key).or_insert_with(|| ImageEntry {
+            item: gpui::ImageCacheItem::new(resource, cx),
+            used: now,
+            bytes: 0,
+        });
+        e.used = now;
+        let got = e.item.use_image(window);
+        if e.bytes == 0 {
+            if let Some(Ok(img)) = &got {
+                e.bytes = PixieImageCache::image_bytes(img);
+                self.bytes += e.bytes;
+                self.evict(now, window, cx);
             }
-            return got;
         }
-        // Miss: start the decode on the background pool and park the
-        // task, exactly as `RetainAllImageCache` does. The element is
-        // notified on the next frame so the load lands in a paint.
-        let fut = gpui::AssetLogger::<gpui::ImageAssetLoader>::load(resource.clone(), cx);
-        let task = cx.background_executor().spawn(fut).shared();
-        self.entries.insert(
-            key,
-            ImageEntry {
-                item: gpui::ImageCacheItem::Loading(task.clone()),
-                used: now,
-                bytes: 0,
-            },
-        );
-        let entity = window.current_view();
-        window
-            .spawn(cx, {
-                async move |cx| {
-                    let _ = task.await;
-                    cx.on_next_frame(move |_, cx| {
-                        cx.notify(entity);
-                    });
-                }
-            })
-            .detach();
-        None
+        got
     }
 }
 

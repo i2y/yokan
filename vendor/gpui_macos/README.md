@@ -2,7 +2,7 @@
 
 This crate is a copy of `crates/gpui_macos` from the Zed repository
 (<https://github.com/zed-industries/zed>) at revision
-`d9ad6aff67e47de43abb270d22de75dd950f1b48`, copyright Zed
+`bda9c0bd43a8d235d82adb01ea5bc875b861ecfc`, copyright Zed
 Industries, Inc., licensed under the Apache License, Version 2.0
 (see [LICENSE-APACHE](LICENSE-APACHE)). It is vendored and patched
 here; it is not a Zed Industries release.

@@ -467,8 +467,17 @@ run, so neither run is a version behind.
 - gpui is pinned to a specific Zed revision plus a vendored macOS
   platform crate (`vendor/gpui_macos`) carrying a panic-containment
   patch; the pin includes `features = ["font-kit"]`, without which
-  no text renders. Upgrading gpui means bumping the rev everywhere,
-  re-applying the vendored patch, and running the tier gate.
+  no text renders, and gpui's own `features = ["stacker"]`, which
+  upstream made opt-in. Upgrading gpui means bumping the rev
+  everywhere, re-vendoring with `tools/devendor.py` and re-applying
+  the patch, and running the tier gate. When cargo then says gpui
+  "does not have that feature", the feature is there: the resolver
+  hit a crate the new gpui pins exactly (`=x.y.z`) while the lock
+  holds another version, backtracked into the lint fixture Zed also
+  names `gpui`, and reported that. `cargo update -p <crate>
+  --precise <version>` to what Zed's own lock says fixes it. A
+  generated crate re-seeds its lock from the tree's when the rev
+  moves, so apps already built take the new engine on their own.
 - Generated apps build with `debug = 0` and, under the gate,
   `--no-interp`: a gate's binary is never debugged or hot-reloaded,
   and the two together took a demo's build from 110 s to 8 s (the

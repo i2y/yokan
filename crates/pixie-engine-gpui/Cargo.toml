@@ -5,21 +5,22 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-# Only for `FutureExt::shared` in the image cache: a decode in flight
-# is handed to every element asking for the same source (§8.38).
-futures = "0.3"
 pixie-kernel.workspace = true
-# The Zed tree at a pinned rev (DESIGN section 5; trigger pulled
-# 2026-08-23 - API drift ahead of the widget fan-out, plus P1). The
-# physical vendor + carried patches replace this git pin next.
-gpui = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48" }
+# The Zed tree at a pinned rev (DESIGN section 5). The rev moves in
+# three places at once: here, gpui_platform below, and the vendored
+# gpui_macos, which `tools/devendor.py` re-derives.
+# `stacker` is gpui's guard on its own layout and paint walk. It was
+# always on until upstream made it opt-in (Zed turns it on for
+# itself), and it stays on here: how deep an app's tree may nest is
+# not something a dependency's default should change.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "bda9c0bd43a8d235d82adb01ea5bc875b861ecfc", features = ["stacker"] }
 # `font-kit` is the mac side's text (without it nothing renders);
 # `wayland`/`x11` are the Linux side's windowing, and gpui_platform
 # defaults to NEITHER, so a Linux build without them has no backend
 # to open a window with. Resolver 2 ignores a feature whose dependency
 # is not active for the target, so all three ride one declaration and
 # there stays exactly one rev to bump.
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d9ad6aff67e47de43abb270d22de75dd950f1b48", features = ["font-kit", "wayland", "x11"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "bda9c0bd43a8d235d82adb01ea5bc875b861ecfc", features = ["font-kit", "wayland", "x11"] }
 # `render_el` recurses once per element AND once per rider around it,
 # and an unoptimized build gives that one giant function a frame near a
 # megabyte — a tree nine wrappers deep overran the main thread's 8 MiB.
