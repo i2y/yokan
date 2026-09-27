@@ -16,12 +16,14 @@
 
 # Where a machine keeps caches is the machine's own answer: `~/.cache`
 # where there is a HOME, and `%LOCALAPPDATA%` on Windows, which has
-# none. pixie-cli's `shared_target_dir`, yokan_gate.py's `cache_root`
-# and the sweep read the same rule, so one build tree serves all four.
-# Forward slashes even on Windows: these paths are pasted into `sh`
-# recipes, where a backslash is an escape character, and every Windows
-# API takes a forward slash.
-cache := if env_var_or_default('HOME', '') != '' { env_var('HOME') / '.cache' } else { replace(env_var('LOCALAPPDATA'), '\', '/') }
+# none unless a shell like Git Bash sets one. pixie-cli's
+# `shared_target_dir`, yokan_gate.py's `cache_root` and the sweep read
+# the same rule, so one build tree serves all four.
+# Forward slashes even on Windows, in both branches (Git Bash's HOME is
+# `C:\Users\...`): these paths are pasted into `sh` recipes, where a
+# backslash is an escape character, and every Windows API takes a
+# forward slash.
+cache := if env_var_or_default('HOME', '') != '' { replace(env_var('HOME'), '\', '/') / '.cache' } else { replace(env_var('LOCALAPPDATA'), '\', '/') }
 
 export CARGO_TARGET_DIR := cache / 'pixie/target'
 

@@ -291,11 +291,15 @@ jobs:
           name: wheel-windows
           path: wheels
 
+      # Put the wheel where the justfile will look. Git Bash sets a HOME,
+      # so that is `~/.cache` here, not `%LOCALAPPDATA%`; asking the
+      # justfile keeps the two from disagreeing again.
       - name: Drive an app with the installed wheel
         shell: bash
         run: |
-          mkdir -p "$LOCALAPPDATA/pixie/target/wheels"
-          cp wheels/*.whl "$LOCALAPPDATA/pixie/target/wheels/"
+          dest=$(uvx --from rust-just just --evaluate wheels)
+          mkdir -p "$dest"
+          cp wheels/*.whl "$dest/"
           uvx --from rust-just just smoke
 
   attach:
