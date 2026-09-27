@@ -3356,3 +3356,55 @@ headless run does — the tier gate, the demos through both runs, the
 packaged folder driven on a machine that never built it — passes
 there. That is the honest shape of the platform today, and the tour
 says exactly that.
+
+## What moving gpui cost (2026-09-27)
+
+The engine's gpui is pinned to one Zed revision, and the pin had not
+moved since this tree began: five weeks and about a hundred commits to
+the gpui crates behind. It now names the commit Zed's own nightly was
+built from. The move is written down because the next one will cost
+the same kinds of thing.
+
+**The image cache follows gpui's entry.** A cache entry in gpui now
+owns its load (dropping the entry cancels a decode in flight) and
+notifies every view that asked for the image when it lands. The
+bounded cache keeps its policy, least recently used with only a loaded
+image counted against the budget, and loses the task that did that
+notifying by hand.
+
+**gpui's own stack guard is asked for by name.** Upstream made the
+guard around gpui's layout and paint walk a feature, `stacker`, off by
+default, and Zed turns it on for itself. The engine turns it on as
+well: how deep an app's tree may nest is not something a dependency's
+default should change.
+
+**A crate the new gpui pins exactly.** One of gpui's platform crates
+pins `unicode-properties = "=0.1.3"`, and the lock held a later patch
+release. Cargo reports that conflict as gpui "does not have that
+feature": Zed's tree holds a second package named `gpui`, a lint
+fixture with no features, and it is the last candidate the resolver
+tried. The contributor notes say how to recognise it.
+
+**An app already built takes the new engine by itself.** A generated
+crate's lock is seeded once from this tree's and then left to cargo, so
+an app that someone resolved or updated keeps its versions. Left alone
+across an engine upgrade, that lock fails exactly as the tree's did,
+which would have broken the first build of every app built with the
+release before. So the seed is taken again when the gpui revision a
+lock resolved against is not the tree's, and the app's own crates
+resolve on top of it, as they did the first time. A crate with no
+engine in it keeps its lock.
+
+**What a window shows.** Every still screen in the gallery renders the
+same on both engines, pixel for pixel, apart from animations and one
+number an app draws at random; clicks, typing into a field, a scrolled
+list, a sorted table, an open select, a menu, a modal and the theme
+flip come out the same too, and a compiled binary's window matches the
+interpreted run's. One thing did change, and it is gpui's fix: the
+element under a pointer that has not moved now shows its hover as soon
+as the window opens, where the old engine waited for the first move.
+A gallery screenshot is taken with the pointer off the window.
+
+Linux and Windows compile their own halves of gpui, which no Mac
+builds, so those two are proved by the release workflow and the
+Windows job rather than by anything above.
