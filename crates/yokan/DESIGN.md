@@ -3408,3 +3408,30 @@ A gallery screenshot is taken with the pointer off the window.
 Linux and Windows compile their own halves of gpui, which no Mac
 builds, so those two are proved by the release workflow and the
 Windows job rather than by anything above.
+
+## The whole sweep on Windows (2026-09-27)
+
+The Windows job gates a few demos when it is dispatched and every demo
+on a tag, and the first tag it ran on found four gates that had never
+run there. None of them was the engine.
+
+Three ran under `uv run --with …` with the job's own interpreter,
+handed in as an absolute path because Windows has no `python3`. An
+absolute path runs that interpreter as it is, without what `--with`
+installed, so pytest and the dialect package were missing. Those lines
+now say `python`, which uv answers with its own environment's
+interpreter on every platform.
+
+The fourth was `zones`. Windows ships no zone files, and CPython's
+answer there is the `tzdata` package. The twin already looked for one
+on `PYTHONPATH`, but split the list on `:`, which every Windows path
+has after its drive letter. It now splits the way the platform writes
+a path list, as CPython does, and names no default zone directories
+where CPython names none. On Windows the sweep puts a `tzdata` on
+`PYTHONPATH` for both runs; elsewhere both still read the machine's
+own files.
+
+What finding them cost was one habit: a failing gate in the sweep said
+nothing, so a machine nobody can log into answered FAIL with no
+reason. It prints what the gate said now, as a failing check already
+did.

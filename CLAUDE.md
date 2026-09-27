@@ -91,14 +91,18 @@ the same change.
   pixie and the gate wrote dropped paths in raw, which is invalid TOML
   the moment a path has a backslash). Two ground-truth tables are
   skipped there, at the skip, with the reason: they are a claim about
-  the machine that printed them. The window is still open as a
-  question — gpui stops at `Error creating DirectWriteTextSystem` on
-  the runner — so no user-facing page claims the platform yet.
+  the machine that printed them. The whole sweep (on a tag, or
+  dispatched with `demos: the sweep`) first went green on 2026-09-27.
+  The window is still open as a question — gpui stops at `Error
+  creating DirectWriteTextSystem` on the runner, and since the move to
+  Zed bda9c0b it says why: `os error 3`, a path it cannot find — so
+  no user-facing page claims the platform yet.
 - `export CARGO_TARGET_DIR=~/.cache/pixie/target` before any cargo
   or gate work — every crate and generated app shares one target
   dir, which is what keeps builds fast. (On Windows the same rule
-  reads `%LOCALAPPDATA%\pixie\target`, because there is no `HOME`;
-  pixie-cli, the gate, the justfile and the sweep each compute it when
+  reads `%LOCALAPPDATA%\pixie\target`, because there is no `HOME` —
+  unless a shell like Git Bash sets one, and then `HOME` wins there
+  too; pixie-cli, the gate, the justfile and the sweep each compute it when
   nobody has set one, and each yields to the one you set — a tree of
   your own costs a single dependency build and is incremental after
   that.)
