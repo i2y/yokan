@@ -19,15 +19,25 @@ fi
 export CARGO_TARGET_DIR
 # The interpreter that runs the command. `python3` everywhere the
 # installer makes that name; Windows installs `python`, so the job
-# there hands one in rather than the script guessing.
+# there hands one in rather than the script guessing. A line that
+# runs under `uv run --with …` says `python` instead: that is the name
+# uv answers with its own environment's interpreter on every platform,
+# and an absolute path to another interpreter would run without what
+# `--with` installed.
 PY="${PYTHON:-python3}"
 pass=0; fail=0; failed=""
+# A gate's verdict is the line it prints. What else it said is shown
+# only when that line is missing, like `check` below, so a failure on
+# a machine nobody can log into explains itself in the log.
 gate() {
   local name="$1"; shift
-  if "$@" 2>&1 | grep -q "GATE OK"; then
+  local out
+  out=$("$@" 2>&1)
+  if printf '%s\n' "$out" | grep -q "GATE OK"; then
     pass=$((pass+1)); echo "OK   $name"
   else
     fail=$((fail+1)); failed="$failed $name"; echo "FAIL $name"
+    printf '%s\n' "$out" | tail -25
   fi
 }
 # A command whose verdict is its exit code rather than a line it
@@ -48,7 +58,7 @@ check() {
 # has never installed the wheel.
 pytest_run() {
   env -u VIRTUAL_ENV PYTHONPATH="$PWD" uv run --quiet --with pytest \
-    "$PY" -m pytest "$@" -q -p yokan_testing
+    python -m pytest "$@" -q -p yokan_testing
 }
 # Scripted gates (interaction coverage beyond the startup dump).
 gate counter "$PY" yokan_gate.py gate demo/counter.py --script "click:+1,dump,input:Momo\, again"
@@ -113,7 +123,19 @@ gate bytes   "$PY" yokan_gate.py gate demo/bytes.py --script "input:hello there,
 # files, so an offset is not something they can disagree about. The
 # `now` step renders what the zone says rather than the clock, which
 # is the part two runs cannot share.
-gate zones   "$PY" yokan_gate.py gate demo/zones.py --script "click:winter,dump,click:difference,dump,click:now,dump,click:summer,dump"
+# Windows ships no zone files, and CPython's answer there is the
+# `tzdata` package: both runs read it off PYTHONPATH, the interpreted
+# one by importing it and the compiled one by looking where it sits.
+zs="click:winter,dump,click:difference,dump,click:now,dump,click:summer,dump"
+if [ "${OS:-}" = Windows_NT ]; then
+  # No line ending: Python writes `\r\n` to a pipe there, and `$(…)`
+  # takes off only the `\n`.
+  tz=$("$PY" -c 'import os; print(os.path.abspath(".gate/tzdata"), end="")')
+  uv pip install --quiet --target "$tz" --python "$PY" tzdata
+  gate zones env PYTHONPATH="$tz" "$PY" yokan_gate.py gate demo/zones.py --script "$zs"
+else
+  gate zones "$PY" yokan_gate.py gate demo/zones.py --script "$zs"
+fi
 # A message that closes itself: the countdown rides the kernel's own
 # clock, so `advance:` is what proves it — no new verb, and no tier
 # able to disagree about when a second and a half passed.
@@ -147,12 +169,12 @@ gate dbnotes "$PY" yokan_gate.py gate demo/dbnotes.py --fresh demo/.gate/notes.d
 # empty database — and the name it types carries an apostrophe, which
 # only a BOUND parameter survives.
 gate ledger  "$PY" yokan_gate.py gate demo/ledger.py --fresh demo/.gate/ledger.db --script "click:reset,input@0:o'brien,input@1:250,click:food,dump"
-gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy "$PY" yokan_gate.py gate demo/pystats.py
+gate pystats env -u VIRTUAL_ENV uv run --quiet --with numpy python yokan_gate.py gate demo/pystats.py
 # A package written in the dialect, installed the way a published one
 # would be and compiled into the app that imports it. Its names are
 # emitted under its modules, so the app's own `badge_of` and the
 # package's `badge` coexist.
-gate pkgapp  env -u VIRTUAL_ENV uv run --quiet --with-editable demo/pkg "$PY" yokan_gate.py gate demo/pkgapp.py --script "click:look,click:fold,dump,click:look,click:look,dump"
+gate pkgapp  env -u VIRTUAL_ENV uv run --quiet --with-editable demo/pkg python yokan_gate.py gate demo/pkgapp.py --script "click:look,click:fold,dump,click:look,click:look,dump"
 gate proj     "$PY" yokan_gate.py gate demo/proj/app.py --script "click:run"
 # Multi-module apps.
 gate multi    "$PY" yokan_gate.py gate demo/multi/app.py
