@@ -110,14 +110,18 @@ def weigh() -> None:
         lines.append(f"{label} {f}")
     summary.set(f"{_len(lines)} parcels, {total} yen: {', '.join(lines)}")
     print(summary())
+    print(f"{total:>8,} yen, {total / _len(lines):.1f} a parcel")
 
 
 def heavy() -> None:
     best = heaviest(desk())
     name = best.label if best is not None else "nothing"
     first = desk()[0]
-    blank = first[-1] == ""
-    print(name, first[0], blank, isinstance(first, tuple))
+    print(name, first[0], first[-1] == "", isinstance(first, tuple))
+    # A rule called inside `print`, handed an Enum local: the call's
+    # answer is the text, its arguments are values.
+    size = first.size
+    print(fee(Parcel("copy", first.weight, size)), size)
     # An optional asked which object it holds, as a generator writes it
     # for an optional input: `is True` is False when it holds nothing.
     light: bool | None = None
@@ -135,8 +139,7 @@ def wrap() -> None:
     # A NamedTuple is a value: `_replace` answers a new one.
     lamp = desk()[1]
     wrapped = lamp._replace(note="wrapped", weight=Gram(lamp.weight + 300))
-    same = wrapped == lamp
-    print(wrapped.note, wrapped.weight, same)
+    print(wrapped.note, wrapped.weight, wrapped == lamp)
     desk.set(desk() + [wrapped])
 
 

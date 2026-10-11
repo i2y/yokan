@@ -585,11 +585,12 @@ An exception class of the app's own carries what it is raised with: an
 `super().__init__(...)` and keeps the rest as `self.` fields, and a
 `__str__` over those fields. `raise BadInput("out of range", repr(w))`
 ends its statement in both runs with the same text on stderr. Its
-arguments go by position or by keyword; a class without its own
-`__init__` takes the message by position only (Python raises TypeError
-at a keyword), and a keyword there is refused. A `raise` inside a
-`try` is refused (the compiled run does not unwind into an `except`),
-so an exception a called function raises is not caught there.
+arguments go by position or by keyword; a builtin exception, or a
+class without its own `__init__`, takes the message by position only
+(Python raises TypeError at a keyword), and a keyword there is
+refused. A `raise` inside a `try` is refused (the compiled run does
+not unwind into an `except`), so an exception a called function raises
+is not caught there.
 
 ## Tuples
 
@@ -1004,7 +1005,10 @@ reason.
   `.replace()` / `.find()` / `.count()` (those, `len(s)`, `s[i]`,
   `s[a:b]` and `in` are in).
 - Format specs beyond fill, align, sign, width, `,`, precision and
-  `d` / `f` / `e` / `%` / `s`.
+  `d` / `f` / `e` / `%` / `s`; also a precision or `,` with no type on
+  a float, and a `0` on a str or beside a fill (the compiled formatter
+  answers those differently). A spec Python rejects (a precision on an
+  int, `d` on a float, a sign on a str) is refused with its reason.
 - A `set` beyond membership — it iterates in an order the compiled
   run would not reproduce, so a `list` or a `dict` covers it; `x in
   {A, B}` and a `frozenset({...})` constant asked with `in` are in.

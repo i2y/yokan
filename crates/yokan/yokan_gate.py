@@ -7178,7 +7178,7 @@ class Translator:
         if isinstance(node, (ast.Compare, ast.BoolOp)) or (
             isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)
         ):
-            if self.text_hole:
+            if self.text_hole and not self.in_wrapped_hole:
                 # A hole renders a bool through `Py.boolRepr`, which
                 # the hole path reaches by asking `_num_ty` first; a
                 # comparison arriving here is one it could not type.
@@ -8130,9 +8130,92 @@ class Translator:
             raise Untranslatable(part, "a format spec is written out (`:.2f`, `:>8`, `:,`) — a computed spec is not in the dialect")
         return spec.values[0].value
 
+    # A format spec as `format()` reads one: [[fill]align][sign][z][#][0]
+    # [width][grouping][.precision][type].
+    _SPEC = re.compile(
+        r"(?:(?P<fill>.)?(?P<align>[<>=^]))?(?P<sign>[-+ ])?(?P<z>z)?(?P<alt>#)?"
+        r"(?P<zero>0)?(?P<width>\d+)?(?P<group>[,_])?(?:\.(?P<prec>\d+))?(?P<type>[A-Za-z%])?",
+        re.S,
+    )
+    # The presentation types Python takes for each, and the ones the
+    # compiled formatter answers the way Python does.
+    _SPEC_PYTHON = {"Int": set("bcdoxXneEfFgG%"), "Float": set("eEfFgGn%"), "String": {"s"}}
+    _SPEC_TAKEN = {"Int": set("def%"), "Float": set("ef%"), "String": {"s"}}
+
+    def _check_spec(self, node, spec: str, ty: str) -> None:
+        """Hold a format spec to what the compiled formatter answers the
+        way CPython does. A spec Python itself rejects is refused with
+        Python's reason; one the formatter would answer differently is
+        refused rather than printed two ways."""
+        what = {"Int": "an int", "Float": "a float", "String": "a str"}[ty]
+        m = self._SPEC.fullmatch(spec)
+        if m is None:
+            raise Untranslatable(
+                node,
+                f"`:{spec}` is not a format spec the dialect reads — a spec here is "
+                "[[fill]align][sign][0][width][,][.precision][type]",
+            )
+        g = m.groupdict()
+        t = g["type"]
+        if t is not None and t not in self._SPEC_PYTHON[ty]:
+            raise Untranslatable(
+                node, f"`:{spec}` on {what}: Python raises ValueError — `{t}` is not a format code for {what}"
+            )
+        if ty == "Int" and g["prec"] is not None and t in (None, "d"):
+            raise Untranslatable(
+                node, f"`:{spec}` on an int: Python raises ValueError — an int's spec takes no precision unless it is formatted as a float (`f`, `e`, `%`)"
+            )
+        if ty == "String":
+            for key, why in (
+                ("sign", "sign"),
+                ("group", "digit separator"),
+                ("z", "`z`"),
+                ("alt", "`#`"),
+            ):
+                if g[key]:
+                    raise Untranslatable(node, f"`:{spec}` on a str: Python raises ValueError — a str's spec takes no {why}")
+            if g["align"] == "=":
+                raise Untranslatable(node, f"`:{spec}` on a str: Python raises ValueError — `=` aligns after a sign, which a str has none of")
+        if ty == "Int" and g["z"]:
+            raise Untranslatable(node, f"`:{spec}` on an int: Python raises ValueError — `z` is for a float's negative zero")
+        if g["z"] or g["alt"]:
+            raise Untranslatable(node, f"`{'z' if g['z'] else '#'}` in a format spec is not in the dialect yet")
+        if g["group"] == "_":
+            raise Untranslatable(node, "`_` as a digit separator is not in the dialect yet — `,` is")
+        if t is not None and t not in self._SPEC_TAKEN[ty]:
+            raise Untranslatable(
+                node, f"the `{t}` format code is not in the dialect yet — `d`, `f`, `e`, `%` and `s` are"
+            )
+        if ty == "Float" and t is None and g["prec"] is not None:
+            raise Untranslatable(
+                node,
+                f"`:{spec}`: a precision with no type formats a float the way `g` does, which is "
+                "not in the dialect yet — say `f` or `e` (`.2f`)",
+            )
+        if ty == "Float" and t is None and g["group"]:
+            raise Untranslatable(
+                node,
+                f"`:{spec}`: `,` with no type groups the digits of a float's repr, and the compiled "
+                "formatter groups one written with an exponent (`1e+16`) where Python leaves it "
+                "as it is — say `f` (`,.2f`)",
+            )
+        if g["zero"] and g["fill"] is not None:
+            raise Untranslatable(
+                node,
+                f"`:{spec}` names a fill and also `0`, and the two runs pad with different ones — "
+                "write one of them",
+            )
+        if ty == "String" and g["zero"]:
+            raise Untranslatable(
+                node,
+                f"`:{spec}`: a `0` before a str's width pads it on the right in Python and on the "
+                "left in the compiled run — write the fill and the side (`0<5`)",
+            )
+
     def _format_call(self, node, spec: str, ctx, param) -> str:
         """`f"{x:>8,.2f}"` — CPython's format mini-language, answered by
-        the same implementation in both runs."""
+        CPython in one run and by a Rust formatter written to answer the
+        same in the other; `_check_spec` keeps to the part where they do."""
         ty = self._num_ty(node, ctx, param)
         fn = {"Int": "formatInt", "Float": "formatFloat", "String": "formatStr"}.get(ty)
         if fn is None:
@@ -8141,6 +8224,7 @@ class Translator:
                 f"a format spec applies to an int, a float or a str — `{self._src(node)}` is "
                 + (f"{py_ty(ty)} here" if ty else "of no type the dialect can format here"),
             )
+        self._check_spec(node, spec, ty)
         self.uses_stdlib = True
         prev, self.in_wrapped_hole = self.in_wrapped_hole, True
         try:
@@ -9770,6 +9854,13 @@ class Translator:
             return self._str_parts(node.left, ctx, param) + self._str_parts(node.right, ctx, param)
         if isinstance(node, ast.Constant) and type(node.value) is str:
             return esc(node.value)
+        if isinstance(node, ast.JoinedStr) and ctx == "store":
+            # An f-string is text with holes already, so its parts go in
+            # as they are; wrapped as one more hole, a spec's quotes would
+            # sit inside a quote inside a quote, which pixie cannot read.
+            lit = self.expr(node, ctx, param)
+            if len(lit) >= 2 and lit[0] == '"' and lit[-1] == '"':
+                return lit[1:-1]
         return self._splice(self._hole(node, ctx, param))
 
     def _text_value(self, node) -> str:
@@ -9817,6 +9908,9 @@ class Translator:
                     if re.fullmatch(r"\.\d+f", spec) and value is part.value:
                         # The engine formats fixed decimals itself.
                         self._reject_bool_text(part.value)
+                        held = self._num_ty(part.value, "view", None)
+                        if held in ("Int", "Float", "String"):
+                            self._check_spec(part.value, spec, held)
                         out += "#{" + self.expr(part.value, "view") + ":" + spec + "}"
                     else:
                         out += "#{" + self._format_call(value, spec, "view", None) + "}"
@@ -10916,6 +11010,16 @@ class Translator:
                 msg = self._exception_message(exc, param)
                 what = f"{exc.func.id}: {msg}" if msg else exc.func.id
             elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                if exc.keywords:
+                    # Python's exceptions take no keyword arguments: the
+                    # raise itself fails with a TypeError, before the
+                    # exception it meant is made.
+                    raise Untranslatable(
+                        exc,
+                        f"`{exc.func.id}` takes no keyword arguments — Python raises TypeError "
+                        f"at `{exc.keywords[0].arg}=` instead of the `{exc.func.id}` it was "
+                        "making; pass the message by position",
+                    )
                 inner = ""
                 if len(exc.args) == 1:
                     inner = ": " + self._str_parts(exc.args[0], "store", param)
@@ -11118,10 +11222,13 @@ class Translator:
     def _struct_of(self, node):
         """The value-class name an expression carries, when the
         declarations alone can answer it: a typed local, a struct
-        cell, a list element, or a field chain rooted at any of
-        them."""
+        cell, a list element, what a call answers, or a field chain
+        rooted at any of them."""
         if isinstance(node, ast.Name):
             t = self.typed_locals.get(node.id)
+            return t if t in self.structs else None
+        if isinstance(node, ast.Call):
+            t = self._num_ty(node, "store", None)
             return t if t in self.structs else None
         if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
             # An element of a list of value classes. The type is the
@@ -11697,7 +11804,10 @@ class Translator:
                     return f"{self.DT_SHOW[t]}(" + self.expr(node, ctx, param) + ")"
             if t is not None and t in self.enums:
                 self.enum_text_used.add(t)
-                return f"PyText.enumStr{t}(" + self.expr(node, ctx, param) + ")"
+                # The twin's text takes the member as a value, an Enum
+                # local included.
+                with self._unwrapped():
+                    return f"PyText.enumStr{t}(" + self.expr(node, ctx, param) + ")"
             if t is None:
                 # The type reader could not name what this hole
                 # renders, so the shapes that would print differently
@@ -11708,6 +11818,12 @@ class Translator:
                 self._reject_float_text(node)
                 self._reject_bool_text(node)
                 self._reject_opt_enum_text(node)
+            if t in ("Int", "String") and not isinstance(node, ast.Name):
+                # Named, the hole renders its own answer; what that is
+                # computed from — a call's arguments, an operand, the
+                # list an index reads — is a value, not text.
+                with self._unwrapped():
+                    return self.expr(node, ctx, param)
             return self.expr(node, ctx, param)
         finally:
             self.text_hole = prev
@@ -12698,6 +12814,8 @@ class Translator:
                 if isinstance(it, ast.Name) and it.id in self.enums:
                     pass
                 if isinstance(it, ast.Name) and it.id in self.handler_locals:
+                    if self.typed_locals.get(it.id, "").startswith("String"):
+                        raise Untranslatable(it, "iterating a str is not in the dialect yet")
                     raise Untranslatable(it, "iterating a local list is not in the dialect yet — keep the list in a State or a store field")
                 if c is not None and self._ty(c) == "String":
                     raise Untranslatable(it, "iterating a str is not in the dialect yet")

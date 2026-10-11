@@ -3561,12 +3561,13 @@ exception ends its statement in both runs and only its text goes
 anywhere, so the class is read for exactly what decides `str(e)`, and
 a `raise` writes that text with the arguments in place of the fields.
 Both runs then say the same thing on stderr. The arguments bind to the
-class's `__init__` by position or by keyword, as a call does. A class
-that keeps Python's own `__init__` takes no keyword — Python raises
-TypeError at one instead of making the exception — so a keyword there
-is refused. A `raise` inside a `try` stays refused, and catching an
-exception that a called function raises waits on the compiled run
-unwinding into an `except`, which it does not do yet.
+class's `__init__` by position or by keyword, as a call does. A
+builtin exception, or a class that keeps Python's own `__init__`,
+takes no keyword — Python raises TypeError at one instead of making
+the exception — so a keyword there is refused. A `raise` inside a
+`try` stays refused, and catching an exception that a called function
+raises waits on the compiled run unwinding into an `except`, which it
+does not do yet.
 
 **`repr` where its text is known.** An int, a float, a bool and bytes
 spell themselves; an Enum member is `<Mood.SAD: 2>`, which CPython
@@ -3585,6 +3586,33 @@ interpreted run, an Enum member's `str()` and every message keep the
 one the app wrote. A store, a model and a value class keep the refusal:
 the interpreted run finds a store's methods by name, and a value class
 twins a Rust struct by name.
+
+Gaps closed on the way, each found by a shape the generated modules
+hold or sit beside. A comparison inside `print(...)` or a text hole
+was refused although the renderer it reached was the bool's own; it is
+rendered now. A field read off what a call answers
+(`best_of(xs).label`) had no lowering; it has one. A call inside
+`print` or a text hole refused its own arguments when one was a local
+a hole cannot print — an Enum, a list — though an argument is a value
+and not text; it is read as one now, and so is an Enum local the hole
+prints through its twin's text. A keyword argument to a raised
+exception (`raise ValueError("bad", value=v)`) was left out of the
+compiled run's text, where Python raises TypeError at it; it is
+refused now, by the rule above. An f-string with a spec inside
+`print`, a `raise` or a concatenation (`print(f"{x:.2f}")`) passed
+`check` and then failed to build, the spec's quotes landing inside a
+quote inside a quote; its parts are spliced in now. And a format spec
+went to the compiled formatter whatever it asked for, so `f"{n:04x}"`
+passed `check` and printed `0255` where CPython prints `00ff`. A spec
+is now read with Python's grammar and held to what the formatter
+answers the same way. One Python rejects is refused with Python's
+reason (a precision on an int, `d` on a float, a sign or `,` on a
+str); one the formatter would answer differently is refused as not in
+yet: a format code beyond `d`, `f`, `e`, `%` and `s`, `#`, `z` and
+`_`, a precision with no type on a float (Python's general form), `,`
+with no type on a float (the formatter would group the digits of
+`1e+16`), a `0` on a str (Python pads it on the right) and a fill
+beside a `0` (Python keeps the fill).
 
 The proof is the generator's own corpus. Every rule in rulec's test
 corpus — 87 rules, three of them state machines walked call by call,

@@ -375,7 +375,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **注釈のないローカルのリストと辞書**（`out: list[str] = []`、`counts: dict[str, int] = {}`。コンパイル側が要素の型や値の型を読めるのは、この注釈があるからです）。
 - **方言に形のないものを返す str のメソッド**：`.format()` と `.translate()`（実行時に組み立てるテンプレートや表）、`.casefold()`（`ß` を `ss` に広げる写像で、他の大小変換とは別の Unicode 表が要ります）。
   使えるのは `.partition()`、`.rpartition()`、`.upper()`、`.lower()`、`.title()`、`.capitalize()`、`.swapcase()`、`.strip()` / `.lstrip()` / `.rstrip()`（文字集合の有無どちらも）、`.split()`、`.splitlines()`、`.join()`、`.startswith()`、`.endswith()`、`.replace()`、`.find()`、`.rfind()`、`.index()`、`.rindex()`、`.count()`、`.zfill()`、`.ljust()`、`.rjust()`、`.center()`、`.expandtabs()`、`.removeprefix()`、`.removesuffix()`、`.encode()`、`.is…()` の族、`len(s)`、`s[i]`、`s[a:b]`、`in` です。
-- **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
+- **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`z`、`_`、`b` / `o` / `x`、`n`、`g`）。コンパイルされた側で答えが変わる三つの組み合わせも受け付けません。型を書かない float の精度（Python の一般形式で、`g` と同じもの）、型を書かない float の `,`、str に付けた `0`、fill と一緒に書いた `0` です。Python 自身が ValueError を出す指定（int の精度、float の `d`、str の符号）は、Python の理由を添えて受け付けません。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
 - **所属の判定のほかの `set`**。

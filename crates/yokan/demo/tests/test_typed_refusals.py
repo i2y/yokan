@@ -80,6 +80,11 @@ CASES = {
     ),
     "the repr of a str": ("s = 'a'\n    print(repr(s))", "`repr` of a str is not in the dialect yet"),
     "walking a set": ("for k in {1, 2}:\n        print(k)", "a `set` iterates in an order"),
+    "walking a str": ("s = 'ab'\n    for ch in s:\n        print(ch)", "iterating a str is not in the dialect yet"),
+    "a keyword to a builtin exception": (
+        "raise ValueError('x', value='1')",
+        "`ValueError` takes no keyword arguments",
+    ),
     "a keyword to an exception without an __init__": (
         "raise Plain('x', value='1')",
         "its `__init__` is Python's own",
