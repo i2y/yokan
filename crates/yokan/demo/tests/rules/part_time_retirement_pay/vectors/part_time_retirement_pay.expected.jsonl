@@ -1,0 +1,14 @@
+{"in":{"tenure":1,"end_reason":"term_end","monthly_pay":100000},"observed":{"part_time_allowance":500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":2,"end_reason":"term_end","monthly_pay":100000},"observed":{"part_time_allowance":500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"term_end","monthly_pay":100000},"observed":{"part_time_allowance":500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":1,"end_reason":"term_end","monthly_pay":100001},"observed":{"part_time_allowance":500005},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":1,"end_reason":"term_end","monthly_pay":499999},"observed":{"part_time_allowance":2499995},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":1,"end_reason":"term_end","monthly_pay":500000},"observed":{"part_time_allowance":2500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":2,"end_reason":"term_end","monthly_pay":100001},"observed":{"part_time_allowance":500005},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":2,"end_reason":"term_end","monthly_pay":499999},"observed":{"part_time_allowance":2499995},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":2,"end_reason":"term_end","monthly_pay":500000},"observed":{"part_time_allowance":2500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"term_end","monthly_pay":100001},"observed":{"part_time_allowance":500005},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"term_end","monthly_pay":499999},"observed":{"part_time_allowance":2499995},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"term_end","monthly_pay":500000},"observed":{"part_time_allowance":2500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"term_end","monthly_pay":300000},"observed":{"part_time_allowance":1500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}
+{"in":{"tenure":3,"end_reason":"resignation","monthly_pay":300000},"observed":{"part_time_allowance":1500000},"trace":[{"table":"retirement:schedule","row":1,"label":"short"},{"table":"retirement:main","row":1}]}

@@ -29,24 +29,25 @@ Whether the two behave the same is checked by `yokan gate`, which replays a scri
 14. [Memory](#memory)
 15. [Sum types and match](#sum-types-and-match)
 16. [Optional and Enum](#optional-and-enum)
-17. [Components](#components)
-18. [Shared properties](#shared-properties)
-19. [Styles and themes](#styles-and-themes)
-20. [Animation](#animation)
-21. [The window](#the-window)
-22. [Error handling](#error-handling)
-23. [The standard library](#the-standard-library)
-24. [Calling a Rust crate](#calling-a-rust-crate)
-25. [Packages](#packages)
-26. [CPython escapes](#cpython-escapes)
-27. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
-28. [Working with type checkers](#working-with-type-checkers)
-29. [Editors](#editors)
-30. [Testing](#testing)
-31. [Headless runs and the gate](#headless-runs-and-the-gate)
-32. [Shipping](#shipping)
-33. [A real app](#a-real-app)
-34. [What does not work yet](#what-does-not-work-yet)
+17. [Names for types](#names-for-types)
+18. [Components](#components)
+19. [Shared properties](#shared-properties)
+20. [Styles and themes](#styles-and-themes)
+21. [Animation](#animation)
+22. [The window](#the-window)
+23. [Error handling](#error-handling)
+24. [The standard library](#the-standard-library)
+25. [Calling a Rust crate](#calling-a-rust-crate)
+26. [Packages](#packages)
+27. [CPython escapes](#cpython-escapes)
+28. [Heavy work, timers and keys](#heavy-work-timers-and-keys)
+29. [Working with type checkers](#working-with-type-checkers)
+30. [Editors](#editors)
+31. [Testing](#testing)
+32. [Headless runs and the gate](#headless-runs-and-the-gate)
+33. [Shipping](#shipping)
+34. [A real app](#a-real-app)
+35. [What does not work yet](#what-does-not-work-yet)
 
 ## The smallest app
 
@@ -414,24 +415,44 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters and locals), `break` / `continue`, and locals (reassignable, as in Python).
+A local may say its type (`total: int = 0`, `best: Row | None = None`), and `+=`, `-=` and the other augmented assignments work on a number or a str.
+A function called for what it does may leave its answer unread (`fee(p)` as a statement).
 `print(...)` writes to stdout, with `sep=` and `end=` as Python has them; `log("…")` writes a line to stderr instead. Both runs print the same bytes, and the gate compares what an app printed the way it compares the screens — a headless run's dump goes to the file `PIXIE_DUMP` names, so the two channels never mix.
 `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
+`is` compares an Enum member or a bool the way `==` does (`if verdict is Pick.SKIP:`), since each is the one object of its value; between other values it asks for `==`.
+An optional of either is asked whether it holds that object, so `flag is True` with `flag: bool | None` is False when `flag` is None.
 A comparison is also a **value**: `flag.set(n() > 1)`, `ok = a == b`, and a helper that answers `bool`.
+
+`isinstance(x, C)` is answered from what `x` is declared as.
+A call that would hand a bool to an `int` parameter, or an int to a `float` one, is refused where it is written (Python would keep the value as it is, and its text and `isinstance` would say so), which is what makes a declaration true in both runs.
+So the answer is known before either run starts, and a branch it rules out is never translated, the way a type checker never reads it:
+
+```python
+def weigh(w: int) -> int:
+    if not isinstance(w, int) or isinstance(w, bool):
+        raise ValueError("not a whole number")      # ruled out: never translated
+    return w // 1000
+```
+
+What a declaration does not settle is refused with the reason: `isinstance` on a `float` (Python lets an int into one), on an optional (narrow it first), and against a NewType (Python raises TypeError).
 A conditional expression (`a if c else b`) works anywhere one does in Python — in a handler and in a view — over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
 A store or model method may answer `T | None`, with `return None` for the empty half; the caller narrows it (`v = Bag.pick()`, then `if v is not None:`).
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
+An `elif` chain counts every way out, and a branch that ends in `raise`, `return`, `break` or `continue` asks nothing of the local, since it never reaches the read.
 
 ```python
 def judge():
     n = score()
     if n > 20:
         verdict = "high"
-    else:
+    elif n >= 0:
         verdict = "low"
+    else:
+        raise ValueError("a negative score")
     grade.set(verdict)      # readable after the branch
 ```
 
@@ -444,6 +465,16 @@ if (v := sel()) is not None:
     text(f"picked {v}")      # v is bound only inside this branch
 else:
     text("(none)")
+```
+
+An optional local or parameter narrows under its own name, wherever Python knows it holds a value: in the branch of an `if`, in the rest of an `and` or an `or`, and in the side of a conditional expression the test picks.
+
+```python
+best: int | None = None
+for v in scores():
+    if best is None or v > best:     # past `best is None`, best is an int
+        best = v
+top = best if best is not None else 0
 ```
 
 ## Functions as values
@@ -570,6 +601,10 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+A local list the function made itself also grows in place, `out.append(x)`, as long as nothing else holds it.
+Python's other names for a list see it grow and a compiled list is a value, so the two agree exactly when there is no other name: every read only looks (`len`, an index, `in`, a `for` that does not grow it, `sorted`, `", ".join(...)`) or hands the list back in the `return` that ends the function.
+An append after the list was handed on (to a call, another name, a field, a closure) is refused, pointing at where it was handed on; `out = out + [x]` makes a new list in both runs and works anywhere.
 
 The operations that say nothing about the element — `in`, a slice, `+`, `[::-1]` — take a list of anything the app can hold, a value class or a tuple included.
 Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` — a lambda of one element, or the name of a helper that takes one — and `sorted` takes a `reverse=`.
@@ -781,6 +816,32 @@ def scan():
 The parts have types of their own, so a tuple is indexed by a literal position: a computed index would have no one type to be.
 Two parts or more, and the same shape can be a state, a field, a list's element, a parameter and a return.
 
+A `NamedTuple` is a tuple whose parts also have names, which is what Python says it is.
+It goes everywhere a value class goes, and reads as a tuple too: by name, by a literal position, by unpacking and in a pair loop.
+
+```python
+from typing import NamedTuple
+
+
+class Row(NamedTuple):
+    """One row of the report."""
+    name: str
+    qty: int
+    note: str = ""
+
+
+r = Row("pens", 3)
+name, qty, note = r                  # unpacking
+same = r[1] == r.qty                 # by position, by name
+bigger = r._replace(qty=r.qty * 2)   # a new one, the other fields kept
+total = 0
+for label, count, _ in rows():       # a list of them, part by part
+    total += count
+```
+
+Two of one class compare with `==`.
+Ordering two tuples, slicing one and joining two are not in the dialect yet (each makes or compares part by part), and neither is a tuple's text: Python writes its repr, `Row(name='pens', qty=3, note='')`, so render the parts you mean.
+
 ## Value classes and interfaces
 
 Data itself lives in **value classes**.
@@ -921,10 +982,12 @@ match health():
 Optional works in state and in fields (`last: int | None = None`).
 Narrowing is as shown in the walrus sections.
 
-Enums are ordinary `class Mood(Enum)` and compile as-is.
+Enums are ordinary `class Mood(Enum)` and compile as-is (`import enum` with `class Mood(enum.Enum)` too).
 `match` arms are `Mood.MEMBER` or `_`, and missing arms are reported.
 In text they render exactly as Python does: `Mood.HAPPY`.
 `.name` and `.value` read what Python reads (`auto()` counts from 1), and `for m in Mood:` walks the members in declaration order.
+`repr(m)` is what Python writes for a member, `<Mood.HAPPY: 1>`, and `repr` of an int, a float, a bool or bytes is what it writes for those.
+A str's `repr` is not in the dialect yet: Python escapes what Unicode's own table says it cannot print, and the compiled side does not carry that table.
 
 `match` also takes int, float, str and bool values, with `|` alternatives and guards:
 
@@ -937,6 +1000,55 @@ match code():
     case _:
         note.set("middle")
 ```
+
+## Names for types
+
+A typed module names its types before it uses them, and the dialect reads those names the way a type checker does.
+
+```python
+import enum
+from typing import NamedTuple, NewType, TypeAlias
+
+Gram = NewType("Gram", int)          # a unit: an int to the compiled side
+
+
+class Size(enum.Enum):
+    SMALL = "small"
+    LARGE = "large"
+    HUGE = "huge"
+
+
+class Parcel(NamedTuple):
+    weight: Gram
+    size: Size
+
+
+Parcels = list[Parcel]               # another name for a type
+Fees: TypeAlias = dict[str, int]     # the same, said outright
+type Labels = list[str]              # and in the newer spelling
+_len = len                           # a builtin under a name of the module's own
+
+OVERSIZE = frozenset({Size.LARGE, Size.HUGE})
+
+
+def oversize_weight(parcels: Parcels) -> Gram:
+    total = Gram(0)
+    for p in parcels:
+        if p.size in OVERSIZE:
+            total = Gram(total + p.weight)
+    return total
+```
+
+A NewType is a name a type checker keeps apart from its base, and nothing at run time: `Gram(5)` answers the 5 it was given.
+So it is its base wherever an annotation names it, and a call to it is held to that base (`Gram(1.5)` is refused, because Python would hand back the float).
+`isinstance(x, Gram)` is refused for the reason Python raises TypeError there: a NewType has no class.
+An alias is the type it names, in any of the three spellings; a union of value classes is a sum type, and keeps its own spelling (`type Shape = Circle | Rect`).
+Another name for a builtin, a function or a class is that thing wherever it is called, except inside a function that binds the original name itself: there Python's alias still reads the builtin, so the call is refused and asks for the function's own name to change.
+A `frozenset` of literals, and a set written in place (`x in {A, B}`), answer `in` and `not in`: the one question a set answers the same way in both runs, whatever order it would walk in.
+
+A class or a local can also take a name the compiled side uses for something of its own: a class called `Element` or `List`, a local called `state`, `case` or `_`.
+A class with no decorator (a NamedTuple, an Enum, an exception) and a function's own parameters and locals are given another name on the compiled side, where nobody sees it; the interpreted run, a `str()` of an Enum member and every message keep the name you wrote.
+A store, a model or a value class keeps its name, because something finds it by that name (the interpreted run finds a store's methods, and a value class twins a Rust struct), so for them the name is refused and another one asked for.
 
 ## Components
 
@@ -1078,6 +1190,31 @@ try:
 except Exception as e:
     status.set(f"offline: {e}")
 ```
+
+An exception class of your own carries what it is raised with: an `__init__` with annotated parameters, which hands the message to `super().__init__(...)` and keeps the rest as fields, and a `__str__` over those fields.
+
+```python
+class BadInput(ValueError):
+    """An input the rule does not take, and what it was."""
+
+    def __init__(self, what: str, value: str | None = None) -> None:
+        super().__init__(what)
+        self.what = what
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.what if self.value is None else f"{self.what}: {self.value}"
+
+
+def fee(weight: int) -> int:
+    if not 1 <= weight <= 20000:
+        raise BadInput("weight is out of range", repr(weight))
+    return 500 if weight <= 2000 else 800
+```
+
+Raising one ends its statement in both runs, and both say why on stderr the same way, `BadInput: weight is out of range: 0` (CPython's traceback puts the module's name in front of the class's).
+The arguments reach that `__init__` by position or by keyword, as in any call; a class that keeps Python's own `__init__` takes its message by position only — Python raises TypeError at a keyword there instead of the exception — so a keyword to it is refused.
+A `raise` inside a `try` is still refused, because the compiled run does not unwind into an `except`: what a `try` catches is a failing standard-library call or an `@py` escape.
 
 ## The standard library
 
@@ -1738,7 +1875,7 @@ What Yokan cannot do as of today, with the reason for each refusal:
 
 - **A bare `d[k]` read, uncaught.** The read form is `.get(key, default)`, where the caller decides what a missing key means — or `try: v = d[k] except KeyError:`, which catches the miss the way Python does. What a `try` catches is the read itself, bound to a name.
 - **A local, a parameter or a loop variable that takes a field's name**, inside a store or model method. Python keeps `score` and `self.score` apart; the compiled side reads a field by its bare name, so the two runs would mean different things by it. Rename the local — `score_` reads the same in Python.
-- **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine.
+- **Reading a local assigned in only one branch.** Had that branch not run, Python would raise NameError. Assign in both if and else and it reads fine; a branch that ends in `raise`, `return`, `break` or `continue` needs no assignment, since it never reaches the read.
 - **Negative exponents on `int ** int`.** The result's type would change at runtime; make either side a float and it can be written.
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
@@ -1747,8 +1884,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Iterating a list of models directly in a view.** A view's `for` walks a list of scalars or value classes; for models, assemble the display strings on the store side and hand them to `list_view`.
 - **On a canvas**: no mouse, no tilemap and no camera offset; coordinates are whole pixels (a float is refused and asks for `int(...)`); the scale is a number the app declares rather than a fit to the window, because the painted size would then depend on a window the dump cannot see; and a sprite's PNG is found next to the app, so a missing one paints nothing. What a canvas paints is not readable by assistive technology either — it reports as one image, and `a11y_label=` is the honest way to say what is on it.
 - **A `Weak` field on a store.** A store is an owner; the non-owning reference belongs on the model side (the back pointer).
-- **Type names the native side already uses, such as `Vec`.** Refused; pick another (`V2`, say).
-- **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases, literal constants, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused. Startup work goes in a def passed as `run(view, on_start=setup)`.
+- **A store, a model or a value class named like a type the native side already uses, such as `Vec` or `Element`.** Refused; pick another (`V2`, say). Something finds each of them by its name, so the compiled side cannot quietly call it something else, as it does for a NamedTuple, an Enum or an exception class with the same name.
+- **Statements at module level.** The compiled app reads the module's declarations (imports, `State`, classes, defs, `style()`, type aliases and NewTypes, another name for a builtin, literal constants including a `frozenset`, `every(...)` timers, the `__main__` guard) and never executes it, so a `count.set(5)` or a `fs.write_text(...)` outside a function is refused. Startup work goes in a def passed as `run(view, on_start=setup)`.
 - **Starting a timer from a handler.** A timer is a declaration (`every(1.0, tick)` at module level), so what a handler changes is what the tick reads.
 - **`task`'s `on_error=`.** The failure path waits on the error union; catch a failing standard-library call with `try` / `except` around the call.
 - **Stopping a task once it has started.** `report` says where the work is; nothing says stop, so a task runs to its end.
@@ -1758,11 +1895,16 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **str methods that answer something the dialect has no shape for**: `.format()` and `.translate()` (a template or a table built at run time), `.casefold()` (its mapping expands `ß` to `ss`, which is a different Unicode table from the one the case methods use). What is in: `.partition()`, `.rpartition()`, `.upper()`, `.lower()`, `.title()`, `.capitalize()`, `.swapcase()`, `.strip()` / `.lstrip()` / `.rstrip()` (with or without a set of characters), `.split()`, `.splitlines()`, `.join()`, `.startswith()`, `.endswith()`, `.replace()`, `.find()`, `.rfind()`, `.index()`, `.rindex()`, `.count()`, `.zfill()`, `.ljust()`, `.rjust()`, `.center()`, `.expandtabs()`, `.removeprefix()`, `.removesuffix()`, `.encode()`, the `.is…()` family, `len(s)`, `s[i]`, `s[a:b]` and `in`.
 - **Format specs beyond fill, align, sign, width, `,`, precision and `d` / `f` / `e` / `%` / `s`** (`#`, `b` / `o` / `x`, `n`, `g`).
 - **A component parameter that is a value class or an enum**, and a body that is not one container (a top-level `if`, or several elements — wrap them in a `column`). Callback and State parameters work: a component that takes one becomes a view per call site.
-- **`set`.** A Python set iterates in an order the compiled side would not reproduce, so it is refused rather than reordered; a `list` covers it. A tuple is in — see [Tuples](#tuples) — but only where its shape is written out: a tuple that a Rust crate would have to answer is not carried yet, which is why `re.findall` still refuses a pattern with two groups or more.
+- **`set`, beyond membership.** A Python set iterates in an order the compiled side would not reproduce, so walking one, measuring one or keeping one in a `State` is refused rather than reordered; a `list` covers it. Asking a literal set (`x in {A, B}`, or a `frozenset({...})` constant) is in, since membership answers the same in both runs. A tuple is in — see [Tuples](#tuples) — but only where its shape is written out: a tuple that a Rust crate would have to answer is not carried yet, which is why `re.findall` still refuses a pattern with two groups or more.
+- **Ordering, slicing, joining and printing a tuple or a NamedTuple.** Each works part by part in Python (and the text is a repr that quotes the str parts); compare, cut or render the parts you mean.
+- **In-place list methods other than `.append` on a list the function made**: `.extend`, `.pop`, `.insert`, `.remove`, `.sort`, and `+=` on a list. Each changes the list where every other name for it would see the change, and a compiled list is a value; `xs = xs + ys` makes a new list in both runs.
+- **`isinstance` on a `float` or on an optional**, and against a NewType. A float slot can hold an int in Python and an optional may be None, so the declaration does not settle the answer; Python raises TypeError for a NewType. Narrow the optional first, and compare a float.
+- **`repr` of a str** (and so of a list, a value class or a tuple holding one). Python escapes what Unicode's table says it cannot print, and the compiled side does not carry that table yet.
+- **Catching an exception that a called function raises.** A `raise` inside a `try` is refused, because the compiled run does not unwind into an `except`; uncaught, an exception ends its statement in both runs with the same message.
 - **`@py` signatures beyond scalars, lists, str-keyed dicts, value classes and Optionals** (models, nested containers).
 - **An optional rendered as text** (`f"{picked}"` where `picked` is `T | None`). Python writes `None` and the compiled run writes nothing, so narrow it first (`if (v := picked) is not None:`) and render `v`.
 - **In Yokan's own modules**: copying or renaming a file, and streaming or binary downloads.
-- **In Python's modules**: six members of `math` (each refused with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. A zone comes from `zoneinfo`, and `datetime.timezone`'s fixed offsets stay out: a zone the machine knows by name is what the two runs can both read. From `zoneinfo`: a key chosen while the app runs (the compiled side reads it as it translates), an aware value in a `State`, a field or a list, and `fold`, which is the keyword that picks between the two readings of an hour a clock shows twice — the dialect always takes the first, as Python does by default. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. From `collections`: everything but `Counter` — `defaultdict` (what a missing key answers is asked at the read here), `deque` (it works in place, and a list lives in a `State`), `namedtuple` (a `@value` class says it with types), `OrderedDict` (a dict here already keeps its order) and `ChainMap`. From `itertools`: what never ends (`count`, `cycle`, `repeat`), what yields an iterator of its own (`groupby`, `tee`), what takes a function (`starmap`, `takewhile`, `filterfalse`) and `batched`, whose last tuple is a different shape from the rest. From `hashlib`: everything but `sha256`, `sha1` and `md5`, and every spelling but `hashlib.sha256(b).hexdigest()`. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `decimal`.
+- **In Python's modules**: six members of `math` (each refused with its reason), `random`'s `shuffle` (it reorders a list in place, and a list lives in a `State` — take a new order with `random.sample(xs(), len(xs()))` and write it back) and its distributions beyond `gauss`, and `statistics` over a list of ints (its answer would be an int or a float depending on the values). From `datetime`: `datetime.time`, `replace`, `strptime`, a `date` in a list or a dict, and a `date` as a helper's parameter. A zone comes from `zoneinfo`, and `datetime.timezone`'s fixed offsets stay out: a zone the machine knows by name is what the two runs can both read. From `zoneinfo`: a key chosen while the app runs (the compiled side reads it as it translates), an aware value in a `State`, a field or a list, and `fold`, which is the keyword that picks between the two readings of an hour a clock shows twice — the dialect always takes the first, as Python does by default. `strftime` takes the directives CPython gives a meaning of its own; `%c`, `%x`, `%X` and `%-d` are refused, because what they answer is the machine's business. `json.loads` is refused too: what it answers has no shape until it runs, so reads go through `jsondoc`'s paths, and a `json.dumps` of a value the app is holding reaches one level of nesting where a literal reaches any. From `re`: a `Match` (`re.search` used as a value), and a pattern built at run time — both refused, the second one pointing at `@py`. From the small modules: what rearranges a list in place (`heapq.heappush`, `bisect.insort`), because a list lives in a `State` here, and `textwrap.wrap` / `fill` / `shorten`, which split words with a regular expression of CPython's own. From `collections`: everything but `Counter` — `defaultdict` (what a missing key answers is asked at the read here), `deque` (it works in place, and a list lives in a `State`), `namedtuple` (`class Row(NamedTuple)` from `typing` says it with types), `OrderedDict` (a dict here already keeps its order) and `ChainMap`. From `itertools`: what never ends (`count`, `cycle`, `repeat`), what yields an iterator of its own (`groupby`, `tee`), what takes a function (`starmap`, `takewhile`, `filterfalse`) and `batched`, whose last tuple is a different shape from the rest. From `hashlib`: everything but `sha256`, `sha1` and `md5`, and every spelling but `hashlib.sha256(b).hexdigest()`. Modules that stay out for a reason the refusal names: `pathlib`, `os`, `decimal`.
 - **Around the new elements**: a table's columns cannot be resized by dragging, and its rows have no keyboard navigation or multi-select; charts have no legend; `select` has no keyboard operation; a tooltip's appearance is not something a script can hover for, and a context menu's panel is not something a script can open (both are in the dump: the tooltip's text, and the menu's items, which `select:` picks from). The keyboard ones wait on a verb the headless harness does not have. A drag has one now — `split`'s divider is driven by `slide:` — so a resizable column waits on the widget rather than on the harness.
 - **A second window.** One app, one window today: the engine's window root is written for a single view, and a headless run's dump is that one tree. Shortcuts, the clipboard, the menu bar, file dialogs, dropped files, tooltips and the multi-line field are all in.
 - **Decorator shapes beyond a plain wrapper**: one that takes arguments of its own, one whose wrapper calls the function twice or uses its value. A decorator that returns the function, or a wrapper calling it once, compiles.

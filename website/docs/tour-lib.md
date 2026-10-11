@@ -22,6 +22,31 @@ except Exception as e:
     status.set(f"offline: {e}")
 ```
 
+An exception class of your own carries what it is raised with: an `__init__` with annotated parameters, which hands the message to `super().__init__(...)` and keeps the rest as fields, and a `__str__` over those fields.
+
+```python
+class BadInput(ValueError):
+    """An input the rule does not take, and what it was."""
+
+    def __init__(self, what: str, value: str | None = None) -> None:
+        super().__init__(what)
+        self.what = what
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.what if self.value is None else f"{self.what}: {self.value}"
+
+
+def fee(weight: int) -> int:
+    if not 1 <= weight <= 20000:
+        raise BadInput("weight is out of range", repr(weight))
+    return 500 if weight <= 2000 else 800
+```
+
+Raising one ends its statement in both runs, and both say why on stderr the same way, `BadInput: weight is out of range: 0` (CPython's traceback puts the module's name in front of the class's).
+The arguments reach that `__init__` by position or by keyword, as in any call; a class that keeps Python's own `__init__` takes its message by position only — Python raises TypeError at a keyword there instead of the exception — so a keyword to it is refused.
+A `raise` inside a `try` is still refused, because the compiled run does not unwind into an `except`: what a `try` catches is a failing standard-library call or an `@py` escape.
+
 ## The standard library
 
 It comes in two halves, told apart by where the name comes from.

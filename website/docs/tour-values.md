@@ -142,10 +142,12 @@ match health():
 Optional works in state and in fields (`last: int | None = None`).
 Narrowing is as shown in the walrus sections.
 
-Enums are ordinary `class Mood(Enum)` and compile as-is.
+Enums are ordinary `class Mood(Enum)` and compile as-is (`import enum` with `class Mood(enum.Enum)` too).
 `match` arms are `Mood.MEMBER` or `_`, and missing arms are reported.
 In text they render exactly as Python does: `Mood.HAPPY`.
 `.name` and `.value` read what Python reads (`auto()` counts from 1), and `for m in Mood:` walks the members in declaration order.
+`repr(m)` is what Python writes for a member, `<Mood.HAPPY: 1>`, and `repr` of an int, a float, a bool or bytes is what it writes for those.
+A str's `repr` is not in the dialect yet: Python escapes what Unicode's own table says it cannot print, and the compiled side does not carry that table.
 
 `match` also takes int, float, str and bool values, with `|` alternatives and guards:
 
@@ -159,3 +161,51 @@ match code():
         note.set("middle")
 ```
 
+## Names for types
+
+A typed module names its types before it uses them, and the dialect reads those names the way a type checker does.
+
+```python
+import enum
+from typing import NamedTuple, NewType, TypeAlias
+
+Gram = NewType("Gram", int)          # a unit: an int to the compiled side
+
+
+class Size(enum.Enum):
+    SMALL = "small"
+    LARGE = "large"
+    HUGE = "huge"
+
+
+class Parcel(NamedTuple):
+    weight: Gram
+    size: Size
+
+
+Parcels = list[Parcel]               # another name for a type
+Fees: TypeAlias = dict[str, int]     # the same, said outright
+type Labels = list[str]              # and in the newer spelling
+_len = len                           # a builtin under a name of the module's own
+
+OVERSIZE = frozenset({Size.LARGE, Size.HUGE})
+
+
+def oversize_weight(parcels: Parcels) -> Gram:
+    total = Gram(0)
+    for p in parcels:
+        if p.size in OVERSIZE:
+            total = Gram(total + p.weight)
+    return total
+```
+
+A NewType is a name a type checker keeps apart from its base, and nothing at run time: `Gram(5)` answers the 5 it was given.
+So it is its base wherever an annotation names it, and a call to it is held to that base (`Gram(1.5)` is refused, because Python would hand back the float).
+`isinstance(x, Gram)` is refused for the reason Python raises TypeError there: a NewType has no class.
+An alias is the type it names, in any of the three spellings; a union of value classes is a sum type, and keeps its own spelling (`type Shape = Circle | Rect`).
+Another name for a builtin, a function or a class is that thing wherever it is called, except inside a function that binds the original name itself: there Python's alias still reads the builtin, so the call is refused and asks for the function's own name to change.
+A `frozenset` of literals, and a set written in place (`x in {A, B}`), answer `in` and `not in`: the one question a set answers the same way in both runs, whatever order it would walk in.
+
+A class or a local can also take a name the compiled side uses for something of its own: a class called `Element` or `List`, a local called `state`, `case` or `_`.
+A class with no decorator (a NamedTuple, an Enum, an exception) and a function's own parameters and locals are given another name on the compiled side, where nobody sees it; the interpreted run, a `str()` of an Enum member and every message keep the name you wrote.
+A store, a model or a value class keeps its name, because something finds it by that name (the interpreted run finds a store's methods, and a value class twins a Rust struct), so for them the name is refused and another one asked for.

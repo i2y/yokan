@@ -111,6 +111,18 @@ gate pyops   "$PY" yokan_gate.py gate demo/pyops.py --script "click:crunch,click
 # comparison as a value.
 gate dialect  "$PY" yokan_gate.py gate demo/dialect.py --script "click:add,click:add,click:add,dump,click:take,dump,click:tally,dump,click:look,dump"
 gate closures "$PY" yokan_gate.py gate demo/closures.py --script "click:advance,dump,click:harder,click:advance,dump,click:through,dump,click:offset,dump,click:double,dump,click:counted,dump,click:ordered,dump,click:reset,dump"
+# The typed Python a module writes at its top: a NewType, aliases, a
+# frozenset asked with `in`, a NamedTuple by name, by position and by
+# unpacking, `isinstance` the types answer, and an exception raised
+# with a value — the last step raises, and both runs end that handler
+# with the same line printed before it.
+gate typed    "$PY" yokan_gate.py gate demo/typed.py --script "click:weigh,click:heaviest,click:wrap,dump,click:overload,dump"
+# Modules a code generator wrote, byte for byte, each put through its
+# own vectors by the app beside it. CPython's answers are held to the
+# vectors by the tests below; this holds the binary to CPython's.
+for d in demo/tests/rules/*/; do
+  gate "rules/$(basename "$d")" "$PY" yokan_gate.py gate "${d}app.py"
+done
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what
@@ -196,7 +208,7 @@ for f in demo/*.py; do
   b=$(basename "$f" .py)
   case "$b" in
     counter|forms|links|calc|calcgrid|postcard|table|transcript|tasks|dashboard|dbnotes|pystats|rustcrate) continue;;
-    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect) continue;;
+    stdlib|files|webfetch|ledger|keys|picker|pyops|pyjob|reader|closures|dialect|typed) continue;;
     pkgapp) continue;;
     bytes|zones|toast|split|picklist|menubutton|contextmenu|widgets) continue;;
     layout|about|filter|loading|labels|badges|quantities|charts|roster) continue;;

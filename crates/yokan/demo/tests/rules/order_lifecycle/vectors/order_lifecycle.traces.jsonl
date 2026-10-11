@@ -1,0 +1,41 @@
+{"machine":"meta","carry":{"in":"state","out":"next_state"}}
+{"in":{"event":"ship","amount_paid":0},"step":"start","state":"received","why":"transition pair: received -[table step row 3]-> received then received -[table step row 1]-> paid"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"ship","amount_paid":0},"step":"start","state":"received","why":"transition pair: received -[table step row 3]-> received then received -[table step row 3]-> received"}
+{"in":{"event":"ship","amount_paid":0},"step":"next"}
+{"in":{"event":"ship","amount_paid":0},"step":"start","state":"received","why":"transition pair: received -[table step row 3]-> received then received -[table step row 2]-> cancelled"}
+{"in":{"event":"cancel","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: paid -[table step row 6]-> paid then paid -[table step row 6]-> paid"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: paid -[table step row 6]-> paid then paid -[table step row 4]-> shipped"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"ship","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: paid -[table step row 6]-> paid then paid -[table step row 5]-> cancelled"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"cancel","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: paid -[table step row 5]-> cancelled then cancelled -[table step row 10]-> cancelled"}
+{"in":{"event":"cancel","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: shipped -[table step row 8]-> shipped then shipped -[table step row 8]-> shipped"}
+{"in":{"event":"ship","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: shipped -[table step row 8]-> shipped then shipped -[table step row 7]-> delivered"}
+{"in":{"event":"ship","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"deliver","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"start","state":"received","why":"transition pair: delivered -[table step row 9]-> delivered then delivered -[table step row 9]-> delivered"}
+{"in":{"event":"ship","amount_paid":0},"step":"next"}
+{"in":{"event":"deliver","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"cancel","amount_paid":0},"step":"start","state":"received","why":"transition pair: cancelled -[table step row 10]-> cancelled then cancelled -[table step row 10]-> cancelled"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
+{"in":{"event":"pay","amount_paid":3000},"step":"start","state":"received","why":"scenario to_delivery"}
+{"in":{"event":"ship","amount_paid":3000},"step":"next"}
+{"in":{"event":"deliver","amount_paid":3000},"step":"next"}
+{"in":{"event":"pay","amount_paid":3000},"step":"start","state":"received","why":"scenario late_pay"}
+{"in":{"event":"cancel","amount_paid":3000},"step":"next"}
+{"in":{"event":"pay","amount_paid":3000},"step":"next"}

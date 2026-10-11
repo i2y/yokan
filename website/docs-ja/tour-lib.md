@@ -27,6 +27,38 @@ except Exception as e:
     status.set(f"offline: {e}")
 ```
 
+自分で定義した例外のクラスは、raise されたときの値を持てます。
+注釈を付けた引数を取る `__init__` が、メッセージを `super().__init__(...)` に渡し、残りをフィールドに置きます。
+`__str__` は、そのフィールドから文字列を作ります。
+
+```python
+class BadInput(ValueError):
+    """An input the rule does not take, and what it was."""
+
+    def __init__(self, what: str, value: str | None = None) -> None:
+        super().__init__(what)
+        self.what = what
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.what if self.value is None else f"{self.what}: {self.value}"
+
+
+def fee(weight: int) -> int:
+    if not 1 <= weight <= 20000:
+        raise BadInput("weight is out of range", repr(weight))
+    return 500 if weight <= 2000 else 800
+```
+
+raise すると、どちらの実行でもその文が終わります。
+理由は stderr に同じ形で出ます（`BadInput: weight is out of range: 0`。CPython の traceback は、クラス名の前にモジュール名を付けます）。
+引数は、ほかの呼び出しと同じく、位置でもキーワードでもその `__init__` に渡せます。
+`__init__` を書いていないクラスは、メッセージを位置でしか受け取りません。
+そこにキーワードを渡すと、Python は例外を作る代わりに TypeError を出すので、受け付けません。
+`try` の中の `raise` は今も受け付けません。
+コンパイルされた実行は `except` まで巻き戻らないからです。
+`try` で捕まえられるのは、失敗した標準ライブラリの呼び出しと `@py` のエスケープです。
+
 ## 標準ライブラリ
 
 標準ライブラリは二つに分かれます。

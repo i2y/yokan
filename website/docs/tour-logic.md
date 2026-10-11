@@ -42,24 +42,44 @@ def tally():
         total.set(total() + double(i))
 ```
 
-Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters), `break` / `continue`, and locals (reassignable, as in Python).
+Available: `if` / `elif` / `else`, `while` (`while True:` included), `for` (over `range()`, list states, list fields, list-typed parameters and locals), `break` / `continue`, and locals (reassignable, as in Python).
+A local may say its type (`total: int = 0`, `best: Row | None = None`), and `+=`, `-=` and the other augmented assignments work on a number or a str.
+A function called for what it does may leave its answer unread (`fee(p)` as a statement).
 `print(...)` writes to stdout, with `sep=` and `end=` as Python has them; `log("…")` writes a line to stderr instead. Both runs print the same bytes, and the gate compares what an app printed the way it compares the screens — a headless run's dump goes to the file `PIXIE_DUMP` names, so the two channels never mix.
 `assert` / `raise` end the statement the way Python's exception does — the app keeps running.
 Conditions take a bool directly (`if on:`), chain comparisons (`0 < n < 10`, the middle read once), and bind with `:=`.
+`is` compares an Enum member or a bool the way `==` does (`if verdict is Pick.SKIP:`), since each is the one object of its value; between other values it asks for `==`.
+An optional of either is asked whether it holds that object, so `flag is True` with `flag: bool | None` is False when `flag` is None.
 A comparison is also a **value**: `flag.set(n() > 1)`, `ok = a == b`, and a helper that answers `bool`.
+
+`isinstance(x, C)` is answered from what `x` is declared as.
+A call that would hand a bool to an `int` parameter, or an int to a `float` one, is refused where it is written (Python would keep the value as it is, and its text and `isinstance` would say so), which is what makes a declaration true in both runs.
+So the answer is known before either run starts, and a branch it rules out is never translated, the way a type checker never reads it:
+
+```python
+def weigh(w: int) -> int:
+    if not isinstance(w, int) or isinstance(w, bool):
+        raise ValueError("not a whole number")      # ruled out: never translated
+    return w // 1000
+```
+
+What a declaration does not settle is refused with the reason: `isinstance` on a `float` (Python lets an int into one), on an optional (narrow it first), and against a NewType (Python raises TypeError).
 A conditional expression (`a if c else b`) works anywhere one does in Python — in a handler and in a view — over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
 A store or model method may answer `T | None`, with `return None` for the empty half; the caller narrows it (`v = Bag.pick()`, then `if v is not None:`).
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
+An `elif` chain counts every way out, and a branch that ends in `raise`, `return`, `break` or `continue` asks nothing of the local, since it never reaches the read.
 
 ```python
 def judge():
     n = score()
     if n > 20:
         verdict = "high"
-    else:
+    elif n >= 0:
         verdict = "low"
+    else:
+        raise ValueError("a negative score")
     grade.set(verdict)      # readable after the branch
 ```
 
@@ -72,6 +92,16 @@ if (v := sel()) is not None:
     text(f"picked {v}")      # v is bound only inside this branch
 else:
     text("(none)")
+```
+
+An optional local or parameter narrows under its own name, wherever Python knows it holds a value: in the branch of an `if`, in the rest of an `and` or an `or`, and in the side of a conditional expression the test picks.
+
+```python
+best: int | None = None
+for v in scores():
+    if best is None or v > best:     # past `best is None`, best is an int
+        best = v
+top = best if best is not None else 0
 ```
 
 ## Functions as values
@@ -199,6 +229,10 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+A local list the function made itself also grows in place, `out.append(x)`, as long as nothing else holds it.
+Python's other names for a list see it grow and a compiled list is a value, so the two agree exactly when there is no other name: every read only looks (`len`, an index, `in`, a `for` that does not grow it, `sorted`, `", ".join(...)`) or hands the list back in the `return` that ends the function.
+An append after the list was handed on (to a call, another name, a field, a closure) is refused, pointing at where it was handed on; `out = out + [x]` makes a new list in both runs and works anywhere.
 
 The operations that say nothing about the element — `in`, a slice, `+`, `[::-1]` — take a list of anything the app can hold, a value class or a tuple included.
 Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` — a lambda of one element, or the name of a helper that takes one — and `sorted` takes a `reverse=`.
@@ -409,3 +443,29 @@ def scan():
 
 The parts have types of their own, so a tuple is indexed by a literal position: a computed index would have no one type to be.
 Two parts or more, and the same shape can be a state, a field, a list's element, a parameter and a return.
+
+A `NamedTuple` is a tuple whose parts also have names, which is what Python says it is.
+It goes everywhere a value class goes, and reads as a tuple too: by name, by a literal position, by unpacking and in a pair loop.
+
+```python
+from typing import NamedTuple
+
+
+class Row(NamedTuple):
+    """One row of the report."""
+    name: str
+    qty: int
+    note: str = ""
+
+
+r = Row("pens", 3)
+name, qty, note = r                  # unpacking
+same = r[1] == r.qty                 # by position, by name
+bigger = r._replace(qty=r.qty * 2)   # a new one, the other fields kept
+total = 0
+for label, count, _ in rows():       # a list of them, part by part
+    total += count
+```
+
+Two of one class compare with `==`.
+Ordering two tuples, slicing one and joining two are not in the dialect yet (each makes or compares part by part), and neither is a tuple's text: Python writes its repr, `Row(name='pens', qty=3, note='')`, so render the parts you mean.

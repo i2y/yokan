@@ -332,6 +332,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **片方の分岐でしか代入していないローカルを後で読むこと**。
   その分岐が実行されなければ、Python でも NameError になる形だからです。
   if と else の両方で代入すれば読めます。
+  `raise`、`return`、`break`、`continue` で終わる分岐には、代入は要りません（後の読みまで届かないからです）。
 - **`int ** int` の負の指数**。
   結果の型が実行時に変わるためです。
   どちらかを float にすれば書けます。
@@ -353,10 +354,11 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   1枚の画像として報告されるので、中身を伝える手段は `a11y_label=` です。
 - **ストアのフィールドを `Weak` にすること**。
   ストアは所有する側なので、所有しない参照はモデル側（逆向きのポインタ）に置きます。
-- **`Vec` などネイティブ側が既に使っている型名**。
-  断られるので、別名（`V2` など）を選びます。
+- **ネイティブ側が既に使っている型名（`Vec` や `Element`）を付けたストア、モデル、Value クラス**。
+  受け付けないので、別名（`V2` など）を選びます。
+  どれも名前で見つけられるので、NamedTuple や Enum や例外のクラスのように、コンパイル側だけで別の名前にすることができません。
 - **モジュールのトップレベルに置いた文**。
-  コンパイル済みのアプリはモジュールの宣言（import、`State`、クラス、def、`style()`、型 alias、リテラル定数、`every(...)` のタイマー、`__main__` ガード）を読むだけで実行はしないため、関数の外に書いた `count.set(5)` や `fs.write_text(...)` は断られます。
+  コンパイル済みのアプリはモジュールの宣言（import、`State`、クラス、def、`style()`、型 alias と NewType、組み込み関数の別名、`frozenset` を含むリテラル定数、`every(...)` のタイマー、`__main__` ガード）を読むだけで実行はしないため、関数の外に書いた `count.set(5)` や `fs.write_text(...)` は断られます。
   起動時の処理は def に書き、`run(view, on_start=setup)` で渡します。
 - **ハンドラからタイマーを開始すること**。
   タイマーは宣言です（モジュールレベルの `every(1.0, tick)`）。
@@ -376,12 +378,30 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
-- **`set`**。
-  Python の set の反復順はコンパイル側で再現できないので、勝手な順に並べ替えるのではなく断ります。
+- **所属の判定のほかの `set`**。
+  Python の set の反復順はコンパイル側で再現できないので、回すこと、数えること、`State` に置くことは、勝手な順に並べ替えるのではなく受け付けません。
   `list` で足ります。
+  リテラルの集合への問い（`x in {A, B}`、`frozenset({...})` の定数）は入っています。
+  所属の判定は、両方の実行で同じに答えるからです。
   タプルは入りました（[タプル](tour-logic.md#タプル)）。
   ただし形を書き下した場合だけで、Rust crate が**返す**タプルはまだ越えられません。
   `re.findall` が群二つ以上を断るのは、そのためです。
+- **タプルと NamedTuple の大小比較、スライス、連結、文字列化**。
+  どれも Python では部分ごとに働きます（文字列化は、str の部分を引用符で囲む repr です）。
+  比べたい部分、切り出したい部分、描きたい部分を書いてください。
+- **関数の中で作ったリストの `.append` を除く、その場で書き換えるリストのメソッド**：`.extend`、`.pop`、`.insert`、`.remove`、`.sort`、リストの `+=`。
+  どれも、同じリストを指す別の名前から変化が見えるように書き換えますが、コンパイル済みのリストは値です。
+  `xs = xs + ys` なら、どちらの実行でも新しいリストを作ります。
+- **`float` や Optional に対する `isinstance`、NewType を使った `isinstance`**。
+  Python では float の場所に int も入り、Optional は None のこともあるので、宣言では答えが決まりません。
+  NewType には、Python が TypeError を出します。
+  Optional は先に絞り込み、float は比較で確かめてください。
+- **str の `repr`**（str を含むリスト、Value クラス、タプルの repr も）。
+  Python は Unicode の表で表示できないとされる文字をエスケープしますが、コンパイル側はその表をまだ持っていません。
+- **呼び出した関数が投げた例外を捕まえること**。
+  `try` の中の `raise` は受け付けません。
+  コンパイルされた実行は `except` まで巻き戻らないからです。
+  捕まえなければ、例外はどちらの実行でもその文を終わらせ、同じメッセージを出します。
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **Optional をそのまま文字列にすること**（`picked` が `T | None` のときの `f"{picked}"`）。
   Python は `None` と書き、コンパイルされた実行は何も書きません。
@@ -402,7 +422,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   後者には、`@py` を使うように案内します。
   小さなモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。
   `collections` からは `Counter` 以外を断ります。
-  `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`@value` クラスが型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
+  `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`typing` の `class Row(NamedTuple)` が型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
   `itertools` からは、終わらないもの（`count`、`cycle`、`repeat`）、それ自体がイテレータを返すもの（`groupby`、`tee`）、関数を取るもの（`starmap`、`takewhile`、`filterfalse`）、最後のタプルだけ形の違う `batched` を断ります。
   `hashlib` からは `sha256`、`sha1`、`md5` 以外を断り、`hashlib.sha256(b).hexdigest()` 以外の書き方も断ります。
   理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal` です。

@@ -1,0 +1,15 @@
+{"in":{"lines":[],"tier":"regular"},"observed":{"fee":500},"trace":[{"table":"fee_table","row":4}]}
+{"in":{"lines":[{"amount":99999}],"tier":"regular"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":1}]}
+{"in":{"lines":[{"amount":3000}],"tier":"regular"},"observed":{"fee":250},"trace":[{"table":"fee_table","row":3}]}
+{"in":{"lines":[{"amount":2999}],"tier":"regular"},"observed":{"fee":500},"trace":[{"table":"fee_table","row":4}]}
+{"in":{"lines":[{"amount":5000}],"tier":"regular"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":1}]}
+{"in":{"lines":[{"amount":4999}],"tier":"regular"},"observed":{"fee":250},"trace":[{"table":"fee_table","row":3}]}
+{"in":{"lines":[{"amount":3000}],"tier":"premium"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":2}]}
+{"in":{"lines":[{"amount":2999}],"tier":"premium"},"observed":{"fee":500},"trace":[{"table":"fee_table","row":4}]}
+{"in":{"lines":[{"amount":4999}],"tier":"premium"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":2}]}
+{"in":{"lines":[{"amount":5000}],"tier":"premium"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":1}]}
+{"in":{"lines":[{"amount":3000},{"amount":2500}],"tier":"regular"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":1}]}
+{"in":{"lines":[{"amount":3000},{"amount":2500}],"tier":"premium"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":1}]}
+{"in":{"lines":[{"amount":1200}],"tier":"regular"},"observed":{"fee":500},"trace":[{"table":"fee_table","row":4}]}
+{"in":{"lines":[{"amount":2000},{"amount":1500}],"tier":"regular"},"observed":{"fee":250},"trace":[{"table":"fee_table","row":3}]}
+{"in":{"lines":[{"amount":2000},{"amount":1500}],"tier":"premium"},"observed":{"fee":0},"trace":[{"table":"fee_table","row":2}]}

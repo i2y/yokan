@@ -3435,3 +3435,174 @@ What finding them cost was one habit: a failing gate in the sweep said
 nothing, so a machine nobody can log into answered FAIL with no
 reason. It prints what the gate said now, as a failing check already
 did.
+
+## Typed Python as a code generator writes it (2026-10-11)
+
+A module generated from a business rule (rulec writes one per rule,
+headed `DO NOT EDIT`) is ordinary typed Python, and the dialect refused
+it at its first lines: a `NewType` per unit, a `NamedTuple` for the
+answer and for each row that matched, an alias for a list type, a
+builtin under a name of the module's own, `frozenset` constants, an
+exception class that carries a value, and locals assigned on every way
+out of an `elif` chain whose last way raises. There were two ways to
+meet it: a second Python target in the generator, written for this
+dialect, or the dialect taking typed Python as typed Python writes
+itself. It takes it. Each of these shapes is what anyone who writes
+typed Python writes, so the gain is not one generator's; the generator
+keeps one Python output; and the two checks that already exist then
+compose into one claim with nothing between them — the generator holds
+its Python to its own evaluator, and the gate holds the binary to
+CPython. What the dialect cannot make mean the same in both runs is
+still refused by name.
+
+**Names for types.** `UserId = NewType("UserId", int)`, `Rows =
+list[Row]`, `Rows: TypeAlias = …`, `type Rows = …` and `_len = len`
+are read before the scan, as declarations, and written out where they
+are used: in an annotation a NewType is its base and an alias its
+type, resolved where the module declared them, whatever a function
+binds; in an expression an alias is what it names, shadowed by a local
+of the same name as in Python. A NewType at run time is nothing — the
+call answers its argument — so `UserId(x)` is `x`, held to the base,
+and `isinstance(x, UserId)` is refused for the reason Python raises
+TypeError there. An alias of a builtin is not written out inside a
+function that binds the builtin's own name, because Python's alias
+would still read the builtin there; that call is refused and asks for
+the rename. A union of value classes keeps its one spelling, `type X
+= A | B`, because it is a sum type here and the old spelling would
+read as a second meaning of the same text.
+
+**A NamedTuple is a value class that is also a tuple.** It is the same
+struct, so everything a value class goes into it goes into, and the
+tuple's reads map onto its fields: a literal position (`r[1]`, `r[-1]`),
+an unpacking, a pair loop over a list of them. `_replace` builds the
+next one with the named fields changed, an unknown field refused for
+the ValueError Python raises, and `==` compares two of one class.
+What works part by part — ordering two, slicing one, joining two — and
+its text, which is a repr that quotes the str parts, are refused with
+the reason; so is `==` against a plain tuple, which Python answers by
+parts across classes while a compiled comparison takes one type.
+
+**`isinstance` is answered from the declaration, so the declaration has
+to be true in both runs.** Python lets a bool into an `int` slot and an
+int into a `float` one and keeps the value as it is, so a function
+handed `True` sees a bool where the compiled run sees 1, and one handed
+`1` prints `1` where the compiled run prints `1.0`. The second was a
+gap that `check` passed and the gate caught; both are now refused where
+the value is written — an argument, a value class's field, an
+annotated local, a function's answer, a state or field write — with
+the conversion that makes the value what the slot says. With that,
+`isinstance(x, int)` on an `int` is True and `isinstance(x, bool)` on
+it is False in both runs, so the answer is settled while translating,
+and a branch it rules out is not translated at all, the way a type
+checker does not read it. What a declaration does not settle stays
+refused: a `float` slot (Python lets an int in), an optional (narrow it
+first), a NewType.
+
+**`is` where each value is one object.** Between two Enum members, or
+two bools, `is` is `==`, since each is the one object of its value;
+between anything else it asks for `==`. An optional of either is asked
+whether it holds that object, which is False when it holds nothing —
+`flag is True` with `flag: bool | None`, the spelling a generator
+writes for an optional input.
+
+**Every way out of a branch counts.** A local that every way out of an
+`if` assigned is declared above it, and a branch that ends in `raise`,
+`return`, `break` or `continue` is not a way out to the read below.
+The declaration's value is a placeholder of the local's type (the
+first member of an Enum, a value class built from placeholders), never
+read, because each path that reaches a read assigned first. Two
+branches that give the local two types are refused at the second: a
+compiled local has one.
+
+**Locals that say more.** A local may carry its type (`total: int =
+0`, `taken: int | None = None`), and the value is held to it the way
+an argument is; `+=` and the other augmented assignments on a number
+or a str are the assignment they abbreviate (on a list `+=` extends in
+place, and is refused for the reason below); a function called for its
+effect may leave its answer unread; a list written out as an argument
+takes the parameter's type.
+
+**A list the function made grows in place.** `xs.append(v)` changes a
+list where every other name for it sees the change, and a compiled
+list is a value, so the two runs agree exactly when there is no other
+name. Each `append` statement is decided before the scan, by the
+function it sits in: the list was made there from a literal, and every
+read of it only looks (`len`, an index, `in`, a `for` that does not
+grow it, `sorted` and the other builtins that keep nothing,
+`str.join`) or hands it back in the `return` that ends the function. A
+parameter, a second name, a call, a field, a closure, or a `for` that
+walks the list while it grows makes a second owner, and the append is
+refused at the place it was handed on. `xs = xs + [v]` makes a new
+list in both runs and stays the form that works anywhere.
+
+**An optional narrows where Python knows it holds a value.** A local or
+a parameter narrows under its own name in the rest of an `and` after
+`x is not None`, in the rest of an `or` after `x is None`, and in the
+side of a conditional expression the test picks; each is written as
+the steps Python takes, with the optional unwrapped under its own name
+where it holds one. The statement form already narrowed under the
+same name, and it now leaves the name the optional it was past the
+branch, rather than a name that no longer existed.
+
+**A literal set answers membership.** `x in {A, B}` and a `frozenset`
+constant asked with `in` are the comparisons they stand for, with `x`
+read once. Membership is the one thing a set answers the same way in
+both runs, whatever order it would walk in, so walking one and keeping
+one in a `State` stay refused. The members are ints, strs, bools or
+Enum members of the subject's type, where hashing and `==` agree; a
+float would bring NaN, which `in` finds by identity and `==` never
+finds.
+
+**An exception class carries what it was raised with.** Its `__init__`
+hands the message to `super().__init__` and keeps its annotated
+parameters as fields, and its `__str__` answers one expression over
+them. Nothing is declared on the compiled side for it: an uncaught
+exception ends its statement in both runs and only its text goes
+anywhere, so the class is read for exactly what decides `str(e)`, and
+a `raise` writes that text with the arguments in place of the fields.
+Both runs then say the same thing on stderr. The arguments bind to the
+class's `__init__` by position or by keyword, as a call does. A class
+that keeps Python's own `__init__` takes no keyword — Python raises
+TypeError at one instead of making the exception — so a keyword there
+is refused. A `raise` inside a `try` stays refused, and catching an
+exception that a called function raises waits on the compiled run
+unwinding into an `except`, which it does not do yet.
+
+**`repr` where its text is known.** An int, a float, a bool and bytes
+spell themselves; an Enum member is `<Mood.SAD: 2>`, which CPython
+prints for each member while the app translates, into a static per
+Enum. A str's repr escapes what Unicode's table says it cannot print,
+and the compiled side does not carry that table, so it is refused.
+
+**Names the compiled side uses for itself.** A class called `Element`
+or `List` collided with the generated crate's own types, and a local
+called `state`, `case` or `_` with pixie's syntax or Rust's pattern;
+the rule was to refuse the name and ask for another. Where nothing on
+the Python side finds the thing by its name — an undecorated class (a
+NamedTuple, an Enum, an exception) and a function's own parameters and
+locals — the compiled side now gives it a name of its own, and the
+interpreted run, an Enum member's `str()` and every message keep the
+one the app wrote. A store, a model and a value class keep the refusal:
+the interpreted run finds a store's methods by name, and a value class
+twins a Rust struct by name.
+
+The proof is the generator's own corpus. Every rule in rulec's test
+corpus — 87 rules, three of them state machines walked call by call,
+and 9,254 vectors — was generated, left as written, and put through an
+app that calls the rule and its traced twin with each vector and
+prints what came out and the rows that matched: `check` refuses
+nothing, the gate finds the two runs identical over 36,662 printed
+lines, and what CPython printed is what the vectors say. Ten of them —
+a table chain with several outputs, a rate and money, a prefix on a
+str, a fold over a sequence, a sum and a count, a state machine walked
+call by call, an `apply` and an `overrides`, an optional input and a
+rule written in Japanese — stay in `demo/tests/rules/` with the app
+`tools/rule_apps.py` writes from their vectors; a test holds CPython
+to the vectors and the sweep gates each app. `demo/typed.py` gates the
+shapes one by one.
+
+Rejected: a generator target for this dialect (two Python outputs to
+keep in step, and what it bought would reach one generator's users);
+and rewriting the module before translating it (the interpreted run is
+the file as written, and a gate over something else proves nothing
+about it).

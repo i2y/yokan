@@ -2,7 +2,7 @@
 
 Written by `tools/stdlib_coverage.py` from the manifest in `yokan_gate.py` and the translator's own tables. Do not edit by hand.
 
-## The builtins — 16 of the 45 probed
+## The builtins — 18 of the 45 probed
 
 Nothing declares these, so each one was written into a handler the way an app would write it and run past the translator. The note is the refusal's own words. Some that are refused as a value are taken in a `for`, and the note says so.
 
@@ -28,7 +28,7 @@ Nothing declares these, so each one was written into a handler the way an app wo
 | `id` | — | [1] |
 | `input` | — | [1] |
 | `int` | ✓ | |
-| `isinstance` | — | [1] |
+| `isinstance` | ✓ | |
 | `iter` | — | [1] |
 | `len` | ✓ | |
 | `list` | — | not in the dialect yet |
@@ -40,12 +40,12 @@ Nothing declares these, so each one was written into a handler the way an app wo
 | `open` | — | [1] |
 | `ord` | — | [1] |
 | `pow` | — | [1] |
-| `print` | — | writes to stdout, which is where a headless run's screen dump goes — `log("…")` writes the same line to stderr in both runs |
+| `print` | ✓ | |
 | `range` | ✓ | |
-| `repr` | — | [1] |
+| `repr` | — | of a str is not in the dialect yet — Python quotes it and escapes what it cannot print by Unicode's own table; write the quotes with the text (`f"'{s}'"`) where the text is known to be plain |
 | `reversed` | ✓ | |
 | `round` | ✓ | |
-| `set` | — | not in the dialect yet |
+| `set` | — | a `set` iterates in an order the compiled run would not reproduce, so it is refused rather than quietly reordered — a literal set answers `in` and `not in` (`x in {A, B}`, `frozenset({A, B})` as a constant), a `list` covers the rest, and a `dict` covers a set of keys |
 | `setattr` | — | not a handler statement the dialect knows yet — handler statements are state writes (`x.set(v)`, `xs[i] = v`, `d[k] = v`), store and model calls, if/while/for/match, try, and locals |
 | `sorted` | ✓ | |
 | `str` | ✓ | |
@@ -56,11 +56,11 @@ Nothing declares these, so each one was written into a handler the way an app wo
 
 [1] not in the dialect here — expressions are state reads, fields, locals, literals, arithmetic, comparisons, helper calls and method calls
 
-## `fs` — Yokan's own, 15 functions
+## `fs` — Yokan's own, 17 functions
 
 Python has no module of this name, so there is nothing to measure against — Yokan has all of them.
 
-- `app_dir`, `append_text`, `exists`, `is_dir`, `list_dir`, `make_dir`, `modified_ms`, `open_dialog`, `read_text`, `read_text_from`, `read_text_or`, `remove`, `save_dialog`, `size`, `write_text`
+- `app_dir`, `append_text`, `exists`, `is_dir`, `list_dir`, `make_dir`, `modified_ms`, `open_dialog`, `read_bytes`, `read_text`, `read_text_from`, `read_text_or`, `remove`, `save_dialog`, `size`, `write_bytes`, `write_text`
 
 ## `sqlite` — Yokan's own, 7 functions
 
@@ -98,6 +98,7 @@ Python has no module of this name, so there is nothing to measure against — Yo
 |---|---|---|
 | `HTTPMethod` | — | |
 | `HTTPStatus` | — | |
+| `get_bytes` | ✓ | not in Python's module |
 | `get_text` | ✓ | not in Python's module |
 | `get_text_or` | ✓ | not in Python's module |
 | `get_text_with` | ✓ | not in Python's module |
@@ -406,6 +407,37 @@ Python has no module of this name, so there is nothing to measure against — Yo
 | `sub` | ✓ |  |
 | `subn` | — | |
 
+## `base64` — 2 of Python's 26
+
+| name | Yokan | note |
+|---|---|---|
+| `MAXBINSIZE` | — | |
+| `MAXLINESIZE` | — | |
+| `a85decode` | — | |
+| `a85encode` | — | |
+| `b16decode` | — | |
+| `b16encode` | — | |
+| `b32decode` | — | |
+| `b32encode` | — | |
+| `b32hexdecode` | — | |
+| `b32hexencode` | — | |
+| `b64decode` | ✓ |  |
+| `b64encode` | ✓ |  |
+| `b85decode` | — | |
+| `b85encode` | — | |
+| `bytes_types` | — | |
+| `decode` | — | |
+| `decodebytes` | — | |
+| `encode` | — | |
+| `encodebytes` | — | |
+| `main` | — | |
+| `standard_b64decode` | — | |
+| `standard_b64encode` | — | |
+| `urlsafe_b64decode` | — | |
+| `urlsafe_b64encode` | — | |
+| `z85decode` | — | |
+| `z85encode` | — | |
+
 ## `datetime` — 3 of Python's 10
 
 | name | Yokan | note |
@@ -460,4 +492,34 @@ Python has no module of this name, so there is nothing to measure against — Yo
 | `takewhile` | — | |
 | `tee` | — | |
 | `zip_longest` | — | |
+
+## `hashlib` — 3 of Python's 18
+
+| name | Yokan | note |
+|---|---|---|
+| `algorithms_available` | — | |
+| `algorithms_guaranteed` | — | |
+| `file_digest` | — | |
+| `md5` | ✓ |  |
+| `new` | — | |
+| `pbkdf2_hmac` | — | |
+| `scrypt` | — | |
+| `sha1` | ✓ |  |
+| `sha224` | — | |
+| `sha256` | ✓ |  |
+| `sha384` | — | |
+| `sha3_224` | — | |
+| `sha3_256` | — | |
+| `sha3_384` | — | |
+| `sha3_512` | — | |
+| `sha512` | — | |
+| `shake_128` | — | |
+| `shake_256` | — | |
+
+## `zoneinfo` — 1 of Python's 2
+
+| name | Yokan | note |
+|---|---|---|
+| `TZPATH` | — | |
+| `ZoneInfo` | ✓ |  |
 

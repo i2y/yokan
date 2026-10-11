@@ -28,24 +28,25 @@ Yokan のアプリは普通の Python ファイルです。
 14. [メモリ管理](#メモリ管理)
 15. [直和型と match](#直和型と-match)
 16. [Optional と Enum](#optional-と-enum)
-17. [コンポーネント](#コンポーネント)
-18. [共通のプロパティ](#共通のプロパティ)
-19. [スタイルとテーマ](#スタイルとテーマ)
-20. [アニメーション](#アニメーション)
-21. [ウィンドウ](#ウィンドウ)
-22. [エラー処理](#エラー処理)
-23. [標準ライブラリ](#標準ライブラリ)
-24. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
-25. [パッケージ](#パッケージ)
-26. [CPython エスケープ](#cpython-エスケープ)
-27. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
-28. [型チェッカーとの併用](#型チェッカーとの併用)
-29. [エディタ](#エディタ)
-30. [テスト](#テスト)
-31. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
-32. [リリース](#リリース)
-33. [本格アプリの例](#本格アプリの例)
-34. [今できないこと](#今できないこと)
+17. [型の名前](#型の名前)
+18. [コンポーネント](#コンポーネント)
+19. [共通のプロパティ](#共通のプロパティ)
+20. [スタイルとテーマ](#スタイルとテーマ)
+21. [アニメーション](#アニメーション)
+22. [ウィンドウ](#ウィンドウ)
+23. [エラー処理](#エラー処理)
+24. [標準ライブラリ](#標準ライブラリ)
+25. [Rust crate を呼ぶ](#rust-crate-を呼ぶ)
+26. [パッケージ](#パッケージ)
+27. [CPython エスケープ](#cpython-エスケープ)
+28. [重い処理とタイマーとキー](#重い処理とタイマーとキー)
+29. [型チェッカーとの併用](#型チェッカーとの併用)
+30. [エディタ](#エディタ)
+31. [テスト](#テスト)
+32. [ヘッドレス実行とゲート](#ヘッドレス実行とゲート)
+33. [リリース](#リリース)
+34. [本格アプリの例](#本格アプリの例)
+35. [今できないこと](#今できないこと)
 
 ## 最小のアプリ
 
@@ -465,7 +466,10 @@ def tally():
         total.set(total() + double(i))
 ```
 
-`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数とローカル）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+ローカルには型を書けます（`total: int = 0`、`best: Row | None = None`）。
+数と str には、`+=` や `-=` などの累算代入も使えます。
+値を返す関数を、値を使わずに文として呼ぶこともできます（`fee(p)` だけの行）。
 `print(...)` は stdout に書きます。
 `sep=` と `end=` も Python と同じように使えます。
 `log("…")` のほうは stderr に一行書きます。
@@ -474,6 +478,10 @@ def tally():
 `assert` と `raise` は、Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
 条件には bool をそのまま書けます（`if on:`）。
 比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）と、`:=` での束縛も使えます。
+`is` は、Enum のメンバーと bool に対しては `==` と同じに比べます（`if verdict is Pick.SKIP:`）。
+どちらも、その値のオブジェクトが一つしかないからです。
+Optional の場合は、その値を持っているかを聞きます（`flag: bool | None` の `flag is True` は、`flag` が None なら False です）。
+ほかの値の `is` は受け付けず、`==` を求めます。
 比較は**値**でもあります。
 `flag.set(n() > 1)`、`ok = a == b`、bool を返すヘルパが書けます。
 条件式（`a if c else b`）は Python で書ける場所ならどこでも書けます。
@@ -485,15 +493,36 @@ def tally():
 ストアやモデルのメソッドは `T | None` を返せます。
 空のほうは `return None` と書き、受け取る側で絞り込みます（`v = Bag.pick()` のあと `if v is not None:`）。
 
+`isinstance(x, C)` の答えは、`x` の宣言から決まります。
+`int` の引数に bool を渡す呼び出しや、`float` の引数に int を渡す呼び出しは、書いた場所で受け付けません。
+Python はその値をそのまま持つので、表示や `isinstance` が宣言と違う答えを返すからです。
+この決まりがあるので、どちらの実行でも値は宣言どおりになります。
+答えはどちらの実行よりも前に分かり、その答えで通らないと決まった分岐は翻訳もしません。
+型チェッカーがその分岐を読まないのと同じです。
+
+```python
+def weigh(w: int) -> int:
+    if not isinstance(w, int) or isinstance(w, bool):
+        raise ValueError("not a whole number")      # 通らないと決まっている。翻訳しない
+    return w // 1000
+```
+
+宣言で決まらない場合は、理由を挙げて受け付けません。
+`float` に対する `isinstance`（Python は float の場所に int も入れられます）、Optional に対するもの（先に絞り込みます）、NewType を使ったもの（Python が TypeError を出します）です。
+
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
+`elif` が続く場合も、出口をすべて数えます。
+`raise`、`return`、`break`、`continue` で終わる分岐は、分岐の後で読む所まで届かないので、代入は要りません。
 
 ```python
 def judge():
     n = score()
     if n > 20:
         verdict = "high"
-    else:
+    elif n >= 0:
         verdict = "low"
+    else:
+        raise ValueError("a negative score")
     grade.set(verdict)      # 分岐の後で読める
 ```
 
@@ -506,6 +535,17 @@ if (v := sel()) is not None:
     text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
 else:
     text("(none)")
+```
+
+Optional のローカルや引数は、Python がそこに値があると分かる場所で、同じ名前のまま絞り込まれます。
+if の分岐の中、`and` や `or` の後ろに続く部分、条件式で値があると分かるほうの枝です。
+
+```python
+best: int | None = None
+for v in scores():
+    if best is None or v > best:     # `best is None` の後ろでは best は int
+        best = v
+top = best if best is not None else 0
 ```
 
 ## 関数を値として扱う
@@ -639,6 +679,13 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+関数の中で作ったローカルのリストは、同じリストを指す名前がほかになければ、`out.append(x)` でその場で伸ばせます。
+Python では同じリストを指す別の名前からも伸びたのが見えますが、コンパイル済みのリストは値です。
+両方の実行が一致するのは、別の名前がない場合に限られます。
+つまり、どの読みも中を見るだけか（`len`、添字、`in`、そのリストを伸ばさない `for`、`sorted`、`", ".join(...)`）、関数を終える `return` で返すだけの場合です。
+呼び出しの引数、別の名前、フィールド、クロージャにリストを渡した後の `append` は受け付けず、渡した場所を示します。
+`out = out + [x]` はどちらの実行でも新しいリストを作るので、どこでも使えます。
 
 要素が何かを問わない操作（`in`、スライス、`+`、`[::-1]`）は、要素が値クラスでもタプルでも、どんなリストにも使えます。
 比べる操作には何を比べるかが要るので、`sorted` と `min` と `max` は `key=` を取り、`sorted` は `reverse=` も取ります。
@@ -893,6 +940,36 @@ def scan():
 部分は二つ以上です。
 同じ形を、state にもフィールドにもリストの要素にも、引数にも返り値にも置けます。
 
+`NamedTuple` は、部分に名前も付いたタプルです。
+Python でもそういうものとして定義されています。
+Value クラスを置ける場所ならどこにでも置け、タプルとしても読めます。
+名前でも、リテラルの位置でも、分解でも、対のループでも読めます。
+
+```python
+from typing import NamedTuple
+
+
+class Row(NamedTuple):
+    """One row of the report."""
+    name: str
+    qty: int
+    note: str = ""
+
+
+r = Row("pens", 3)
+name, qty, note = r                  # 分解
+same = r[1] == r.qty                 # 位置でも名前でも
+bigger = r._replace(qty=r.qty * 2)   # ほかのフィールドはそのままの新しい値
+total = 0
+for label, count, _ in rows():       # リストなら部分ごとに
+    total += count
+```
+
+同じクラスのもの同士は `==` で比べられます。
+二つのタプルの大小比較、スライス、連結は、まだ方言にありません（どれも部分ごとに作ったり比べたりする操作です）。
+タプルの文字列化もまだです。
+Python は repr（`Row(name='pens', qty=3, note='')`）を書くので、見せたい部分を表示してください。
+
 ## Value クラスとインターフェース
 
 データそのものは**Value クラス**で持ちます。
@@ -1042,11 +1119,15 @@ match health():
 Optional は状態にもフィールドにも書けます（`last: int | None = None`）。
 絞り込みは walrus の節で見たとおりです。
 
-Enum は `class Mood(Enum)` と普通に書けば、そのままコンパイルされます。
+Enum は `class Mood(Enum)` と普通に書けば、そのままコンパイルされます（`import enum` と `class Mood(enum.Enum)` の形も同じです）。
 `.name` と `.value` は Python と同じ値を返します（`auto()` は 1 から数えます）。
 `for m in Mood:` は宣言順にメンバーを回ります。
 `match` の case に書けるのは `Mood.MEMBER` か `_` で、抜けはここでも指摘されます。
 テキストに埋め込むと、Python と同じ `Mood.HAPPY` の形で描画されます。
+`repr(m)` は、メンバーについて Python が書くもの（`<Mood.HAPPY: 1>`）を返します。
+int、float、bool、bytes の `repr` も、Python が書くものと同じです。
+str の `repr` はまだ方言にありません。
+Python は Unicode の表で表示できないとされる文字をエスケープしますが、コンパイル側はその表を持っていないからです。
 
 `match` は int、float、str、bool の値も取ります。
 `|` で候補を並べたり、`if` でガードを付けたりもできます。
@@ -1060,6 +1141,66 @@ match code():
     case _:
         note.set("middle")
 ```
+
+## 型の名前
+
+型を付けたモジュールは、使う前に型に名前を付けます。
+方言はその名前を、型チェッカーと同じように読みます。
+
+```python
+import enum
+from typing import NamedTuple, NewType, TypeAlias
+
+Gram = NewType("Gram", int)          # 単位。コンパイル側には int
+
+
+class Size(enum.Enum):
+    SMALL = "small"
+    LARGE = "large"
+    HUGE = "huge"
+
+
+class Parcel(NamedTuple):
+    weight: Gram
+    size: Size
+
+
+Parcels = list[Parcel]               # 型の別名
+Fees: TypeAlias = dict[str, int]     # 同じことを明示した形
+type Labels = list[str]              # 新しい書き方
+_len = len                           # 組み込み関数に付けた、モジュール自身の名前
+
+OVERSIZE = frozenset({Size.LARGE, Size.HUGE})
+
+
+def oversize_weight(parcels: Parcels) -> Gram:
+    total = Gram(0)
+    for p in parcels:
+        if p.size in OVERSIZE:
+            total = Gram(total + p.weight)
+    return total
+```
+
+NewType は、型チェッカーが元の型と区別するための名前です。
+実行時には、渡された値をそのまま返すだけです（`Gram(5)` は 5 を返します）。
+そのため、注釈に書いた NewType は元の型として読み、呼び出しの引数はその元の型であることを確かめます（`Gram(1.5)` は受け付けません。Python は float をそのまま返すからです）。
+`isinstance(x, Gram)` は、Python が TypeError を出すのと同じ理由で受け付けません。
+NewType にはクラスがないからです。
+別名は、三つの書き方のどれでも、その型そのものです。
+Value クラスを `|` でつないだものは直和型で、`type Shape = Circle | Rect` の書き方のままです。
+組み込み関数、関数、クラスに付けた別名は、呼ぶ場所でその本体と同じです。
+ただし、元の名前を関数が自分で定義している場合は受け付けず、関数の側の名前を変えるように求めます。
+そこでも Python の別名は組み込みのほうを読み続けるからです。
+リテラルの `frozenset` と、その場で書いた集合（`x in {A, B}`）は、`in` と `not in` に答えます。
+集合が両方の実行で同じに答えるのは、この問いだけです（どの順で回るかによらないからです）。
+
+コンパイル側が自分のために使っている名前を、クラスやローカルに付けることもあります。
+`Element` や `List` という名前のクラス、`state`、`case`、`_` という名前のローカルです。
+デコレータのないクラス（NamedTuple、Enum、例外）と、関数の引数とローカルは、コンパイル側だけで別の名前になります。
+その名前は誰にも見えません。
+開発中の CPython の実行、Enum のメンバーの `str()`、メッセージは、書いたとおりの名前のままです。
+ストア、モデル、Value クラスは名前で見つけられるので（開発中の実行はストアのメソッドを名前で探し、Value クラスは Rust の構造体と名前で対応します）、名前を変えられません。
+これらには別の名前を付けるように求めます。
 
 ## コンポーネント
 
@@ -1225,6 +1366,38 @@ try:
 except Exception as e:
     status.set(f"offline: {e}")
 ```
+
+自分で定義した例外のクラスは、raise されたときの値を持てます。
+注釈を付けた引数を取る `__init__` が、メッセージを `super().__init__(...)` に渡し、残りをフィールドに置きます。
+`__str__` は、そのフィールドから文字列を作ります。
+
+```python
+class BadInput(ValueError):
+    """An input the rule does not take, and what it was."""
+
+    def __init__(self, what: str, value: str | None = None) -> None:
+        super().__init__(what)
+        self.what = what
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.what if self.value is None else f"{self.what}: {self.value}"
+
+
+def fee(weight: int) -> int:
+    if not 1 <= weight <= 20000:
+        raise BadInput("weight is out of range", repr(weight))
+    return 500 if weight <= 2000 else 800
+```
+
+raise すると、どちらの実行でもその文が終わります。
+理由は stderr に同じ形で出ます（`BadInput: weight is out of range: 0`。CPython の traceback は、クラス名の前にモジュール名を付けます）。
+引数は、ほかの呼び出しと同じく、位置でもキーワードでもその `__init__` に渡せます。
+`__init__` を書いていないクラスは、メッセージを位置でしか受け取りません。
+そこにキーワードを渡すと、Python は例外を作る代わりに TypeError を出すので、受け付けません。
+`try` の中の `raise` は今も受け付けません。
+コンパイルされた実行は `except` まで巻き戻らないからです。
+`try` で捕まえられるのは、失敗した標準ライブラリの呼び出しと `@py` のエスケープです。
 
 ## 標準ライブラリ
 
@@ -2015,6 +2188,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **片方の分岐でしか代入していないローカルを後で読むこと**。
   その分岐が実行されなければ、Python でも NameError になる形だからです。
   if と else の両方で代入すれば読めます。
+  `raise`、`return`、`break`、`continue` で終わる分岐には、代入は要りません（後の読みまで届かないからです）。
 - **`int ** int` の負の指数**。
   結果の型が実行時に変わるためです。
   どちらかを float にすれば書けます。
@@ -2037,10 +2211,11 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   1枚の画像として報告されるので、中身を伝える手段は `a11y_label=` です。
 - **ストアのフィールドを `Weak` にすること**。
   ストアは所有する側なので、所有しない参照はモデル側（逆向きのポインタ）に置きます。
-- **`Vec` などネイティブ側が既に使っている型名**。
-  断られるので、別名（`V2` など）を選びます。
+- **ネイティブ側が既に使っている型名（`Vec` や `Element`）を付けたストア、モデル、Value クラス**。
+  受け付けないので、別名（`V2` など）を選びます。
+  どれも名前で見つけられるので、NamedTuple や Enum や例外のクラスのように、コンパイル側だけで別の名前にすることができません。
 - **モジュールのトップレベルに置いた文**。
-  コンパイル済みのアプリはモジュールの宣言（import、`State`、クラス、def、`style()`、型 alias、リテラル定数、`every(...)` のタイマー、`__main__` ガード）を読むだけで実行はしないため、関数の外に書いた `count.set(5)` や `fs.write_text(...)` は断られます。
+  コンパイル済みのアプリはモジュールの宣言（import、`State`、クラス、def、`style()`、型 alias と NewType、組み込み関数の別名、`frozenset` を含むリテラル定数、`every(...)` のタイマー、`__main__` ガード）を読むだけで実行はしないため、関数の外に書いた `count.set(5)` や `fs.write_text(...)` は断られます。
   起動時の処理は def に書き、`run(view, on_start=setup)` で渡します。
 - **ハンドラからタイマーを開始すること**。
   タイマーは宣言です（モジュールレベルの `every(1.0, tick)`）。
@@ -2060,12 +2235,30 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
 - **fill、align、符号、幅、`,`、精度、`d` / `f` / `e` / `%` / `s` を超える書式指定**（`#`、`b` / `o` / `x`、`n`、`g`）。
 - **Value クラスや Enum のコンポーネント引数**、そして本体がコンテナ一つでない形（先頭の `if`、複数の要素。`column` でまとめます）。
   コールバックと State の引数は使えます（受け取るコンポーネントは呼び出し箇所ごとのビューになります）。
-- **`set`**。
-  Python の set の反復順はコンパイル側で再現できないので、勝手な順に並べ替えるのではなく断ります。
+- **所属の判定のほかの `set`**。
+  Python の set の反復順はコンパイル側で再現できないので、回すこと、数えること、`State` に置くことは、勝手な順に並べ替えるのではなく受け付けません。
   `list` で足ります。
+  リテラルの集合への問い（`x in {A, B}`、`frozenset({...})` の定数）は入っています。
+  所属の判定は、両方の実行で同じに答えるからです。
   タプルは入りました（[タプル](#タプル)）。
   ただし形を書き下した場合だけで、Rust crate が**返す**タプルはまだ越えられません。
   `re.findall` が群二つ以上を断るのは、そのためです。
+- **タプルと NamedTuple の大小比較、スライス、連結、文字列化**。
+  どれも Python では部分ごとに働きます（文字列化は、str の部分を引用符で囲む repr です）。
+  比べたい部分、切り出したい部分、描きたい部分を書いてください。
+- **関数の中で作ったリストの `.append` を除く、その場で書き換えるリストのメソッド**：`.extend`、`.pop`、`.insert`、`.remove`、`.sort`、リストの `+=`。
+  どれも、同じリストを指す別の名前から変化が見えるように書き換えますが、コンパイル済みのリストは値です。
+  `xs = xs + ys` なら、どちらの実行でも新しいリストを作ります。
+- **`float` や Optional に対する `isinstance`、NewType を使った `isinstance`**。
+  Python では float の場所に int も入り、Optional は None のこともあるので、宣言では答えが決まりません。
+  NewType には、Python が TypeError を出します。
+  Optional は先に絞り込み、float は比較で確かめてください。
+- **str の `repr`**（str を含むリスト、Value クラス、タプルの repr も）。
+  Python は Unicode の表で表示できないとされる文字をエスケープしますが、コンパイル側はその表をまだ持っていません。
+- **呼び出した関数が投げた例外を捕まえること**。
+  `try` の中の `raise` は受け付けません。
+  コンパイルされた実行は `except` まで巻き戻らないからです。
+  捕まえなければ、例外はどちらの実行でもその文を終わらせ、同じメッセージを出します。
 - **スカラー、リスト、str キーの辞書、Value クラス、Optional 以外の `@py` の署名**（モデル、入れ子のコンテナ）。
 - **Optional をそのまま文字列にすること**（`picked` が `T | None` のときの `f"{picked}"`）。
   Python は `None` と書き、コンパイルされた実行は何も書きません。
@@ -2086,7 +2279,7 @@ widgets.py:5:40: not in the dialect — text() does not take `weight=`
   後者には、`@py` を使うように案内します。
   小さなモジュールからは、リストをその場で並べ替えるもの（`heapq.heappush`、`bisect.insort`。リストは `State` の中にあります）と、`textwrap.wrap` / `fill` / `shorten`（CPython 自身の正規表現で語を分けます）を断ります。
   `collections` からは `Counter` 以外を断ります。
-  `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`@value` クラスが型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
+  `defaultdict`（キーが無いときに何を返すかは、ここでは読む側が決めます）、`deque`（その場で書き換えるものですが、リストは `State` の中にあります）、`namedtuple`（`typing` の `class Row(NamedTuple)` が型付きで同じことをします）、`OrderedDict`（ここでの辞書はすでに順序を覚えています）、`ChainMap` です。
   `itertools` からは、終わらないもの（`count`、`cycle`、`repeat`）、それ自体がイテレータを返すもの（`groupby`、`tee`）、関数を取るもの（`starmap`、`takewhile`、`filterfalse`）、最後のタプルだけ形の違う `batched` を断ります。
   `hashlib` からは `sha256`、`sha1`、`md5` 以外を断り、`hashlib.sha256(b).hexdigest()` 以外の書き方も断ります。
   理由を挙げて断るモジュールは、`pathlib`、`os`、`decimal` です。

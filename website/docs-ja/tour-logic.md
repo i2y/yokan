@@ -45,7 +45,10 @@ def tally():
         total.set(total() + double(i))
 ```
 
-`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+`if` / `elif` / `else`、`while`（`while True:` も含みます）、`for`（`range()`、リストの状態、リストのフィールド、リスト型の引数とローカル）、`break` / `continue`、ローカル変数（Python と同じく再代入可）が使えます。
+ローカルには型を書けます（`total: int = 0`、`best: Row | None = None`）。
+数と str には、`+=` や `-=` などの累算代入も使えます。
+値を返す関数を、値を使わずに文として呼ぶこともできます（`fee(p)` だけの行）。
 `print(...)` は stdout に書きます。
 `sep=` と `end=` も Python と同じように使えます。
 `log("…")` のほうは stderr に一行書きます。
@@ -54,6 +57,10 @@ def tally():
 `assert` と `raise` は、Python の例外と同じようにその文を終わらせます（アプリは動き続けます）。
 条件には bool をそのまま書けます（`if on:`）。
 比較の連鎖（`0 < n < 10`、中央は一度だけ読みます）と、`:=` での束縛も使えます。
+`is` は、Enum のメンバーと bool に対しては `==` と同じに比べます（`if verdict is Pick.SKIP:`）。
+どちらも、その値のオブジェクトが一つしかないからです。
+Optional の場合は、その値を持っているかを聞きます（`flag: bool | None` の `flag is True` は、`flag` が None なら False です）。
+ほかの値の `is` は受け付けず、`==` を求めます。
 比較は**値**でもあります。
 `flag.set(n() > 1)`、`ok = a == b`、bool を返すヘルパが書けます。
 条件式（`a if c else b`）は Python で書ける場所ならどこでも書けます。
@@ -65,15 +72,36 @@ def tally():
 ストアやモデルのメソッドは `T | None` を返せます。
 空のほうは `return None` と書き、受け取る側で絞り込みます（`v = Bag.pick()` のあと `if v is not None:`）。
 
+`isinstance(x, C)` の答えは、`x` の宣言から決まります。
+`int` の引数に bool を渡す呼び出しや、`float` の引数に int を渡す呼び出しは、書いた場所で受け付けません。
+Python はその値をそのまま持つので、表示や `isinstance` が宣言と違う答えを返すからです。
+この決まりがあるので、どちらの実行でも値は宣言どおりになります。
+答えはどちらの実行よりも前に分かり、その答えで通らないと決まった分岐は翻訳もしません。
+型チェッカーがその分岐を読まないのと同じです。
+
+```python
+def weigh(w: int) -> int:
+    if not isinstance(w, int) or isinstance(w, bool):
+        raise ValueError("not a whole number")      # 通らないと決まっている。翻訳しない
+    return w // 1000
+```
+
+宣言で決まらない場合は、理由を挙げて受け付けません。
+`float` に対する `isinstance`（Python は float の場所に int も入れられます）、Optional に対するもの（先に絞り込みます）、NewType を使ったもの（Python が TypeError を出します）です。
+
 if と else の**両方**で代入したローカルは、Python と同じように分岐の後でも読めます。
+`elif` が続く場合も、出口をすべて数えます。
+`raise`、`return`、`break`、`continue` で終わる分岐は、分岐の後で読む所まで届かないので、代入は要りません。
 
 ```python
 def judge():
     n = score()
     if n > 20:
         verdict = "high"
-    else:
+    elif n >= 0:
         verdict = "low"
+    else:
+        raise ValueError("a negative score")
     grade.set(verdict)      # 分岐の後で読める
 ```
 
@@ -86,6 +114,17 @@ if (v := sel()) is not None:
     text(f"picked {v}")      # v はこの分岐の中でだけ束縛される
 else:
     text("(none)")
+```
+
+Optional のローカルや引数は、Python がそこに値があると分かる場所で、同じ名前のまま絞り込まれます。
+if の分岐の中、`and` や `or` の後ろに続く部分、条件式で値があると分かるほうの枝です。
+
+```python
+best: int | None = None
+for v in scores():
+    if best is None or v > best:     # `best is None` の後ろでは best は int
+        best = v
+top = best if best is not None else 0
 ```
 
 ## 関数を値として扱う
@@ -220,6 +259,13 @@ for i, s in enumerate(items()):
 items.set(sorted(out))
 best.set(max(scores()))
 ```
+
+関数の中で作ったローカルのリストは、同じリストを指す名前がほかになければ、`out.append(x)` でその場で伸ばせます。
+Python では同じリストを指す別の名前からも伸びたのが見えますが、コンパイル済みのリストは値です。
+両方の実行が一致するのは、別の名前がない場合に限られます。
+つまり、どの読みも中を見るだけか（`len`、添字、`in`、そのリストを伸ばさない `for`、`sorted`、`", ".join(...)`）、関数を終える `return` で返すだけの場合です。
+呼び出しの引数、別の名前、フィールド、クロージャにリストを渡した後の `append` は受け付けず、渡した場所を示します。
+`out = out + [x]` はどちらの実行でも新しいリストを作るので、どこでも使えます。
 
 要素が何かを問わない操作（`in`、スライス、`+`、`[::-1]`）は、要素が値クラスでもタプルでも、どんなリストにも使えます。
 比べる操作には何を比べるかが要るので、`sorted` と `min` と `max` は `key=` を取り、`sorted` は `reverse=` も取ります。
@@ -473,3 +519,33 @@ def scan():
 計算した位置だと型が一つに決まりません。
 部分は二つ以上です。
 同じ形を、state にもフィールドにもリストの要素にも、引数にも返り値にも置けます。
+
+`NamedTuple` は、部分に名前も付いたタプルです。
+Python でもそういうものとして定義されています。
+Value クラスを置ける場所ならどこにでも置け、タプルとしても読めます。
+名前でも、リテラルの位置でも、分解でも、対のループでも読めます。
+
+```python
+from typing import NamedTuple
+
+
+class Row(NamedTuple):
+    """One row of the report."""
+    name: str
+    qty: int
+    note: str = ""
+
+
+r = Row("pens", 3)
+name, qty, note = r                  # 分解
+same = r[1] == r.qty                 # 位置でも名前でも
+bigger = r._replace(qty=r.qty * 2)   # ほかのフィールドはそのままの新しい値
+total = 0
+for label, count, _ in rows():       # リストなら部分ごとに
+    total += count
+```
+
+同じクラスのもの同士は `==` で比べられます。
+二つのタプルの大小比較、スライス、連結は、まだ方言にありません（どれも部分ごとに作ったり比べたりする操作です）。
+タプルの文字列化もまだです。
+Python は repr（`Row(name='pens', qty=3, note='')`）を書くので、見せたい部分を表示してください。

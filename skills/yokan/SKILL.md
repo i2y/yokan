@@ -228,12 +228,19 @@ and a variant belongs to one sum type.
 
 ### Enum, Optional, Protocol
 
-- `class Mood(Enum)` compiles as-is. `match` arms are `Mood.MEMBER`
+- `class Mood(Enum)` compiles as-is (`import enum` and
+  `class Mood(enum.Enum)` too). `match` arms are `Mood.MEMBER`
   or `_`; missing arms are reported. In text an enum renders as
-  Python does (`Mood.HAPPY`). Compare with `==`.
+  Python does (`Mood.HAPPY`), and `repr(m)` is `<Mood.HAPPY: 1>`.
+  Compare with `==`, or with `is`, which means the same for a member;
+  an optional one asked with `is` answers whether it holds that
+  member (`flag is True` is False when `flag` is None).
 - Optional works in state and in fields (`last: int | None =
   None`); narrow with the walrus, `if (v := sel()) is not None:`,
   in handlers and views alike (`v` is bound only in that branch).
+  An optional LOCAL or parameter narrows under its own name wherever
+  Python knows it holds a value: `if best is not None:`, `best is
+  None or v > best`, `x if x is not None else 0`.
 - `typing.Protocol` with method stubs is an interface: a model
   listing it as a base implements it, and a helper with a
   Protocol-typed parameter is statically dispatched. Such helpers
@@ -474,18 +481,28 @@ def tally():
 ```
 
 - `if` / `elif` / `else`, `while`, `for` (over `range()` with one or
-  two arguments, a list state, a list field, a list parameter,
-  `sorted(d())`, `sorted(xs)` / `reversed(xs)`, or an `itertools`
-  combinator), `break` / `continue`, locals (reassignable).
+  two arguments, a list state, a list field, a list parameter or
+  local, `sorted(d())`, `sorted(xs)` / `reversed(xs)`, or an
+  `itertools` combinator), `break` / `continue`, locals
+  (reassignable, and typed when written `total: int = 0`), `+=` and
+  the other augmented assignments on a number or a str, and a call
+  whose answer is left unread (`fee(p)` as a statement).
 - A local assigned in **both** arms of an `if` / `else` reads after
-  the branch; assigned in one arm only, it is refused (Python would
-  raise NameError on the other path). Loop variables do not outlive
-  the loop.
+  the branch, `elif` chains included; an arm that ends in `raise`,
+  `return`, `break` or `continue` needs no assignment. Assigned in
+  one arm only, it is refused (Python would raise NameError on the
+  other path). Loop variables do not outlive the loop.
 - Conditions are bools (a state, a field, a local, a parameter,
   `while True:`) or explicit comparisons — `if name() == "":`, not
   `if name():`, because a str has no truth value here. `and` / `or`
   / `not` work in conditions and as bool values over bools; `0 < n
   < 10` chains (the middle is read once) and `:=` binds.
+- `isinstance(x, C)` is answered from what `x` is declared as, and a
+  branch that answer rules out is not translated. It holds because a
+  bool handed to an `int` slot, or an int to a `float` slot (a
+  parameter, a field, an annotated local, an answer), is refused
+  where it is written: Python keeps the value as it is. `isinstance`
+  on a float, on an optional or against a NewType is refused.
 - `a if c else b` is written in a handler over int/float/str/bool;
   in a view, branch the elements with `if` / `else`.
 - Helpers may return early from a branch, call themselves, take
@@ -513,6 +530,13 @@ def tally():
   one element, or a helper's name) and `sorted` a `reverse=` for
   those, and the sort is stable. `reversed(xs)` is Python's
   iterator: it belongs in a `for`, and `xs[::-1]` is the list.
+  A local list the function made itself (`out: list[str] = []`)
+  grows in place with `out.append(x)` while nothing else holds it —
+  reading it (`len`, an index, `in`, a `for` that does not grow it,
+  `sorted`, `", ".join(out)`) and returning it are
+  fine; an append after it was handed to a call, another name, a
+  field or a closure is refused, since Python's other name would
+  see the change. `out = out + [x]` works anywhere.
 - `print(...)` writes to stdout with Python's `sep=` / `end=`, and
   the gate compares what an app printed as a channel of its own (the
   headless dump goes to the file `PIXIE_DUMP` names). `log("…")`
@@ -533,11 +557,11 @@ def tally():
   `.replace()`, `.find()`, `.count()`). `int()` / `float()` /
   `str()` / `bool()` / `round()` convert, failing the way Python
   raises; `strings.to_int(s, default)` is the total form.
-- Helpers: parameters annotated int/float/str/bool (or a
-  Protocol), the return annotated int/float/str/bool, body ending
-  in `return expression`; callable from handlers and from view
-  text. Lists, value classes and Optionals do not cross a helper
-  yet; store methods take them.
+- Helpers: parameters and the return annotated (scalars, lists,
+  dicts, value classes, NamedTuples, tuples, enums, `T | None` of
+  those, or a Protocol), body ending in `return expression`;
+  callable from handlers and from view text. A list written out as
+  an argument takes the parameter's type (`total([])`).
 - A store method calls a sibling through the class name
   (`Cart.reset_total()`), not bare.
 
@@ -556,6 +580,17 @@ except Exception as e:
     status.set(f"offline: {e}")
 ```
 
+An exception class of the app's own carries what it is raised with: an
+`__init__` with annotated parameters that hands the message to
+`super().__init__(...)` and keeps the rest as `self.` fields, and a
+`__str__` over those fields. `raise BadInput("out of range", repr(w))`
+ends its statement in both runs with the same text on stderr. Its
+arguments go by position or by keyword; a class without its own
+`__init__` takes the message by position only (Python raises TypeError
+at a keyword), and a keyword there is refused. A `raise` inside a
+`try` is refused (the compiled run does not unwind into an `except`),
+so an exception a called function raises is not caught there.
+
 ## Tuples
 
 A tuple is a value with a part per position: `State[tuple[str, int]]`,
@@ -565,6 +600,32 @@ way Python writes one — `(a, b)`, `t[0]` by a LITERAL position,
 `whole, rest = divmod(n, 3)`, `a, sep, b = s.partition("=")`,
 `m, e = math.frexp(x)`. Two parts or more. A tuple a Rust crate would
 have to answer does not cross yet (`re.findall` with two groups).
+
+`class Row(NamedTuple)` (from `typing`) is a tuple whose parts have
+names: it goes wherever a value class goes and reads as a tuple too —
+`r.qty`, `r[1]`, `name, qty, note = r`, `for name, qty, note in
+rows()`, `r._replace(qty=2)`, `==` between two of one class. Ordering
+two tuples, slicing one, joining two and rendering one as text are
+refused (render the parts).
+
+## Names for types
+
+```python
+Gram = NewType("Gram", int)            # its base in annotations; Gram(5) is 5
+Rows = list[Row]                       # an alias (also `X: TypeAlias = ...`,
+type Names = list[str]                 #   and `type X = ...`)
+_len = len                             # a builtin under another name
+OVERSIZE = frozenset({Size.LARGE, Size.HUGE})   # asked with `in` only
+```
+
+A NewType call is held to its base (`Gram(1.5)` is refused: Python
+would hand back the float); `isinstance(x, Gram)` is refused (Python
+raises TypeError). A literal set or a `frozenset` constant answers
+`in` / `not in`, nothing else. A class or a local named with one of
+the compiled side's own words (`Element`, `List`, a local `state` or
+`case` or `_`) is renamed there invisibly when it is an undecorated
+class or a function's own local; a store, a model or a value class
+with such a name is refused.
 
 ## The standard library
 
@@ -904,7 +965,8 @@ Same list as the tour's closing section; each is refused with its
 reason.
 
 - Bare `d[k]` reads: use `.get(key, default)`.
-- Reading a local assigned in one branch only.
+- Reading a local assigned in one branch only (a branch that ends in
+  `raise` / `return` / `break` / `continue` needs no assignment).
 - A local, a parameter or a loop variable with a FIELD's name inside a
   store or model method: the compiled side reads a field by its bare
   name, so rename it (`score_`).
@@ -923,7 +985,9 @@ reason.
   paints is one image to assistive technology (`a11y_label=`).
 - A `Weak` field on a store (stores own; the back pointer lives on
   the model).
-- Type names the compiled side uses, such as `Vec`: pick another.
+- A store, a model or a value class named like a type the compiled
+  side uses, such as `Vec` or `Element`: pick another (a NamedTuple,
+  an Enum or an exception class with that name is renamed instead).
 - Statements at module level: startup work goes in
   `run(view, on_start=setup)`.
 - Starting a timer from a handler: `every(1.0, tick)` is a
@@ -941,8 +1005,16 @@ reason.
   `s[a:b]` and `in` are in).
 - Format specs beyond fill, align, sign, width, `,`, precision and
   `d` / `f` / `e` / `%` / `s`.
-- A `set` — it iterates in an order the compiled run would not
-  reproduce, so a `list` (with `in`) or a `dict` covers it.
+- A `set` beyond membership — it iterates in an order the compiled
+  run would not reproduce, so a `list` or a `dict` covers it; `x in
+  {A, B}` and a `frozenset({...})` constant asked with `in` are in.
+- Ordering, slicing, joining or printing a tuple or a NamedTuple.
+- In-place list methods other than `.append` on a list the function
+  made (`.extend`, `.pop`, `.insert`, `+=` on a list).
+- `isinstance` on a float or an optional, or against a NewType.
+- `repr` of a str (and of what holds one).
+- Catching an exception a called function raises (`raise` inside a
+  `try` is refused).
 - An optional rendered as text: Python writes `None` and the
   compiled run writes nothing, so narrow it and render the value.
 - Component parameters that are value classes or enums, and a body
@@ -950,8 +1022,8 @@ reason.
   — wrap them in a `column`). Callbacks and State parameters work:
   the component becomes a view per call site.
 - `set`: a Python set iterates in an order the compiled side would
-  not reproduce, so it is refused rather than reordered; a `list`
-  covers it. A tuple is in (see Tuples above), but only where its
+  not reproduce, so walking one is refused rather than reordered; a
+  `list` covers it, and membership in a literal set is in. A tuple is in (see Tuples above), but only where its
   shape is written out — a tuple a Rust crate would answer is not
   carried yet, which is why `re.findall` refuses a pattern with two
   groups or more.

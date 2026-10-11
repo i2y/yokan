@@ -49,7 +49,10 @@ out: list[str] = []             # an empty list has no element type
 ```
 
 That is the shape of most annotations you will write inside a
-function: a container that starts empty.
+function: a container that starts empty. A local may also say its type
+where its value would have (`best: Row | None = None`), and the value
+is then held to it: a bool written into an `int`, or an int into a
+`float`, is refused, because Python keeps the value as it was written.
 
 ## The vocabulary
 
@@ -59,6 +62,10 @@ function: a container that starts empty.
 | `list[T]` | `T` is a scalar, a value class, an enum, or a list |
 | `dict[str, T]` | string keys; iterates in insertion order in both runs |
 | `tuple[A, B]` | a fixed shape, written out |
+| `NamedTuple` class | a value class whose parts also read by position |
+| `NewType("UserId", int)` | its base, under a name a type checker keeps apart; `UserId(5)` is 5 |
+| `Rows = list[Row]` | an alias: the type it names, in any of Python's three spellings |
+| `frozenset({...})`, `{...}` | asked with `in` and `not in`, and nothing else |
 | `@value` class | data: fields, no identity |
 | `@model` class | observed and shared; reached by reference |
 | `Enum` | Python's `enum.Enum` |
@@ -151,7 +158,9 @@ does.
 
 - **An empty container** has no element type. Annotate it.
 - **A local assigned in only one branch.** Had that branch not run,
-  Python would raise `NameError`; assign in both and it reads fine.
+  Python would raise `NameError`; assign in both and it reads fine (a
+  branch that ends in `raise`, `return`, `break` or `continue` needs no
+  assignment).
 - **A local a text hole cannot render.** A float or a bool in
   `f"{x}"` asks for a State or a pinned `.2f`, because Python's `str()`
   of a float is a specification, not a formatting default.
