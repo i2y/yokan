@@ -123,6 +123,10 @@ gate typed    "$PY" yokan_gate.py gate demo/typed.py --script "click:weigh,click
 for d in demo/tests/rules/*/; do
   gate "rules/$(basename "$d")" "$PY" yokan_gate.py gate "${d}app.py"
 done
+# Python that `check` once passed and the compiled build then stopped
+# on: a float against an int, optionals handed to and answered by a
+# helper, narrowed past a guard and held in lists, each printed.
+gate build_edges "$PY" yokan_gate.py gate demo/tests/build_edges.py
 # A @py escape inside a task: awaited in the compiled run too (so a
 # minute of Python cannot freeze the window), reporting from the
 # worker thread it runs on. The report count in the dump is what

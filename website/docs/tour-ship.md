@@ -286,6 +286,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
+- **A call in a view's condition.** The compiled view reads states, fields and literals in an `if`, so a helper, the standard library and a float compared with an int other than a literal are refused there; the text the condition decides can make the call, and a handler can keep the answer in a State.
+- **`max` and `min` of an int and a float.** Python answers the one it picked as it is, an int or a float by the values; make both floats (`float(n)`) or both ints.
 - **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
 - **Iterating a list of models directly in a view.** Today, assemble the display strings on the store side and hand them to `list_view`.
 - **On a canvas**: no mouse, no tilemap and no camera offset; coordinates are whole pixels (a float is refused and asks for `int(...)`); the scale is a number the app declares rather than a fit to the window, because the painted size would then depend on a window the dump cannot see; and a sprite's PNG is found next to the app, so a missing one paints nothing. What a canvas paints is not readable by assistive technology either — it reports as one image, and `a11y_label=` is the honest way to say what is on it.

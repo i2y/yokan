@@ -260,6 +260,7 @@ To pin the number of decimals, format specs like `f"{x:.1f}"` work too.
 Holes can also compute with `+`, `-`, `*` (`f"{n * 2 + 1}"`).
 
 Conditionals are ordinary `if` / `elif` / `else` inside the view.
+A view's condition reads states, fields and literals; a call there (a helper, the standard library, a float compared with an int other than a literal) is refused, since the compiled view cannot make one in a condition — the text the condition decides can, and a handler can keep the answer in a State.
 A modal is open by existing, so wrap it in an `if`.
 
 ```python
@@ -439,6 +440,8 @@ def weigh(w: int) -> int:
 What a declaration does not settle is refused with the reason: `isinstance` on a `float` (Python lets an int into one), on an optional (narrow it first), and against a NewType (Python raises TypeError).
 A conditional expression (`a if c else b`) works anywhere one does in Python — in a handler and in a view — over int, float, str or bool.
 A pure helper (parameters and return annotated, body ending in `return expression`) is callable from handlers and from view text; it may return early from a branch, call itself, take `list[...]` parameters and default arguments, and return a value class or a list.
+A helper's parameter may say `T | None` and take a plain value or `None` there, as Python's does, and a helper may answer `T | None` (`return None` for the empty half).
+A helper reads only what it is handed: a State read or written inside one is refused, since the compiled helper has no app around it — read the State in the handler and pass the value in.
 A store or model method may answer `T | None`, with `return None` for the empty half; the caller narrows it (`v = Bag.pick()`, then `if v is not None:`).
 
 A local assigned in **both** the if and the else reads fine after the branch, as in Python.
@@ -468,6 +471,7 @@ else:
 ```
 
 An optional local or parameter narrows under its own name, wherever Python knows it holds a value: in the branch of an `if`, in the rest of an `and` or an `or`, and in the side of a conditional expression the test picks.
+It narrows past a guard too: after `if x is None:` whose branch returns, raises, breaks or continues, the rest of the block reads `x` as the value.
 
 ```python
 best: int | None = None
@@ -548,6 +552,8 @@ p.set(2 ** 10)        # 1024
 Division by zero and overflow are exceptions in Python, and in the shipped app they surface the same way — the statement aborts, the app does not crash.
 Write `int ** int` exponents as non-negative literals (a negative exponent would change the result's type at runtime; with either side a float, negative exponents are fine).
 Do fallible `/` `//` `%` `**` inside handlers and hand the view the result.
+An int and a float mix as in Python: `x + 1` is a float, and a comparison is exact whatever the int (`x < 0`, `level() > count()`, `0 <= x < n`).
+`max` and `min` of an int and a float are refused, since Python answers the one it picked as it is, an int or a float by the values.
 
 `and`, `or`, `not` work in conditions as-is.
 They also work as bool values (`both.set(hot() and not cold())`).
@@ -605,6 +611,7 @@ best.set(max(scores()))
 A local list the function made itself also grows in place, `out.append(x)`, as long as nothing else holds it.
 Python's other names for a list see it grow and a compiled list is a value, so the two agree exactly when there is no other name: every read only looks (`len`, an index, `in`, a `for` that does not grow it, `sorted`, `", ".join(...)`) or hands the list back in the `return` that ends the function.
 An append after the list was handed on (to a call, another name, a field, a closure) is refused, pointing at where it was handed on; `out = out + [x]` makes a new list in both runs and works anywhere.
+A list of optionals (`list[int | None]`) is written out, grown with `None` or a value, and walked as in Python; its element is an optional, and narrows like one.
 
 The operations that say nothing about the element — `in`, a slice, `+`, `[::-1]` — take a list of anything the app can hold, a value class or a tuple included.
 Comparing needs to know what to compare, so `sorted`, `min` and `max` take a `key=` — a lambda of one element, or the name of a helper that takes one — and `sorted` takes a `reverse=`.
@@ -1880,6 +1887,8 @@ What Yokan cannot do as of today, with the reason for each refusal:
 - **Compiling dict state (`run(state={...})`).** It runs during development, but the compiled truth is typed `State`.
 - **Calling Protocol-bound helpers from views** (handlers can call them).
 - **Calling value-class methods from views** (handlers can; views read fields).
+- **A call in a view's condition.** The compiled view reads states, fields and literals in an `if`, so a helper, the standard library and a float compared with an int other than a literal are refused there; the text the condition decides can make the call, and a handler can keep the answer in a State.
+- **`max` and `min` of an int and a float.** Python answers the one it picked as it is, an int or a float by the values; make both floats (`float(n)`) or both ints.
 - **Calling a store or model method from a view.** Building the screen only reads state, and a method may write to it; the read-only form is a `@property`, which a view reads like a field.
 - **Iterating a list of models directly in a view.** A view's `for` walks a list of scalars or value classes; for models, assemble the display strings on the store side and hand them to `list_view`.
 - **On a canvas**: no mouse, no tilemap and no camera offset; coordinates are whole pixels (a float is refused and asks for `int(...)`); the scale is a number the app declares rather than a fit to the window, because the painted size would then depend on a window the dump cannot see; and a sprite's PNG is found next to the app, so a missing one paints nothing. What a canvas paints is not readable by assistive technology either — it reports as one image, and `a11y_label=` is the honest way to say what is on it.

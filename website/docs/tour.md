@@ -221,6 +221,7 @@ To pin the number of decimals, format specs like `f"{x:.1f}"` work too.
 Holes can also compute with `+`, `-`, `*` (`f"{n * 2 + 1}"`).
 
 Conditionals are ordinary `if` / `elif` / `else` inside the view.
+A view's condition reads states, fields and literals; a call there (a helper, the standard library, a float compared with an int other than a literal) is refused, since the compiled view cannot make one in a condition — the text the condition decides can, and a handler can keep the answer in a State.
 A modal is open by existing, so wrap it in an `if`.
 
 ```python

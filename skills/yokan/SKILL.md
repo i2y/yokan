@@ -240,7 +240,10 @@ and a variant belongs to one sum type.
   in handlers and views alike (`v` is bound only in that branch).
   An optional LOCAL or parameter narrows under its own name wherever
   Python knows it holds a value: `if best is not None:`, `best is
-  None or v > best`, `x if x is not None else 0`.
+  None or v > best`, `x if x is not None else 0`, and the rest of a
+  block after `if x is None:` whose branch returns, raises, breaks
+  or continues. A list of optionals (`list[int | None]`) is written
+  out, grown with `None` or a value, and walked; its element narrows.
 - `typing.Protocol` with method stubs is an interface: a model
   listing it as a base implements it, and a helper with a
   Protocol-typed parameter is statically dispatched. Such helpers
@@ -496,7 +499,11 @@ def tally():
   `while True:`) or explicit comparisons — `if name() == "":`, not
   `if name():`, because a str has no truth value here. `and` / `or`
   / `not` work in conditions and as bool values over bools; `0 < n
-  < 10` chains (the middle is read once) and `:=` binds.
+  < 10` chains (the middle is read once) and `:=` binds. A VIEW's
+  condition reads states, fields and literals only: a call there (a
+  helper, the standard library, a float against a non-literal int)
+  is refused — put the call in the text it decides, or keep the
+  answer in a State from a handler.
 - `isinstance(x, C)` is answered from what `x` is declared as, and a
   branch that answer rules out is not translated. It holds because a
   bool handed to an `int` slot, or an int to a `float` slot (a
@@ -507,11 +514,16 @@ def tally():
   in a view, branch the elements with `if` / `else`.
 - Helpers may return early from a branch, call themselves, take
   `list[...]` parameters and defaults, and return a value class or
-  a list.
+  a list. A `T | None` parameter takes a plain value or `None`, and
+  a helper may answer `T | None`. A helper reads only what it is
+  handed: a State read or written inside one is refused.
 - Arithmetic is exactly Python's: `/` is always float, `//` floors,
   `%` takes the divisor's sign, `**` is power. Division by zero and
   overflow abort the statement in both runs; the app lives on.
-  `int ** int` takes a non-negative literal exponent.
+  `int ** int` takes a non-negative literal exponent. An int and a
+  float mix as in Python, and compare exactly (`x < 0`, `level() >
+  count()`); `max` / `min` of an int and a float are refused (the
+  answer's type would depend on the values).
 - Dicts: `prices["cherry"] = 200` writes a key, `d().get(k,
   default)` reads, `"k" in d()` tests, `len(d())` counts. `for k in
   d()` walks the keys in insertion order, the order Python walks
@@ -977,6 +989,10 @@ reason.
 - Calling Protocol-bound helpers, value-class methods, or a store
   or model method from views (handlers can; views read fields and
   `@property`).
+- A call in a view's `if` (a helper, the standard library, a float
+  against a non-literal int): the compiled view reads states, fields
+  and literals in a condition.
+- `max` / `min` of an int and a float.
 - Iterating a list of models in a view: `for` there walks scalars
   and value classes; for models, assemble strings on the store side
   and hand them to `list_view`.

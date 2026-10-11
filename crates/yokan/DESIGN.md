@@ -3634,3 +3634,85 @@ keep in step, and what it bought would reach one generator's users);
 and rewriting the module before translating it (the interpreted run is
 the file as written, and a gate over something else proves nothing
 about it).
+
+## What `check` passed and the build stopped on (2026-10-11)
+
+`check` translates a module and holds each shape to the dialect; the
+compiled build then has its own say, and a shape both runs mean the
+same by could still pass the first and stop at the second — a type
+error in pixie or rustc, after the app looked done. Python that apps
+write every day did that: a float compared with `0`, a helper handed
+`None`, an optional read past `if x is None: return`. The rule kept
+here is the one the gate keeps: what `check` passes, the build takes,
+and what the compiled side cannot take is refused at `check`, with the
+reason, before any build.
+
+**A float against an int, as Python compares them: exactly.** The
+compiled side compares two floats or two ints. An int literal is
+written as the float that equals it (`x < 0` is `x < 0.0`); a literal
+no float equals, past 2**53, is refused, since Python compares it
+exactly and no float says what it says. Any other int goes to a small
+helper made once per operator: it compares through the float nearest
+the int, which answers exactly unless the two are equal as floats, and
+then asks again in ints, with 2**63 as the one float no int reaches;
+NaN and the infinities fall out of the same comparisons. Each side is
+read once, and an int on the left that is more than a plain read is
+held in a local first, so the two are read in Python's order. A bool
+against a number is refused (Python counts True as 1 there), and so
+are `max` and `min` of an int and a float, whose answer is whichever
+they picked — an int or a float by the values. Arithmetic mixed the
+two already.
+
+**A float literal is written in digits.** `1e-05` and `1e+16` are what
+`repr` prints, and pixie's lexer has no exponent: `1e-05` read as `1e
+- 5`. The digits `repr` chose are written out with a point, which
+names the same double.
+
+**A sum printed is a sum.** `print(n + 1)` wrote the two operands'
+text side by side, `51` where CPython prints `6`: `+` inside text was
+read as joining strs whatever its operands were. It joins only two
+strs now, and a sum is one hole.
+
+**An optional where the compiled side wraps one.** pixie wraps a plain
+value in `Some` where a slot declares an optional — a typed
+declaration, an assignment, a field, a method's parameter — and not in
+a static function's argument, a list literal, a `push`, or the bare
+tail of a static function. So a plain value or `None` for a helper's
+`T | None` parameter, an element of a list of optionals, an append to
+one, and a helper's `return None` at the end are each held in a local
+of the optional's type first, which it wraps. The other way round, it
+does not know a field or a State read is already optional and wrapped
+it a second time; such a value going into an optional slot is copied
+through `if let` into a local it does know. A store method's parameter
+takes `None` as `nil`, and a loop over a list of optionals gives an
+optional that narrows. Where no line can stand before the value — a
+helper's answer that hands `None` on — it is refused with the local to
+write.
+
+**An optional narrows past a guard.** `if x is None:` whose branch
+returns, raises, breaks or continues, followed by the rest of the
+block, is turned into `if x is not None:` around the rest with the
+branch as its else, before translating. The control flow is the same —
+the rest runs exactly when `x` holds a value — and it is written the
+way the compiled side narrows, so `x` is the value there, as Python
+knows it is.
+
+**A view's condition and a helper's reach.** A compiled view evaluates
+its `if` over states, fields and literals; a call there — a helper,
+the standard library — stopped the build, and the tour only ever said
+helpers are callable from view text. The call is refused in a
+condition now, and so is a float compared with a non-literal int in
+one, since the exact comparison takes a call; the text the condition
+decides can make it. A helper compiles to a static function with no
+app around it, so a State read or written inside one is refused where
+it is written.
+
+`demo/tests/build_edges.py` gates each of these the way an app writes
+it, and `test_build_refusals.py` holds the refusals beside them.
+
+Rejected: the exact comparison written inline in each condition (it
+reads each side twice, which takes locals a view's condition does not
+have); comparing through the float alone (exact only up to 2**53,
+where Python's comparison stays exact); and a constructor for an
+optional in pixie, which would mean a change to the language for what
+a typed declaration already does.
